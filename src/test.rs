@@ -13,3 +13,13 @@ pub fn paint_test_input(buf: &mut [u8]) {
         offset += take;
     }
 }
+
+#[test]
+fn test_reference_impl_size() {
+    // Because the Rust compiler optimizes struct layout, it's possible that
+    // some future version of the compiler will produce a different size. If
+    // that happens, we can either disable this test, or test for multiple
+    // expected values. For now, the purpose of this test is to make sure we
+    // notice if that happens.
+    assert_eq!(1848, core::mem::size_of::<reference_impl::Hasher>());
+}
