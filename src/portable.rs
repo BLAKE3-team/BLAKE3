@@ -54,7 +54,7 @@ fn round(state: &mut [u32; 16], msg: &[u32; 16], round: usize) {
     g(state, 3, 4, 9, 14, msg[schedule[14]], msg[schedule[15]]);
 }
 
-fn compress(
+pub fn compress(
     cv: &[u32; 8],
     block: &[u8; BLOCK_LEN],
     block_len: u8,

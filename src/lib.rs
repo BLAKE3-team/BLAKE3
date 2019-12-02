@@ -1,6 +1,8 @@
 use arrayref::{array_refs, mut_array_refs};
 
 mod portable;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+mod sse41;
 #[cfg(test)]
 mod test;
 
