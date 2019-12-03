@@ -138,3 +138,54 @@ impl fmt::Debug for Hash {
         write!(f, "Hash(0x{})", self.to_hex())
     }
 }
+
+// Each chunk or parent node can produce either a 32-byte chaining value or, by
+// setting the ROOT flag, any number of final output bytes. The Output struct
+// captures the state just prior to choosing between those two possibilities.
+struct Output {
+    input_chaining_value: [u8; 32],
+    block: [u8; 64],
+    block_len: u8,
+    offset: u64,
+    flags: Flags,
+    platform: Platform,
+}
+
+impl Output {
+    fn chaining_value(&self) -> [u8; 32] {
+        let out = self.platform.compress(
+            &self.input_chaining_value,
+            &self.block,
+            self.block_len,
+            self.offset,
+            self.flags.bits(),
+        );
+        *array_ref!(out, 0, 32)
+    }
+
+    fn root_hash(&self) -> Hash {
+        let out = self.platform.compress(
+            &self.input_chaining_value,
+            &self.block,
+            self.block_len,
+            self.offset,
+            (self.flags | Flags::ROOT).bits(),
+        );
+        Hash(*array_ref!(out, 0, 32))
+    }
+
+    fn root_output_bytes(&self, out_slice: &mut [u8]) {
+        let mut offset = 0;
+        for out_block in out_slice.chunks_mut(2 * OUT_LEN) {
+            let out_bytes = self.platform.compress(
+                &self.input_chaining_value,
+                &self.block,
+                self.block_len,
+                offset,
+                (self.flags | Flags::ROOT).bits(),
+            );
+            out_block.copy_from_slice(&out_bytes[..out_block.len()]);
+            offset += 2 * OUT_LEN as u64;
+        }
+    }
+}
