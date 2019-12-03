@@ -670,7 +670,7 @@ mod test {
 
     #[test]
     fn test_transpose() {
-        if !is_x86_feature_detected!("sse4.1") {
+        if !crate::platform::sse41_detected() {
             return;
         }
 
@@ -702,7 +702,7 @@ mod test {
 
     #[test]
     fn test_compress() {
-        if !is_x86_feature_detected!("sse4.1") {
+        if !crate::platform::sse41_detected() {
             return;
         }
 
@@ -737,7 +737,7 @@ mod test {
 
     #[test]
     fn test_parents() {
-        if !is_x86_feature_detected!("sse4.1") {
+        if !crate::platform::sse41_detected() {
             return;
         }
 
@@ -784,7 +784,7 @@ mod test {
 
     #[test]
     fn test_chunks() {
-        if !is_x86_feature_detected!("sse4.1") {
+        if !crate::platform::sse41_detected() {
             return;
         }
 
@@ -853,7 +853,7 @@ mod test {
 
     #[test]
     fn test_hash1_1() {
-        if !is_x86_feature_detected!("sse4.1") {
+        if !crate::platform::sse41_detected() {
             return;
         }
 
@@ -893,7 +893,7 @@ mod test {
 
     #[test]
     fn test_hash1_3() {
-        if !is_x86_feature_detected!("sse4.1") {
+        if !crate::platform::sse41_detected() {
             return;
         }
 
@@ -934,7 +934,7 @@ mod test {
 
     #[test]
     fn test_hash_many() {
-        if !is_x86_feature_detected!("sse4.1") {
+        if !crate::platform::sse41_detected() {
             return;
         }
 

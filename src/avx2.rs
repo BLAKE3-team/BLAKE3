@@ -432,7 +432,7 @@ mod test {
 
     #[test]
     fn test_transpose() {
-        if !is_x86_feature_detected!("avx2") {
+        if !crate::platform::avx2_detected() {
             return;
         }
 
@@ -464,7 +464,7 @@ mod test {
 
     #[test]
     fn test_parents() {
-        if !is_x86_feature_detected!("avx2") {
+        if !crate::platform::avx2_detected() {
             return;
         }
 
@@ -519,7 +519,7 @@ mod test {
 
     #[test]
     fn test_chunks() {
-        if !is_x86_feature_detected!("avx2") {
+        if !crate::platform::avx2_detected() {
             return;
         }
 
@@ -596,7 +596,7 @@ mod test {
 
     #[test]
     fn test_hash_many() {
-        if !is_x86_feature_detected!("avx2") {
+        if !crate::platform::avx2_detected() {
             return;
         }
 

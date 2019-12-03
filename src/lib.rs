@@ -1,3 +1,5 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use arrayref::{array_refs, mut_array_refs};
 use arrayvec::ArrayString;
 use core::fmt;

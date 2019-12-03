@@ -21,10 +21,10 @@ impl Platform {
     pub fn detect() -> Self {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if is_x86_feature_detected!("avx2") {
+            if avx2_detected() {
                 return Platform::AVX2;
             }
-            if is_x86_feature_detected!("sse4.1") {
+            if sse41_detected() {
                 return Platform::SSE41;
             }
         }
@@ -113,4 +113,40 @@ impl Platform {
             },
         }
     }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[inline(always)]
+pub fn avx2_detected() -> bool {
+    // Static check, e.g. for building with target-cpu=native.
+    #[cfg(target_feature = "avx2")]
+    {
+        return true;
+    }
+    // Dyanmic check, if std is enabled.
+    #[cfg(feature = "std")]
+    {
+        if is_x86_feature_detected!("avx2") {
+            return true;
+        }
+    }
+    false
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[inline(always)]
+pub fn sse41_detected() -> bool {
+    // Static check, e.g. for building with target-cpu=native.
+    #[cfg(target_feature = "sse4.1")]
+    {
+        return true;
+    }
+    // Dyanmic check, if std is enabled.
+    #[cfg(feature = "std")]
+    {
+        if is_x86_feature_detected!("sse4.1") {
+            return true;
+        }
+    }
+    false
 }
