@@ -123,7 +123,7 @@ unsafe fn undiagonalize(row1: &mut __m128i, row3: &mut __m128i, row4: &mut __m12
 }
 
 #[target_feature(enable = "sse4.1")]
-unsafe fn compress(
+pub unsafe fn compress(
     cv: &[u32; 8],
     block: &[u8; BLOCK_LEN],
     block_len: u8,

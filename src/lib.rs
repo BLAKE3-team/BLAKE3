@@ -2,6 +2,7 @@ use arrayref::{array_refs, mut_array_refs};
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod avx2;
+mod platform;
 mod portable;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod sse41;
