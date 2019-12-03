@@ -61,6 +61,16 @@ impl Platform {
         }
     }
 
+    // IMPLEMENTATION NOTE
+    // ===================
+    // hash_many() applies two optimizations. The critically important
+    // optimization is the high-performance parallel SIMD hashing mode,
+    // described in detail in the spec. This more than doubles throughput per
+    // thread. Another optimization is keeping the state vectors transposed
+    // from block to block within a chunk. When state vectors are transposed
+    // after every block, there's a small but measurable performance loss.
+    // Compressing chunks with a dedicated loop avoids this.
+
     pub fn hash_many<A: arrayvec::Array<Item = u8>>(
         &self,
         inputs: &[&A],

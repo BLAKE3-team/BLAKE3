@@ -302,3 +302,17 @@ impl fmt::Debug for ChunkState {
         )
     }
 }
+
+// IMPLEMENTATION NOTE
+// ===================
+// hash_subtree() is the basis of high-performance BLAKE3. We use it both for
+// all-at-once hashing, and for the incremental input with Hasher (though we
+// have to be careful with subtree boundaries in the incremental case).
+// hash_subtree() applies several optimizations at the same time:
+// - Multi-threading with Rayon.
+// - Parallel chunk hashing with SIMD.
+// - Parallel parent hashing with SIMD. Note that while SIMD chunk hashing
+//   maxes out at MAX_SIMD_DEGREE*CHUNK_LEN, parallel parent hashing continues
+//   to benefit from larger inputs, because more levels of the tree benefit can
+//   use full-width SIMD vectors for parent hashing. Without parallel parent
+//   hashing, we lose about 10% of overall throughput on AVX2 and AVX-512.
