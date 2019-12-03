@@ -1,4 +1,6 @@
 use arrayref::{array_refs, mut_array_refs};
+use arrayvec::ArrayString;
+use core::fmt;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod avx2;
@@ -108,4 +110,59 @@ fn offset_low(offset: u64) -> u32 {
 
 fn offset_high(offset: u64) -> u32 {
     (offset >> 32) as u32
+}
+
+/// A BLAKE3 output of the default size, 32 bytes, which implements
+/// constant-time equality.
+#[derive(Clone, Copy)]
+pub struct Hash([u8; OUT_LEN]);
+
+impl Hash {
+    pub fn as_bytes(&self) -> &[u8; OUT_LEN] {
+        &self.0
+    }
+
+    pub fn to_hex(&self) -> ArrayString<[u8; 2 * OUT_LEN]> {
+        let mut s = ArrayString::new();
+        let table = b"0123456789abcdef";
+        for &b in self.0.iter() {
+            s.push(table[(b >> 4) as usize] as char);
+            s.push(table[(b & 0xf) as usize] as char);
+        }
+        s
+    }
+}
+
+impl From<[u8; OUT_LEN]> for Hash {
+    fn from(bytes: [u8; OUT_LEN]) -> Self {
+        Self(bytes)
+    }
+}
+
+impl From<Hash> for [u8; OUT_LEN] {
+    fn from(hash: Hash) -> Self {
+        hash.0
+    }
+}
+
+/// This implementation is constant-time.
+impl PartialEq for Hash {
+    fn eq(&self, other: &Hash) -> bool {
+        constant_time_eq::constant_time_eq(&self.0[..], &other.0[..])
+    }
+}
+
+/// This implementation is constant-time.
+impl PartialEq<[u8; OUT_LEN]> for Hash {
+    fn eq(&self, other: &[u8; OUT_LEN]) -> bool {
+        constant_time_eq::constant_time_eq(&self.0[..], other)
+    }
+}
+
+impl Eq for Hash {}
+
+impl fmt::Debug for Hash {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Hash(0x{})", self.to_hex())
+    }
 }
