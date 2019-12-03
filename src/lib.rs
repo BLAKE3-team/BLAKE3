@@ -11,6 +11,7 @@ mod test;
 
 use arrayref::array_ref;
 use arrayvec::ArrayString;
+use core::cmp;
 use core::fmt;
 use platform::Platform;
 
@@ -158,18 +159,19 @@ impl Output {
             &self.block,
             self.block_len,
             self.offset,
-            self.flags.bits(),
+            self.flags,
         );
         *array_ref!(out, 0, 32)
     }
 
     fn root_hash(&self) -> Hash {
+        debug_assert_eq!(self.offset, 0);
         let out = self.platform.compress(
             &self.input_chaining_value,
             &self.block,
             self.block_len,
-            self.offset,
-            (self.flags | Flags::ROOT).bits(),
+            0,
+            self.flags | Flags::ROOT,
         );
         Hash(*array_ref!(out, 0, 32))
     }
@@ -182,10 +184,121 @@ impl Output {
                 &self.block,
                 self.block_len,
                 offset,
-                (self.flags | Flags::ROOT).bits(),
+                self.flags | Flags::ROOT,
             );
             out_block.copy_from_slice(&out_bytes[..out_block.len()]);
             offset += 2 * OUT_LEN as u64;
         }
+    }
+}
+
+#[derive(Clone)]
+struct ChunkState {
+    cv: [u8; 32],
+    offset: u64,
+    buf: [u8; BLOCK_LEN],
+    buf_len: u8,
+    blocks_compressed: u8,
+    flags: Flags,
+    platform: Platform,
+}
+
+impl ChunkState {
+    fn new(key: &[u8; 32], offset: u64, flags: Flags, platform: Platform) -> Self {
+        Self {
+            cv: *key,
+            offset: 0,
+            buf: [0; BLOCK_LEN],
+            buf_len: 0,
+            blocks_compressed: 0,
+            flags,
+            platform,
+        }
+    }
+
+    fn len(&self) -> u64 {
+        BLOCK_LEN as u64 * self.blocks_compressed as u64 + self.buf_len as u64
+    }
+
+    fn fill_buf(&mut self, input: &mut &[u8]) {
+        let want = BLOCK_LEN - self.buf_len as usize;
+        let take = cmp::min(want, input.len());
+        self.buf[self.buf_len as usize..][..take].copy_from_slice(&input[..take]);
+        self.buf_len += take as u8;
+        *input = &input[take..];
+    }
+
+    fn start_flag(&self) -> Flags {
+        if self.blocks_compressed == 0 {
+            Flags::CHUNK_START
+        } else {
+            Flags::empty()
+        }
+    }
+
+    // Try to avoid buffering as much as possible, by compressing directly from
+    // the input slice when full blocks are available.
+    fn update(&mut self, mut input: &[u8]) {
+        if self.buf_len > 0 {
+            self.fill_buf(&mut input);
+            if !input.is_empty() {
+                debug_assert_eq!(self.buf_len as usize, BLOCK_LEN);
+                let block_flags = self.flags | self.start_flag(); // borrowck
+                self.platform.compress(
+                    &mut self.cv,
+                    &self.buf,
+                    BLOCK_LEN as u8,
+                    self.offset,
+                    block_flags,
+                );
+                self.buf_len = 0;
+                self.buf = [0; BLOCK_LEN];
+                self.blocks_compressed += 1;
+            }
+        }
+
+        while input.len() > BLOCK_LEN {
+            debug_assert_eq!(self.buf_len, 0);
+            let block_flags = self.flags | self.start_flag(); // borrowck
+            self.platform.compress(
+                &mut self.cv,
+                array_ref!(input, 0, BLOCK_LEN),
+                BLOCK_LEN as u8,
+                self.offset,
+                block_flags,
+            );
+            self.blocks_compressed += 1;
+            input = &input[BLOCK_LEN..];
+        }
+
+        self.fill_buf(&mut input);
+        debug_assert!(input.is_empty());
+        debug_assert!(self.len() <= CHUNK_LEN as u64);
+    }
+
+    fn finalize(&self) -> Output {
+        let block_flags = self.flags | self.start_flag() | Flags::CHUNK_END;
+        Output {
+            input_chaining_value: self.cv,
+            block: self.buf,
+            block_len: self.buf_len,
+            offset: self.offset,
+            flags: block_flags,
+            platform: self.platform,
+        }
+    }
+}
+
+// Don't derive(Debug), because the state may be secret.
+impl fmt::Debug for ChunkState {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ChunkState {{ len: {}, offset: {}, flags: {:?}, platform: {:?} }}",
+            self.len(),
+            self.offset,
+            self.flags,
+            self.platform
+        )
     }
 }

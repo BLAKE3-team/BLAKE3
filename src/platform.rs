@@ -1,4 +1,4 @@
-use crate::{portable, BLOCK_LEN, KEY_LEN};
+use crate::{portable, Flags, BLOCK_LEN, KEY_LEN};
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use crate::{avx2, sse41};
@@ -49,14 +49,14 @@ impl Platform {
         block: &[u8; BLOCK_LEN],
         block_len: u8,
         offset: u64,
-        flags: u8,
+        flags: Flags,
     ) -> [u8; 64] {
         match self {
-            Platform::Portable => portable::compress(cv, block, block_len, offset, flags),
+            Platform::Portable => portable::compress(cv, block, block_len, offset, flags.bits()),
             // Safe because detect() checked for platform support.
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::SSE41 | Platform::AVX2 => unsafe {
-                sse41::compress(cv, block, block_len, offset, flags)
+                sse41::compress(cv, block, block_len, offset, flags.bits())
             },
         }
     }
@@ -67,9 +67,9 @@ impl Platform {
         key: &[u8; KEY_LEN],
         offset: u64,
         offset_deltas: &[u64; 16],
-        flags: u8,
-        flags_start: u8,
-        flags_end: u8,
+        flags: Flags,
+        flags_start: Flags,
+        flags_end: Flags,
         out: &mut [u8],
     ) {
         match self {
@@ -78,9 +78,9 @@ impl Platform {
                 key,
                 offset,
                 offset_deltas,
-                flags,
-                flags_start,
-                flags_end,
+                flags.bits(),
+                flags_start.bits(),
+                flags_end.bits(),
                 out,
             ),
             // Safe because detect() checked for platform support.
@@ -91,9 +91,9 @@ impl Platform {
                     key,
                     offset,
                     offset_deltas,
-                    flags,
-                    flags_start,
-                    flags_end,
+                    flags.bits(),
+                    flags_start.bits(),
+                    flags_end.bits(),
                     out,
                 )
             },
@@ -105,9 +105,9 @@ impl Platform {
                     key,
                     offset,
                     offset_deltas,
-                    flags,
-                    flags_start,
-                    flags_end,
+                    flags.bits(),
+                    flags_start.bits(),
+                    flags_end.bits(),
                     out,
                 )
             },
