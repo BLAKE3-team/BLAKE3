@@ -712,7 +712,7 @@ mod test {
         crate::test::paint_test_input(&mut block[..block_len as usize]);
         // Use an offset with set bits in both 32-bit words.
         let offset = ((5 * CHUNK_LEN as u64) << 32) + 6 * CHUNK_LEN as u64;
-        let flags = crate::Flags::CHUNK_END | crate::Flags::ROOT;
+        let flags = Flags::CHUNK_END | Flags::ROOT;
 
         let portable_out = portable::compress(
             &initial_state,
@@ -771,7 +771,7 @@ mod test {
                 1,
                 &key,
                 0,
-                crate::PARENT_OFFSET_DELTAS,
+                PARENT_OFFSET_DELTAS,
                 0,
                 Flags::PARENT.bits(),
                 0,
@@ -840,7 +840,7 @@ mod test {
                 CHUNK_LEN / BLOCK_LEN,
                 &key,
                 initial_offset,
-                crate::CHUNK_OFFSET_DELTAS,
+                CHUNK_OFFSET_DELTAS,
                 Flags::KEYED_HASH.bits(),
                 Flags::CHUNK_START.bits(),
                 Flags::CHUNK_END.bits(),
@@ -859,7 +859,7 @@ mod test {
 
         let block = [1; BLOCK_LEN];
         let key = [2; 8];
-        let offset = 3 * crate::CHUNK_LEN as u64;
+        let offset = 3 * CHUNK_LEN as u64;
         let flags = 4;
         let flags_start = 8;
         let flags_end = 16;
@@ -900,7 +900,7 @@ mod test {
         let mut blocks = [0; BLOCK_LEN * 3];
         crate::test::paint_test_input(&mut blocks);
         let key = [2; 8];
-        let offset = 3 * crate::CHUNK_LEN as u64;
+        let offset = 3 * CHUNK_LEN as u64;
         let flags = 4;
         let flags_start = 8;
         let flags_end = 16;
@@ -958,7 +958,7 @@ mod test {
             &inputs,
             &key,
             offset,
-            crate::CHUNK_OFFSET_DELTAS,
+            CHUNK_OFFSET_DELTAS,
             flags,
             flags_start,
             flags_end,
@@ -971,7 +971,7 @@ mod test {
                 &inputs,
                 &key,
                 offset,
-                crate::CHUNK_OFFSET_DELTAS,
+                CHUNK_OFFSET_DELTAS,
                 flags,
                 flags_start,
                 flags_end,
