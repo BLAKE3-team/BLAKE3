@@ -1,4 +1,4 @@
-use crate::{portable, BLOCK_LEN};
+use crate::{portable, BLOCK_LEN, KEY_LEN};
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use crate::{avx2, sse41};
@@ -45,12 +45,12 @@ impl Platform {
 
     pub fn compress(
         &self,
-        cv: &[u32; 8],
+        cv: &[u8; 32],
         block: &[u8; BLOCK_LEN],
         block_len: u8,
         offset: u64,
         flags: u8,
-    ) -> [u32; 16] {
+    ) -> [u8; 64] {
         match self {
             Platform::Portable => portable::compress(cv, block, block_len, offset, flags),
             // Safe because detect() checked for platform support.
@@ -64,7 +64,7 @@ impl Platform {
     pub fn hash_many<A: arrayvec::Array<Item = u8>>(
         &self,
         inputs: &[&A],
-        key: &[u32; 8],
+        key: &[u8; KEY_LEN],
         offset: u64,
         offset_deltas: &[u64; 16],
         flags: u8,

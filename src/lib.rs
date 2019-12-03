@@ -1,9 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use arrayref::{array_refs, mut_array_refs};
-use arrayvec::ArrayString;
-use core::fmt;
-
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod avx2;
 mod platform;
@@ -12,6 +8,11 @@ mod portable;
 mod sse41;
 #[cfg(test)]
 mod test;
+
+use arrayref::array_ref;
+use arrayvec::ArrayString;
+use core::fmt;
+use platform::Platform;
 
 /// The default number of bytes in a hash, 32.
 pub const OUT_LEN: usize = 32;
@@ -73,37 +74,6 @@ bitflags::bitflags! {
         const KEYED_HASH = 1 << 4;
         const DERIVE_KEY = 1 << 5;
     }
-}
-
-fn words_from_key_bytes(bytes: &[u8; KEY_LEN]) -> [u32; 8] {
-    // Parse the message bytes as little endian words.
-    let refs = array_refs!(bytes, 4, 4, 4, 4, 4, 4, 4, 4);
-    [
-        u32::from_le_bytes(*refs.0),
-        u32::from_le_bytes(*refs.1),
-        u32::from_le_bytes(*refs.2),
-        u32::from_le_bytes(*refs.3),
-        u32::from_le_bytes(*refs.4),
-        u32::from_le_bytes(*refs.5),
-        u32::from_le_bytes(*refs.6),
-        u32::from_le_bytes(*refs.7),
-    ]
-}
-
-fn bytes_from_state_words(words: &[u32; 8]) -> [u8; OUT_LEN] {
-    let mut bytes = [0; OUT_LEN];
-    {
-        let refs = mut_array_refs!(&mut bytes, 4, 4, 4, 4, 4, 4, 4, 4);
-        *refs.0 = words[0].to_le_bytes();
-        *refs.1 = words[1].to_le_bytes();
-        *refs.2 = words[2].to_le_bytes();
-        *refs.3 = words[3].to_le_bytes();
-        *refs.4 = words[4].to_le_bytes();
-        *refs.5 = words[5].to_le_bytes();
-        *refs.6 = words[6].to_le_bytes();
-        *refs.7 = words[7].to_le_bytes();
-    }
-    bytes
 }
 
 fn offset_low(offset: u64) -> u32 {

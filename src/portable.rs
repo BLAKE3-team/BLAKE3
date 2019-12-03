@@ -1,28 +1,5 @@
-use crate::{offset_high, offset_low, BLOCK_LEN, IV, MSG_SCHEDULE, OUT_LEN};
-use arrayref::{array_mut_ref, array_ref, array_refs};
-
-#[inline(always)]
-fn words_from_block(bytes: &[u8; BLOCK_LEN]) -> [u32; 16] {
-    let refs = array_refs!(bytes, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4);
-    [
-        u32::from_le_bytes(*refs.0),
-        u32::from_le_bytes(*refs.1),
-        u32::from_le_bytes(*refs.2),
-        u32::from_le_bytes(*refs.3),
-        u32::from_le_bytes(*refs.4),
-        u32::from_le_bytes(*refs.5),
-        u32::from_le_bytes(*refs.6),
-        u32::from_le_bytes(*refs.7),
-        u32::from_le_bytes(*refs.8),
-        u32::from_le_bytes(*refs.9),
-        u32::from_le_bytes(*refs.10),
-        u32::from_le_bytes(*refs.11),
-        u32::from_le_bytes(*refs.12),
-        u32::from_le_bytes(*refs.13),
-        u32::from_le_bytes(*refs.14),
-        u32::from_le_bytes(*refs.15),
-    ]
-}
+use crate::{offset_high, offset_low, BLOCK_LEN, IV, KEY_LEN, MSG_SCHEDULE, OUT_LEN};
+use arrayref::{array_mut_ref, array_ref};
 
 #[inline(always)]
 fn g(state: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize, x: u32, y: u32) {
@@ -55,22 +32,40 @@ fn round(state: &mut [u32; 16], msg: &[u32; 16], round: usize) {
 }
 
 pub fn compress(
-    cv: &[u32; 8],
+    cv: &[u8; 32],
     block: &[u8; BLOCK_LEN],
     block_len: u8,
     offset: u64,
     flags: u8,
-) -> [u32; 16] {
-    let block_words = words_from_block(block);
+) -> [u8; 64] {
+    let block_words = [
+        u32::from_le_bytes(*array_ref!(block, 0 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(block, 1 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(block, 2 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(block, 3 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(block, 4 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(block, 5 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(block, 6 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(block, 7 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(block, 8 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(block, 9 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(block, 10 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(block, 11 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(block, 12 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(block, 13 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(block, 14 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(block, 15 * 4, 4)),
+    ];
+
     let mut state = [
-        cv[0],
-        cv[1],
-        cv[2],
-        cv[3],
-        cv[4],
-        cv[5],
-        cv[6],
-        cv[7],
+        u32::from_le_bytes(*array_ref!(cv, 0 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(cv, 1 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(cv, 2 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(cv, 3 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(cv, 4 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(cv, 5 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(cv, 6 * 4, 4)),
+        u32::from_le_bytes(*array_ref!(cv, 7 * 4, 4)),
         IV[0],
         IV[1],
         IV[2],
@@ -97,21 +92,38 @@ pub fn compress(
     state[5] ^= state[13];
     state[6] ^= state[14];
     state[7] ^= state[15];
-    state[8] ^= cv[0];
-    state[9] ^= cv[1];
-    state[10] ^= cv[2];
-    state[11] ^= cv[3];
-    state[12] ^= cv[4];
-    state[13] ^= cv[5];
-    state[14] ^= cv[6];
-    state[15] ^= cv[7];
+    state[8] ^= u32::from_le_bytes(*array_ref!(cv, 0 * 4, 4));
+    state[9] ^= u32::from_le_bytes(*array_ref!(cv, 1 * 4, 4));
+    state[10] ^= u32::from_le_bytes(*array_ref!(cv, 2 * 4, 4));
+    state[11] ^= u32::from_le_bytes(*array_ref!(cv, 3 * 4, 4));
+    state[12] ^= u32::from_le_bytes(*array_ref!(cv, 4 * 4, 4));
+    state[13] ^= u32::from_le_bytes(*array_ref!(cv, 5 * 4, 4));
+    state[14] ^= u32::from_le_bytes(*array_ref!(cv, 6 * 4, 4));
+    state[15] ^= u32::from_le_bytes(*array_ref!(cv, 7 * 4, 4));
 
-    state
+    let mut out = [0; 64];
+    out[0 * 4..][..4].copy_from_slice(&state[0].to_le_bytes());
+    out[1 * 4..][..4].copy_from_slice(&state[1].to_le_bytes());
+    out[2 * 4..][..4].copy_from_slice(&state[2].to_le_bytes());
+    out[3 * 4..][..4].copy_from_slice(&state[3].to_le_bytes());
+    out[4 * 4..][..4].copy_from_slice(&state[4].to_le_bytes());
+    out[5 * 4..][..4].copy_from_slice(&state[5].to_le_bytes());
+    out[6 * 4..][..4].copy_from_slice(&state[6].to_le_bytes());
+    out[7 * 4..][..4].copy_from_slice(&state[7].to_le_bytes());
+    out[8 * 4..][..4].copy_from_slice(&state[8].to_le_bytes());
+    out[9 * 4..][..4].copy_from_slice(&state[9].to_le_bytes());
+    out[10 * 4..][..4].copy_from_slice(&state[10].to_le_bytes());
+    out[11 * 4..][..4].copy_from_slice(&state[11].to_le_bytes());
+    out[12 * 4..][..4].copy_from_slice(&state[12].to_le_bytes());
+    out[13 * 4..][..4].copy_from_slice(&state[13].to_le_bytes());
+    out[14 * 4..][..4].copy_from_slice(&state[14].to_le_bytes());
+    out[15 * 4..][..4].copy_from_slice(&state[15].to_le_bytes());
+    out
 }
 
 pub fn hash1<A: arrayvec::Array<Item = u8>>(
     input: &A,
-    key: &[u32; 8],
+    key: &[u8; KEY_LEN],
     offset: u64,
     flags: u8,
     flags_start: u8,
@@ -133,16 +145,16 @@ pub fn hash1<A: arrayvec::Array<Item = u8>>(
             offset,
             block_flags,
         );
-        cv = *array_ref!(output, 0, 8);
+        cv = *array_ref!(output, 0, 32);
         block_flags = flags;
         slice = &slice[BLOCK_LEN..];
     }
-    *out = crate::bytes_from_state_words(&cv);
+    *out = cv;
 }
 
 pub fn hash_many<A: arrayvec::Array<Item = u8>>(
     inputs: &[&A],
-    key: &[u32; 8],
+    key: &[u8; KEY_LEN],
     mut offset: u64,
     offset_deltas: &[u64; 16],
     flags: u8,
@@ -172,20 +184,19 @@ pub mod test {
     #[test]
     fn test_hash1_1() {
         let block = [1; BLOCK_LEN];
-        let key = [2; 8];
+        let key = [2; 32];
         let offset = 3 * crate::CHUNK_LEN as u64;
         let flags = 4;
         let flags_start = 8;
         let flags_end = 16;
 
-        let out = compress(
+        let expected_out = compress(
             &key,
             &block,
             BLOCK_LEN as u8,
             offset,
             flags | flags_start | flags_end,
         );
-        let expected_out = crate::bytes_from_state_words(array_ref!(out, 0, 8));
 
         let mut test_out = [0; OUT_LEN];
         hash1(
@@ -198,14 +209,14 @@ pub mod test {
             &mut test_out,
         );
 
-        assert_eq!(expected_out, test_out);
+        assert_eq!(&expected_out[0..32], &test_out);
     }
 
     #[test]
     fn test_hash1_3() {
         let mut blocks = [0; BLOCK_LEN * 3];
         crate::test::paint_test_input(&mut blocks);
-        let key = [2; 8];
+        let key = [2; 32];
         let offset = 3 * crate::CHUNK_LEN as u64;
         let flags = 4;
         let flags_start = 8;
@@ -213,30 +224,29 @@ pub mod test {
 
         let mut expected_cv = key;
         let out = compress(
-            &mut expected_cv,
+            &expected_cv,
             array_ref!(blocks, 0, BLOCK_LEN),
             BLOCK_LEN as u8,
             offset,
             flags | flags_start,
         );
-        expected_cv = *array_ref!(out, 0, 8);
+        expected_cv = *array_ref!(out, 0, 32);
         let out = compress(
-            &mut expected_cv,
+            &expected_cv,
             array_ref!(blocks, BLOCK_LEN, BLOCK_LEN),
             BLOCK_LEN as u8,
             offset,
             flags,
         );
-        expected_cv = *array_ref!(out, 0, 8);
+        expected_cv = *array_ref!(out, 0, 32);
         let out = compress(
-            &mut expected_cv,
+            &expected_cv,
             array_ref!(blocks, 2 * BLOCK_LEN, BLOCK_LEN),
             BLOCK_LEN as u8,
             offset,
             flags | flags_end,
         );
-        expected_cv = *array_ref!(out, 0, 8);
-        let expected_out = crate::bytes_from_state_words(&expected_cv);
+        expected_cv = *array_ref!(out, 0, 32);
 
         let mut test_out = [0; OUT_LEN];
         hash1(
@@ -249,7 +259,7 @@ pub mod test {
             &mut test_out,
         );
 
-        assert_eq!(expected_out, test_out);
+        assert_eq!(expected_cv, test_out);
     }
 
     #[test]
@@ -261,7 +271,7 @@ pub mod test {
             array_ref!(input_buf, 3 * BLOCK_LEN, 3 * BLOCK_LEN),
             array_ref!(input_buf, 6 * BLOCK_LEN, 3 * BLOCK_LEN),
         ];
-        let key = [2; 8];
+        let key = [2; 32];
         let offset = 3 * crate::CHUNK_LEN as u64;
         let delta = crate::CHUNK_LEN as u64;
         let flags = 4;

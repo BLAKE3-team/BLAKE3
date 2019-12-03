@@ -3,7 +3,7 @@ use core::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::*;
 
-use crate::{offset_high, offset_low, BLOCK_LEN, IV, MSG_SCHEDULE, OUT_LEN};
+use crate::{offset_high, offset_low, BLOCK_LEN, IV, KEY_LEN, MSG_SCHEDULE, OUT_LEN};
 use arrayref::{array_mut_ref, array_ref, mut_array_refs};
 
 pub const DEGREE: usize = 4;
@@ -124,14 +124,14 @@ unsafe fn undiagonalize(row1: &mut __m128i, row3: &mut __m128i, row4: &mut __m12
 
 #[target_feature(enable = "sse4.1")]
 pub unsafe fn compress(
-    cv: &[u32; 8],
+    cv: &[u8; 32],
     block: &[u8; BLOCK_LEN],
     block_len: u8,
     offset: u64,
     flags: u8,
-) -> [u32; 16] {
-    let row1 = &mut loadu(cv.as_ptr().add(0) as _);
-    let row2 = &mut loadu(cv.as_ptr().add(4) as _);
+) -> [u8; 64] {
+    let row1 = &mut loadu(&cv[0]);
+    let row2 = &mut loadu(&cv[16]);
     let row3 = &mut set4(IV[0], IV[1], IV[2], IV[3]);
     let row4 = &mut set4(
         offset_low(offset),
@@ -305,10 +305,10 @@ pub unsafe fn compress(
 
     *row1 = xor(*row1, *row3);
     *row2 = xor(*row2, *row4);
-    *row3 = xor(*row3, loadu(cv.as_ptr().add(0) as *const u8));
-    *row4 = xor(*row4, loadu(cv.as_ptr().add(4) as *const u8));
+    *row3 = xor(*row3, loadu(&cv[0]));
+    *row4 = xor(*row4, loadu(&cv[16]));
 
-    core::mem::transmute([*row1, *row2, *row3, *row4])
+    core::mem::transmute([*row1, *row2, *row3, *row4]) // x86 is little-endian
 }
 
 #[inline(always)]
@@ -500,7 +500,7 @@ unsafe fn load_offsets(offset: u64, offset_deltas: &[u64; 16]) -> (__m128i, __m1
 pub unsafe fn hash4(
     inputs: &[*const u8; DEGREE],
     blocks: usize,
-    key: &[u32; 8],
+    key: &[u8; KEY_LEN],
     offset: u64,
     offset_deltas: &[u64; 16],
     flags: u8,
@@ -508,15 +508,16 @@ pub unsafe fn hash4(
     flags_end: u8,
     out: &mut [u8; DEGREE * OUT_LEN],
 ) {
+    let key_words: [u32; 8] = core::mem::transmute(*key); // x86 is little-endian
     let mut h_vecs = [
-        set1(key[0]),
-        set1(key[1]),
-        set1(key[2]),
-        set1(key[3]),
-        set1(key[4]),
-        set1(key[5]),
-        set1(key[6]),
-        set1(key[7]),
+        set1(key_words[0]),
+        set1(key_words[1]),
+        set1(key_words[2]),
+        set1(key_words[3]),
+        set1(key_words[4]),
+        set1(key_words[5]),
+        set1(key_words[6]),
+        set1(key_words[7]),
     ];
     let (offset_low_vec, offset_high_vec) = load_offsets(offset, offset_deltas);
     let mut block_flags = flags | flags_start;
@@ -588,7 +589,7 @@ pub unsafe fn hash4(
 #[target_feature(enable = "sse4.1")]
 unsafe fn hash1<A: arrayvec::Array<Item = u8>>(
     input: &A,
-    key: &[u32; 8],
+    key: &[u8; KEY_LEN],
     offset: u64,
     flags: u8,
     flags_start: u8,
@@ -610,17 +611,17 @@ unsafe fn hash1<A: arrayvec::Array<Item = u8>>(
             offset,
             block_flags,
         );
-        cv = *array_ref!(out, 0, 8);
+        cv = *array_ref!(out, 0, 32);
         block_flags = flags;
         slice = &slice[BLOCK_LEN..];
     }
-    *out = core::mem::transmute(cv) // x86 is little endian
+    *out = cv;
 }
 
 #[target_feature(enable = "sse4.1")]
 pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
     mut inputs: &[&A],
-    key: &[u32; 8],
+    key: &[u8; KEY_LEN],
     mut offset: u64,
     offset_deltas: &[u64; 16],
     flags: u8,
@@ -706,7 +707,7 @@ mod test {
             return;
         }
 
-        let initial_state = [1, 2, 3, 4, 5, 6, 7, 8];
+        let mut initial_state = crate::test::TEST_KEY;
         let block_len: u8 = 27;
         let mut block = [0; BLOCK_LEN];
         crate::test::paint_test_input(&mut block[..block_len as usize]);
@@ -732,7 +733,7 @@ mod test {
             )
         };
 
-        assert_eq!(portable_out, simd_out);
+        assert_eq!(&portable_out[..], &simd_out[..]);
     }
 
     #[test]
@@ -749,13 +750,13 @@ mod test {
             array_ref!(input, 2 * BLOCK_LEN, BLOCK_LEN),
             array_ref!(input, 3 * BLOCK_LEN, BLOCK_LEN),
         ];
-        let key = [99, 98, 97, 96, 95, 94, 93, 92];
+        let key = crate::test::TEST_KEY;
 
         let mut portable_out = [0; DEGREE * OUT_LEN];
         for (parent, out) in parents.iter().zip(portable_out.chunks_exact_mut(OUT_LEN)) {
-            let out_words =
+            let wide_out =
                 portable::compress(&key, parent, BLOCK_LEN as u8, 0, Flags::PARENT.bits());
-            out.copy_from_slice(&bytes_from_state_words(array_ref!(out_words, 0, 8)));
+            out.copy_from_slice(&wide_out[..32]);
         }
 
         let mut simd_out = [0; DEGREE * OUT_LEN];
@@ -796,7 +797,7 @@ mod test {
             array_ref!(input, 2 * CHUNK_LEN, CHUNK_LEN),
             array_ref!(input, 3 * CHUNK_LEN, CHUNK_LEN),
         ];
-        let key = [108, 107, 106, 105, 104, 103, 102, 101];
+        let key = crate::test::TEST_KEY;
         // Use an offset with set bits in both 32-bit words.
         let initial_offset = ((5 * CHUNK_LEN as u64) << 32) + 6 * CHUNK_LEN as u64;
 
@@ -822,9 +823,9 @@ mod test {
                     initial_offset + (chunk_index * CHUNK_LEN) as u64,
                     block_flags.bits(),
                 );
-                cv = *array_ref!(out, 0, 8);
+                cv = *array_ref!(out, 0, 32);
             }
-            out.copy_from_slice(&bytes_from_state_words(&cv));
+            out.copy_from_slice(&cv);
         }
 
         let mut simd_out = [0; DEGREE * OUT_LEN];
@@ -858,7 +859,7 @@ mod test {
         }
 
         let block = [1; BLOCK_LEN];
-        let key = [2; 8];
+        let key = crate::test::TEST_KEY;
         let offset = 3 * CHUNK_LEN as u64;
         let flags = 4;
         let flags_start = 8;
@@ -899,7 +900,7 @@ mod test {
 
         let mut blocks = [0; BLOCK_LEN * 3];
         crate::test::paint_test_input(&mut blocks);
-        let key = [2; 8];
+        let key = crate::test::TEST_KEY;
         let offset = 3 * CHUNK_LEN as u64;
         let flags = 4;
         let flags_start = 8;
@@ -947,7 +948,7 @@ mod test {
         for i in 0..NUM_INPUTS {
             inputs.push(array_ref!(input_buf, i * INPUT_LEN, INPUT_LEN));
         }
-        let key = [2; 8];
+        let key = crate::test::TEST_KEY;
         let offset = 3 * CHUNK_LEN as u64;
         let flags = 4;
         let flags_start = 8;
