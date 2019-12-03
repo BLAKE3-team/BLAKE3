@@ -9,11 +9,11 @@ mod sse41;
 #[cfg(test)]
 mod test;
 
-use arrayref::array_ref;
-use arrayvec::ArrayString;
+use arrayref::{array_mut_ref, array_ref};
+use arrayvec::{ArrayString, ArrayVec};
 use core::cmp;
 use core::fmt;
-use platform::Platform;
+use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
 
 /// The default number of bytes in a hash, 32.
 pub const OUT_LEN: usize = 32;
@@ -276,7 +276,7 @@ impl ChunkState {
         debug_assert!(self.len() <= CHUNK_LEN as u64);
     }
 
-    fn finalize(&self) -> Output {
+    fn output(&self) -> Output {
         let block_flags = self.flags | self.start_flag() | Flags::CHUNK_END;
         Output {
             input_chaining_value: self.cv,
@@ -305,10 +305,11 @@ impl fmt::Debug for ChunkState {
 
 // IMPLEMENTATION NOTE
 // ===================
-// hash_subtree() is the basis of high-performance BLAKE3. We use it both for
-// all-at-once hashing, and for the incremental input with Hasher (though we
-// have to be careful with subtree boundaries in the incremental case).
-// hash_subtree() applies several optimizations at the same time:
+// The recursive function hash_subtree(), implemented below, is the basis of
+// high-performance BLAKE3. We use it both for all-at-once hashing, and for the
+// incremental input with Hasher (though we have to be careful with subtree
+// boundaries in the incremental case). hash_subtree() applies several
+// optimizations at the same time:
 // - Multi-threading with Rayon.
 // - Parallel chunk hashing with SIMD.
 // - Parallel parent hashing with SIMD. Note that while SIMD chunk hashing
@@ -316,3 +317,248 @@ impl fmt::Debug for ChunkState {
 //   to benefit from larger inputs, because more levels of the tree benefit can
 //   use full-width SIMD vectors for parent hashing. Without parallel parent
 //   hashing, we lose about 10% of overall throughput on AVX2 and AVX-512.
+
+// The largest power of two less than or equal to `n`, used for left_len()
+// immediately below.
+fn largest_power_of_two_leq(n: usize) -> usize {
+    ((n / 2) + 1).next_power_of_two()
+}
+
+// Given some input larger than one chunk, return the number of bytes that
+// should go in the left subtree. This is the largest power-of-2 number of
+// chunks that leaves at least 1 byte for the right subtree.
+fn left_len(content_len: usize) -> usize {
+    debug_assert!(content_len > CHUNK_LEN);
+    // Subtract 1 to reserve at least one byte for the right side.
+    let full_chunks = (content_len - 1) / CHUNK_LEN;
+    largest_power_of_two_leq(full_chunks) * CHUNK_LEN
+}
+
+// Recurse in parallel with rayon::join() if the "rayon" feature is active.
+// Rayon uses a global thread pool and a work-stealing algorithm to hand the
+// right side off to another thread, if idle threads are available. If the
+// "rayon" feature is disabled, just make ordinary function calls for the left
+// and the right.
+fn join<A, B, RA, RB>(oper_a: A, oper_b: B) -> (RA, RB)
+where
+    A: FnOnce() -> RA + Send,
+    B: FnOnce() -> RB + Send,
+    RA: Send,
+    RB: Send,
+{
+    #[cfg(feature = "rayon")]
+    return rayon::join(oper_a, oper_b);
+    #[cfg(not(feature = "rayon"))]
+    return (oper_a(), oper_b());
+}
+
+// Use SIMD parallelism to hash up to MAX_SIMD_DEGREE chunks at the same time
+// on a single thread. Write out the chunk chaining values and return the
+// number of chunks hashed. These chunks are never the root and never empty;
+// those cases use a different codepath.
+fn hash_chunks_parallel(
+    input: &[u8],
+    key: &[u8; KEY_LEN],
+    offset: u64,
+    flags: Flags,
+    platform: Platform,
+    out: &mut [u8],
+) -> usize {
+    debug_assert!(!input.is_empty(), "empty chunks below the root");
+    debug_assert!(input.len() <= MAX_SIMD_DEGREE * CHUNK_LEN);
+    debug_assert_eq!(offset % CHUNK_LEN as u64, 0, "invalid offset");
+
+    let mut chunks_exact = input.chunks_exact(CHUNK_LEN);
+    let mut chunks_array = ArrayVec::<[&[u8; CHUNK_LEN]; MAX_SIMD_DEGREE]>::new();
+    for chunk in &mut chunks_exact {
+        chunks_array.push(array_ref!(chunk, 0, CHUNK_LEN));
+    }
+    platform.hash_many(
+        &chunks_array,
+        key,
+        offset,
+        CHUNK_OFFSET_DELTAS,
+        flags,
+        Flags::CHUNK_START,
+        Flags::CHUNK_END,
+        out,
+    );
+
+    // Hash the remaining partial chunk, if there is one. Note that the empty
+    // chunk (meaning the empty message) is a different codepath.
+    let chunks_so_far = chunks_array.len();
+    if !chunks_exact.remainder().is_empty() {
+        let mut chunk_state = ChunkState::new(key, offset, flags, platform);
+        chunk_state.update(chunks_exact.remainder());
+        *array_mut_ref!(out, chunks_so_far * OUT_LEN, OUT_LEN) =
+            chunk_state.output().chaining_value();
+        chunks_so_far + 1
+    } else {
+        chunks_so_far
+    }
+}
+
+// Use SIMD parallelism to hash up to MAX_SIMD_DEGREE parents at the same time
+// on a single thread. Write out the parent chaining values and return the
+// number of parents hashed. (If there's an odd input chaining value left over,
+// return it as an additional output.) These parents are never the root and
+// never empty; those cases use a different codepath.
+fn hash_parents_parallel(
+    child_chaining_values: &[u8],
+    key: &[u8; KEY_LEN],
+    flags: Flags,
+    platform: Platform,
+    out: &mut [u8],
+) -> usize {
+    debug_assert_eq!(child_chaining_values.len() % OUT_LEN, 0, "wacky hash bytes");
+    let num_children = child_chaining_values.len() / OUT_LEN;
+    debug_assert!(num_children >= 2, "not enough children");
+    debug_assert!(num_children <= 2 * MAX_SIMD_DEGREE, "too many");
+
+    let mut parents_exact = child_chaining_values.chunks_exact(BLOCK_LEN);
+    // Use MAX_SIMD_DEGREE_OR_2 rather than MAX_SIMD_DEGREE here, because of
+    // the requirements of hash_subtree_wide().
+    let mut parents_array = ArrayVec::<[&[u8; BLOCK_LEN]; MAX_SIMD_DEGREE_OR_2]>::new();
+    for parent in &mut parents_exact {
+        parents_array.push(array_ref!(parent, 0, BLOCK_LEN));
+    }
+    platform.hash_many(
+        &parents_array,
+        key,
+        0, // Parents always use offset 0.
+        PARENT_OFFSET_DELTAS,
+        flags | Flags::PARENT,
+        Flags::empty(), // Parents have no start flags.
+        Flags::empty(), // Parents have no end flags.
+        out,
+    );
+
+    // If there's an odd child left over, it becomes an output.
+    let parents_so_far = parents_array.len();
+    if !parents_exact.remainder().is_empty() {
+        out[parents_so_far * OUT_LEN..][..OUT_LEN].copy_from_slice(parents_exact.remainder());
+        parents_so_far + 1
+    } else {
+        parents_so_far
+    }
+}
+
+// The wide helper function returns (writes out) an array of chaining values
+// and returns the length of that array. The number of chaining values returned
+// is the dyanmically detected SIMD degree, at most MAX_SIMD_DEGREE. Or fewer,
+// if the input is shorter than that many chunks. The reason for maintaining a
+// wide array of chaining values going back up the tree, is to allow the
+// implementation to hash as many parents in parallel as possible.
+//
+// As a special case when the SIMD degree is 1, this function will still return
+// at least 2 outputs. This guarantees that this function doesn't perform the
+// root compression. (If it did, it would use the wrong flags, and also we
+// wouldn't be able to implement exendable ouput.) Note that this function is
+// not used when the whole input is only 1 chunk long; that's a different
+// codepath.
+fn hash_subtree_wide(
+    input: &[u8],
+    key: &[u8; KEY_LEN],
+    offset: u64,
+    flags: Flags,
+    platform: Platform,
+    out: &mut [u8],
+) -> usize {
+    // Note that the single chunk case does *not* bump the SIMD degree up to 2
+    // when it is 1. This allows Rayon the option of multi-threading even the
+    // 2-chunk case, which can help performance on smaller platforms.
+    if input.len() <= platform.simd_degree() * CHUNK_LEN {
+        return hash_chunks_parallel(input, key, offset, flags, platform, out);
+    }
+
+    // With more than simd_degree chunks, we need to recurse. Start by dividing
+    // the input into left and right subtrees. (Note that this is only optimal
+    // as long as the SIMD degree is a power of 2. If we ever get a SIMD degree
+    // of 3 or something, we'll need a more complicated strategy.)
+    debug_assert_eq!(platform.simd_degree().count_ones(), 1, "power of 2");
+    let (left, right) = input.split_at(left_len(input.len()));
+    let right_offset = offset + left.len() as u64;
+
+    // Make space for the child outputs. Here we use MAX_SIMD_DEGREE_OR_2 to
+    // account for the special case of returning 2 outputs when the SIMD degree
+    // is 1.
+    let mut cv_array = [0; 2 * MAX_SIMD_DEGREE_OR_2 * OUT_LEN];
+    let degree = if left.len() == CHUNK_LEN {
+        // The "simd_degree=1 and we're at the leaf nodes" case.
+        debug_assert_eq!(platform.simd_degree(), 1);
+        1
+    } else {
+        cmp::max(platform.simd_degree(), 2)
+    };
+    let (left_out, right_out) = cv_array.split_at_mut(degree * OUT_LEN);
+
+    // Recurse! This uses multiple threads if the "rayon" feature is enabled.
+    let (left_n, right_n) = join(
+        || hash_subtree_wide(left, key, offset, flags, platform, left_out),
+        || hash_subtree_wide(right, key, right_offset, flags, platform, right_out),
+    );
+
+    // The special case again. If simd_degree=1, then we'll have left_n=1 and
+    // right_n=1. Rather than compressing them into a single output, return
+    // them directly, to make sure we always have at least two outputs.
+    debug_assert_eq!(left_n, degree);
+    debug_assert!(right_n >= 1 && right_n <= left_n);
+    if left_n == 1 {
+        out[..2 * OUT_LEN].copy_from_slice(&cv_array[..2 * OUT_LEN]);
+        return 2;
+    }
+
+    // Otherwise, do one layer of parent node compression.
+    let num_children = left_n + right_n;
+    hash_parents_parallel(
+        &cv_array[..num_children * OUT_LEN],
+        key,
+        flags,
+        platform,
+        out,
+    )
+}
+
+fn hash_subtree(
+    input: &[u8],
+    key: &[u8; KEY_LEN],
+    offset: u64,
+    flags: Flags,
+    platform: Platform,
+) -> Output {
+    // If the whole subtree is one chunk, hash it directly with a ChunkState.
+    if input.len() <= CHUNK_LEN {
+        let mut chunk_state = ChunkState::new(key, offset, flags, platform);
+        chunk_state.update(input);
+        return chunk_state.output();
+    }
+
+    // The input is more than one chunk. Hash it recursively, using as much
+    // parallelism as possible, both SIMD and threads. hash_subtree_wide() is
+    // guaranteed to return at least two output chaining values. That's
+    // important, because we want to build an Output object representing the
+    // (subtree) root node.
+    let mut cv_array = [0; 2 * MAX_SIMD_DEGREE_OR_2 * OUT_LEN];
+    let mut num_cvs = hash_subtree_wide(input, &key, 0, flags, platform, &mut cv_array);
+    debug_assert!(num_cvs >= 2);
+
+    // If MAX_SIMD_DEGREE is greater than 2 and there's enough input,
+    // hash_subtree_wide() returns more than 2 chaining values. Condense them
+    // into 2 by forming parent nodes repeatedly.
+    let mut out_array = [0; MAX_SIMD_DEGREE_OR_2 * OUT_LEN / 2];
+    while num_cvs > 2 {
+        let cv_slice = &cv_array[..num_cvs * OUT_LEN];
+        num_cvs = hash_parents_parallel(cv_slice, key, flags, platform, &mut out_array);
+        cv_array[..num_cvs * OUT_LEN].copy_from_slice(&out_array[..num_cvs * OUT_LEN]);
+    }
+
+    debug_assert_eq!(num_cvs, 2);
+    Output {
+        input_chaining_value: *key,
+        block: *array_ref!(cv_array, 0, BLOCK_LEN),
+        block_len: BLOCK_LEN as u8,
+        offset: 0,
+        flags: flags | Flags::PARENT,
+        platform,
+    }
+}

@@ -8,6 +8,15 @@ pub const MAX_SIMD_DEGREE: usize = 8;
 #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
 pub const MAX_SIMD_DEGREE: usize = 1;
 
+// There are some places where we want a static size that's equal to the
+// MAX_SIMD_DEGREE, but also at least 2. Constant contexts aren't currently
+// allowed to use cmp::max, so we have to hardcode this additional constant
+// value. Get rid of this once cmp::max is a const fn.
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub const MAX_SIMD_DEGREE_OR_2: usize = 8;
+#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+pub const MAX_SIMD_DEGREE_OR_2: usize = 2;
+
 #[derive(Clone, Copy, Debug)]
 pub enum Platform {
     Portable,
