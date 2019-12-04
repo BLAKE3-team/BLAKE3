@@ -1,12 +1,5 @@
 # Contributing
 
-BLAKE3 is 
-
-* [@oconnor63 ](https://github.com/daeMOn63) (Jack O'Connor)
-* [@sneves](https://github.com/sneves) (Samuel Neves)
-* [@veorq](https://github.com/veorq) (Jean-Philippe Aumasson)
-* [@zookozcash](https://github.com/zookocash) (Zooko)
-
 We welcome and encourage third-party contributions to BLAKE3, be it reports of issues encountered while using the software, suggestions of new features, or proposals of patches.
 
 ## Bug reports
