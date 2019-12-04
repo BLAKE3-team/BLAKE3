@@ -707,7 +707,7 @@ mod test {
             return;
         }
 
-        let mut initial_state = crate::test::TEST_KEY;
+        let initial_state = crate::test::TEST_KEY;
         let block_len: u8 = 27;
         let mut block = [0; BLOCK_LEN];
         crate::test::paint_test_input(&mut block[..block_len as usize]);

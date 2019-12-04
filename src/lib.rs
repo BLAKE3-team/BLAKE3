@@ -27,8 +27,13 @@ pub const BLOCK_LEN: usize = 64;
 #[doc(hidden)]
 pub const CHUNK_LEN: usize = 2048;
 
-const IV: [u32; 8] = [
+const IV: &[u32; 8] = &[
     0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
+];
+
+const IV_BYTES: &[u8; 32] = &[
+    0x67, 0xe6, 0x09, 0x6a, 0x85, 0xae, 0x67, 0xbb, 0x72, 0xf3, 0x6e, 0x3c, 0x3a, 0xf5, 0x4f, 0xa5,
+    0x7f, 0x52, 0x0e, 0x51, 0x8c, 0x68, 0x05, 0x9b, 0xab, 0xd9, 0x83, 0x1f, 0x19, 0xcd, 0xe0, 0x5b,
 ];
 
 const MSG_SCHEDULE: [[usize; 16]; 7] = [
@@ -177,6 +182,7 @@ impl Output {
     }
 
     fn root_output_bytes(&self, out_slice: &mut [u8]) {
+        debug_assert_eq!(self.offset, 0);
         let mut offset = 0;
         for out_block in out_slice.chunks_mut(2 * OUT_LEN) {
             let out_bytes = self.platform.compress(
@@ -207,7 +213,7 @@ impl ChunkState {
     fn new(key: &[u8; 32], offset: u64, flags: Flags, platform: Platform) -> Self {
         Self {
             cv: *key,
-            offset: 0,
+            offset,
             buf: [0; BLOCK_LEN],
             buf_len: 0,
             blocks_compressed: 0,
@@ -244,13 +250,14 @@ impl ChunkState {
             if !input.is_empty() {
                 debug_assert_eq!(self.buf_len as usize, BLOCK_LEN);
                 let block_flags = self.flags | self.start_flag(); // borrowck
-                self.platform.compress(
-                    &mut self.cv,
+                let output = self.platform.compress(
+                    &self.cv,
                     &self.buf,
                     BLOCK_LEN as u8,
                     self.offset,
                     block_flags,
                 );
+                self.cv = *array_ref!(output, 0, 32);
                 self.buf_len = 0;
                 self.buf = [0; BLOCK_LEN];
                 self.blocks_compressed += 1;
@@ -260,13 +267,14 @@ impl ChunkState {
         while input.len() > BLOCK_LEN {
             debug_assert_eq!(self.buf_len, 0);
             let block_flags = self.flags | self.start_flag(); // borrowck
-            self.platform.compress(
-                &mut self.cv,
+            let output = self.platform.compress(
+                &self.cv,
                 array_ref!(input, 0, BLOCK_LEN),
                 BLOCK_LEN as u8,
                 self.offset,
                 block_flags,
             );
+            self.cv = *array_ref!(output, 0, 32);
             self.blocks_compressed += 1;
             input = &input[BLOCK_LEN..];
         }
@@ -388,7 +396,8 @@ fn hash_chunks_parallel(
     // chunk (meaning the empty message) is a different codepath.
     let chunks_so_far = chunks_array.len();
     if !chunks_exact.remainder().is_empty() {
-        let mut chunk_state = ChunkState::new(key, offset, flags, platform);
+        let chunk_offset = offset + (chunks_so_far * CHUNK_LEN) as u64;
+        let mut chunk_state = ChunkState::new(key, chunk_offset, flags, platform);
         chunk_state.update(chunks_exact.remainder());
         *array_mut_ref!(out, chunks_so_far * OUT_LEN, OUT_LEN) =
             chunk_state.output().chaining_value();
@@ -561,4 +570,16 @@ fn hash_subtree(
         flags: flags | Flags::PARENT,
         platform,
     }
+}
+
+pub fn hash(input: &[u8]) -> Hash {
+    hash_subtree(input, IV_BYTES, 0, Flags::empty(), Platform::detect()).root_hash()
+}
+
+pub fn hash_keyed(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
+    hash_subtree(input, key, 0, Flags::KEYED_HASH, Platform::detect()).root_hash()
+}
+
+pub fn derive_key(key: &[u8; KEY_LEN], context: &[u8]) -> Hash {
+    hash_subtree(context, key, 0, Flags::DERIVE_KEY, Platform::detect()).root_hash()
 }

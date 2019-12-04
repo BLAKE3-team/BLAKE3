@@ -52,7 +52,7 @@ impl Platform {
         degree
     }
 
-    pub fn compress(
+    pub(crate) fn compress(
         &self,
         cv: &[u8; 32],
         block: &[u8; BLOCK_LEN],
@@ -80,7 +80,7 @@ impl Platform {
     // after every block, there's a small but measurable performance loss.
     // Compressing chunks with a dedicated loop avoids this.
 
-    pub fn hash_many<A: arrayvec::Array<Item = u8>>(
+    pub(crate) fn hash_many<A: arrayvec::Array<Item = u8>>(
         &self,
         inputs: &[&A],
         key: &[u8; KEY_LEN],

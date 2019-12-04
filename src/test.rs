@@ -1,23 +1,43 @@
 use crate::CHUNK_LEN;
-use core::cmp;
+use arrayref::array_ref;
 use core::usize;
 
-pub const TEST_KEY: [u8; crate::KEY_LEN] = [
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
-    26, 27, 28, 29, 30, 31,
+// Interesting input lengths to run tests on.
+pub const TEST_CASES: &[usize] = &[
+    0,
+    1,
+    CHUNK_LEN - 1,
+    CHUNK_LEN,
+    CHUNK_LEN + 1,
+    2 * CHUNK_LEN,
+    2 * CHUNK_LEN + 1,
+    3 * CHUNK_LEN,
+    3 * CHUNK_LEN + 1,
+    4 * CHUNK_LEN,
+    4 * CHUNK_LEN + 1,
+    5 * CHUNK_LEN,
+    5 * CHUNK_LEN + 1,
+    6 * CHUNK_LEN,
+    6 * CHUNK_LEN + 1,
+    7 * CHUNK_LEN,
+    7 * CHUNK_LEN + 1,
+    8 * CHUNK_LEN,
+    8 * CHUNK_LEN + 1,
+    16 * CHUNK_LEN, // AVX512's bandwidth
+    31 * CHUNK_LEN, // 16 + 8 + 4 + 2 + 1
 ];
 
-// Paint a byte pattern that won't repeat, so that we don't accidentally
-// miss buffer offset bugs.
+pub const TEST_CASES_MAX: usize = 31 * CHUNK_LEN;
+
+pub const TEST_KEY: [u8; crate::KEY_LEN] = *b"whats the Elvish word for friend";
+
+// Paint the input with a repeating byte pattern. We use a cycle length of 251,
+// because that's the largets prime number less than 256. This makes it
+// unlikely to swapping any two adjacent input blocks or chunks will give the
+// same answer.
 pub fn paint_test_input(buf: &mut [u8]) {
-    let mut offset = 0;
-    let mut counter: u32 = 1;
-    while offset < buf.len() {
-        let bytes = counter.to_le_bytes();
-        let take = cmp::min(bytes.len(), buf.len() - offset);
-        buf[offset..][..take].copy_from_slice(&bytes[..take]);
-        counter += 1;
-        offset += take;
+    for (i, b) in buf.iter_mut().enumerate() {
+        *b = (i % 251) as u8;
     }
 }
 
@@ -77,5 +97,44 @@ fn test_left_len() {
     ];
     for &(input, output) in input_output {
         assert_eq!(crate::left_len(input), output);
+    }
+}
+
+#[test]
+fn test_compare_reference_impl() {
+    const OUT: usize = 303; // more than 64, not a multiple of 4
+    let mut input_buf = [0; TEST_CASES_MAX];
+    paint_test_input(&mut input_buf);
+    for &case in TEST_CASES {
+        let input = &input_buf[..case];
+        #[cfg(feature = "std")]
+        dbg!(case);
+
+        // regular
+        let mut reference_hasher = reference_impl::Hasher::new();
+        reference_hasher.update(input);
+        let mut expected_out = [0; OUT];
+        reference_hasher.finalize(&mut expected_out);
+
+        let test_out = crate::hash(input);
+        assert_eq!(&test_out, array_ref!(expected_out, 0, 32));
+
+        // keyed
+        let mut reference_hasher = reference_impl::Hasher::new_keyed(&TEST_KEY);
+        reference_hasher.update(input);
+        let mut expected_out = [0; OUT];
+        reference_hasher.finalize(&mut expected_out);
+
+        let test_out = crate::hash_keyed(&TEST_KEY, input);
+        assert_eq!(&test_out, array_ref!(expected_out, 0, 32));
+
+        // derive_key
+        let mut reference_hasher = reference_impl::Hasher::new_derive_key(&TEST_KEY);
+        reference_hasher.update(input);
+        let mut expected_out = [0; OUT];
+        reference_hasher.finalize(&mut expected_out);
+
+        let test_out = crate::derive_key(&TEST_KEY, input);
+        assert_eq!(&test_out, array_ref!(expected_out, 0, 32));
     }
 }
