@@ -2,12 +2,18 @@
 
 BLAKE3 is a cryptographic hash function that is
 
-1. Much faster than MD5, SHA1, SHA2, SHA3, and even BLAKE2
+1. Faster than MD5, SHA1, SHA2, SHA3, and even BLAKE2
 1. Highly parallelizable: The more data and the more cores, the faster it
 goes. (For you specialists reading this: this is because it is actually a
 MerkleTree under the hood.)
 1. Capable of streaming and random-access verification. (Again: the magic of Merkle Trees.)
 1. Carefully engineered to be simple and safe to use, with no "modes" or tweaks required.
+
+This repository provides the reference implementation of BLAKE3, which
+is coded in Rust and includes portable as well as optimized code for
+various instructions sets.
+
+Speed..
 
 ![benchmarks](media/speed.png)
 
@@ -40,6 +46,9 @@ TODO: BLAKE, BLAKE3, Bao
 Please see [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Licensing
+
+The source code in the present repository is dual-licensed under Apache
+2 and 
 
 TODO: Apache 2 and CC0
 
