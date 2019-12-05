@@ -15,7 +15,7 @@ use core::cmp;
 use core::fmt;
 use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
 
-/// The default number of bytes in a hash, 32.
+/// The number of bytes in the default output, 32.
 pub const OUT_LEN: usize = 32;
 
 /// The number of bytes in a key, 32.
@@ -92,14 +92,23 @@ fn offset_high(offset: u64) -> u32 {
 
 /// A BLAKE3 output of the default size, 32 bytes, which implements
 /// constant-time equality.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash)]
 pub struct Hash([u8; OUT_LEN]);
 
 impl Hash {
+    /// The bytes of the `Hash`. Note that byte arrays don't provide
+    /// constant-time equality, so if  you need to compare hashes, prefer the
+    /// `Hash` type.
     pub fn as_bytes(&self) -> &[u8; OUT_LEN] {
         &self.0
     }
 
+    /// The hexadecimal encoding of the `Hash`. The returned [`ArrayString`] is
+    /// a fixed size and does not allocate memory on the heap. Note that
+    /// [`ArrayString`] doesn't provide constant-time equality, so if you need
+    /// to compare hashes, prefer the `Hash` type.
+    ///
+    /// [`ArrayString`]: https://docs.rs/arrayvec/0.5.1/arrayvec/struct.ArrayString.html
     pub fn to_hex(&self) -> ArrayString<[u8; 2 * OUT_LEN]> {
         let mut s = ArrayString::new();
         let table = b"0123456789abcdef";
@@ -141,7 +150,7 @@ impl Eq for Hash {}
 
 impl fmt::Debug for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Hash(0x{})", self.to_hex())
+        write!(f, "Hash({})", self.to_hex())
     }
 }
 
@@ -222,8 +231,17 @@ impl ChunkState {
         }
     }
 
-    fn len(&self) -> u64 {
-        BLOCK_LEN as u64 * self.blocks_compressed as u64 + self.buf_len as u64
+    fn reset(&mut self, key: &[u8; KEY_LEN], new_offset: u64) {
+        debug_assert_eq!(new_offset % CHUNK_LEN as u64, 0);
+        self.cv = *key;
+        self.offset = new_offset;
+        self.buf = [0; BLOCK_LEN];
+        self.buf_len = 0;
+        self.blocks_compressed = 0;
+    }
+
+    fn len(&self) -> usize {
+        BLOCK_LEN * self.blocks_compressed as usize + self.buf_len as usize
     }
 
     fn fill_buf(&mut self, input: &mut &[u8]) {
@@ -244,7 +262,7 @@ impl ChunkState {
 
     // Try to avoid buffering as much as possible, by compressing directly from
     // the input slice when full blocks are available.
-    fn update(&mut self, mut input: &[u8]) {
+    fn update(&mut self, mut input: &[u8]) -> &mut Self {
         if self.buf_len > 0 {
             self.fill_buf(&mut input);
             if !input.is_empty() {
@@ -281,7 +299,8 @@ impl ChunkState {
 
         self.fill_buf(&mut input);
         debug_assert!(input.is_empty());
-        debug_assert!(self.len() <= CHUNK_LEN as u64);
+        debug_assert!(self.len() <= CHUNK_LEN);
+        self
     }
 
     fn output(&self) -> Output {
@@ -313,11 +332,11 @@ impl fmt::Debug for ChunkState {
 
 // IMPLEMENTATION NOTE
 // ===================
-// The recursive function hash_subtree(), implemented below, is the basis of
-// high-performance BLAKE3. We use it both for all-at-once hashing, and for the
-// incremental input with Hasher (though we have to be careful with subtree
-// boundaries in the incremental case). hash_subtree() applies several
-// optimizations at the same time:
+// The recursive function compress_subtree_wide(), implemented below, is the
+// basis of high-performance BLAKE3. We use it both for all-at-once hashing,
+// and for the incremental input with Hasher (though we have to be careful with
+// subtree boundaries in the incremental case). compress_subtree_wide() applies
+// several optimizations at the same time:
 // - Multi-threading with Rayon.
 // - Parallel chunk hashing with SIMD.
 // - Parallel parent hashing with SIMD. Note that while SIMD chunk hashing
@@ -327,7 +346,7 @@ impl fmt::Debug for ChunkState {
 //   hashing, we lose about 10% of overall throughput on AVX2 and AVX-512.
 
 // The largest power of two less than or equal to `n`, used for left_len()
-// immediately below.
+// immediately below, and also directly in Hasher::update().
 fn largest_power_of_two_leq(n: usize) -> usize {
     ((n / 2) + 1).next_power_of_two()
 }
@@ -364,7 +383,7 @@ where
 // on a single thread. Write out the chunk chaining values and return the
 // number of chunks hashed. These chunks are never the root and never empty;
 // those cases use a different codepath.
-fn hash_chunks_parallel(
+fn compress_chunks_parallel(
     input: &[u8],
     key: &[u8; KEY_LEN],
     offset: u64,
@@ -412,7 +431,7 @@ fn hash_chunks_parallel(
 // number of parents hashed. (If there's an odd input chaining value left over,
 // return it as an additional output.) These parents are never the root and
 // never empty; those cases use a different codepath.
-fn hash_parents_parallel(
+fn compress_parents_parallel(
     child_chaining_values: &[u8],
     key: &[u8; KEY_LEN],
     flags: Flags,
@@ -426,7 +445,7 @@ fn hash_parents_parallel(
 
     let mut parents_exact = child_chaining_values.chunks_exact(BLOCK_LEN);
     // Use MAX_SIMD_DEGREE_OR_2 rather than MAX_SIMD_DEGREE here, because of
-    // the requirements of hash_subtree_wide().
+    // the requirements of compress_subtree_wide().
     let mut parents_array = ArrayVec::<[&[u8; BLOCK_LEN]; MAX_SIMD_DEGREE_OR_2]>::new();
     for parent in &mut parents_exact {
         parents_array.push(array_ref!(parent, 0, BLOCK_LEN));
@@ -465,7 +484,7 @@ fn hash_parents_parallel(
 // wouldn't be able to implement exendable ouput.) Note that this function is
 // not used when the whole input is only 1 chunk long; that's a different
 // codepath.
-fn hash_subtree_wide(
+fn compress_subtree_wide(
     input: &[u8],
     key: &[u8; KEY_LEN],
     offset: u64,
@@ -477,7 +496,7 @@ fn hash_subtree_wide(
     // when it is 1. This allows Rayon the option of multi-threading even the
     // 2-chunk case, which can help performance on smaller platforms.
     if input.len() <= platform.simd_degree() * CHUNK_LEN {
-        return hash_chunks_parallel(input, key, offset, flags, platform, out);
+        return compress_chunks_parallel(input, key, offset, flags, platform, out);
     }
 
     // With more than simd_degree chunks, we need to recurse. Start by dividing
@@ -503,8 +522,8 @@ fn hash_subtree_wide(
 
     // Recurse! This uses multiple threads if the "rayon" feature is enabled.
     let (left_n, right_n) = join(
-        || hash_subtree_wide(left, key, offset, flags, platform, left_out),
-        || hash_subtree_wide(right, key, right_offset, flags, platform, right_out),
+        || compress_subtree_wide(left, key, offset, flags, platform, left_out),
+        || compress_subtree_wide(right, key, right_offset, flags, platform, right_out),
     );
 
     // The special case again. If simd_degree=1, then we'll have left_n=1 and
@@ -519,7 +538,7 @@ fn hash_subtree_wide(
 
     // Otherwise, do one layer of parent node compression.
     let num_children = left_n + right_n;
-    hash_parents_parallel(
+    compress_parents_parallel(
         &cv_array[..num_children * OUT_LEN],
         key,
         flags,
@@ -528,43 +547,56 @@ fn hash_subtree_wide(
     )
 }
 
-fn hash_subtree(
+// Hash a subtree with compress_subtree_wide(), and then condense the resulting
+// list of chaining values down to a single parent node. Don't compress that
+// last parent node, however. Instead, return its message bytes (the
+// concatenated chaining values of its children). This is necessary when the
+// first call to update() supplies a complete subtree, because the topmost
+// parent node of that subtree could end up being the root.
+//
+// As with compress_subtree_wide(), this function is not used on inputs of 1
+// chunk or less. That's a different codepath.
+fn compress_subtree_to_parent_node(
     input: &[u8],
     key: &[u8; KEY_LEN],
     offset: u64,
     flags: Flags,
     platform: Platform,
-) -> Output {
-    // If the whole subtree is one chunk, hash it directly with a ChunkState.
-    if input.len() <= CHUNK_LEN {
-        let mut chunk_state = ChunkState::new(key, offset, flags, platform);
-        chunk_state.update(input);
-        return chunk_state.output();
-    }
-
-    // The input is more than one chunk. Hash it recursively, using as much
-    // parallelism as possible, both SIMD and threads. hash_subtree_wide() is
-    // guaranteed to return at least two output chaining values. That's
-    // important, because we want to build an Output object representing the
-    // (subtree) root node.
+) -> [u8; BLOCK_LEN] {
+    debug_assert!(input.len() > CHUNK_LEN);
     let mut cv_array = [0; 2 * MAX_SIMD_DEGREE_OR_2 * OUT_LEN];
-    let mut num_cvs = hash_subtree_wide(input, &key, 0, flags, platform, &mut cv_array);
+    let mut num_cvs = compress_subtree_wide(input, &key, offset, flags, platform, &mut cv_array);
     debug_assert!(num_cvs >= 2);
 
     // If MAX_SIMD_DEGREE is greater than 2 and there's enough input,
-    // hash_subtree_wide() returns more than 2 chaining values. Condense them
-    // into 2 by forming parent nodes repeatedly.
+    // compress_subtree_wide() returns more than 2 chaining values. Condense
+    // them into 2 by forming parent nodes repeatedly.
     let mut out_array = [0; MAX_SIMD_DEGREE_OR_2 * OUT_LEN / 2];
     while num_cvs > 2 {
         let cv_slice = &cv_array[..num_cvs * OUT_LEN];
-        num_cvs = hash_parents_parallel(cv_slice, key, flags, platform, &mut out_array);
+        num_cvs = compress_parents_parallel(cv_slice, key, flags, platform, &mut out_array);
         cv_array[..num_cvs * OUT_LEN].copy_from_slice(&out_array[..num_cvs * OUT_LEN]);
     }
+    *array_ref!(cv_array, 0, 2 * OUT_LEN)
+}
 
-    debug_assert_eq!(num_cvs, 2);
+// Hash a complete input all at once. Unlike compress_subtree_wide() and
+// compress_subtree_to_parent_node(), this function handles the 1 chunk case.
+fn hash_all_at_once(input: &[u8], key: &[u8; KEY_LEN], flags: Flags) -> Output {
+    let platform = Platform::detect();
+
+    // If the whole subtree is one chunk, hash it directly with a ChunkState.
+    if input.len() <= CHUNK_LEN {
+        return ChunkState::new(key, 0, flags, platform)
+            .update(input)
+            .output();
+    }
+
+    // Otherwise construct an Output object from the parent node returned by
+    // compress_subtree_to_parent_node().
     Output {
         input_chaining_value: *key,
-        block: *array_ref!(cv_array, 0, BLOCK_LEN),
+        block: compress_subtree_to_parent_node(input, key, 0, flags, platform),
         block_len: BLOCK_LEN as u8,
         offset: 0,
         flags: flags | Flags::PARENT,
@@ -572,14 +604,330 @@ fn hash_subtree(
     }
 }
 
+/// The default hash function.
 pub fn hash(input: &[u8]) -> Hash {
-    hash_subtree(input, IV_BYTES, 0, Flags::empty(), Platform::detect()).root_hash()
+    hash_all_at_once(input, IV_BYTES, Flags::empty()).root_hash()
 }
 
+/// The keyed hash function.
 pub fn hash_keyed(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
-    hash_subtree(input, key, 0, Flags::KEYED_HASH, Platform::detect()).root_hash()
+    hash_all_at_once(input, key, Flags::KEYED_HASH).root_hash()
 }
 
+/// The key derivation function.
 pub fn derive_key(key: &[u8; KEY_LEN], context: &[u8]) -> Hash {
-    hash_subtree(context, key, 0, Flags::DERIVE_KEY, Platform::detect()).root_hash()
+    hash_all_at_once(context, key, Flags::DERIVE_KEY).root_hash()
+}
+
+fn parent_node_output(
+    left_child: &[u8; 32],
+    right_child: &[u8; 32],
+    key: &[u8; KEY_LEN],
+    flags: Flags,
+    platform: Platform,
+) -> Output {
+    let mut block = [0; BLOCK_LEN];
+    block[..32].copy_from_slice(left_child);
+    block[32..].copy_from_slice(right_child);
+    Output {
+        input_chaining_value: *key,
+        block,
+        block_len: BLOCK_LEN as u8,
+        offset: 0,
+        flags: flags | Flags::PARENT,
+        platform,
+    }
+}
+
+/// An incremental hash state that can accept any number of writes, with
+/// support for extendable output.
+#[derive(Clone)]
+pub struct Hasher {
+    key: [u8; KEY_LEN],
+    chunk_state: ChunkState,
+    // 2^53 * 2048 = 2^64
+    cv_stack: ArrayVec<[[u8; OUT_LEN]; 53]>,
+}
+
+impl Hasher {
+    fn new_internal(key: &[u8; 32], flags: Flags) -> Self {
+        Self {
+            key: *key,
+            chunk_state: ChunkState::new(key, 0, flags, Platform::detect()),
+            cv_stack: ArrayVec::new(),
+        }
+    }
+
+    /// Construct a new `Hasher` for the regular hash function.
+    pub fn new() -> Self {
+        Self::new_internal(IV_BYTES, Flags::empty())
+    }
+
+    /// Construct a new `Hasher` for the keyed hash function.
+    pub fn new_keyed(key: &[u8; KEY_LEN]) -> Self {
+        Self::new_internal(key, Flags::KEYED_HASH)
+    }
+
+    /// Construct a new `Hasher` for the key derivation function.
+    ///
+    /// Note that the input in this case is intended to be an
+    /// application-specific context string. Most callers should hardcode such
+    /// strings and prefer the [`derive_key`] function.
+    ///
+    /// [`derive_key`]: fn.derive_key.html
+    pub fn new_derive_key(key: &[u8; KEY_LEN]) -> Self {
+        Self::new_internal(key, Flags::DERIVE_KEY)
+    }
+
+    /// The total number of input bytes so far.
+    pub fn count(&self) -> u64 {
+        self.chunk_state.offset + self.chunk_state.len() as u64
+    }
+
+    // See comment in push_cv.
+    fn merge_cv_stack(&mut self, total_len: u64) {
+        let post_merge_stack_len = total_len.count_ones() as usize;
+        while self.cv_stack.len() > post_merge_stack_len {
+            let right_child = self.cv_stack.pop().unwrap();
+            let left_child = self.cv_stack.pop().unwrap();
+            let parent_cv = parent_node_output(
+                &left_child,
+                &right_child,
+                &self.key,
+                self.chunk_state.flags,
+                self.chunk_state.platform,
+            )
+            .chaining_value();
+            self.cv_stack.push(parent_cv);
+        }
+    }
+
+    fn push_cv(&mut self, new_cv: &[u8; 32], offset: u64) {
+        // In reference_impl.rs, we merge the new CV with existing CVs from the
+        // stack before pushing it. We can do that because we know more input
+        // is coming, so we know none of the merges are root.
+        //
+        // This setting is different. We want to feed as much input as possible
+        // to compress_subtree_wide(), without setting aside anything in the
+        // chunk_state. If the user gives us 64 KiB, we want to parallelize
+        // over all 64 KiB at once as a single subtree, rather than hashing 32
+        // KiB followed by 16 KiB followed by...etc.
+        //
+        // But we have to worry about the possibility that no more input comes
+        // in the future. That 64 KiB might be bring the total to e.g. 128 KiB.
+        // We shouldn't merge that whole 128 KiB tree yet, because if no more
+        // input comes in the future, then we'll have merged the root node. We
+        // need that node for extendable output, not to mention setting the
+        // ROOT flag properly.
+        //
+        // To deal with this, we merge the CV stack lazily. We do a merge of
+        // what's in there *just* before adding a new CV, and we don't do any
+        // merging with the new CV itself.
+        //
+        // We still use the "count the 1 bits" algorithm, adjusted slightly for
+        // this setting, using the offset (the start of the new CV's bytes)
+        // rather than the final total (the end of the new CV's bytes). That
+        // algorithm is explained in detail in the spec.
+        self.merge_cv_stack(offset);
+        self.cv_stack.push(*new_cv);
+    }
+
+    /// Add input bytes to the hash state. You can call this any number of
+    /// times.
+    pub fn update(&mut self, mut input: &[u8]) -> &mut Self {
+        // If we have some partial chunk bytes in the internal chunk_state, we
+        // need to finish that chunk first.
+        if self.chunk_state.len() > 0 {
+            let want = CHUNK_LEN - self.chunk_state.len();
+            let take = cmp::min(want, input.len());
+            self.chunk_state.update(&input[..take]);
+            input = &input[take..];
+            if !input.is_empty() {
+                // We've filled the current chunk, and there's more input
+                // coming, so we know it's not the root and we can finalize it.
+                // Then we'll proceed to hashing whole chunks below.
+                debug_assert_eq!(self.chunk_state.len(), CHUNK_LEN);
+                let chunk_cv = self.chunk_state.output().chaining_value();
+                self.push_cv(&chunk_cv, self.chunk_state.offset);
+                let new_offset = self.chunk_state.offset + CHUNK_LEN as u64;
+                self.chunk_state.reset(&self.key, new_offset);
+            } else {
+                return self;
+            }
+        }
+
+        // Now the chunk_state is clear, and we have more input. If there's
+        // more than a single chunk (so, definitely not the root chunk), hash
+        // the largest whole subtree we can, with the full benefits of SIMD and
+        // multi-threading parallelism. Two restrictions:
+        // - The subtree has to be a power-of-2 number of chunks. Only subtrees
+        //   along the right edge can be incomplete, and we don't know where
+        //   the right edge is going to be until we get to finalize().
+        // - The subtree must evenly divide the total number of chunks up until
+        //   this point (if total is not 0). If the current incomplete subtree
+        //   is only waiting for 1 more chunk, we can't hash a subtree of 4
+        //   chunks. We have to complete the current subtree first.
+        // Because we might need to break up the input to form powers of 2, or
+        // to evenly divide what we already have, this part runs in a loop.
+        while input.len() > CHUNK_LEN {
+            debug_assert_eq!(self.chunk_state.len(), 0, "no partial chunk data");
+            debug_assert_eq!(CHUNK_LEN.count_ones(), 1, "power of 2 chunk len");
+            debug_assert_eq!(self.chunk_state.offset % CHUNK_LEN as u64, 0);
+            let mut subtree_len = largest_power_of_two_leq(input.len());
+            // Shrink the subtree_len until it evenly divides the count so far.
+            // We know it's a power of 2, so we can use a bitmask rather than
+            // the more expensive modulus operation. Note that if the caller
+            // consistently passes power-of-2 inputs of the same size (as is
+            // hopefully typical), we'll always skip over this loop.
+            while (subtree_len - 1) as u64 & self.chunk_state.offset != 0 {
+                subtree_len /= 2;
+            }
+            // The shrunken subtree_len might now be 1 chunk long. If so, hash
+            // that one chunk by itself. Otherwise, compress the subtree into a
+            // pair of CVs.
+            if subtree_len <= CHUNK_LEN {
+                debug_assert_eq!(subtree_len, CHUNK_LEN);
+                self.push_cv(
+                    &ChunkState::new(
+                        &self.key,
+                        self.chunk_state.offset,
+                        self.chunk_state.flags,
+                        self.chunk_state.platform,
+                    )
+                    .update(&input[..subtree_len])
+                    .output()
+                    .chaining_value(),
+                    self.chunk_state.offset,
+                );
+            } else {
+                // This is the high-performance happy path, though getting here
+                // depends on the caller giving us a long enough input.
+                let cv_pair = compress_subtree_to_parent_node(
+                    &input[..subtree_len],
+                    &self.key,
+                    self.chunk_state.offset,
+                    self.chunk_state.flags,
+                    self.chunk_state.platform,
+                );
+                let left_cv = array_ref!(cv_pair, 0, 32);
+                let right_cv = array_ref!(cv_pair, 32, 32);
+                // Push the two CVs we received into the CV stack in order. Because
+                // the stack merges lazily, this guarantees we aren't merging the
+                // root.
+                self.push_cv(left_cv, self.chunk_state.offset);
+                self.push_cv(right_cv, self.chunk_state.offset + (subtree_len as u64 / 2));
+            }
+            self.chunk_state.offset += subtree_len as u64;
+            input = &input[subtree_len..];
+        }
+
+        // What remains is 1 chunk or less. Add it to the chunk state.
+        debug_assert!(input.len() <= CHUNK_LEN);
+        if !input.is_empty() {
+            self.chunk_state.update(input);
+            // Having added some input to the chunk_state, we know what's in
+            // the CV stack won't become the root node, and we can do an extra
+            // merge. This simplifies finalize().
+            self.merge_cv_stack(self.chunk_state.offset);
+        }
+
+        self
+    }
+
+    fn final_output(&self) -> Output {
+        // If the current chunk is the only chunk, that makes it the root node
+        // also. Convert it directly into an Output. Otherwise, we need to
+        // merge subtrees below.
+        if self.cv_stack.is_empty() {
+            debug_assert_eq!(self.chunk_state.offset, 0);
+            return self.chunk_state.output();
+        }
+
+        // If there are any bytes in the ChunkState, finalize that chunk and
+        // merge its CV with everything in the CV stack. In that case, the work
+        // we did at the end of update() above guarantees that the stack
+        // doesn't contain any unmerged subtrees that need to be merged first.
+        // (This is important, because if there were two chunk hashes sitting
+        // on top of the stack, they would need to merge with each other, and
+        // merging a new chunk hash into them would be incorrect.)
+        //
+        // If there are no bytes in the ChunkState, we'll merge what's already
+        // in the stack. In this case it's fine if there are unmerged chunks on
+        // top, because we'll merge them with each other. Note that the case of
+        // the empty chunk is taken care of above.
+        let mut output: Output;
+        let mut num_cvs_remaining = self.cv_stack.len();
+        if self.chunk_state.len() > 0 {
+            debug_assert_eq!(
+                self.cv_stack.len(),
+                self.chunk_state.offset.count_ones() as usize,
+                "cv stack does not need a merge"
+            );
+            output = self.chunk_state.output();
+        } else {
+            debug_assert!(self.cv_stack.len() >= 2);
+            output = parent_node_output(
+                &self.cv_stack[num_cvs_remaining - 2],
+                &self.cv_stack[num_cvs_remaining - 1],
+                &self.key,
+                self.chunk_state.flags,
+                self.chunk_state.platform,
+            );
+            num_cvs_remaining -= 2;
+        }
+        while num_cvs_remaining > 0 {
+            output = parent_node_output(
+                &self.cv_stack[num_cvs_remaining - 1],
+                &output.chaining_value(),
+                &self.key,
+                self.chunk_state.flags,
+                self.chunk_state.platform,
+            );
+            num_cvs_remaining -= 1;
+        }
+        output
+    }
+
+    /// Finalize the hash state and return the [`Hash`](struct.Hash.html) of
+    /// the input.
+    ///
+    /// This method is idempotent. Calling it twice will give the same result.
+    /// You can also add more input and finalize again.
+    pub fn finalize(&self) -> Hash {
+        self.final_output().root_hash()
+    }
+
+    /// Finalize the hash state and write any number of extended output bytes.
+    ///
+    /// This method is idempotent. Calling it twice will give the same result.
+    /// You can also add more input and finalize again.
+    pub fn finalize_xof(&self, output: &mut [u8]) {
+        self.final_output().root_output_bytes(output);
+    }
+}
+
+// Don't derive(Debug), because the state may be secret.
+impl fmt::Debug for Hasher {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Hasher {{ count: {}, flags: {:?}, platform: {:?} }}",
+            self.count(),
+            self.chunk_state.flags,
+            self.chunk_state.platform
+        )
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::io::Write for Hasher {
+    /// This is equivalent to [`update`](#method.update).
+    fn write(&mut self, input: &[u8]) -> std::io::Result<usize> {
+        self.update(input);
+        Ok(input.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }

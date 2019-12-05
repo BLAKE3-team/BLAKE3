@@ -1,6 +1,7 @@
 use crate::CHUNK_LEN;
 use arrayref::array_ref;
 use core::usize;
+use rand::prelude::*;
 
 // Interesting input lengths to run tests on.
 pub const TEST_CASES: &[usize] = &[
@@ -111,30 +112,128 @@ fn test_compare_reference_impl() {
         dbg!(case);
 
         // regular
-        let mut reference_hasher = reference_impl::Hasher::new();
-        reference_hasher.update(input);
-        let mut expected_out = [0; OUT];
-        reference_hasher.finalize(&mut expected_out);
+        {
+            let mut reference_hasher = reference_impl::Hasher::new();
+            reference_hasher.update(input);
+            let mut expected_out = [0; OUT];
+            reference_hasher.finalize(&mut expected_out);
 
-        let test_out = crate::hash(input);
-        assert_eq!(&test_out, array_ref!(expected_out, 0, 32));
+            let test_out = crate::hash(input);
+            assert_eq!(&test_out, array_ref!(expected_out, 0, 32));
+            let mut hasher = crate::Hasher::new();
+            hasher.update(input);
+            assert_eq!(&hasher.finalize(), array_ref!(expected_out, 0, 32));
+            assert_eq!(&hasher.finalize(), &test_out);
+            let mut extended = [0; OUT];
+            hasher.finalize_xof(&mut extended);
+            assert_eq!(&extended[..], &expected_out[..]);
+        }
 
         // keyed
-        let mut reference_hasher = reference_impl::Hasher::new_keyed(&TEST_KEY);
-        reference_hasher.update(input);
-        let mut expected_out = [0; OUT];
-        reference_hasher.finalize(&mut expected_out);
+        {
+            let mut reference_hasher = reference_impl::Hasher::new_keyed(&TEST_KEY);
+            reference_hasher.update(input);
+            let mut expected_out = [0; OUT];
+            reference_hasher.finalize(&mut expected_out);
 
-        let test_out = crate::hash_keyed(&TEST_KEY, input);
-        assert_eq!(&test_out, array_ref!(expected_out, 0, 32));
+            let test_out = crate::hash_keyed(&TEST_KEY, input);
+            assert_eq!(&test_out, array_ref!(expected_out, 0, 32));
+            let mut hasher = crate::Hasher::new_keyed(&TEST_KEY);
+            hasher.update(input);
+            assert_eq!(&hasher.finalize(), array_ref!(expected_out, 0, 32));
+            assert_eq!(&hasher.finalize(), &test_out);
+            let mut extended = [0; OUT];
+            hasher.finalize_xof(&mut extended);
+            assert_eq!(&extended[..], &expected_out[..]);
+        }
 
         // derive_key
-        let mut reference_hasher = reference_impl::Hasher::new_derive_key(&TEST_KEY);
-        reference_hasher.update(input);
-        let mut expected_out = [0; OUT];
-        reference_hasher.finalize(&mut expected_out);
+        {
+            let mut reference_hasher = reference_impl::Hasher::new_derive_key(&TEST_KEY);
+            reference_hasher.update(input);
+            let mut expected_out = [0; OUT];
+            reference_hasher.finalize(&mut expected_out);
 
-        let test_out = crate::derive_key(&TEST_KEY, input);
-        assert_eq!(&test_out, array_ref!(expected_out, 0, 32));
+            let test_out = crate::derive_key(&TEST_KEY, input);
+            assert_eq!(&test_out, array_ref!(expected_out, 0, 32));
+            let mut hasher = crate::Hasher::new_derive_key(&TEST_KEY);
+            hasher.update(input);
+            assert_eq!(&hasher.finalize(), array_ref!(expected_out, 0, 32));
+            assert_eq!(&hasher.finalize(), &test_out);
+            let mut extended = [0; OUT];
+            hasher.finalize_xof(&mut extended);
+            assert_eq!(&extended[..], &expected_out[..]);
+        }
+    }
+}
+
+fn reference_hash(input: &[u8]) -> crate::Hash {
+    let mut hasher = reference_impl::Hasher::new();
+    hasher.update(input);
+    let mut bytes = [0; 32];
+    hasher.finalize(&mut bytes);
+    bytes.into()
+}
+
+#[test]
+fn test_compare_update_multiple() {
+    // Don't use all the long test cases here, since that's unnecessarily slow
+    // in debug mode.
+    let short_test_cases = &TEST_CASES[..10];
+    assert_eq!(*short_test_cases.last().unwrap(), 4 * CHUNK_LEN);
+
+    let mut input_buf = [0; 2 * TEST_CASES_MAX];
+    paint_test_input(&mut input_buf);
+
+    for &first_update in short_test_cases {
+        #[cfg(feature = "std")]
+        dbg!(first_update);
+        let first_input = &input_buf[..first_update];
+        let mut test_hasher = crate::Hasher::new();
+        test_hasher.update(first_input);
+
+        for &second_update in short_test_cases {
+            #[cfg(feature = "std")]
+            dbg!(second_update);
+            let second_input = &input_buf[first_update..][..second_update];
+            let total_input = &input_buf[..first_update + second_update];
+            // Clone the hasher with first_update bytes already written, so
+            // that the next iteration can reuse it.
+            let mut test_hasher = test_hasher.clone();
+            test_hasher.update(second_input);
+
+            assert_eq!(reference_hash(total_input), test_hasher.finalize());
+        }
+    }
+}
+
+#[test]
+fn test_fuzz_hasher() {
+    const INPUT_MAX: usize = 4 * CHUNK_LEN;
+    let mut input_buf = [0; 3 * INPUT_MAX];
+    paint_test_input(&mut input_buf);
+
+    // Don't do too many iterations in debug mode, to keep the tests under a
+    // second or so. CI should run tests in release mode also.
+    let num_tests: usize = if cfg!(debug_assertions) { 100 } else { 10_000 };
+
+    // Use a fixed RNG seed for reproducibility.
+    let mut rng = rand_chacha::ChaCha8Rng::from_seed([1; 32]);
+    for num_test in 0..num_tests {
+        #[cfg(feature = "std")]
+        dbg!(num_test);
+        let mut hasher = crate::Hasher::new();
+        let mut total_input = 0;
+        // For each test, write 3 inputs of random length.
+        for _ in 0..3 {
+            let input_len = rng.gen_range(0, INPUT_MAX + 1);
+            #[cfg(feature = "std")]
+            dbg!(input_len);
+            let input = &input_buf[total_input..][..input_len];
+            hasher.update(input);
+            total_input += input_len;
+        }
+        let expected = reference_hash(&input_buf[..total_input]);
+        assert_eq!(expected, hasher.finalize());
     }
 }

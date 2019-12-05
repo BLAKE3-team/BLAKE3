@@ -19,7 +19,8 @@ rayon = { version = "1.2.1", optional = true }
 [dev-dependencies]
 page_size = "0.4.1"
 rand = "0.7.2"
+rand_chacha = "0.2.1"
 reference_impl = { path = "./reference_impl" }
 
 [build-dependencies]
-cc = "1.0.47"
+cc = "1.0.48"

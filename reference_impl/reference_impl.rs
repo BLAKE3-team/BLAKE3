@@ -246,19 +246,19 @@ impl Hasher {
         }
     }
 
-    /// Construct a new `Hasher` for the default **hash** mode.
+    /// Construct a new `Hasher` for the regular hash function.
     pub fn new() -> Self {
         Self::new_internal(&IV, 0)
     }
 
-    /// Construct a new `Hasher` for the **keyed_hash** mode.
+    /// Construct a new `Hasher` for the keyed hash function.
     pub fn new_keyed(key: &[u8; KEY_LEN]) -> Self {
         let mut key_words = [0; 8];
         words_from_litte_endian_bytes(key, &mut key_words);
         Self::new_internal(&key_words, KEYED_HASH)
     }
 
-    /// Construct a new `Hasher` for the **derive_key** mode.
+    /// Construct a new `Hasher` for the key derivation function.
     pub fn new_derive_key(key: &[u8; KEY_LEN]) -> Self {
         let mut key_words = [0; 8];
         words_from_litte_endian_bytes(key, &mut key_words);
