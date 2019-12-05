@@ -13,13 +13,15 @@ This repository provides the reference implementation of BLAKE3, which
 is coded in Rust and includes portable as well as optimized code for
 various instructions sets.
 
-Speed..
+The complete specifications and design rationale are available as a
+[PDF](https://github.com/BLAKE3/BLAKE3-specs/raw/master/blake3.pdf) and its
+[LaTeX source](https://github.com/veorq/BLAKE3-specs/).
+
+The following graph shows BLAKE3's multi-threaded throughput on an Intel
+Kany Lake processor:
 
 ![benchmarks](media/speed.png)
 
-The complete specifications are available as a
-[PDF](https://github.com/BLAKE3/BLAKE3-specs/raw/master/blake3.pdf) and its
-[LaTeX source](https://github.com/veorq/BLAKE3-specs/raw/master/blake3.pdf).
 
 BLAKE3 was designed by:
 
