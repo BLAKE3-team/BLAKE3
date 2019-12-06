@@ -71,16 +71,12 @@ const PARENT_OFFSET_DELTAS: &[u64; 16] = &[0; 16];
 // chunk/parent, and chunk beginning/middle/end. These get set at the high end
 // of the block flags word in the compression function, so their values start
 // high and go down.
-bitflags::bitflags! {
-    struct Flags: u8 {
-        const CHUNK_START = 1 << 0;
-        const CHUNK_END = 1 << 1;
-        const PARENT = 1 << 2;
-        const ROOT = 1 << 3;
-        const KEYED_HASH = 1 << 4;
-        const DERIVE_KEY = 1 << 5;
-    }
-}
+const CHUNK_START: u8 = 1 << 0;
+const CHUNK_END: u8 = 1 << 1;
+const PARENT: u8 = 1 << 2;
+const ROOT: u8 = 1 << 3;
+const KEYED_HASH: u8 = 1 << 4;
+const DERIVE_KEY: u8 = 1 << 5;
 
 fn offset_low(offset: u64) -> u32 {
     offset as u32
@@ -162,7 +158,7 @@ struct Output {
     block: [u8; 64],
     block_len: u8,
     offset: u64,
-    flags: Flags,
+    flags: u8,
     platform: Platform,
 }
 
@@ -185,7 +181,7 @@ impl Output {
             &self.block,
             self.block_len,
             0,
-            self.flags | Flags::ROOT,
+            self.flags | ROOT,
         );
         Hash(*array_ref!(out, 0, 32))
     }
@@ -199,7 +195,7 @@ impl Output {
                 &self.block,
                 self.block_len,
                 offset,
-                self.flags | Flags::ROOT,
+                self.flags | ROOT,
             );
             out_block.copy_from_slice(&out_bytes[..out_block.len()]);
             offset += 2 * OUT_LEN as u64;
@@ -214,12 +210,12 @@ struct ChunkState {
     buf: [u8; BLOCK_LEN],
     buf_len: u8,
     blocks_compressed: u8,
-    flags: Flags,
+    flags: u8,
     platform: Platform,
 }
 
 impl ChunkState {
-    fn new(key: &[u8; 32], offset: u64, flags: Flags, platform: Platform) -> Self {
+    fn new(key: &[u8; 32], offset: u64, flags: u8, platform: Platform) -> Self {
         Self {
             cv: *key,
             offset,
@@ -252,11 +248,11 @@ impl ChunkState {
         *input = &input[take..];
     }
 
-    fn start_flag(&self) -> Flags {
+    fn start_flag(&self) -> u8 {
         if self.blocks_compressed == 0 {
-            Flags::CHUNK_START
+            CHUNK_START
         } else {
-            Flags::empty()
+            0
         }
     }
 
@@ -304,7 +300,7 @@ impl ChunkState {
     }
 
     fn output(&self) -> Output {
-        let block_flags = self.flags | self.start_flag() | Flags::CHUNK_END;
+        let block_flags = self.flags | self.start_flag() | CHUNK_END;
         Output {
             input_chaining_value: self.cv,
             block: self.buf,
@@ -387,7 +383,7 @@ fn compress_chunks_parallel(
     input: &[u8],
     key: &[u8; KEY_LEN],
     offset: u64,
-    flags: Flags,
+    flags: u8,
     platform: Platform,
     out: &mut [u8],
 ) -> usize {
@@ -406,8 +402,8 @@ fn compress_chunks_parallel(
         offset,
         CHUNK_OFFSET_DELTAS,
         flags,
-        Flags::CHUNK_START,
-        Flags::CHUNK_END,
+        CHUNK_START,
+        CHUNK_END,
         out,
     );
 
@@ -434,7 +430,7 @@ fn compress_chunks_parallel(
 fn compress_parents_parallel(
     child_chaining_values: &[u8],
     key: &[u8; KEY_LEN],
-    flags: Flags,
+    flags: u8,
     platform: Platform,
     out: &mut [u8],
 ) -> usize {
@@ -455,9 +451,9 @@ fn compress_parents_parallel(
         key,
         0, // Parents always use offset 0.
         PARENT_OFFSET_DELTAS,
-        flags | Flags::PARENT,
-        Flags::empty(), // Parents have no start flags.
-        Flags::empty(), // Parents have no end flags.
+        flags | PARENT,
+        0, // Parents have no start flags.
+        0, // Parents have no end flags.
         out,
     );
 
@@ -488,7 +484,7 @@ fn compress_subtree_wide(
     input: &[u8],
     key: &[u8; KEY_LEN],
     offset: u64,
-    flags: Flags,
+    flags: u8,
     platform: Platform,
     out: &mut [u8],
 ) -> usize {
@@ -560,7 +556,7 @@ fn compress_subtree_to_parent_node(
     input: &[u8],
     key: &[u8; KEY_LEN],
     offset: u64,
-    flags: Flags,
+    flags: u8,
     platform: Platform,
 ) -> [u8; BLOCK_LEN] {
     debug_assert!(input.len() > CHUNK_LEN);
@@ -582,7 +578,7 @@ fn compress_subtree_to_parent_node(
 
 // Hash a complete input all at once. Unlike compress_subtree_wide() and
 // compress_subtree_to_parent_node(), this function handles the 1 chunk case.
-fn hash_all_at_once(input: &[u8], key: &[u8; KEY_LEN], flags: Flags) -> Output {
+fn hash_all_at_once(input: &[u8], key: &[u8; KEY_LEN], flags: u8) -> Output {
     let platform = Platform::detect();
 
     // If the whole subtree is one chunk, hash it directly with a ChunkState.
@@ -599,31 +595,31 @@ fn hash_all_at_once(input: &[u8], key: &[u8; KEY_LEN], flags: Flags) -> Output {
         block: compress_subtree_to_parent_node(input, key, 0, flags, platform),
         block_len: BLOCK_LEN as u8,
         offset: 0,
-        flags: flags | Flags::PARENT,
+        flags: flags | PARENT,
         platform,
     }
 }
 
 /// The default hash function.
 pub fn hash(input: &[u8]) -> Hash {
-    hash_all_at_once(input, IV_BYTES, Flags::empty()).root_hash()
+    hash_all_at_once(input, IV_BYTES, 0).root_hash()
 }
 
 /// The keyed hash function.
 pub fn hash_keyed(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
-    hash_all_at_once(input, key, Flags::KEYED_HASH).root_hash()
+    hash_all_at_once(input, key, KEYED_HASH).root_hash()
 }
 
 /// The key derivation function.
 pub fn derive_key(key: &[u8; KEY_LEN], context: &[u8]) -> Hash {
-    hash_all_at_once(context, key, Flags::DERIVE_KEY).root_hash()
+    hash_all_at_once(context, key, DERIVE_KEY).root_hash()
 }
 
 fn parent_node_output(
     left_child: &[u8; 32],
     right_child: &[u8; 32],
     key: &[u8; KEY_LEN],
-    flags: Flags,
+    flags: u8,
     platform: Platform,
 ) -> Output {
     let mut block = [0; BLOCK_LEN];
@@ -634,7 +630,7 @@ fn parent_node_output(
         block,
         block_len: BLOCK_LEN as u8,
         offset: 0,
-        flags: flags | Flags::PARENT,
+        flags: flags | PARENT,
         platform,
     }
 }
@@ -650,7 +646,7 @@ pub struct Hasher {
 }
 
 impl Hasher {
-    fn new_internal(key: &[u8; 32], flags: Flags) -> Self {
+    fn new_internal(key: &[u8; 32], flags: u8) -> Self {
         Self {
             key: *key,
             chunk_state: ChunkState::new(key, 0, flags, Platform::detect()),
@@ -660,12 +656,12 @@ impl Hasher {
 
     /// Construct a new `Hasher` for the regular hash function.
     pub fn new() -> Self {
-        Self::new_internal(IV_BYTES, Flags::empty())
+        Self::new_internal(IV_BYTES, 0)
     }
 
     /// Construct a new `Hasher` for the keyed hash function.
     pub fn new_keyed(key: &[u8; KEY_LEN]) -> Self {
-        Self::new_internal(key, Flags::KEYED_HASH)
+        Self::new_internal(key, KEYED_HASH)
     }
 
     /// Construct a new `Hasher` for the key derivation function.
@@ -676,7 +672,7 @@ impl Hasher {
     ///
     /// [`derive_key`]: fn.derive_key.html
     pub fn new_derive_key(key: &[u8; KEY_LEN]) -> Self {
-        Self::new_internal(key, Flags::DERIVE_KEY)
+        Self::new_internal(key, DERIVE_KEY)
     }
 
     /// The total number of input bytes so far.

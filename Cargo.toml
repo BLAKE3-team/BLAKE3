@@ -12,7 +12,6 @@ std = []
 [dependencies]
 arrayref = "0.3.5"
 arrayvec = { version = "0.5.1", default-features = false, features = ["array-sizes-33-128"] }
-bitflags = "1.2.1"
 constant_time_eq = "0.1.4"
 rayon = { version = "1.2.1", optional = true }
 

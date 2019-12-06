@@ -713,25 +713,13 @@ mod test {
         crate::test::paint_test_input(&mut block[..block_len as usize]);
         // Use an offset with set bits in both 32-bit words.
         let offset = ((5 * CHUNK_LEN as u64) << 32) + 6 * CHUNK_LEN as u64;
-        let flags = Flags::CHUNK_END | Flags::ROOT;
+        let flags = crate::CHUNK_END | crate::ROOT;
 
-        let portable_out = portable::compress(
-            &initial_state,
-            &block,
-            block_len,
-            offset as u64,
-            flags.bits(),
-        );
+        let portable_out =
+            portable::compress(&initial_state, &block, block_len, offset as u64, flags);
 
-        let simd_out = unsafe {
-            super::compress(
-                &initial_state,
-                &block,
-                block_len,
-                offset as u64,
-                flags.bits(),
-            )
-        };
+        let simd_out =
+            unsafe { super::compress(&initial_state, &block, block_len, offset as u64, flags) };
 
         assert_eq!(&portable_out[..], &simd_out[..]);
     }
@@ -754,8 +742,7 @@ mod test {
 
         let mut portable_out = [0; DEGREE * OUT_LEN];
         for (parent, out) in parents.iter().zip(portable_out.chunks_exact_mut(OUT_LEN)) {
-            let wide_out =
-                portable::compress(&key, parent, BLOCK_LEN as u8, 0, Flags::PARENT.bits());
+            let wide_out = portable::compress(&key, parent, BLOCK_LEN as u8, 0, crate::PARENT);
             out.copy_from_slice(&wide_out[..32]);
         }
 
@@ -774,7 +761,7 @@ mod test {
                 0,
                 PARENT_OFFSET_DELTAS,
                 0,
-                Flags::PARENT.bits(),
+                crate::PARENT,
                 0,
                 &mut simd_out,
             );
@@ -809,19 +796,19 @@ mod test {
         {
             let mut cv = key;
             for (block_index, block) in chunk.chunks_exact(BLOCK_LEN).enumerate() {
-                let mut block_flags = Flags::KEYED_HASH;
+                let mut block_flags = crate::KEYED_HASH;
                 if block_index == 0 {
-                    block_flags |= Flags::CHUNK_START;
+                    block_flags |= crate::CHUNK_START;
                 }
                 if block_index == CHUNK_LEN / BLOCK_LEN - 1 {
-                    block_flags |= Flags::CHUNK_END;
+                    block_flags |= crate::CHUNK_END;
                 }
                 let out = portable::compress(
                     &cv,
                     array_ref!(block, 0, BLOCK_LEN),
                     BLOCK_LEN as u8,
                     initial_offset + (chunk_index * CHUNK_LEN) as u64,
-                    block_flags.bits(),
+                    block_flags,
                 );
                 cv = *array_ref!(out, 0, 32);
             }
@@ -842,9 +829,9 @@ mod test {
                 &key,
                 initial_offset,
                 CHUNK_OFFSET_DELTAS,
-                Flags::KEYED_HASH.bits(),
-                Flags::CHUNK_START.bits(),
-                Flags::CHUNK_END.bits(),
+                crate::KEYED_HASH,
+                crate::CHUNK_START,
+                crate::CHUNK_END,
                 &mut simd_out,
             );
         }

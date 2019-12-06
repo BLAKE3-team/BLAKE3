@@ -485,8 +485,7 @@ mod test {
 
         let mut portable_out = [0; DEGREE * OUT_LEN];
         for (parent, out) in parents.iter().zip(portable_out.chunks_exact_mut(OUT_LEN)) {
-            let out_wide =
-                portable::compress(&key, parent, BLOCK_LEN as u8, 0, Flags::PARENT.bits());
+            let out_wide = portable::compress(&key, parent, BLOCK_LEN as u8, 0, crate::PARENT);
             out.copy_from_slice(&out_wide[..32]);
         }
 
@@ -509,7 +508,7 @@ mod test {
                 0,
                 PARENT_OFFSET_DELTAS,
                 0,
-                Flags::PARENT.bits(),
+                crate::PARENT,
                 0,
                 &mut simd_out,
             );
@@ -548,19 +547,19 @@ mod test {
         {
             let mut cv = key;
             for (block_index, block) in chunk.chunks_exact(BLOCK_LEN).enumerate() {
-                let mut flags = Flags::KEYED_HASH;
+                let mut flags = crate::KEYED_HASH;
                 if block_index == 0 {
-                    flags |= Flags::CHUNK_START;
+                    flags |= crate::CHUNK_START;
                 }
                 if block_index == CHUNK_LEN / BLOCK_LEN - 1 {
-                    flags |= Flags::CHUNK_END;
+                    flags |= crate::CHUNK_END;
                 }
                 let out = portable::compress(
                     &cv,
                     array_ref!(block, 0, BLOCK_LEN),
                     BLOCK_LEN as u8,
                     initial_offset + (chunk_index * CHUNK_LEN) as u64,
-                    flags.bits(),
+                    flags,
                 );
                 cv = *array_ref!(out, 0, 32);
             }
@@ -585,9 +584,9 @@ mod test {
                 &key,
                 initial_offset,
                 CHUNK_OFFSET_DELTAS,
-                Flags::KEYED_HASH.bits(),
-                Flags::CHUNK_START.bits(),
-                Flags::CHUNK_END.bits(),
+                crate::KEYED_HASH,
+                crate::CHUNK_START,
+                crate::CHUNK_END,
                 &mut simd_out,
             );
         }
