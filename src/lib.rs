@@ -1,13 +1,19 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod avx2;
-mod platform;
-mod portable;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod sse41;
 #[cfg(test)]
 mod test;
+
+// These modules are pub for benchmarks only. They are not stable.
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[doc(hidden)]
+pub mod avx2;
+#[doc(hidden)]
+pub mod platform;
+#[doc(hidden)]
+pub mod portable;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[doc(hidden)]
+pub mod sse41;
 
 use arrayref::{array_mut_ref, array_ref};
 use arrayvec::{ArrayString, ArrayVec};
@@ -21,7 +27,8 @@ pub const OUT_LEN: usize = 32;
 /// The number of bytes in a key, 32.
 pub const KEY_LEN: usize = 32;
 
-// These are pub for tests and benchmarks. Callers don't need them.
+// These constants are pub for tests and benchmarks only. Their names are not
+// stable.
 #[doc(hidden)]
 pub const BLOCK_LEN: usize = 64;
 #[doc(hidden)]
