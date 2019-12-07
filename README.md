@@ -14,8 +14,8 @@ is coded in Rust and includes portable as well as optimized code for
 various instructions sets.
 
 The complete specifications and design rationale are available as a
-[PDF](https://github.com/BLAKE3/BLAKE3-specs/raw/master/blake3.pdf) and its
-[LaTeX source](https://github.com/veorq/BLAKE3-specs/).
+[PDF](https://github.com/BLAKE3-team/BLAKE3-specs/raw/master/blake3.pdf) and its
+[LaTeX source](https://github.com/BLAKE3-team/BLAKE3-specs/).
 
 The following graph shows BLAKE3's multi-threaded throughput on an Intel
 Kany Lake processor:
@@ -25,7 +25,7 @@ Kany Lake processor:
 
 BLAKE3 was designed by:
 
-* [@oconnor63 ](https://github.com/daeMOn63) (Jack O'Connor)
+* [@oconnor63 ](https://github.com/oconnor63) (Jack O'Connor)
 * [@sneves](https://github.com/sneves) (Samuel Neves)
 * [@veorq](https://github.com/veorq) (Jean-Philippe Aumasson)
 * [@zookozcash](https://github.com/zookocash) (Zooko)
