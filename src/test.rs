@@ -1,5 +1,6 @@
-use crate::CHUNK_LEN;
+use crate::{OffsetDeltas, BLOCK_LEN, CHUNK_LEN, KEY_LEN, OUT_LEN};
 use arrayref::array_ref;
+use arrayvec::ArrayVec;
 use core::usize;
 use rand::prelude::*;
 
@@ -39,6 +40,134 @@ pub const TEST_KEY: [u8; crate::KEY_LEN] = *b"whats the Elvish word for friend";
 pub fn paint_test_input(buf: &mut [u8]) {
     for (i, b) in buf.iter_mut().enumerate() {
         *b = (i % 251) as u8;
+    }
+}
+
+type CompressFn = unsafe fn(
+    cv: &[u8; 32],
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    offset: u64,
+    flags: u8,
+) -> [u8; 64];
+
+// A shared helper function for platform-specific tests.
+pub fn test_compress_fn(compress_fn: CompressFn) {
+    let initial_state = *b"IV for compression tests <('.')>";
+    let block_len: u8 = 61;
+    let mut block = [0; BLOCK_LEN];
+    paint_test_input(&mut block[..block_len as usize]);
+    // Use an offset with set bits in both 32-bit words.
+    let offset = ((5 * CHUNK_LEN as u64) << 32) + 6 * CHUNK_LEN as u64;
+    let flags = crate::CHUNK_END | crate::ROOT | crate::KEYED_HASH;
+
+    let portable_out =
+        crate::portable::compress(&initial_state, &block, block_len, offset as u64, flags);
+
+    let test_out = unsafe { compress_fn(&initial_state, &block, block_len, offset as u64, flags) };
+
+    assert_eq!(&portable_out[..], &test_out[..]);
+}
+
+type HashManyFn<A> = unsafe fn(
+    inputs: &[&A],
+    key: &[u8; KEY_LEN],
+    offset: u64,
+    offset_deltas: &OffsetDeltas,
+    flags: u8,
+    flags_start: u8,
+    flags_end: u8,
+    out: &mut [u8],
+);
+
+// A shared helper function for platform-specific tests.
+pub fn test_hash_many_fn(
+    hash_many_chunks_fn: HashManyFn<[u8; CHUNK_LEN]>,
+    hash_many_parents_fn: HashManyFn<[u8; 2 * OUT_LEN]>,
+) {
+    // 31 (16 + 8 + 4 + 2 + 1) inputs
+    const NUM_INPUTS: usize = 31;
+    let mut input_buf = [0; CHUNK_LEN * NUM_INPUTS];
+    crate::test::paint_test_input(&mut input_buf);
+    // An offset just prior to u32::MAX.
+    let offset = (1 << 32) - CHUNK_LEN as u64;
+
+    // First hash chunks.
+    let mut chunks = ArrayVec::<[&[u8; CHUNK_LEN]; NUM_INPUTS]>::new();
+    for i in 0..NUM_INPUTS {
+        chunks.push(array_ref!(input_buf, i * CHUNK_LEN, CHUNK_LEN));
+    }
+    let mut portable_chunks_out = [0; NUM_INPUTS * OUT_LEN];
+    crate::portable::hash_many(
+        &chunks,
+        &TEST_KEY,
+        offset,
+        crate::CHUNK_OFFSET_DELTAS,
+        crate::DERIVE_KEY,
+        crate::CHUNK_START,
+        crate::CHUNK_END,
+        &mut portable_chunks_out,
+    );
+
+    let mut test_chunks_out = [0; NUM_INPUTS * OUT_LEN];
+    unsafe {
+        hash_many_chunks_fn(
+            &chunks[..],
+            &TEST_KEY,
+            offset,
+            crate::CHUNK_OFFSET_DELTAS,
+            crate::DERIVE_KEY,
+            crate::CHUNK_START,
+            crate::CHUNK_END,
+            &mut test_chunks_out,
+        );
+    }
+    for n in 0..NUM_INPUTS {
+        #[cfg(feature = "std")]
+        dbg!(n);
+        assert_eq!(
+            &portable_chunks_out[n * OUT_LEN..][..OUT_LEN],
+            &test_chunks_out[n * OUT_LEN..][..OUT_LEN]
+        );
+    }
+
+    // Then hash parents.
+    let mut parents = ArrayVec::<[&[u8; 2 * OUT_LEN]; NUM_INPUTS]>::new();
+    for i in 0..NUM_INPUTS {
+        parents.push(array_ref!(input_buf, i * 2 * OUT_LEN, 2 * OUT_LEN));
+    }
+    let mut portable_parents_out = [0; NUM_INPUTS * OUT_LEN];
+    crate::portable::hash_many(
+        &parents,
+        &TEST_KEY,
+        0,
+        crate::PARENT_OFFSET_DELTAS,
+        crate::DERIVE_KEY | crate::PARENT,
+        0,
+        0,
+        &mut portable_parents_out,
+    );
+
+    let mut test_parents_out = [0; NUM_INPUTS * OUT_LEN];
+    unsafe {
+        hash_many_parents_fn(
+            &parents[..],
+            &TEST_KEY,
+            0,
+            crate::PARENT_OFFSET_DELTAS,
+            crate::DERIVE_KEY | crate::PARENT,
+            0,
+            0,
+            &mut test_parents_out,
+        );
+    }
+    for n in 0..NUM_INPUTS {
+        #[cfg(feature = "std")]
+        dbg!(n);
+        assert_eq!(
+            &portable_parents_out[n * OUT_LEN..][..OUT_LEN],
+            &test_parents_out[n * OUT_LEN..][..OUT_LEN]
+        );
     }
 }
 

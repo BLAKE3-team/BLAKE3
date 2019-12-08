@@ -181,144 +181,18 @@ pub fn hash_many<A: arrayvec::Array<Item = u8>>(
 pub mod test {
     use super::*;
 
+    // This is basically testing the portable implementation against itself,
+    // but we do it anyway for completeness. Other implementations will test
+    // themselves against portable. We also have several tests against the
+    // reference implementation in test.rs.
     #[test]
-    fn test_hash1_1() {
-        let block = [1; BLOCK_LEN];
-        let key = [2; 32];
-        let offset = 3 * crate::CHUNK_LEN as u64;
-        let flags = 4;
-        let flags_start = 8;
-        let flags_end = 16;
-
-        let expected_out = compress(
-            &key,
-            &block,
-            BLOCK_LEN as u8,
-            offset,
-            flags | flags_start | flags_end,
-        );
-
-        let mut test_out = [0; OUT_LEN];
-        hash1(
-            &block,
-            &key,
-            offset,
-            flags,
-            flags_start,
-            flags_end,
-            &mut test_out,
-        );
-
-        assert_eq!(&expected_out[0..32], &test_out);
+    fn test_compress() {
+        crate::test::test_compress_fn(compress);
     }
 
-    #[test]
-    fn test_hash1_3() {
-        let mut blocks = [0; BLOCK_LEN * 3];
-        crate::test::paint_test_input(&mut blocks);
-        let key = [2; 32];
-        let offset = 3 * crate::CHUNK_LEN as u64;
-        let flags = 4;
-        let flags_start = 8;
-        let flags_end = 16;
-
-        let mut expected_cv = key;
-        let out = compress(
-            &expected_cv,
-            array_ref!(blocks, 0, BLOCK_LEN),
-            BLOCK_LEN as u8,
-            offset,
-            flags | flags_start,
-        );
-        expected_cv = *array_ref!(out, 0, 32);
-        let out = compress(
-            &expected_cv,
-            array_ref!(blocks, BLOCK_LEN, BLOCK_LEN),
-            BLOCK_LEN as u8,
-            offset,
-            flags,
-        );
-        expected_cv = *array_ref!(out, 0, 32);
-        let out = compress(
-            &expected_cv,
-            array_ref!(blocks, 2 * BLOCK_LEN, BLOCK_LEN),
-            BLOCK_LEN as u8,
-            offset,
-            flags | flags_end,
-        );
-        expected_cv = *array_ref!(out, 0, 32);
-
-        let mut test_out = [0; OUT_LEN];
-        hash1(
-            &blocks,
-            &key,
-            offset,
-            flags,
-            flags_start,
-            flags_end,
-            &mut test_out,
-        );
-
-        assert_eq!(expected_cv, test_out);
-    }
-
+    // Ditto.
     #[test]
     fn test_hash_many() {
-        let mut input_buf = [0; BLOCK_LEN * 9];
-        crate::test::paint_test_input(&mut input_buf);
-        let inputs = [
-            array_ref!(input_buf, 0 * BLOCK_LEN, 3 * BLOCK_LEN),
-            array_ref!(input_buf, 3 * BLOCK_LEN, 3 * BLOCK_LEN),
-            array_ref!(input_buf, 6 * BLOCK_LEN, 3 * BLOCK_LEN),
-        ];
-        let key = [2; 32];
-        let offset = 3 * crate::CHUNK_LEN as u64;
-        let delta = crate::CHUNK_LEN as u64;
-        let flags = 4;
-        let flags_start = 8;
-        let flags_end = 16;
-
-        let mut expected_out = [0; 3 * OUT_LEN];
-        hash1(
-            inputs[0],
-            &key,
-            offset + 0 * delta,
-            flags,
-            flags_start,
-            flags_end,
-            array_mut_ref!(&mut expected_out, 0 * OUT_LEN, OUT_LEN),
-        );
-        hash1(
-            inputs[1],
-            &key,
-            offset + 1 * delta,
-            flags,
-            flags_start,
-            flags_end,
-            array_mut_ref!(&mut expected_out, 1 * OUT_LEN, OUT_LEN),
-        );
-        hash1(
-            inputs[2],
-            &key,
-            offset + 2 * delta,
-            flags,
-            flags_start,
-            flags_end,
-            array_mut_ref!(&mut expected_out, 2 * OUT_LEN, OUT_LEN),
-        );
-
-        let mut test_out = [0; OUT_LEN * 3];
-        hash_many(
-            &inputs,
-            &key,
-            offset,
-            crate::CHUNK_OFFSET_DELTAS,
-            flags,
-            flags_start,
-            flags_end,
-            &mut test_out,
-        );
-
-        assert_eq!(&expected_out[..], &test_out[..]);
+        crate::test::test_hash_many_fn(hash_many, hash_many);
     }
 }
