@@ -450,7 +450,7 @@ fn compress_parents_parallel(
     debug_assert_eq!(child_chaining_values.len() % OUT_LEN, 0, "wacky hash bytes");
     let num_children = child_chaining_values.len() / OUT_LEN;
     debug_assert!(num_children >= 2, "not enough children");
-    debug_assert!(num_children <= 2 * MAX_SIMD_DEGREE, "too many");
+    debug_assert!(num_children <= 2 * MAX_SIMD_DEGREE_OR_2, "too many");
 
     let mut parents_exact = child_chaining_values.chunks_exact(BLOCK_LEN);
     // Use MAX_SIMD_DEGREE_OR_2 rather than MAX_SIMD_DEGREE here, because of
