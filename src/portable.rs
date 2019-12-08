@@ -1,4 +1,4 @@
-use crate::{offset_high, offset_low, BLOCK_LEN, IV, KEY_LEN, MSG_SCHEDULE, OUT_LEN};
+use crate::{offset_high, offset_low, OffsetDeltas, BLOCK_LEN, IV, KEY_LEN, MSG_SCHEDULE, OUT_LEN};
 use arrayref::{array_mut_ref, array_ref};
 
 #[inline(always)]
@@ -156,7 +156,7 @@ pub fn hash_many<A: arrayvec::Array<Item = u8>>(
     inputs: &[&A],
     key: &[u8; KEY_LEN],
     mut offset: u64,
-    offset_deltas: &[u64; 16],
+    offset_deltas: &OffsetDeltas,
     flags: u8,
     flags_start: u8,
     flags_end: u8,

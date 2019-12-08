@@ -1,4 +1,4 @@
-use crate::{portable, BLOCK_LEN, KEY_LEN};
+use crate::{portable, OffsetDeltas, BLOCK_LEN, KEY_LEN};
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use crate::{avx2, sse41};
@@ -85,7 +85,7 @@ impl Platform {
         inputs: &[&A],
         key: &[u8; KEY_LEN],
         offset: u64,
-        offset_deltas: &[u64; 16],
+        offset_deltas: &OffsetDeltas,
         flags: u8,
         flags_start: u8,
         flags_end: u8,

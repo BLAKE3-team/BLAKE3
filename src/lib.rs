@@ -53,7 +53,12 @@ const MSG_SCHEDULE: [[usize; 16]; 7] = [
     [12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11],
 ];
 
-const CHUNK_OFFSET_DELTAS: &[u64; 16] = &[
+// 17 is 1 + the largest supported SIMD degree (including AVX-512, currently in C).
+// Each hash_many() implementation can thus do `offset += offset_deltas[DEGREE]`
+// at the end of each batch.
+type OffsetDeltas = [u64; 17];
+
+const CHUNK_OFFSET_DELTAS: &OffsetDeltas = &[
     CHUNK_LEN as u64 * 0,
     CHUNK_LEN as u64 * 1,
     CHUNK_LEN as u64 * 2,
@@ -70,9 +75,10 @@ const CHUNK_OFFSET_DELTAS: &[u64; 16] = &[
     CHUNK_LEN as u64 * 13,
     CHUNK_LEN as u64 * 14,
     CHUNK_LEN as u64 * 15,
+    CHUNK_LEN as u64 * 16,
 ];
 
-const PARENT_OFFSET_DELTAS: &[u64; 16] = &[0; 16];
+const PARENT_OFFSET_DELTAS: &OffsetDeltas = &[0; 17];
 
 // These are the internal flags that we use to domain separate root/non-root,
 // chunk/parent, and chunk beginning/middle/end. These get set at the high end

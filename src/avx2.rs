@@ -3,7 +3,7 @@ use core::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::*;
 
-use crate::{offset_high, offset_low, BLOCK_LEN, IV, KEY_LEN, MSG_SCHEDULE, OUT_LEN};
+use crate::{offset_high, offset_low, OffsetDeltas, BLOCK_LEN, IV, KEY_LEN, MSG_SCHEDULE, OUT_LEN};
 use arrayref::{array_mut_ref, mut_array_refs};
 
 pub const DEGREE: usize = 8;
@@ -270,7 +270,7 @@ unsafe fn transpose_msg_vecs(inputs: &[*const u8; DEGREE], block_offset: usize) 
 }
 
 #[inline(always)]
-unsafe fn load_offsets(offset: u64, offset_deltas: &[u64; 16]) -> (__m256i, __m256i) {
+unsafe fn load_offsets(offset: u64, offset_deltas: &OffsetDeltas) -> (__m256i, __m256i) {
     (
         set8(
             offset_low(offset + offset_deltas[0]),
@@ -301,7 +301,7 @@ pub unsafe fn hash8(
     blocks: usize,
     key: &[u8; KEY_LEN],
     offset: u64,
-    offset_deltas: &[u64; 16],
+    offset_deltas: &OffsetDeltas,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
@@ -386,7 +386,7 @@ pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
     mut inputs: &[&A],
     key: &[u8; KEY_LEN],
     mut offset: u64,
-    offset_deltas: &[u64; 16],
+    offset_deltas: &OffsetDeltas,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
