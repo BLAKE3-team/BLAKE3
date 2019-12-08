@@ -5,8 +5,9 @@ authors = ["Jack O'Connor <oconnor663@gmail.com>"]
 edition = "2018"
 
 [features]
-default = ["c", "std"]
-c = []
+default = ["std"]
+c_avx512 = []
+c_neon = []
 std = []
 
 [dependencies]
@@ -14,6 +15,7 @@ arrayref = "0.3.5"
 arrayvec = { version = "0.5.1", default-features = false, features = ["array-sizes-33-128"] }
 constant_time_eq = "0.1.4"
 rayon = { version = "1.2.1", optional = true }
+cfg-if = "0.1.10"
 
 [dev-dependencies]
 page_size = "0.4.1"
