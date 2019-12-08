@@ -214,8 +214,15 @@ fn test_fuzz_hasher() {
     paint_test_input(&mut input_buf);
 
     // Don't do too many iterations in debug mode, to keep the tests under a
-    // second or so. CI should run tests in release mode also.
-    let num_tests: usize = if cfg!(debug_assertions) { 100 } else { 10_000 };
+    // second or so. CI should run tests in release mode also. Provide an
+    // environment variable for specifying a larger number of fuzz iterations.
+    let mut num_tests: usize = if cfg!(debug_assertions) { 100 } else { 10_000 };
+    #[cfg(feature = "std")]
+    {
+        if let Ok(iters) = std::env::var("BLAKE3_FUZZ_ITERATIONS") {
+            num_tests = iters.parse().expect("invalid usize");
+        }
+    }
 
     // Use a fixed RNG seed for reproducibility.
     let mut rng = rand_chacha::ChaCha8Rng::from_seed([1; 32]);
