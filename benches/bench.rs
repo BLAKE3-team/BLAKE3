@@ -80,6 +80,15 @@ fn bench_single_compression_sse41(b: &mut Bencher) {
     bench_single_compression_fn(b, blake3::sse41::compress);
 }
 
+#[bench]
+#[cfg(feature = "c_avx512")]
+fn bench_single_compression_avx512(b: &mut Bencher) {
+    if !blake3::platform::avx512_detected() {
+        return;
+    }
+    bench_single_compression_fn(b, blake3::c_avx512::compress);
+}
+
 type HashManyFn<A> = unsafe fn(
     inputs: &[&A],
     key: &[u8; blake3::KEY_LEN],
@@ -136,6 +145,22 @@ fn bench_many_chunks_avx2(b: &mut Bencher) {
     bench_many_chunks_fn(b, blake3::avx2::hash_many, blake3::avx2::DEGREE);
 }
 
+#[bench]
+#[cfg(feature = "c_avx512")]
+fn bench_many_chunks_avx512(b: &mut Bencher) {
+    if !blake3::platform::avx512_detected() {
+        return;
+    }
+    bench_many_chunks_fn(b, blake3::c_avx512::hash_many, blake3::c_avx512::DEGREE);
+}
+
+#[bench]
+#[cfg(feature = "c_neon")]
+fn bench_many_chunks_neon(b: &mut Bencher) {
+    // When "c_neon" is on, NEON support is assumed.
+    bench_many_chunks_fn(b, blake3::c_neon::hash_many, blake3::c_neon::DEGREE);
+}
+
 // TODO: When we get const generics we can unify this with the chunks code.
 fn bench_many_parents_fn(b: &mut Bencher, f: HashManyFn<[u8; BLOCK_LEN]>, degree: usize) {
     let mut inputs = Vec::new();
@@ -180,6 +205,22 @@ fn bench_many_parents_avx2(b: &mut Bencher) {
         return;
     }
     bench_many_parents_fn(b, blake3::avx2::hash_many, blake3::avx2::DEGREE);
+}
+
+#[bench]
+#[cfg(feature = "c_avx512")]
+fn bench_many_parents_avx512(b: &mut Bencher) {
+    if !blake3::platform::avx512_detected() {
+        return;
+    }
+    bench_many_parents_fn(b, blake3::c_avx512::hash_many, blake3::c_avx512::DEGREE);
+}
+
+#[bench]
+#[cfg(feature = "c_neon")]
+fn bench_many_parents_neon(b: &mut Bencher) {
+    // When "c_neon" is on, NEON support is assumed.
+    bench_many_parents_fn(b, blake3::c_neon::hash_many, blake3::c_neon::DEGREE);
 }
 
 fn bench_atonce(b: &mut Bencher, len: usize) {

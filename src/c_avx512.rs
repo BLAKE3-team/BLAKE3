@@ -1,5 +1,7 @@
 use crate::{OffsetDeltas, BLOCK_LEN, KEY_LEN, OUT_LEN};
 
+pub const DEGREE: usize = 16;
+
 // Unsafe because this may only be called on platforms supporting AVX-512.
 pub unsafe fn compress(
     cv: &[u8; 32],

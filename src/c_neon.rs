@@ -1,5 +1,7 @@
 use crate::{OffsetDeltas, BLOCK_LEN, KEY_LEN, OUT_LEN};
 
+pub const DEGREE: usize = 4;
+
 // Unsafe because this may only be called on platforms supporting NEON.
 pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
     inputs: &[&A],
