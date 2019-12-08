@@ -228,6 +228,16 @@ fn bench_atonce_0128_kib(b: &mut Bencher) {
 }
 
 #[bench]
+fn bench_atonce_0256_kib(b: &mut Bencher) {
+    bench_atonce(b, 256 * KIB);
+}
+
+#[bench]
+fn bench_atonce_0512_kib(b: &mut Bencher) {
+    bench_atonce(b, 512 * KIB);
+}
+
+#[bench]
 fn bench_atonce_1024_kib(b: &mut Bencher) {
     bench_atonce(b, 1024 * KIB);
 }
@@ -278,6 +288,82 @@ fn bench_incremental_0128_kib(b: &mut Bencher) {
 }
 
 #[bench]
+fn bench_incremental_0256_kib(b: &mut Bencher) {
+    bench_incremental(b, 256 * KIB);
+}
+
+#[bench]
+fn bench_incremental_0512_kib(b: &mut Bencher) {
+    bench_incremental(b, 512 * KIB);
+}
+
+#[bench]
 fn bench_incremental_1024_kib(b: &mut Bencher) {
     bench_incremental(b, 1024 * KIB);
+}
+
+fn bench_reference(b: &mut Bencher, len: usize) {
+    let mut input = RandomInput::new(b, len);
+    b.iter(|| {
+        let mut hasher = reference_impl::Hasher::new();
+        hasher.update(input.get());
+        let mut out = [0; 32];
+        hasher.finalize(&mut out);
+        out
+    });
+}
+
+#[bench]
+fn bench_reference_0001_block(b: &mut Bencher) {
+    bench_reference(b, BLOCK_LEN);
+}
+
+#[bench]
+fn bench_reference_0001_chunk(b: &mut Bencher) {
+    bench_reference(b, CHUNK_LEN);
+}
+
+#[bench]
+fn bench_reference_0004_kib(b: &mut Bencher) {
+    bench_reference(b, 4 * KIB);
+}
+
+#[bench]
+fn bench_reference_0008_kib(b: &mut Bencher) {
+    bench_reference(b, 8 * KIB);
+}
+
+#[bench]
+fn bench_reference_0016_kib(b: &mut Bencher) {
+    bench_reference(b, 16 * KIB);
+}
+
+#[bench]
+fn bench_reference_0032_kib(b: &mut Bencher) {
+    bench_reference(b, 32 * KIB);
+}
+
+#[bench]
+fn bench_reference_0064_kib(b: &mut Bencher) {
+    bench_reference(b, 64 * KIB);
+}
+
+#[bench]
+fn bench_reference_0128_kib(b: &mut Bencher) {
+    bench_reference(b, 128 * KIB);
+}
+
+#[bench]
+fn bench_reference_0256_kib(b: &mut Bencher) {
+    bench_reference(b, 256 * KIB);
+}
+
+#[bench]
+fn bench_reference_0512_kib(b: &mut Bencher) {
+    bench_reference(b, 512 * KIB);
+}
+
+#[bench]
+fn bench_reference_1024_kib(b: &mut Bencher) {
+    bench_reference(b, 1024 * KIB);
 }
