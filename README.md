@@ -28,7 +28,7 @@ BLAKE3 was designed by:
 * [@oconnor63 ](https://github.com/oconnor63) (Jack O'Connor)
 * [@sneves](https://github.com/sneves) (Samuel Neves)
 * [@veorq](https://github.com/veorq) (Jean-Philippe Aumasson)
-* [@zookozcash](https://github.com/zookocash) (Zooko)
+* [@zookozcash](https://github.com/zookozcash) (Zooko)
 
 *WARNING*: BLAKE3 is not a password-hash function, because it's designed
 to be fast, whereas password hashing should not be fast.
