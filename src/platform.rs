@@ -49,6 +49,7 @@ pub enum Platform {
 }
 
 impl Platform {
+    #[allow(unreachable_code)]
     pub fn detect() -> Self {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
