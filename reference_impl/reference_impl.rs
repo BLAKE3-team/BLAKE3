@@ -232,8 +232,8 @@ fn parent_output(
 pub struct Hasher {
     chunk_state: ChunkState,
     key: [u32; 8],
-    subtree_stack: [[u32; 8]; 53], // Space for 53 subtree chaining values:
-    subtree_stack_len: u8,         // 2^53 * CHUNK_LEN = 2^64
+    cv_stack: [[u32; 8]; 53], // Space for 53 subtree chaining values:
+    cv_stack_len: u8,         // 2^53 * CHUNK_LEN = 2^64
 }
 
 impl Hasher {
@@ -241,8 +241,8 @@ impl Hasher {
         Self {
             chunk_state: ChunkState::new(key, 0, flags),
             key: *key,
-            subtree_stack: [[0; 8]; 53],
-            subtree_stack_len: 0,
+            cv_stack: [[0; 8]; 53],
+            cv_stack_len: 0,
         }
     }
 
@@ -266,13 +266,13 @@ impl Hasher {
     }
 
     fn push_stack(&mut self, cv: &[u32; 8]) {
-        self.subtree_stack[self.subtree_stack_len as usize] = *cv;
-        self.subtree_stack_len += 1;
+        self.cv_stack[self.cv_stack_len as usize] = *cv;
+        self.cv_stack_len += 1;
     }
 
     fn pop_stack(&mut self) -> [u32; 8] {
-        self.subtree_stack_len -= 1;
-        self.subtree_stack[self.subtree_stack_len as usize]
+        self.cv_stack_len -= 1;
+        self.cv_stack[self.cv_stack_len as usize]
     }
 
     fn push_chunk_chaining_value(&mut self, mut cv: [u32; 8], total_bytes: u64) {
@@ -283,7 +283,7 @@ impl Hasher {
         // stack. The final length of the stack will be the count of 1 bits in
         // the total number of chunks or (equivalently) input bytes so far.
         let final_stack_len = total_bytes.count_ones() as u8;
-        while self.subtree_stack_len >= final_stack_len {
+        while self.cv_stack_len >= final_stack_len {
             cv = parent_output(&self.pop_stack(), &cv, &self.key, self.chunk_state.flags)
                 .chaining_value();
         }
@@ -314,11 +314,11 @@ impl Hasher {
         // parent chaining values along the right edge of the tree, until we
         // have the root Output.
         let mut output = self.chunk_state.output();
-        let mut parent_nodes_remaining = self.subtree_stack_len as usize;
+        let mut parent_nodes_remaining = self.cv_stack_len as usize;
         while parent_nodes_remaining > 0 {
             parent_nodes_remaining -= 1;
             output = parent_output(
-                &self.subtree_stack[parent_nodes_remaining],
+                &self.cv_stack[parent_nodes_remaining],
                 &output.chaining_value(),
                 &self.key,
                 self.chunk_state.flags,
