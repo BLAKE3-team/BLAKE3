@@ -41,3 +41,15 @@ jobs:
     - run: cross test --target armv7-unknown-linux-gnueabihf --features=c_neon
     - run: cross test --target aarch64-unknown-linux-gnu
     - run: cross test --target aarch64-unknown-linux-gnu --features=c_neon
+
+  bench_tests:
+    name: bench tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        override: true
+    - run: cargo test --benches
