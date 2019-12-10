@@ -74,50 +74,49 @@ INLINE __m512i rot7_512(__m512i x) { return _mm512_ror_epi32(x, 7); }
  * ----------------------------------------------------------------------------
  */
 
-INLINE void g1(__m128i *row1, __m128i *row2, __m128i *row3, __m128i *row4,
+INLINE void g1(__m128i *row0, __m128i *row1, __m128i *row2, __m128i *row3,
                __m128i m) {
-  *row1 = add_128(add_128(*row1, m), *row2);
-  *row4 = xor_128(*row4, *row1);
-  *row4 = rot16_128(*row4);
-  *row3 = add_128(*row3, *row4);
-  *row2 = xor_128(*row2, *row3);
-  *row2 = rot12_128(*row2);
+  *row0 = add_128(add_128(*row0, m), *row1);
+  *row3 = xor_128(*row3, *row0);
+  *row3 = rot16_128(*row3);
+  *row2 = add_128(*row2, *row3);
+  *row1 = xor_128(*row1, *row2);
+  *row1 = rot12_128(*row1);
 }
 
-INLINE void g2(__m128i *row1, __m128i *row2, __m128i *row3, __m128i *row4,
+INLINE void g2(__m128i *row0, __m128i *row1, __m128i *row2, __m128i *row3,
                __m128i m) {
-  *row1 = add_128(add_128(*row1, m), *row2);
-  *row4 = xor_128(*row4, *row1);
-  *row4 = rot8_128(*row4);
-  *row3 = add_128(*row3, *row4);
-  *row2 = xor_128(*row2, *row3);
-  *row2 = rot7_128(*row2);
+  *row0 = add_128(add_128(*row0, m), *row1);
+  *row3 = xor_128(*row3, *row0);
+  *row3 = rot8_128(*row3);
+  *row2 = add_128(*row2, *row3);
+  *row1 = xor_128(*row1, *row2);
+  *row1 = rot7_128(*row1);
 }
 
-// Note the optimization here of leaving row2 as the unrotated row, rather than
-// row1. All the message loads below are adjusted to compensate for this. See
+// Note the optimization here of leaving row1 as the unrotated row, rather than
+// row0. All the message loads below are adjusted to compensate for this. See
 // discussion at https://github.com/sneves/blake2-avx2/pull/4
-INLINE void diagonalize(__m128i *row1, __m128i *row3, __m128i *row4) {
-  *row1 = _mm_shuffle_epi32(*row1, _MM_SHUFFLE(2, 1, 0, 3));
-  *row4 = _mm_shuffle_epi32(*row4, _MM_SHUFFLE(1, 0, 3, 2));
-  *row3 = _mm_shuffle_epi32(*row3, _MM_SHUFFLE(0, 3, 2, 1));
+INLINE void diagonalize(__m128i *row0, __m128i *row2, __m128i *row3) {
+  *row0 = _mm_shuffle_epi32(*row0, _MM_SHUFFLE(2, 1, 0, 3));
+  *row3 = _mm_shuffle_epi32(*row3, _MM_SHUFFLE(1, 0, 3, 2));
+  *row2 = _mm_shuffle_epi32(*row2, _MM_SHUFFLE(0, 3, 2, 1));
 }
 
-INLINE void undiagonalize(__m128i *row1, __m128i *row3, __m128i *row4) {
-  *row1 = _mm_shuffle_epi32(*row1, _MM_SHUFFLE(0, 3, 2, 1));
-  *row4 = _mm_shuffle_epi32(*row4, _MM_SHUFFLE(1, 0, 3, 2));
-  *row3 = _mm_shuffle_epi32(*row3, _MM_SHUFFLE(2, 1, 0, 3));
+INLINE void undiagonalize(__m128i *row0, __m128i *row2, __m128i *row3) {
+  *row0 = _mm_shuffle_epi32(*row0, _MM_SHUFFLE(0, 3, 2, 1));
+  *row3 = _mm_shuffle_epi32(*row3, _MM_SHUFFLE(1, 0, 3, 2));
+  *row2 = _mm_shuffle_epi32(*row2, _MM_SHUFFLE(2, 1, 0, 3));
 }
 
-void blake3_compress_avx512(const uint8_t cv[8],
-                            const uint8_t block[BLAKE3_BLOCK_LEN],
-                            uint8_t block_len, uint64_t offset, uint8_t flags,
-                            uint8_t out[64]) {
-  __m128i row1 = loadu_128(&cv[0]);
-  __m128i row2 = loadu_128(&cv[16]);
-  __m128i row3 = set4(IV[0], IV[1], IV[2], IV[3]);
-  __m128i row4 = set4(offset_low(offset), offset_high(offset),
-                      (uint32_t)block_len, (uint32_t)flags);
+INLINE void compress_pre(__m128i rows[4], const uint32_t cv[8],
+                         const uint8_t block[BLAKE3_BLOCK_LEN],
+                         uint8_t block_len, uint64_t offset, uint8_t flags) {
+  rows[0] = loadu_128((uint8_t *)&cv[0]);
+  rows[1] = loadu_128((uint8_t *)&cv[4]);
+  rows[2] = set4(IV[0], IV[1], IV[2], IV[3]);
+  rows[3] = set4(offset_low(offset), offset_high(offset), (uint32_t)block_len,
+                 (uint32_t)flags);
 
   __m128i m0 = loadu_128(&block[sizeof(__m128i) * 0]);
   __m128i m1 = loadu_128(&block[sizeof(__m128i) * 1]);
@@ -129,160 +128,177 @@ void blake3_compress_avx512(const uint8_t cv[8],
   // round 1
   buf = _mm_castps_si128(_mm_shuffle_ps(
       _mm_castsi128_ps(m0), _mm_castsi128_ps(m1), _MM_SHUFFLE(2, 0, 2, 0)));
-  g1(&row1, &row2, &row3, &row4, buf);
+  g1(&rows[0], &rows[1], &rows[2], &rows[3], buf);
   buf = _mm_castps_si128(_mm_shuffle_ps(
       _mm_castsi128_ps(m0), _mm_castsi128_ps(m1), _MM_SHUFFLE(3, 1, 3, 1)));
-  g2(&row1, &row2, &row3, &row4, buf);
-  diagonalize(&row1, &row3, &row4);
+  g2(&rows[0], &rows[1], &rows[2], &rows[3], buf);
+  diagonalize(&rows[0], &rows[2], &rows[3]);
   t0 = _mm_shuffle_epi32(m2, _MM_SHUFFLE(3, 2, 0, 1));
   t1 = _mm_shuffle_epi32(m3, _MM_SHUFFLE(0, 1, 3, 2));
   buf = _mm_blend_epi16(t0, t1, 0xC3);
-  g1(&row1, &row2, &row3, &row4, buf);
+  g1(&rows[0], &rows[1], &rows[2], &rows[3], buf);
   t0 = _mm_blend_epi16(t0, t1, 0x3C);
   buf = _mm_shuffle_epi32(t0, _MM_SHUFFLE(2, 3, 0, 1));
-  g2(&row1, &row2, &row3, &row4, buf);
-  undiagonalize(&row1, &row3, &row4);
+  g2(&rows[0], &rows[1], &rows[2], &rows[3], buf);
+  undiagonalize(&rows[0], &rows[2], &rows[3]);
 
   // round 2
   t0 = _mm_blend_epi16(m1, m2, 0x0C);
   t1 = _mm_slli_si128(m3, 4);
   t2 = _mm_blend_epi16(t0, t1, 0xF0);
   buf = _mm_shuffle_epi32(t2, _MM_SHUFFLE(2, 1, 0, 3));
-  g1(&row1, &row2, &row3, &row4, buf);
+  g1(&rows[0], &rows[1], &rows[2], &rows[3], buf);
   t0 = _mm_shuffle_epi32(m2, _MM_SHUFFLE(0, 0, 2, 0));
   t1 = _mm_blend_epi16(m1, m3, 0xC0);
   t2 = _mm_blend_epi16(t0, t1, 0xF0);
   buf = _mm_shuffle_epi32(t2, _MM_SHUFFLE(2, 3, 0, 1));
-  g2(&row1, &row2, &row3, &row4, buf);
-  diagonalize(&row1, &row3, &row4);
+  g2(&rows[0], &rows[1], &rows[2], &rows[3], buf);
+  diagonalize(&rows[0], &rows[2], &rows[3]);
   t0 = _mm_slli_si128(m1, 4);
   t1 = _mm_blend_epi16(m2, t0, 0x30);
   t2 = _mm_blend_epi16(m0, t1, 0xF0);
   buf = _mm_shuffle_epi32(t2, _MM_SHUFFLE(3, 0, 1, 2));
-  g1(&row1, &row2, &row3, &row4, buf);
+  g1(&rows[0], &rows[1], &rows[2], &rows[3], buf);
   t0 = _mm_unpackhi_epi32(m0, m1);
   t1 = _mm_slli_si128(m3, 4);
   t2 = _mm_blend_epi16(t0, t1, 0x0C);
   buf = _mm_shuffle_epi32(t2, _MM_SHUFFLE(3, 0, 1, 2));
-  g2(&row1, &row2, &row3, &row4, buf);
-  undiagonalize(&row1, &row3, &row4);
+  g2(&rows[0], &rows[1], &rows[2], &rows[3], buf);
+  undiagonalize(&rows[0], &rows[2], &rows[3]);
 
   // round 3
   t0 = _mm_unpackhi_epi32(m2, m3);
   t1 = _mm_blend_epi16(m3, m1, 0x0C);
   t2 = _mm_blend_epi16(t0, t1, 0x0F);
   buf = _mm_shuffle_epi32(t2, _MM_SHUFFLE(3, 1, 0, 2));
-  g1(&row1, &row2, &row3, &row4, buf);
+  g1(&rows[0], &rows[1], &rows[2], &rows[3], buf);
   t0 = _mm_unpacklo_epi32(m2, m0);
   t1 = _mm_blend_epi16(t0, m0, 0xF0);
   t2 = _mm_slli_si128(m3, 8);
   buf = _mm_blend_epi16(t1, t2, 0xC0);
-  g2(&row1, &row2, &row3, &row4, buf);
-  diagonalize(&row1, &row3, &row4);
+  g2(&rows[0], &rows[1], &rows[2], &rows[3], buf);
+  diagonalize(&rows[0], &rows[2], &rows[3]);
   t0 = _mm_blend_epi16(m0, m2, 0x3C);
   t1 = _mm_srli_si128(m1, 12);
   t2 = _mm_blend_epi16(t0, t1, 0x03);
   buf = _mm_shuffle_epi32(t2, _MM_SHUFFLE(0, 3, 2, 1));
-  g1(&row1, &row2, &row3, &row4, buf);
+  g1(&rows[0], &rows[1], &rows[2], &rows[3], buf);
   t0 = _mm_slli_si128(m3, 4);
   t1 = _mm_blend_epi16(m0, m1, 0x33);
   t2 = _mm_blend_epi16(t1, t0, 0xC0);
   buf = _mm_shuffle_epi32(t2, _MM_SHUFFLE(1, 2, 3, 0));
-  g2(&row1, &row2, &row3, &row4, buf);
-  undiagonalize(&row1, &row3, &row4);
+  g2(&rows[0], &rows[1], &rows[2], &rows[3], buf);
+  undiagonalize(&rows[0], &rows[2], &rows[3]);
 
   // round 4
   t0 = _mm_unpackhi_epi32(m0, m1);
   t1 = _mm_unpackhi_epi32(t0, m2);
   t2 = _mm_blend_epi16(t1, m3, 0x0C);
   buf = _mm_shuffle_epi32(t2, _MM_SHUFFLE(3, 1, 0, 2));
-  g1(&row1, &row2, &row3, &row4, buf);
+  g1(&rows[0], &rows[1], &rows[2], &rows[3], buf);
   t0 = _mm_slli_si128(m2, 8);
   t1 = _mm_blend_epi16(m3, m0, 0x0C);
   t2 = _mm_blend_epi16(t1, t0, 0xC0);
   buf = _mm_shuffle_epi32(t2, _MM_SHUFFLE(2, 0, 1, 3));
-  g2(&row1, &row2, &row3, &row4, buf);
-  diagonalize(&row1, &row3, &row4);
+  g2(&rows[0], &rows[1], &rows[2], &rows[3], buf);
+  diagonalize(&rows[0], &rows[2], &rows[3]);
   t0 = _mm_blend_epi16(m0, m1, 0x0F);
   t1 = _mm_blend_epi16(t0, m3, 0xC0);
   buf = _mm_shuffle_epi32(t1, _MM_SHUFFLE(0, 1, 2, 3));
-  g1(&row1, &row2, &row3, &row4, buf);
+  g1(&rows[0], &rows[1], &rows[2], &rows[3], buf);
   t0 = _mm_alignr_epi8(m0, m1, 4);
   buf = _mm_blend_epi16(t0, m2, 0x33);
-  g2(&row1, &row2, &row3, &row4, buf);
-  undiagonalize(&row1, &row3, &row4);
+  g2(&rows[0], &rows[1], &rows[2], &rows[3], buf);
+  undiagonalize(&rows[0], &rows[2], &rows[3]);
 
   // round 5
   t0 = _mm_unpacklo_epi64(m1, m2);
   t1 = _mm_unpackhi_epi64(m0, m2);
   t2 = _mm_blend_epi16(t0, t1, 0x33);
   buf = _mm_shuffle_epi32(t2, _MM_SHUFFLE(2, 0, 1, 3));
-  g1(&row1, &row2, &row3, &row4, buf);
+  g1(&rows[0], &rows[1], &rows[2], &rows[3], buf);
   t0 = _mm_unpackhi_epi64(m1, m3);
   t1 = _mm_unpacklo_epi64(m0, m1);
   buf = _mm_blend_epi16(t0, t1, 0x33);
-  g2(&row1, &row2, &row3, &row4, buf);
-  diagonalize(&row1, &row3, &row4);
+  g2(&rows[0], &rows[1], &rows[2], &rows[3], buf);
+  diagonalize(&rows[0], &rows[2], &rows[3]);
   t0 = _mm_unpackhi_epi64(m3, m1);
   t1 = _mm_unpackhi_epi64(m2, m0);
   t2 = _mm_blend_epi16(t1, t0, 0x33);
   buf = _mm_shuffle_epi32(t2, _MM_SHUFFLE(2, 1, 0, 3));
-  g1(&row1, &row2, &row3, &row4, buf);
+  g1(&rows[0], &rows[1], &rows[2], &rows[3], buf);
   t0 = _mm_blend_epi16(m0, m2, 0x03);
   t1 = _mm_slli_si128(t0, 8);
   t2 = _mm_blend_epi16(t1, m3, 0x0F);
   buf = _mm_shuffle_epi32(t2, _MM_SHUFFLE(2, 0, 3, 1));
-  g2(&row1, &row2, &row3, &row4, buf);
-  undiagonalize(&row1, &row3, &row4);
+  g2(&rows[0], &rows[1], &rows[2], &rows[3], buf);
+  undiagonalize(&rows[0], &rows[2], &rows[3]);
 
   // round 6
   t0 = _mm_unpackhi_epi32(m0, m1);
   t1 = _mm_unpacklo_epi32(m0, m2);
   buf = _mm_unpacklo_epi64(t0, t1);
-  g1(&row1, &row2, &row3, &row4, buf);
+  g1(&rows[0], &rows[1], &rows[2], &rows[3], buf);
   t0 = _mm_srli_si128(m2, 4);
   t1 = _mm_blend_epi16(m0, m3, 0x03);
   buf = _mm_blend_epi16(t1, t0, 0x3C);
-  g2(&row1, &row2, &row3, &row4, buf);
-  diagonalize(&row1, &row3, &row4);
+  g2(&rows[0], &rows[1], &rows[2], &rows[3], buf);
+  diagonalize(&rows[0], &rows[2], &rows[3]);
   t0 = _mm_blend_epi16(m1, m0, 0x0C);
   t1 = _mm_srli_si128(m3, 4);
   t2 = _mm_blend_epi16(t0, t1, 0x30);
   buf = _mm_shuffle_epi32(t2, _MM_SHUFFLE(2, 3, 0, 1));
-  g1(&row1, &row2, &row3, &row4, buf);
+  g1(&rows[0], &rows[1], &rows[2], &rows[3], buf);
   t0 = _mm_unpacklo_epi64(m2, m1);
   t1 = _mm_shuffle_epi32(m3, _MM_SHUFFLE(2, 0, 1, 0));
   t2 = _mm_srli_si128(t0, 4);
   buf = _mm_blend_epi16(t1, t2, 0x33);
-  g2(&row1, &row2, &row3, &row4, buf);
-  undiagonalize(&row1, &row3, &row4);
+  g2(&rows[0], &rows[1], &rows[2], &rows[3], buf);
+  undiagonalize(&rows[0], &rows[2], &rows[3]);
 
   // round 7
   t0 = _mm_slli_si128(m1, 12);
   t1 = _mm_blend_epi16(m0, m3, 0x33);
   buf = _mm_blend_epi16(t1, t0, 0xC0);
-  g1(&row1, &row2, &row3, &row4, buf);
+  g1(&rows[0], &rows[1], &rows[2], &rows[3], buf);
   t0 = _mm_blend_epi16(m3, m2, 0x30);
   t1 = _mm_srli_si128(m1, 4);
   t2 = _mm_blend_epi16(t0, t1, 0x03);
   buf = _mm_shuffle_epi32(t2, _MM_SHUFFLE(2, 1, 3, 0));
-  g2(&row1, &row2, &row3, &row4, buf);
-  diagonalize(&row1, &row3, &row4);
+  g2(&rows[0], &rows[1], &rows[2], &rows[3], buf);
+  diagonalize(&rows[0], &rows[2], &rows[3]);
   t0 = _mm_unpacklo_epi64(m0, m2);
   t1 = _mm_srli_si128(m1, 4);
   buf =
       _mm_shuffle_epi32(_mm_blend_epi16(t0, t1, 0x0C), _MM_SHUFFLE(3, 1, 0, 2));
-  g1(&row1, &row2, &row3, &row4, buf);
+  g1(&rows[0], &rows[1], &rows[2], &rows[3], buf);
   t0 = _mm_unpackhi_epi32(m1, m2);
   t1 = _mm_unpackhi_epi64(m0, t0);
   buf = _mm_shuffle_epi32(t1, _MM_SHUFFLE(0, 1, 2, 3));
-  g2(&row1, &row2, &row3, &row4, buf);
-  undiagonalize(&row1, &row3, &row4);
+  g2(&rows[0], &rows[1], &rows[2], &rows[3], buf);
+  undiagonalize(&rows[0], &rows[2], &rows[3]);
+}
 
-  storeu_128(xor_128(row1, row3), &out[0]);
-  storeu_128(xor_128(row2, row4), &out[16]);
-  storeu_128(xor_128(row3, loadu_128(&cv[0])), &out[32]);
-  storeu_128(xor_128(row4, loadu_128(&cv[16])), &out[48]);
+void blake3_compress_xof_avx512(const uint32_t cv[8],
+                                const uint8_t block[BLAKE3_BLOCK_LEN],
+                                uint8_t block_len, uint64_t offset,
+                                uint8_t flags, uint8_t out[64]) {
+  __m128i rows[4];
+  compress_pre(rows, cv, block, block_len, offset, flags);
+  storeu_128(xor_128(rows[0], rows[2]), &out[0]);
+  storeu_128(xor_128(rows[1], rows[3]), &out[16]);
+  storeu_128(xor_128(rows[2], loadu_128((uint8_t *)&cv[0])), &out[32]);
+  storeu_128(xor_128(rows[3], loadu_128((uint8_t *)&cv[4])), &out[48]);
+}
+
+void blake3_compress_in_place_avx512(uint32_t cv[8],
+                                     const uint8_t block[BLAKE3_BLOCK_LEN],
+                                     uint8_t block_len, uint64_t offset,
+                                     uint8_t flags) {
+  __m128i rows[4];
+  compress_pre(rows, cv, block, block_len, offset, flags);
+  storeu_128(xor_128(rows[0], rows[2]), (uint8_t *)&cv[0]);
+  storeu_128(xor_128(rows[1], rows[3]), (uint8_t *)&cv[4]);
 }
 
 /*
@@ -461,15 +477,12 @@ INLINE void load_offsets4(uint64_t offset, const uint64_t deltas[4],
 }
 
 void blake3_hash4_avx512(const uint8_t *const *inputs, size_t blocks,
-                         const uint8_t key[BLAKE3_KEY_LEN], uint64_t offset,
+                         const uint32_t key[8], uint64_t offset,
                          offset_deltas_t offset_deltas, uint8_t flags,
                          uint8_t flags_start, uint8_t flags_end, uint8_t *out) {
-  uint32_t key_words[8];
-  memcpy(key_words, key, BLAKE3_KEY_LEN); // x86 is little-endian
   __m128i h_vecs[8] = {
-      set1_128(key_words[0]), set1_128(key_words[1]), set1_128(key_words[2]),
-      set1_128(key_words[3]), set1_128(key_words[4]), set1_128(key_words[5]),
-      set1_128(key_words[6]), set1_128(key_words[7]),
+      set1_128(key[0]), set1_128(key[1]), set1_128(key[2]), set1_128(key[3]),
+      set1_128(key[4]), set1_128(key[5]), set1_128(key[6]), set1_128(key[7]),
   };
   __m128i offset_low_vec, offset_high_vec;
   load_offsets4(offset, offset_deltas, &offset_low_vec, &offset_high_vec);
@@ -710,15 +723,12 @@ INLINE void load_offsets8(uint64_t offset, const uint64_t deltas[8],
 }
 
 void blake3_hash8_avx512(const uint8_t *const *inputs, size_t blocks,
-                         const uint8_t key[BLAKE3_KEY_LEN], uint64_t offset,
+                         const uint32_t key[8], uint64_t offset,
                          offset_deltas_t offset_deltas, uint8_t flags,
                          uint8_t flags_start, uint8_t flags_end, uint8_t *out) {
-  uint32_t key_words[8];
-  memcpy(key_words, key, BLAKE3_KEY_LEN); // x86 is little-endian
   __m256i h_vecs[8] = {
-      set1_256(key_words[0]), set1_256(key_words[1]), set1_256(key_words[2]),
-      set1_256(key_words[3]), set1_256(key_words[4]), set1_256(key_words[5]),
-      set1_256(key_words[6]), set1_256(key_words[7]),
+      set1_256(key[0]), set1_256(key[1]), set1_256(key[2]), set1_256(key[3]),
+      set1_256(key[4]), set1_256(key[5]), set1_256(key[6]), set1_256(key[7]),
   };
   __m256i offset_low_vec, offset_high_vec;
   load_offsets8(offset, offset_deltas, &offset_low_vec, &offset_high_vec);
@@ -1023,16 +1033,13 @@ INLINE void load_offsets16(uint64_t offset, const uint64_t deltas[16],
 }
 
 void blake3_hash16_avx512(const uint8_t *const *inputs, size_t blocks,
-                          const uint8_t key[BLAKE3_KEY_LEN], uint64_t offset,
+                          const uint32_t key[8], uint64_t offset,
                           offset_deltas_t offset_deltas, uint8_t flags,
                           uint8_t flags_start, uint8_t flags_end,
                           uint8_t *out) {
-  uint32_t key_words[8];
-  memcpy(key_words, key, BLAKE3_KEY_LEN); // x86 is little-endian
   __m512i h_vecs[8] = {
-      set1_512(key_words[0]), set1_512(key_words[1]), set1_512(key_words[2]),
-      set1_512(key_words[3]), set1_512(key_words[4]), set1_512(key_words[5]),
-      set1_512(key_words[6]), set1_512(key_words[7]),
+      set1_512(key[0]), set1_512(key[1]), set1_512(key[2]), set1_512(key[3]),
+      set1_512(key[4]), set1_512(key[5]), set1_512(key[6]), set1_512(key[7]),
   };
   __m512i offset_low_vec, offset_high_vec;
   load_offsets16(offset, offset_deltas, &offset_low_vec, &offset_high_vec);
@@ -1107,20 +1114,18 @@ void blake3_hash16_avx512(const uint8_t *const *inputs, size_t blocks,
  */
 
 INLINE void hash_one_avx512(const uint8_t *input, size_t blocks,
-                            const uint8_t key[BLAKE3_KEY_LEN], uint64_t offset,
+                            const uint32_t key[8], uint64_t offset,
                             uint8_t flags, uint8_t flags_start,
                             uint8_t flags_end, uint8_t out[BLAKE3_OUT_LEN]) {
-  uint8_t cv[32];
+  uint32_t cv[8];
   memcpy(cv, key, BLAKE3_KEY_LEN);
   uint8_t block_flags = flags | flags_start;
   while (blocks > 0) {
     if (blocks == 1) {
       block_flags |= flags_end;
     }
-    uint8_t out[64];
-    blake3_compress_avx512(cv, input, BLAKE3_BLOCK_LEN, offset, block_flags,
-                           out);
-    memcpy(cv, out, 32);
+    blake3_compress_in_place_avx512(cv, input, BLAKE3_BLOCK_LEN, offset,
+                                    block_flags);
     input = &input[BLAKE3_BLOCK_LEN];
     blocks -= 1;
     block_flags = flags;
@@ -1129,7 +1134,7 @@ INLINE void hash_one_avx512(const uint8_t *input, size_t blocks,
 }
 
 void blake3_hash_many_avx512(const uint8_t *const *inputs, size_t num_inputs,
-                             size_t blocks, const uint8_t key[BLAKE3_KEY_LEN],
+                             size_t blocks, const uint32_t key[8],
                              uint64_t offset, offset_deltas_t offset_deltas,
                              uint8_t flags, uint8_t flags_start,
                              uint8_t flags_end, uint8_t *out) {

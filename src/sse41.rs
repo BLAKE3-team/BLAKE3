@@ -3,7 +3,9 @@ use core::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::*;
 
-use crate::{offset_high, offset_low, OffsetDeltas, BLOCK_LEN, IV, KEY_LEN, MSG_SCHEDULE, OUT_LEN};
+use crate::{
+    offset_high, offset_low, CVBytes, CVWords, OffsetDeltas, BLOCK_LEN, IV, MSG_SCHEDULE, OUT_LEN,
+};
 use arrayref::{array_mut_ref, array_ref, mut_array_refs};
 
 pub const DEGREE: usize = 4;
@@ -122,16 +124,16 @@ unsafe fn undiagonalize(row1: &mut __m128i, row3: &mut __m128i, row4: &mut __m12
     *row3 = _mm_shuffle_epi32(*row3, _MM_SHUFFLE!(2, 1, 0, 3));
 }
 
-#[target_feature(enable = "sse4.1")]
-pub unsafe fn compress(
-    cv: &[u8; 32],
+#[inline(always)]
+unsafe fn compress_pre(
+    cv: &CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
     offset: u64,
     flags: u8,
-) -> [u8; 64] {
-    let row1 = &mut loadu(&cv[0]);
-    let row2 = &mut loadu(&cv[16]);
+) -> [__m128i; 4] {
+    let row1 = &mut loadu(cv.as_ptr().add(0) as *const u8);
+    let row2 = &mut loadu(cv.as_ptr().add(4) as *const u8);
     let row3 = &mut set4(IV[0], IV[1], IV[2], IV[3]);
     let row4 = &mut set4(
         offset_low(offset),
@@ -303,12 +305,37 @@ pub unsafe fn compress(
     g2(row1, row2, row3, row4, buf);
     undiagonalize(row1, row3, row4);
 
-    *row1 = xor(*row1, *row3);
-    *row2 = xor(*row2, *row4);
-    *row3 = xor(*row3, loadu(&cv[0]));
-    *row4 = xor(*row4, loadu(&cv[16]));
+    [*row1, *row2, *row3, *row4]
+}
 
-    core::mem::transmute([*row1, *row2, *row3, *row4]) // x86 is little-endian
+#[target_feature(enable = "sse4.1")]
+pub unsafe fn compress_in_place(
+    cv: &mut CVWords,
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    offset: u64,
+    flags: u8,
+) {
+    let [row1, row2, row3, row4] = compress_pre(cv, block, block_len, offset, flags);
+    storeu(xor(row1, row3), cv.as_mut_ptr().add(0) as *mut u8);
+    storeu(xor(row2, row4), cv.as_mut_ptr().add(4) as *mut u8);
+}
+
+#[target_feature(enable = "sse4.1")]
+pub unsafe fn compress_xof(
+    cv: &CVWords,
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    offset: u64,
+    flags: u8,
+) -> [u8; 64] {
+    let [mut row1, mut row2, mut row3, mut row4] =
+        compress_pre(cv, block, block_len, offset, flags);
+    row1 = xor(row1, row3);
+    row2 = xor(row2, row4);
+    row3 = xor(row3, loadu(cv.as_ptr().add(0) as *const u8));
+    row4 = xor(row4, loadu(cv.as_ptr().add(4) as *const u8));
+    core::mem::transmute([row1, row2, row3, row4])
 }
 
 #[inline(always)]
@@ -500,7 +527,7 @@ unsafe fn load_offsets(offset: u64, offset_deltas: &OffsetDeltas) -> (__m128i, _
 pub unsafe fn hash4(
     inputs: &[*const u8; DEGREE],
     blocks: usize,
-    key: &[u8; KEY_LEN],
+    key: &CVWords,
     offset: u64,
     offset_deltas: &OffsetDeltas,
     flags: u8,
@@ -508,16 +535,15 @@ pub unsafe fn hash4(
     flags_end: u8,
     out: &mut [u8; DEGREE * OUT_LEN],
 ) {
-    let key_words: [u32; 8] = core::mem::transmute(*key); // x86 is little-endian
     let mut h_vecs = [
-        set1(key_words[0]),
-        set1(key_words[1]),
-        set1(key_words[2]),
-        set1(key_words[3]),
-        set1(key_words[4]),
-        set1(key_words[5]),
-        set1(key_words[6]),
-        set1(key_words[7]),
+        set1(key[0]),
+        set1(key[1]),
+        set1(key[2]),
+        set1(key[3]),
+        set1(key[4]),
+        set1(key[5]),
+        set1(key[6]),
+        set1(key[7]),
     ];
     let (offset_low_vec, offset_high_vec) = load_offsets(offset, offset_deltas);
     let mut block_flags = flags | flags_start;
@@ -589,12 +615,12 @@ pub unsafe fn hash4(
 #[target_feature(enable = "sse4.1")]
 unsafe fn hash1<A: arrayvec::Array<Item = u8>>(
     input: &A,
-    key: &[u8; KEY_LEN],
+    key: &CVWords,
     offset: u64,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
-    out: &mut [u8; OUT_LEN],
+    out: &mut CVBytes,
 ) {
     debug_assert_eq!(A::CAPACITY % BLOCK_LEN, 0, "uneven blocks");
     let mut cv = *key;
@@ -604,24 +630,23 @@ unsafe fn hash1<A: arrayvec::Array<Item = u8>>(
         if slice.len() == BLOCK_LEN {
             block_flags |= flags_end;
         }
-        let out = compress(
-            &cv,
+        compress_in_place(
+            &mut cv,
             array_ref!(slice, 0, BLOCK_LEN),
             BLOCK_LEN as u8,
             offset,
             block_flags,
         );
-        cv = *array_ref!(out, 0, 32);
         block_flags = flags;
         slice = &slice[BLOCK_LEN..];
     }
-    *out = cv;
+    *out = core::mem::transmute(cv); // x86 is little-endian
 }
 
 #[target_feature(enable = "sse4.1")]
 pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
     mut inputs: &[&A],
-    key: &[u8; KEY_LEN],
+    key: &CVWords,
     mut offset: u64,
     offset_deltas: &OffsetDeltas,
     flags: u8,
@@ -705,7 +730,7 @@ mod test {
         if !crate::platform::sse41_detected() {
             return;
         }
-        crate::test::test_compress_fn(compress);
+        crate::test::test_compress_fn(compress_in_place, compress_xof);
     }
 
     #[test]

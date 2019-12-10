@@ -1,17 +1,29 @@
-use crate::{OffsetDeltas, BLOCK_LEN, KEY_LEN, OUT_LEN};
+use crate::{CVWords, OffsetDeltas, BLOCK_LEN, OUT_LEN};
+use arrayref::array_ref;
 
 pub const DEGREE: usize = 16;
 
 // Unsafe because this may only be called on platforms supporting AVX-512.
-pub unsafe fn compress(
-    cv: &[u8; 32],
+pub unsafe fn compress_in_place(
+    cv: &mut CVWords,
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    offset: u64,
+    flags: u8,
+) {
+    ffi::blake3_compress_in_place_avx512(cv.as_mut_ptr(), block.as_ptr(), block_len, offset, flags)
+}
+
+// Unsafe because this may only be called on platforms supporting AVX-512.
+pub unsafe fn compress_xof(
+    cv: &CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
     offset: u64,
     flags: u8,
 ) -> [u8; 64] {
     let mut out = [0u8; 64];
-    ffi::blake3_compress_avx512(
+    ffi::blake3_compress_xof_avx512(
         cv.as_ptr(),
         block.as_ptr(),
         block_len,
@@ -25,7 +37,7 @@ pub unsafe fn compress(
 // Unsafe because this may only be called on platforms supporting AVX-512.
 pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
     inputs: &[&A],
-    key: &[u8; KEY_LEN],
+    key: &CVWords,
     offset: u64,
     offset_deltas: &OffsetDeltas,
     flags: u8,
@@ -53,53 +65,26 @@ pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
 
 pub mod ffi {
     extern "C" {
-        pub fn blake3_compress_avx512(
-            cv: *const u8,
+        pub fn blake3_compress_in_place_avx512(
+            cv: *mut u32,
+            block: *const u8,
+            block_len: u8,
+            offset: u64,
+            flags: u8,
+        );
+        pub fn blake3_compress_xof_avx512(
+            cv: *const u32,
             block: *const u8,
             block_len: u8,
             offset: u64,
             flags: u8,
             out: *mut u8,
         );
-        // hash4/hash8/hash16 are exposed here for benchmarks.
-        pub fn blake3_hash4_avx512(
-            inputs: *const *const u8,
-            blocks: usize,
-            key: *const u8,
-            offset: u64,
-            offset_deltas: *const u64,
-            flags: u8,
-            flags_start: u8,
-            flags_end: u8,
-            out: *mut u8,
-        );
-        pub fn blake3_hash8_avx512(
-            inputs: *const *const u8,
-            blocks: usize,
-            key: *const u8,
-            offset: u64,
-            offset_deltas: *const u64,
-            flags: u8,
-            flags_start: u8,
-            flags_end: u8,
-            out: *mut u8,
-        );
-        pub fn blake3_hash16_avx512(
-            inputs: *const *const u8,
-            blocks: usize,
-            key: *const u8,
-            offset: u64,
-            offset_deltas: *const u64,
-            flags: u8,
-            flags_start: u8,
-            flags_end: u8,
-            out: *mut u8,
-        );
         pub fn blake3_hash_many_avx512(
             inputs: *const *const u8,
             num_inputs: usize,
             blocks: usize,
-            key: *const u8,
+            key: *const u32,
             offset: u64,
             offset_deltas: *const u64,
             flags: u8,
@@ -119,7 +104,7 @@ mod test {
         if !crate::platform::avx512_detected() {
             return;
         }
-        crate::test::test_compress_fn(compress);
+        crate::test::test_compress_fn(compress_in_place, compress_xof);
     }
 
     #[test]

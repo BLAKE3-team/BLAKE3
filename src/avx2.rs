@@ -3,7 +3,7 @@ use core::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::*;
 
-use crate::{offset_high, offset_low, OffsetDeltas, BLOCK_LEN, IV, KEY_LEN, MSG_SCHEDULE, OUT_LEN};
+use crate::{offset_high, offset_low, CVWords, OffsetDeltas, BLOCK_LEN, IV, MSG_SCHEDULE, OUT_LEN};
 use arrayref::{array_mut_ref, mut_array_refs};
 
 pub const DEGREE: usize = 8;
@@ -299,7 +299,7 @@ unsafe fn load_offsets(offset: u64, offset_deltas: &OffsetDeltas) -> (__m256i, _
 pub unsafe fn hash8(
     inputs: &[*const u8; DEGREE],
     blocks: usize,
-    key: &[u8; KEY_LEN],
+    key: &CVWords,
     offset: u64,
     offset_deltas: &OffsetDeltas,
     flags: u8,
@@ -307,16 +307,15 @@ pub unsafe fn hash8(
     flags_end: u8,
     out: &mut [u8; DEGREE * OUT_LEN],
 ) {
-    let key_words: [u32; 8] = core::mem::transmute(*key); // x86 is little-endian
     let mut h_vecs = [
-        set1(key_words[0]),
-        set1(key_words[1]),
-        set1(key_words[2]),
-        set1(key_words[3]),
-        set1(key_words[4]),
-        set1(key_words[5]),
-        set1(key_words[6]),
-        set1(key_words[7]),
+        set1(key[0]),
+        set1(key[1]),
+        set1(key[2]),
+        set1(key[3]),
+        set1(key[4]),
+        set1(key[5]),
+        set1(key[6]),
+        set1(key[7]),
     ];
     let (offset_low_vec, offset_high_vec) = load_offsets(offset, offset_deltas);
     let mut block_flags = flags | flags_start;
@@ -384,7 +383,7 @@ pub unsafe fn hash8(
 #[target_feature(enable = "avx2")]
 pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
     mut inputs: &[&A],
-    key: &[u8; KEY_LEN],
+    key: &CVWords,
     mut offset: u64,
     offset_deltas: &OffsetDeltas,
     flags: u8,

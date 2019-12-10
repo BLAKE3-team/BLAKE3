@@ -1,4 +1,5 @@
-use crate::{portable, OffsetDeltas, BLOCK_LEN, KEY_LEN};
+use crate::{portable, CVWords, OffsetDeltas, BLOCK_LEN};
+use arrayref::{array_mut_ref, array_ref};
 
 #[cfg(feature = "c_avx512")]
 use crate::c_avx512;
@@ -91,27 +92,55 @@ impl Platform {
         degree
     }
 
-    pub(crate) fn compress(
+    pub(crate) fn compress_in_place(
         &self,
-        cv: &[u8; 32],
+        cv: &mut CVWords,
+        block: &[u8; BLOCK_LEN],
+        block_len: u8,
+        offset: u64,
+        flags: u8,
+    ) {
+        match self {
+            Platform::Portable => portable::compress_in_place(cv, block, block_len, offset, flags),
+            // Safe because detect() checked for platform support.
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Platform::SSE41 | Platform::AVX2 => unsafe {
+                sse41::compress_in_place(cv, block, block_len, offset, flags)
+            },
+            // Safe because detect() checked for platform support.
+            #[cfg(feature = "c_avx512")]
+            Platform::AVX512 => unsafe {
+                c_avx512::compress_in_place(cv, block, block_len, offset, flags)
+            },
+            // No NEON compress_in_place() implementation yet.
+            #[cfg(feature = "c_neon")]
+            Platform::NEON => portable::compress_in_place(cv, block, block_len, offset, flags),
+        }
+    }
+
+    pub(crate) fn compress_xof(
+        &self,
+        cv: &CVWords,
         block: &[u8; BLOCK_LEN],
         block_len: u8,
         offset: u64,
         flags: u8,
     ) -> [u8; 64] {
         match self {
-            Platform::Portable => portable::compress(cv, block, block_len, offset, flags),
+            Platform::Portable => portable::compress_xof(cv, block, block_len, offset, flags),
             // Safe because detect() checked for platform support.
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::SSE41 | Platform::AVX2 => unsafe {
-                sse41::compress(cv, block, block_len, offset, flags)
+                sse41::compress_xof(cv, block, block_len, offset, flags)
             },
             // Safe because detect() checked for platform support.
             #[cfg(feature = "c_avx512")]
-            Platform::AVX512 => unsafe { c_avx512::compress(cv, block, block_len, offset, flags) },
-            // No NEON compress() implementation yet.
+            Platform::AVX512 => unsafe {
+                c_avx512::compress_xof(cv, block, block_len, offset, flags)
+            },
+            // No NEON compress_xof() implementation yet.
             #[cfg(feature = "c_neon")]
-            Platform::NEON => portable::compress(cv, block, block_len, offset, flags),
+            Platform::NEON => portable::compress_xof(cv, block, block_len, offset, flags),
         }
     }
 
@@ -128,7 +157,7 @@ impl Platform {
     pub(crate) fn hash_many<A: arrayvec::Array<Item = u8>>(
         &self,
         inputs: &[&A],
-        key: &[u8; KEY_LEN],
+        key: &CVWords,
         offset: u64,
         offset_deltas: &OffsetDeltas,
         flags: u8,
@@ -261,4 +290,76 @@ pub fn sse41_detected() -> bool {
         }
     }
     false
+}
+
+#[inline(always)]
+pub fn words_from_le_bytes_32(bytes: &[u8; 32]) -> [u32; 8] {
+    let mut out = [0; 8];
+    out[0] = u32::from_le_bytes(*array_ref!(bytes, 0 * 4, 4));
+    out[1] = u32::from_le_bytes(*array_ref!(bytes, 1 * 4, 4));
+    out[2] = u32::from_le_bytes(*array_ref!(bytes, 2 * 4, 4));
+    out[3] = u32::from_le_bytes(*array_ref!(bytes, 3 * 4, 4));
+    out[4] = u32::from_le_bytes(*array_ref!(bytes, 4 * 4, 4));
+    out[5] = u32::from_le_bytes(*array_ref!(bytes, 5 * 4, 4));
+    out[6] = u32::from_le_bytes(*array_ref!(bytes, 6 * 4, 4));
+    out[7] = u32::from_le_bytes(*array_ref!(bytes, 7 * 4, 4));
+    out
+}
+
+#[inline(always)]
+pub fn words_from_le_bytes_64(bytes: &[u8; 64]) -> [u32; 16] {
+    let mut out = [0; 16];
+    out[0] = u32::from_le_bytes(*array_ref!(bytes, 0 * 4, 4));
+    out[1] = u32::from_le_bytes(*array_ref!(bytes, 1 * 4, 4));
+    out[2] = u32::from_le_bytes(*array_ref!(bytes, 2 * 4, 4));
+    out[3] = u32::from_le_bytes(*array_ref!(bytes, 3 * 4, 4));
+    out[4] = u32::from_le_bytes(*array_ref!(bytes, 4 * 4, 4));
+    out[5] = u32::from_le_bytes(*array_ref!(bytes, 5 * 4, 4));
+    out[6] = u32::from_le_bytes(*array_ref!(bytes, 6 * 4, 4));
+    out[7] = u32::from_le_bytes(*array_ref!(bytes, 7 * 4, 4));
+    out[8] = u32::from_le_bytes(*array_ref!(bytes, 8 * 4, 4));
+    out[9] = u32::from_le_bytes(*array_ref!(bytes, 9 * 4, 4));
+    out[10] = u32::from_le_bytes(*array_ref!(bytes, 10 * 4, 4));
+    out[11] = u32::from_le_bytes(*array_ref!(bytes, 11 * 4, 4));
+    out[12] = u32::from_le_bytes(*array_ref!(bytes, 12 * 4, 4));
+    out[13] = u32::from_le_bytes(*array_ref!(bytes, 13 * 4, 4));
+    out[14] = u32::from_le_bytes(*array_ref!(bytes, 14 * 4, 4));
+    out[15] = u32::from_le_bytes(*array_ref!(bytes, 15 * 4, 4));
+    out
+}
+
+#[inline(always)]
+pub fn le_bytes_from_words_32(words: &[u32; 8]) -> [u8; 32] {
+    let mut out = [0; 32];
+    *array_mut_ref!(out, 0 * 4, 4) = words[0].to_le_bytes();
+    *array_mut_ref!(out, 1 * 4, 4) = words[1].to_le_bytes();
+    *array_mut_ref!(out, 2 * 4, 4) = words[2].to_le_bytes();
+    *array_mut_ref!(out, 3 * 4, 4) = words[3].to_le_bytes();
+    *array_mut_ref!(out, 4 * 4, 4) = words[4].to_le_bytes();
+    *array_mut_ref!(out, 5 * 4, 4) = words[5].to_le_bytes();
+    *array_mut_ref!(out, 6 * 4, 4) = words[6].to_le_bytes();
+    *array_mut_ref!(out, 7 * 4, 4) = words[7].to_le_bytes();
+    out
+}
+
+#[inline(always)]
+pub fn le_bytes_from_words_64(words: &[u32; 16]) -> [u8; 64] {
+    let mut out = [0; 64];
+    *array_mut_ref!(out, 0 * 4, 4) = words[0].to_le_bytes();
+    *array_mut_ref!(out, 1 * 4, 4) = words[1].to_le_bytes();
+    *array_mut_ref!(out, 2 * 4, 4) = words[2].to_le_bytes();
+    *array_mut_ref!(out, 3 * 4, 4) = words[3].to_le_bytes();
+    *array_mut_ref!(out, 4 * 4, 4) = words[4].to_le_bytes();
+    *array_mut_ref!(out, 5 * 4, 4) = words[5].to_le_bytes();
+    *array_mut_ref!(out, 6 * 4, 4) = words[6].to_le_bytes();
+    *array_mut_ref!(out, 7 * 4, 4) = words[7].to_le_bytes();
+    *array_mut_ref!(out, 8 * 4, 4) = words[8].to_le_bytes();
+    *array_mut_ref!(out, 9 * 4, 4) = words[9].to_le_bytes();
+    *array_mut_ref!(out, 10 * 4, 4) = words[10].to_le_bytes();
+    *array_mut_ref!(out, 11 * 4, 4) = words[11].to_le_bytes();
+    *array_mut_ref!(out, 12 * 4, 4) = words[12].to_le_bytes();
+    *array_mut_ref!(out, 13 * 4, 4) = words[13].to_le_bytes();
+    *array_mut_ref!(out, 14 * 4, 4) = words[14].to_le_bytes();
+    *array_mut_ref!(out, 15 * 4, 4) = words[15].to_le_bytes();
+    out
 }

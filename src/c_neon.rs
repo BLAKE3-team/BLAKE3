@@ -1,11 +1,11 @@
-use crate::{OffsetDeltas, BLOCK_LEN, KEY_LEN, OUT_LEN};
+use crate::{CVWords, OffsetDeltas, BLOCK_LEN, OUT_LEN};
 
 pub const DEGREE: usize = 4;
 
 // Unsafe because this may only be called on platforms supporting NEON.
 pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
     inputs: &[&A],
-    key: &[u8; KEY_LEN],
+    key: &CVWords,
     offset: u64,
     offset_deltas: &OffsetDeltas,
     flags: u8,
@@ -31,25 +31,36 @@ pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
     )
 }
 
+// blake3_neon.c normally depends on blake3_portable.c, because the NEON
+// implementation only provides 4x compression, and it relies on the portable
+// implementation for 1x compression. However, we expose the portable Rust
+// implementation here instead, to avoid linking in unnecessary code.
+#[no_mangle]
+pub extern "C" fn blake3_compress_in_place_portable(
+    cv: *mut u32,
+    block: *const u8,
+    block_len: u8,
+    offset: u64,
+    flags: u8,
+) {
+    unsafe {
+        crate::portable::compress_in_place(
+            &mut *(cv as *mut [u32; 8]),
+            &*(block as *const [u8; 64]),
+            block_len,
+            offset,
+            flags,
+        )
+    }
+}
+
 pub mod ffi {
     extern "C" {
-        // Exposed here for benchmarks.
-        pub fn blake3_hash4_neon(
-            inputs: *const *const u8,
-            blocks: usize,
-            key: *const u8,
-            offset: u64,
-            offset_deltas: *const u64,
-            flags: u8,
-            flags_start: u8,
-            flags_end: u8,
-            out: *mut u8,
-        );
         pub fn blake3_hash_many_neon(
             inputs: *const *const u8,
             num_inputs: usize,
             blocks: usize,
-            key: *const u8,
+            key: *const u32,
             offset: u64,
             offset_deltas: *const u64,
             flags: u8,

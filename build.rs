@@ -44,8 +44,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if defined("CARGO_FEATURE_C_NEON") {
         let mut build = new_build();
+        // Note that blake3_neon.c normally depends on the blake3_portable.c
+        // for the single-instance compression function, but we expose
+        // portable.rs over FFI instead. See c_neon.rs.
         build.file("src/c/blake3_neon.c");
-        build.file("src/c/blake3_portable.c");
         // ARMv7 platforms that support NEON generally need the following
         // flags. AArch64 supports NEON by default and does not support -mpfu.
         if is_armv7() {

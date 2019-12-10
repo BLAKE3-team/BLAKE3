@@ -1,4 +1,4 @@
-use crate::{OffsetDeltas, BLOCK_LEN, CHUNK_LEN, KEY_LEN, OUT_LEN};
+use crate::{CVBytes, CVWords, OffsetDeltas, BLOCK_LEN, CHUNK_LEN, OUT_LEN};
 use arrayref::array_ref;
 use arrayvec::ArrayVec;
 use core::usize;
@@ -31,7 +31,11 @@ pub const TEST_CASES: &[usize] = &[
 
 pub const TEST_CASES_MAX: usize = 31 * CHUNK_LEN;
 
-pub const TEST_KEY: [u8; crate::KEY_LEN] = *b"whats the Elvish word for friend";
+// There's a test to make sure these two are equal below.
+pub const TEST_KEY: CVBytes = *b"whats the Elvish word for friend";
+pub const TEST_KEY_WORDS: CVWords = [
+    1952540791, 1752440947, 1816469605, 1752394102, 1919907616, 1868963940, 1919295602, 1684956521,
+];
 
 // Paint the input with a repeating byte pattern. We use a cycle length of 251,
 // because that's the largets prime number less than 256. This makes it
@@ -43,8 +47,11 @@ pub fn paint_test_input(buf: &mut [u8]) {
     }
 }
 
-type CompressFn = unsafe fn(
-    cv: &[u8; 32],
+type CompressInPlaceFn =
+    unsafe fn(cv: &mut CVWords, block: &[u8; BLOCK_LEN], block_len: u8, offset: u64, flags: u8);
+
+type CompressXofFn = unsafe fn(
+    cv: &CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
     offset: u64,
@@ -52,8 +59,8 @@ type CompressFn = unsafe fn(
 ) -> [u8; 64];
 
 // A shared helper function for platform-specific tests.
-pub fn test_compress_fn(compress_fn: CompressFn) {
-    let initial_state = *b"IV for compression tests <('.')>";
+pub fn test_compress_fn(compress_in_place_fn: CompressInPlaceFn, compress_xof_fn: CompressXofFn) {
+    let initial_state = TEST_KEY_WORDS;
     let block_len: u8 = 61;
     let mut block = [0; BLOCK_LEN];
     paint_test_input(&mut block[..block_len as usize]);
@@ -62,16 +69,21 @@ pub fn test_compress_fn(compress_fn: CompressFn) {
     let flags = crate::CHUNK_END | crate::ROOT | crate::KEYED_HASH;
 
     let portable_out =
-        crate::portable::compress(&initial_state, &block, block_len, offset as u64, flags);
+        crate::portable::compress_xof(&initial_state, &block, block_len, offset as u64, flags);
 
-    let test_out = unsafe { compress_fn(&initial_state, &block, block_len, offset as u64, flags) };
+    let mut test_state = initial_state;
+    unsafe { compress_in_place_fn(&mut test_state, &block, block_len, offset as u64, flags) };
+    let test_state_bytes = crate::platform::le_bytes_from_words_32(&test_state);
+    let test_xof =
+        unsafe { compress_xof_fn(&initial_state, &block, block_len, offset as u64, flags) };
 
-    assert_eq!(&portable_out[..], &test_out[..]);
+    assert_eq!(&portable_out[..32], &test_state_bytes[..]);
+    assert_eq!(&portable_out[..], &test_xof[..]);
 }
 
 type HashManyFn<A> = unsafe fn(
     inputs: &[&A],
-    key: &[u8; KEY_LEN],
+    key: &CVWords,
     offset: u64,
     offset_deltas: &OffsetDeltas,
     flags: u8,
@@ -100,7 +112,7 @@ pub fn test_hash_many_fn(
     let mut portable_chunks_out = [0; NUM_INPUTS * OUT_LEN];
     crate::portable::hash_many(
         &chunks,
-        &TEST_KEY,
+        &TEST_KEY_WORDS,
         offset,
         crate::CHUNK_OFFSET_DELTAS,
         crate::DERIVE_KEY,
@@ -113,7 +125,7 @@ pub fn test_hash_many_fn(
     unsafe {
         hash_many_chunks_fn(
             &chunks[..],
-            &TEST_KEY,
+            &TEST_KEY_WORDS,
             offset,
             crate::CHUNK_OFFSET_DELTAS,
             crate::DERIVE_KEY,
@@ -139,7 +151,7 @@ pub fn test_hash_many_fn(
     let mut portable_parents_out = [0; NUM_INPUTS * OUT_LEN];
     crate::portable::hash_many(
         &parents,
-        &TEST_KEY,
+        &TEST_KEY_WORDS,
         0,
         crate::PARENT_OFFSET_DELTAS,
         crate::DERIVE_KEY | crate::PARENT,
@@ -152,7 +164,7 @@ pub fn test_hash_many_fn(
     unsafe {
         hash_many_parents_fn(
             &parents[..],
-            &TEST_KEY,
+            &TEST_KEY_WORDS,
             0,
             crate::PARENT_OFFSET_DELTAS,
             crate::DERIVE_KEY | crate::PARENT,
@@ -169,6 +181,14 @@ pub fn test_hash_many_fn(
             &test_parents_out[n * OUT_LEN..][..OUT_LEN]
         );
     }
+}
+
+#[test]
+fn test_key_bytes_equal_key_words() {
+    assert_eq!(
+        TEST_KEY_WORDS,
+        crate::platform::words_from_le_bytes_32(&TEST_KEY),
+    );
 }
 
 #[test]

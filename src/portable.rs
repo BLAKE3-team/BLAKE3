@@ -1,4 +1,6 @@
-use crate::{offset_high, offset_low, OffsetDeltas, BLOCK_LEN, IV, KEY_LEN, MSG_SCHEDULE, OUT_LEN};
+use crate::{
+    offset_high, offset_low, CVBytes, CVWords, OffsetDeltas, BLOCK_LEN, IV, MSG_SCHEDULE, OUT_LEN,
+};
 use arrayref::{array_mut_ref, array_ref};
 
 #[inline(always)]
@@ -31,41 +33,25 @@ fn round(state: &mut [u32; 16], msg: &[u32; 16], round: usize) {
     g(state, 3, 4, 9, 14, msg[schedule[14]], msg[schedule[15]]);
 }
 
-pub fn compress(
-    cv: &[u8; 32],
+#[inline(always)]
+fn compress_pre(
+    cv: &CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
     offset: u64,
     flags: u8,
-) -> [u8; 64] {
-    let block_words = [
-        u32::from_le_bytes(*array_ref!(block, 0 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(block, 1 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(block, 2 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(block, 3 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(block, 4 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(block, 5 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(block, 6 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(block, 7 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(block, 8 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(block, 9 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(block, 10 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(block, 11 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(block, 12 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(block, 13 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(block, 14 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(block, 15 * 4, 4)),
-    ];
+) -> [u32; 16] {
+    let block_words = crate::platform::words_from_le_bytes_64(block);
 
     let mut state = [
-        u32::from_le_bytes(*array_ref!(cv, 0 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(cv, 1 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(cv, 2 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(cv, 3 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(cv, 4 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(cv, 5 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(cv, 6 * 4, 4)),
-        u32::from_le_bytes(*array_ref!(cv, 7 * 4, 4)),
+        cv[0],
+        cv[1],
+        cv[2],
+        cv[3],
+        cv[4],
+        cv[5],
+        cv[6],
+        cv[7],
         IV[0],
         IV[1],
         IV[2],
@@ -84,6 +70,36 @@ pub fn compress(
     round(&mut state, &block_words, 5);
     round(&mut state, &block_words, 6);
 
+    state
+}
+
+pub fn compress_in_place(
+    cv: &mut CVWords,
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    offset: u64,
+    flags: u8,
+) {
+    let state = compress_pre(cv, block, block_len, offset, flags);
+
+    cv[0] = state[0] ^ state[8];
+    cv[1] = state[1] ^ state[9];
+    cv[2] = state[2] ^ state[10];
+    cv[3] = state[3] ^ state[11];
+    cv[4] = state[4] ^ state[12];
+    cv[5] = state[5] ^ state[13];
+    cv[6] = state[6] ^ state[14];
+    cv[7] = state[7] ^ state[15];
+}
+
+pub fn compress_xof(
+    cv: &CVWords,
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    offset: u64,
+    flags: u8,
+) -> [u8; 64] {
+    let mut state = compress_pre(cv, block, block_len, offset, flags);
     state[0] ^= state[8];
     state[1] ^= state[9];
     state[2] ^= state[10];
@@ -92,43 +108,25 @@ pub fn compress(
     state[5] ^= state[13];
     state[6] ^= state[14];
     state[7] ^= state[15];
-    state[8] ^= u32::from_le_bytes(*array_ref!(cv, 0 * 4, 4));
-    state[9] ^= u32::from_le_bytes(*array_ref!(cv, 1 * 4, 4));
-    state[10] ^= u32::from_le_bytes(*array_ref!(cv, 2 * 4, 4));
-    state[11] ^= u32::from_le_bytes(*array_ref!(cv, 3 * 4, 4));
-    state[12] ^= u32::from_le_bytes(*array_ref!(cv, 4 * 4, 4));
-    state[13] ^= u32::from_le_bytes(*array_ref!(cv, 5 * 4, 4));
-    state[14] ^= u32::from_le_bytes(*array_ref!(cv, 6 * 4, 4));
-    state[15] ^= u32::from_le_bytes(*array_ref!(cv, 7 * 4, 4));
-
-    let mut out = [0; 64];
-    out[0 * 4..][..4].copy_from_slice(&state[0].to_le_bytes());
-    out[1 * 4..][..4].copy_from_slice(&state[1].to_le_bytes());
-    out[2 * 4..][..4].copy_from_slice(&state[2].to_le_bytes());
-    out[3 * 4..][..4].copy_from_slice(&state[3].to_le_bytes());
-    out[4 * 4..][..4].copy_from_slice(&state[4].to_le_bytes());
-    out[5 * 4..][..4].copy_from_slice(&state[5].to_le_bytes());
-    out[6 * 4..][..4].copy_from_slice(&state[6].to_le_bytes());
-    out[7 * 4..][..4].copy_from_slice(&state[7].to_le_bytes());
-    out[8 * 4..][..4].copy_from_slice(&state[8].to_le_bytes());
-    out[9 * 4..][..4].copy_from_slice(&state[9].to_le_bytes());
-    out[10 * 4..][..4].copy_from_slice(&state[10].to_le_bytes());
-    out[11 * 4..][..4].copy_from_slice(&state[11].to_le_bytes());
-    out[12 * 4..][..4].copy_from_slice(&state[12].to_le_bytes());
-    out[13 * 4..][..4].copy_from_slice(&state[13].to_le_bytes());
-    out[14 * 4..][..4].copy_from_slice(&state[14].to_le_bytes());
-    out[15 * 4..][..4].copy_from_slice(&state[15].to_le_bytes());
-    out
+    state[8] ^= cv[0];
+    state[9] ^= cv[1];
+    state[10] ^= cv[2];
+    state[11] ^= cv[3];
+    state[12] ^= cv[4];
+    state[13] ^= cv[5];
+    state[14] ^= cv[6];
+    state[15] ^= cv[7];
+    crate::platform::le_bytes_from_words_64(&state)
 }
 
 pub fn hash1<A: arrayvec::Array<Item = u8>>(
     input: &A,
-    key: &[u8; KEY_LEN],
+    key: &CVWords,
     offset: u64,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
-    out: &mut [u8; OUT_LEN],
+    out: &mut CVBytes,
 ) {
     debug_assert_eq!(A::CAPACITY % BLOCK_LEN, 0, "uneven blocks");
     let mut cv = *key;
@@ -138,23 +136,22 @@ pub fn hash1<A: arrayvec::Array<Item = u8>>(
         if slice.len() == BLOCK_LEN {
             block_flags |= flags_end;
         }
-        let output = compress(
-            &cv,
+        compress_in_place(
+            &mut cv,
             array_ref!(slice, 0, BLOCK_LEN),
             BLOCK_LEN as u8,
             offset,
             block_flags,
         );
-        cv = *array_ref!(output, 0, 32);
         block_flags = flags;
         slice = &slice[BLOCK_LEN..];
     }
-    *out = cv;
+    *out = crate::platform::le_bytes_from_words_32(&cv);
 }
 
 pub fn hash_many<A: arrayvec::Array<Item = u8>>(
     inputs: &[&A],
-    key: &[u8; KEY_LEN],
+    key: &CVWords,
     mut offset: u64,
     offset_deltas: &OffsetDeltas,
     flags: u8,
@@ -182,12 +179,12 @@ pub mod test {
     use super::*;
 
     // This is basically testing the portable implementation against itself,
-    // but we do it anyway for completeness. Other implementations will test
-    // themselves against portable. We also have several tests against the
-    // reference implementation in test.rs.
+    // but it also checks that compress_in_place and compress_xof are
+    // consistent. And there are tests against the reference implementation and
+    // against hardcoded test vectors elsewhere.
     #[test]
     fn test_compress() {
-        crate::test::test_compress_fn(compress);
+        crate::test::test_compress_fn(compress_in_place, compress_xof);
     }
 
     // Ditto.

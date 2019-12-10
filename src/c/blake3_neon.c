@@ -223,17 +223,12 @@ INLINE void load_offsets4(uint64_t offset, const uint64_t deltas[4],
 }
 
 void blake3_hash4_neon(const uint8_t *const *inputs, size_t blocks,
-                       const uint8_t key[BLAKE3_KEY_LEN], uint64_t offset,
+                       const uint32_t key[8], uint64_t offset,
                        offset_deltas_t offset_deltas, uint8_t flags,
                        uint8_t flags_start, uint8_t flags_end, uint8_t *out) {
-  uint32_t key_words[8];
-  // TODO: This is assuming little-endian. Is there such a thing as NEON on
-  //       big-endian?
-  memcpy(key_words, key, BLAKE3_KEY_LEN);
   uint32x4_t h_vecs[8] = {
-      set1_128(key_words[0]), set1_128(key_words[1]), set1_128(key_words[2]),
-      set1_128(key_words[3]), set1_128(key_words[4]), set1_128(key_words[5]),
-      set1_128(key_words[6]), set1_128(key_words[7]),
+      set1_128(key[0]), set1_128(key[1]), set1_128(key[2]), set1_128(key[3]),
+      set1_128(key[4]), set1_128(key[5]), set1_128(key[6]), set1_128(key[7]),
   };
   uint32x4_t offset_low_vec, offset_high_vec;
   load_offsets4(offset, offset_deltas, &offset_low_vec, &offset_high_vec);
@@ -294,10 +289,10 @@ void blake3_hash4_neon(const uint8_t *const *inputs, size_t blocks,
  */
 
 INLINE void hash_one_neon(const uint8_t *input, size_t blocks,
-                          const uint8_t key[BLAKE3_KEY_LEN], uint64_t offset,
-                          uint8_t flags, uint8_t flags_start, uint8_t flags_end,
+                          const uint32_t key[8], uint64_t offset, uint8_t flags,
+                          uint8_t flags_start, uint8_t flags_end,
                           uint8_t out[BLAKE3_OUT_LEN]) {
-  uint8_t cv[32];
+  uint32_t cv[8];
   memcpy(cv, key, BLAKE3_KEY_LEN);
   uint8_t block_flags = flags | flags_start;
   while (blocks > 0) {
@@ -307,10 +302,8 @@ INLINE void hash_one_neon(const uint8_t *input, size_t blocks,
     // TODO: Implement compress_neon. However note that according to
     // https://github.com/BLAKE2/BLAKE2/commit/7965d3e6e1b4193438b8d3a656787587d2579227,
     // compress_neon might not be any faster than compress_portable.
-    uint8_t out[64];
-    blake3_compress_portable(cv, input, BLAKE3_BLOCK_LEN, offset, block_flags,
-                             out);
-    memcpy(cv, out, 32);
+    blake3_compress_in_place_portable(cv, input, BLAKE3_BLOCK_LEN, offset,
+                                      block_flags);
     input = &input[BLAKE3_BLOCK_LEN];
     blocks -= 1;
     block_flags = flags;
@@ -319,7 +312,7 @@ INLINE void hash_one_neon(const uint8_t *input, size_t blocks,
 }
 
 void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
-                           size_t blocks, const uint8_t key[BLAKE3_KEY_LEN],
+                           size_t blocks, const uint32_t key[8],
                            uint64_t offset, offset_deltas_t offset_deltas,
                            uint8_t flags, uint8_t flags_start,
                            uint8_t flags_end, uint8_t *out) {

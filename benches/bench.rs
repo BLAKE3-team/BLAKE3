@@ -5,7 +5,7 @@ extern crate test;
 use arrayref::array_ref;
 use arrayvec::ArrayVec;
 use blake3::platform::MAX_SIMD_DEGREE;
-use blake3::{BLOCK_LEN, CHUNK_LEN, KEY_LEN, OUT_LEN};
+use blake3::{BLOCK_LEN, CHUNK_LEN, OUT_LEN};
 use rand::prelude::*;
 use test::Bencher;
 
@@ -48,27 +48,21 @@ impl RandomInput {
     }
 }
 
-type CompressFn = unsafe fn(
-    cv: &[u8; 32],
-    block: &[u8; BLOCK_LEN],
-    block_len: u8,
-    offset: u64,
-    flags: u8,
-) -> [u8; 64];
+type CompressInPlaceFn =
+    unsafe fn(cv: &mut [u32; 8], block: &[u8; BLOCK_LEN], block_len: u8, offset: u64, flags: u8);
 
-fn bench_single_compression_fn(b: &mut Bencher, f: CompressFn) {
-    let state: [u8; 32];
+fn bench_single_compression_fn(b: &mut Bencher, f: CompressInPlaceFn) {
+    let mut state = [1u32; 8];
     let mut r = RandomInput::new(b, 64);
-    state = *array_ref!(r.get(), 0, 32);
     let input = array_ref!(r.get(), 0, 64);
     unsafe {
-        b.iter(|| f(&state, input, 64 as u8, 0, 0));
+        b.iter(|| f(&mut state, input, 64 as u8, 0, 0));
     }
 }
 
 #[bench]
 fn bench_single_compression_portable(b: &mut Bencher) {
-    bench_single_compression_fn(b, blake3::portable::compress);
+    bench_single_compression_fn(b, blake3::portable::compress_in_place);
 }
 
 #[bench]
@@ -77,7 +71,7 @@ fn bench_single_compression_sse41(b: &mut Bencher) {
     if !blake3::platform::sse41_detected() {
         return;
     }
-    bench_single_compression_fn(b, blake3::sse41::compress);
+    bench_single_compression_fn(b, blake3::sse41::compress_in_place);
 }
 
 #[bench]
@@ -86,12 +80,12 @@ fn bench_single_compression_avx512(b: &mut Bencher) {
     if !blake3::platform::avx512_detected() {
         return;
     }
-    bench_single_compression_fn(b, blake3::c_avx512::compress);
+    bench_single_compression_fn(b, blake3::c_avx512::compress_in_place);
 }
 
 type HashManyFn<A> = unsafe fn(
     inputs: &[&A],
-    key: &[u8; blake3::KEY_LEN],
+    key: &[u32; 8],
     offset: u64,
     offset_deltas: &[u64; 17],
     flags: u8,
@@ -113,16 +107,7 @@ fn bench_many_chunks_fn(b: &mut Bencher, f: HashManyFn<[u8; CHUNK_LEN]>, degree:
                 .map(|i| array_ref!(i.get(), 0, CHUNK_LEN))
                 .collect();
             let mut out = [0; MAX_SIMD_DEGREE * OUT_LEN];
-            f(
-                &input_arrays[..],
-                &[0; KEY_LEN],
-                0,
-                &[0; 17],
-                0,
-                0,
-                0,
-                &mut out,
-            );
+            f(&input_arrays[..], &[0; 8], 0, &[0; 17], 0, 0, 0, &mut out);
         });
     }
 }
@@ -175,16 +160,7 @@ fn bench_many_parents_fn(b: &mut Bencher, f: HashManyFn<[u8; BLOCK_LEN]>, degree
                 .map(|i| array_ref!(i.get(), 0, BLOCK_LEN))
                 .collect();
             let mut out = [0; MAX_SIMD_DEGREE * OUT_LEN];
-            f(
-                &input_arrays[..],
-                &[0; KEY_LEN],
-                0,
-                &[0; 17],
-                0,
-                0,
-                0,
-                &mut out,
-            );
+            f(&input_arrays[..], &[0; 8], 0, &[0; 17], 0, 0, 0, &mut out);
         });
     }
 }

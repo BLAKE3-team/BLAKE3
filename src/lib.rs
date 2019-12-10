@@ -40,13 +40,16 @@ pub const BLOCK_LEN: usize = 64;
 #[doc(hidden)]
 pub const CHUNK_LEN: usize = 2048;
 
-const IV: &[u32; 8] = &[
-    0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
-];
+// While iterating the compression function within a chunk, the CV is
+// represented as words, to avoid doing two extra endianness conversions for
+// each compression in the portable implementation. But the hash_many interface
+// needs to hash both input bytes and parent nodes, so its better for its
+// output CVs to be represented as bytes.
+type CVWords = [u32; 8];
+type CVBytes = [u8; 32]; // little-endian
 
-const IV_BYTES: &[u8; 32] = &[
-    0x67, 0xe6, 0x09, 0x6a, 0x85, 0xae, 0x67, 0xbb, 0x72, 0xf3, 0x6e, 0x3c, 0x3a, 0xf5, 0x4f, 0xa5,
-    0x7f, 0x52, 0x0e, 0x51, 0x8c, 0x68, 0x05, 0x9b, 0xab, 0xd9, 0x83, 0x1f, 0x19, 0xcd, 0xe0, 0x5b,
+const IV: &CVWords = &[
+    0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
 ];
 
 const MSG_SCHEDULE: [[usize; 16]; 7] = [
@@ -173,7 +176,7 @@ impl fmt::Debug for Hash {
 // setting the ROOT flag, any number of final output bytes. The Output struct
 // captures the state just prior to choosing between those two possibilities.
 struct Output {
-    input_chaining_value: [u8; 32],
+    input_chaining_value: CVWords,
     block: [u8; 64],
     block_len: u8,
     offset: u64,
@@ -182,34 +185,31 @@ struct Output {
 }
 
 impl Output {
-    fn chaining_value(&self) -> [u8; 32] {
-        let out = self.platform.compress(
-            &self.input_chaining_value,
+    fn chaining_value(&self) -> CVBytes {
+        let mut cv = self.input_chaining_value;
+        self.platform.compress_in_place(
+            &mut cv,
             &self.block,
             self.block_len,
             self.offset,
             self.flags,
         );
-        *array_ref!(out, 0, 32)
+        platform::le_bytes_from_words_32(&cv)
     }
 
     fn root_hash(&self) -> Hash {
         debug_assert_eq!(self.offset, 0);
-        let out = self.platform.compress(
-            &self.input_chaining_value,
-            &self.block,
-            self.block_len,
-            0,
-            self.flags | ROOT,
-        );
-        Hash(*array_ref!(out, 0, 32))
+        let mut cv = self.input_chaining_value;
+        self.platform
+            .compress_in_place(&mut cv, &self.block, self.block_len, 0, self.flags | ROOT);
+        Hash(platform::le_bytes_from_words_32(&cv))
     }
 
     fn root_output_bytes(&self, out_slice: &mut [u8]) {
         debug_assert_eq!(self.offset, 0);
         let mut offset = 0;
         for out_block in out_slice.chunks_mut(2 * OUT_LEN) {
-            let out_bytes = self.platform.compress(
+            let out_bytes = self.platform.compress_xof(
                 &self.input_chaining_value,
                 &self.block,
                 self.block_len,
@@ -224,7 +224,7 @@ impl Output {
 
 #[derive(Clone)]
 struct ChunkState {
-    cv: [u8; 32],
+    cv: CVWords,
     offset: u64,
     buf: [u8; BLOCK_LEN],
     buf_len: u8,
@@ -234,7 +234,7 @@ struct ChunkState {
 }
 
 impl ChunkState {
-    fn new(key: &[u8; 32], offset: u64, flags: u8, platform: Platform) -> Self {
+    fn new(key: &CVWords, offset: u64, flags: u8, platform: Platform) -> Self {
         Self {
             cv: *key,
             offset,
@@ -246,7 +246,7 @@ impl ChunkState {
         }
     }
 
-    fn reset(&mut self, key: &[u8; KEY_LEN], new_offset: u64) {
+    fn reset(&mut self, key: &CVWords, new_offset: u64) {
         debug_assert_eq!(new_offset % CHUNK_LEN as u64, 0);
         self.cv = *key;
         self.offset = new_offset;
@@ -283,14 +283,13 @@ impl ChunkState {
             if !input.is_empty() {
                 debug_assert_eq!(self.buf_len as usize, BLOCK_LEN);
                 let block_flags = self.flags | self.start_flag(); // borrowck
-                let output = self.platform.compress(
-                    &self.cv,
+                self.platform.compress_in_place(
+                    &mut self.cv,
                     &self.buf,
                     BLOCK_LEN as u8,
                     self.offset,
                     block_flags,
                 );
-                self.cv = *array_ref!(output, 0, 32);
                 self.buf_len = 0;
                 self.buf = [0; BLOCK_LEN];
                 self.blocks_compressed += 1;
@@ -300,14 +299,13 @@ impl ChunkState {
         while input.len() > BLOCK_LEN {
             debug_assert_eq!(self.buf_len, 0);
             let block_flags = self.flags | self.start_flag(); // borrowck
-            let output = self.platform.compress(
-                &self.cv,
+            self.platform.compress_in_place(
+                &mut self.cv,
                 array_ref!(input, 0, BLOCK_LEN),
                 BLOCK_LEN as u8,
                 self.offset,
                 block_flags,
             );
-            self.cv = *array_ref!(output, 0, 32);
             self.blocks_compressed += 1;
             input = &input[BLOCK_LEN..];
         }
@@ -400,7 +398,7 @@ where
 // those cases use a different codepath.
 fn compress_chunks_parallel(
     input: &[u8],
-    key: &[u8; KEY_LEN],
+    key: &CVWords,
     offset: u64,
     flags: u8,
     platform: Platform,
@@ -448,7 +446,7 @@ fn compress_chunks_parallel(
 // never empty; those cases use a different codepath.
 fn compress_parents_parallel(
     child_chaining_values: &[u8],
-    key: &[u8; KEY_LEN],
+    key: &CVWords,
     flags: u8,
     platform: Platform,
     out: &mut [u8],
@@ -501,7 +499,7 @@ fn compress_parents_parallel(
 // codepath.
 fn compress_subtree_wide(
     input: &[u8],
-    key: &[u8; KEY_LEN],
+    key: &CVWords,
     offset: u64,
     flags: u8,
     platform: Platform,
@@ -573,7 +571,7 @@ fn compress_subtree_wide(
 // chunk or less. That's a different codepath.
 fn compress_subtree_to_parent_node(
     input: &[u8],
-    key: &[u8; KEY_LEN],
+    key: &CVWords,
     offset: u64,
     flags: u8,
     platform: Platform,
@@ -597,7 +595,7 @@ fn compress_subtree_to_parent_node(
 
 // Hash a complete input all at once. Unlike compress_subtree_wide() and
 // compress_subtree_to_parent_node(), this function handles the 1 chunk case.
-fn hash_all_at_once(input: &[u8], key: &[u8; KEY_LEN], flags: u8) -> Output {
+fn hash_all_at_once(input: &[u8], key: &CVWords, flags: u8) -> Output {
     let platform = Platform::detect();
 
     // If the whole subtree is one chunk, hash it directly with a ChunkState.
@@ -621,23 +619,25 @@ fn hash_all_at_once(input: &[u8], key: &[u8; KEY_LEN], flags: u8) -> Output {
 
 /// The default hash function.
 pub fn hash(input: &[u8]) -> Hash {
-    hash_all_at_once(input, IV_BYTES, 0).root_hash()
+    hash_all_at_once(input, IV, 0).root_hash()
 }
 
 /// The keyed hash function.
 pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
-    hash_all_at_once(input, key, KEYED_HASH).root_hash()
+    let key_words = platform::words_from_le_bytes_32(key);
+    hash_all_at_once(input, &key_words, KEYED_HASH).root_hash()
 }
 
 /// The key derivation function.
 pub fn derive_key(key: &[u8; KEY_LEN], context: &[u8]) -> Hash {
-    hash_all_at_once(context, key, DERIVE_KEY).root_hash()
+    let key_words = platform::words_from_le_bytes_32(key);
+    hash_all_at_once(context, &key_words, DERIVE_KEY).root_hash()
 }
 
 fn parent_node_output(
-    left_child: &[u8; 32],
-    right_child: &[u8; 32],
-    key: &[u8; KEY_LEN],
+    left_child: &CVBytes,
+    right_child: &CVBytes,
+    key: &CVWords,
     flags: u8,
     platform: Platform,
 ) -> Output {
@@ -658,14 +658,14 @@ fn parent_node_output(
 /// support for extendable output.
 #[derive(Clone)]
 pub struct Hasher {
-    key: [u8; KEY_LEN],
+    key: CVWords,
     chunk_state: ChunkState,
     // 2^53 * 2048 = 2^64
-    cv_stack: ArrayVec<[[u8; OUT_LEN]; 53]>,
+    cv_stack: ArrayVec<[CVBytes; 53]>,
 }
 
 impl Hasher {
-    fn new_internal(key: &[u8; 32], flags: u8) -> Self {
+    fn new_internal(key: &CVWords, flags: u8) -> Self {
         Self {
             key: *key,
             chunk_state: ChunkState::new(key, 0, flags, Platform::detect()),
@@ -675,12 +675,13 @@ impl Hasher {
 
     /// Construct a new `Hasher` for the regular hash function.
     pub fn new() -> Self {
-        Self::new_internal(IV_BYTES, 0)
+        Self::new_internal(IV, 0)
     }
 
     /// Construct a new `Hasher` for the keyed hash function.
     pub fn new_keyed(key: &[u8; KEY_LEN]) -> Self {
-        Self::new_internal(key, KEYED_HASH)
+        let key_words = platform::words_from_le_bytes_32(key);
+        Self::new_internal(&key_words, KEYED_HASH)
     }
 
     /// Construct a new `Hasher` for the key derivation function.
@@ -691,7 +692,8 @@ impl Hasher {
     ///
     /// [`derive_key`]: fn.derive_key.html
     pub fn new_derive_key(key: &[u8; KEY_LEN]) -> Self {
-        Self::new_internal(key, DERIVE_KEY)
+        let key_words = platform::words_from_le_bytes_32(key);
+        Self::new_internal(&key_words, DERIVE_KEY)
     }
 
     /// The total number of input bytes so far.
@@ -705,19 +707,18 @@ impl Hasher {
         while self.cv_stack.len() > post_merge_stack_len {
             let right_child = self.cv_stack.pop().unwrap();
             let left_child = self.cv_stack.pop().unwrap();
-            let parent_cv = parent_node_output(
+            let parent_output = parent_node_output(
                 &left_child,
                 &right_child,
                 &self.key,
                 self.chunk_state.flags,
                 self.chunk_state.platform,
-            )
-            .chaining_value();
-            self.cv_stack.push(parent_cv);
+            );
+            self.cv_stack.push(parent_output.chaining_value());
         }
     }
 
-    fn push_cv(&mut self, new_cv: &[u8; 32], offset: u64) {
+    fn push_cv(&mut self, new_cv: &CVBytes, offset: u64) {
         // In reference_impl.rs, we merge the new CV with existing CVs from the
         // stack before pushing it. We can do that because we know more input
         // is coming, so we know none of the merges are root.
