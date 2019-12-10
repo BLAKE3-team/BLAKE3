@@ -11,6 +11,13 @@ fn is_windows() -> bool {
     target_os == "windows"
 }
 
+fn is_armv7() -> bool {
+    let target = env::var("TARGET").unwrap();
+    let target_components: Vec<&str> = target.split("-").collect();
+    let target_arch = target_components[0];
+    target_arch == "armv7"
+}
+
 fn new_build() -> cc::Build {
     let mut build = cc::Build::new();
     if !is_windows() {
@@ -41,8 +48,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         build.file("src/c/blake3_portable.c");
         // ARMv7 platforms that support NEON generally need the following
         // flags. AArch64 supports NEON by default and does not support -mpfu.
-        // build.flag("-mfpu=neon-vfpv4");
-        // build.flag("-mfloat-abi=hard");
+        if is_armv7() {
+            build.flag("-mfpu=neon-vfpv4");
+            build.flag("-mfloat-abi=hard");
+        }
         build.compile("blake3_neon");
     }
 

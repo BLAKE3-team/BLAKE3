@@ -38,5 +38,6 @@ jobs:
     - run: cargo install cross
     - run: cross test --target mips-unknown-linux-gnu
     - run: cross test --target armv7-unknown-linux-gnueabihf
+    - run: cross test --target armv7-unknown-linux-gnueabihf --feature=c_neon
     - run: cross test --target aarch64-unknown-linux-gnu
     - run: cross test --target aarch64-unknown-linux-gnu --features=c_neon
