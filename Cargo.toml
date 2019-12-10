@@ -6,14 +6,14 @@ edition = "2018"
 
 [features]
 default = ["std"]
-# Like SSE4.1 and AVX2, the AVX-512 implementation uses dynamic feature
-# detection, so a binary with "c_avx512" on is still cross-platform.
+# Like SSE4.1 and AVX2, the AVX-512 implementation participates in dynamic
+# feature detection. A binary with "c_avx512" on is still cross-platform.
 c_avx512 = []
-# The NEON implementation does not use dynamic feature detection. If "c_neon"
-# is on, NEON support is assumed. Note that AArch64 always supports NEON, but
-# support on ARMv7 varies. (See also comments about ARMv7 in build.rs. You'll
-# probably need to uncomment some flags there to convince the C compiler to
-# turn on NEON support.)
+# The NEON implementation does not participate in dynamic feature detection,
+# which is currently x86-only. If "c_neon" is on, NEON support is assumed. Note
+# that AArch64 always supports NEON, but support on ARMv7 varies. (See also
+# comments about ARMv7 in build.rs. You'll probably need to uncomment some
+# flags there to convince the C compiler to turn on NEON support.)
 c_neon = []
 std = []
 

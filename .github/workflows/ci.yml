@@ -1,0 +1,42 @@
+name: tests
+
+on: [push]
+
+jobs:
+  cargo tests:
+    name: Rust ${{ matrix.rust_version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        rust_version: [stable, beta, nightly]
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.rust_version }}
+        override: true
+    # Default tests.
+    - run: cargo test
+    # No-default-features tests.
+    - run: cargo test --no-default-features
+    # More features tests. Note that "c_avx512" participates in dynamic feature
+    # detection, so it'll be built, but it probably won't run.
+    - run: cargo test --features=c_avx512,rayon
+
+  cross tests:
+    name: cross tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+    - run: cargo install cross
+    - run: cross test --target mips-unknown-linux-gnu
+    - run: cross test --target armv7-unknown-linux-gnueabihf
+    - run: cross test --target aarch64-unknown-linux-gnu
+    - run: cross test --target aarch64-unknown-linux-gnu --features=c_neon
