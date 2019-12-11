@@ -24,6 +24,13 @@ jobs:
     # More features tests. Note that "c_avx512" participates in dynamic feature
     # detection, so it'll be built, but it probably won't run.
     - run: cargo test --features=c_avx512,rayon
+    # Test vectors.
+    - run: cargo test
+      working-directory: ./test_vectors
+    # Test benchmarks. Nightly only.
+    - run: cargo test --benches
+      if: matrix.rust_version == 'nightly'
+      working-directory: ./test_vectors
 
   cross_tests:
     name: cross tests
@@ -41,28 +48,3 @@ jobs:
     - run: cross test --target armv7-unknown-linux-gnueabihf --features=c_neon
     - run: cross test --target aarch64-unknown-linux-gnu
     - run: cross test --target aarch64-unknown-linux-gnu --features=c_neon
-
-  bench_tests:
-    name: bench tests
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v1
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
-        override: true
-    - run: cargo test --benches
-
-  test_vectors:
-    name: test vectors
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v1
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-    - run: cargo test
-      working-directory: ./test_vectors
