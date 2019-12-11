@@ -1,6 +1,10 @@
 use blake3::CHUNK_LEN;
 use serde::{Deserialize, Serialize};
 
+// A non-multiple of 4 is important, since one possible bug is to fail to emit
+// partial words.
+pub const OUTPUT_LEN: usize = 2 * blake3::BLOCK_LEN + 3;
+
 pub const TEST_CASES: &[usize] = &[
     0,
     1,
@@ -37,19 +41,69 @@ pub fn paint_test_input(buf: &mut [u8]) {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Cases {
     pub _comment: String,
     pub key: String,
     pub cases: Vec<Case>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Case {
     pub input_len: usize,
     pub hash: String,
     pub keyed_hash: String,
     pub derive_key: String,
+}
+
+pub fn generate_json() -> String {
+    let mut cases = Vec::new();
+    for &input_len in TEST_CASES {
+        let mut input = vec![0; input_len];
+        paint_test_input(&mut input);
+
+        let mut hash_out = [0; OUTPUT_LEN];
+        blake3::Hasher::new()
+            .update(&input)
+            .finalize_xof(&mut hash_out);
+
+        let mut keyed_hash_out = [0; OUTPUT_LEN];
+        blake3::Hasher::new_keyed(TEST_KEY)
+            .update(&input)
+            .finalize_xof(&mut keyed_hash_out);
+
+        let mut derive_key_out = [0; OUTPUT_LEN];
+        blake3::Hasher::new_derive_key(TEST_KEY)
+            .update(&input)
+            .finalize_xof(&mut derive_key_out);
+
+        cases.push(Case {
+            input_len,
+            hash: hex::encode(&hash_out[..]),
+            keyed_hash: hex::encode(&keyed_hash_out[..]),
+            derive_key: hex::encode(&derive_key_out[..]),
+        });
+    }
+
+    let mut json = serde_json::to_string_pretty(&Cases {
+        _comment: "Each test is an input length and three outputs, one for each of the hash, keyed_hash, and derive_key modes. The input in each case is filled with a 251-byte-long repeating pattern: 0, 1, 2, ..., 249, 250, 0, 1, ... The key used with keyed_hash and derive_key is the 32-byte ASCII string given below. Outputs are encoded as hexadecimal. Each case is an extended output, and implementations should also check that the first 32 bytes match their default-length output.".to_string(),
+        key: std::str::from_utf8(TEST_KEY).unwrap().to_string(),
+        cases,
+    }).unwrap();
+
+    // Add a trailing newline.
+    json.push('\n');
+    json
+}
+
+pub fn read_test_vectors_file() -> String {
+    let test_vectors_file_path = "./test_vectors.json";
+    std::fs::read_to_string(test_vectors_file_path).expect("failed to read test_vectors.json")
+}
+
+pub fn parse_test_cases() -> Cases {
+    let json = read_test_vectors_file();
+    serde_json::from_str(&json).expect("failed to parse test_vectors.json")
 }
 
 #[cfg(test)]
@@ -198,17 +252,16 @@ mod tests {
     }
 
     #[test]
-    fn run_test_vectors() -> Result<(), Box<dyn std::error::Error>> {
-        let test_vectors_file_path = "./test_vectors.json";
-        let test_vectors_json = std::fs::read_to_string(test_vectors_file_path)?;
-        let cases: Cases = serde_json::from_str(&test_vectors_json)?;
-        let key: &[u8; blake3::KEY_LEN] = cases.key.as_bytes().try_into()?;
+    fn run_test_vectors() {
+        let cases = parse_test_cases();
+        let key: &[u8; blake3::KEY_LEN] = cases.key.as_bytes().try_into().unwrap();
         for case in &cases.cases {
+            dbg!(case.input_len);
             let mut input = vec![0; case.input_len];
             paint_test_input(&mut input);
-            let expected_hash = hex::decode(&case.hash)?;
-            let expected_keyed_hash = hex::decode(&case.keyed_hash)?;
-            let expected_derive_key = hex::decode(&case.derive_key)?;
+            let expected_hash = hex::decode(&case.hash).unwrap();
+            let expected_keyed_hash = hex::decode(&case.keyed_hash).unwrap();
+            let expected_derive_key = hex::decode(&case.derive_key).unwrap();
 
             test_reference_impl_all_at_once(
                 key,
@@ -250,6 +303,13 @@ mod tests {
                 &expected_derive_key,
             );
         }
-        Ok(())
+    }
+
+    #[test]
+    fn test_checked_in_vectors_up_to_date() {
+        let json = read_test_vectors_file();
+        if generate_json() != json {
+            panic!("Checked-in test_vectors.json is not up to date. Regenerate with `cargo run --bin generate > ./test_vectors.json`.");
+        }
     }
 }
