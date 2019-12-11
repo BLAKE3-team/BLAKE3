@@ -625,7 +625,7 @@ pub fn hash(input: &[u8]) -> Hash {
 }
 
 /// The keyed hash function.
-pub fn hash_keyed(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
+pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
     hash_all_at_once(input, key, KEYED_HASH).root_hash()
 }
 

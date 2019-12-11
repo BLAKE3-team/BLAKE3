@@ -265,7 +265,7 @@ fn test_compare_reference_impl() {
             let mut expected_out = [0; OUT];
             reference_hasher.finalize(&mut expected_out);
 
-            let test_out = crate::hash_keyed(&TEST_KEY, input);
+            let test_out = crate::keyed_hash(&TEST_KEY, input);
             assert_eq!(&test_out, array_ref!(expected_out, 0, 32));
             let mut hasher = crate::Hasher::new_keyed(&TEST_KEY);
             hasher.update(input);
