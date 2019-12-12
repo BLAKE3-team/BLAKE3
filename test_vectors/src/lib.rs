@@ -307,7 +307,9 @@ mod tests {
 
     #[test]
     fn test_checked_in_vectors_up_to_date() {
-        let json = read_test_vectors_file();
+        // Replace Windows newlines, in case Git is configured to alter
+        // newlines when files are checked out.
+        let json = read_test_vectors_file().replace("\r\n", "\n");
         if generate_json() != json {
             panic!("Checked-in test_vectors.json is not up to date. Regenerate with `cargo run --bin generate > ./test_vectors.json`.");
         }
