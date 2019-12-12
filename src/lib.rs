@@ -175,6 +175,7 @@ impl fmt::Debug for Hash {
 // Each chunk or parent node can produce either a 32-byte chaining value or, by
 // setting the ROOT flag, any number of final output bytes. The Output struct
 // captures the state just prior to choosing between those two possibilities.
+#[derive(Clone)]
 struct Output {
     input_chaining_value: CVWords,
     block: [u8; 64],
@@ -205,20 +206,14 @@ impl Output {
         Hash(platform::le_bytes_from_words_32(&cv))
     }
 
-    fn root_output_bytes(&self, out_slice: &mut [u8]) {
-        debug_assert_eq!(self.offset, 0);
-        let mut offset = 0;
-        for out_block in out_slice.chunks_mut(2 * OUT_LEN) {
-            let out_bytes = self.platform.compress_xof(
-                &self.input_chaining_value,
-                &self.block,
-                self.block_len,
-                offset,
-                self.flags | ROOT,
-            );
-            out_block.copy_from_slice(&out_bytes[..out_block.len()]);
-            offset += 2 * OUT_LEN as u64;
-        }
+    fn root_output_block(&self) -> [u8; 2 * OUT_LEN] {
+        self.platform.compress_xof(
+            &self.input_chaining_value,
+            &self.block,
+            self.block_len,
+            self.offset,
+            self.flags | ROOT,
+        )
     }
 }
 
@@ -629,9 +624,11 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 }
 
 /// The key derivation function.
-pub fn derive_key(key: &[u8; KEY_LEN], context: &[u8]) -> Hash {
+pub fn derive_key(key: &[u8; KEY_LEN], context: &[u8]) -> [u8; OUT_LEN] {
     let key_words = platform::words_from_le_bytes_32(key);
-    hash_all_at_once(context, &key_words, DERIVE_KEY).root_hash()
+    hash_all_at_once(context, &key_words, DERIVE_KEY)
+        .root_hash()
+        .into()
 }
 
 fn parent_node_output(
@@ -913,12 +910,17 @@ impl Hasher {
         self.final_output().root_hash()
     }
 
-    /// Finalize the hash state and write any number of extended output bytes.
+    /// Finalize the hash state and return an incremental [`OutputReader`].
     ///
     /// This method is idempotent. Calling it twice will give the same result.
     /// You can also add more input and finalize again.
-    pub fn finalize_xof(&self, output: &mut [u8]) {
-        self.final_output().root_output_bytes(output);
+    ///
+    /// [`OutputReader`]: struct.OutputReader.html
+    pub fn finalize_xof(&self) -> OutputReader {
+        OutputReader {
+            inner: self.final_output(),
+            position_within_block: 0,
+        }
     }
 }
 
@@ -945,5 +947,92 @@ impl std::io::Write for Hasher {
 
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
+    }
+}
+
+/// An incremental reader for BLAKE3 output, returned by
+/// [`Hasher::finalize_xof`].
+///
+/// [`Hasher::finalize_xof`]: struct.Hasher.html#method.finalize_xof
+#[derive(Clone)]
+pub struct OutputReader {
+    inner: Output,
+    position_within_block: u8,
+}
+
+impl OutputReader {
+    /// Fill a buffer with output bytes and advance the position of the
+    /// `OutputReader`.
+    ///
+    /// Note that `OutputReader` does not buffer output bytes internally, so
+    /// calling `fill` repeatedly with a short-length or odd-length slice will
+    /// perform the same compression multiple times. A length that's a multiple
+    /// of 64 is more efficient.
+    ///
+    /// The maximum output size of BLAKE3 is 2<sup>64</sup>-1 bytes. If you try
+    /// to extract more than that, for example by seeking near the end and
+    /// reading further, the behavior is unspecified.
+    pub fn fill(&mut self, mut buf: &mut [u8]) {
+        while !buf.is_empty() {
+            let block: [u8; BLOCK_LEN] = self.inner.root_output_block();
+            let output_bytes = &block[self.position_within_block as usize..];
+            let take = cmp::min(buf.len(), output_bytes.len());
+            buf[..take].copy_from_slice(&output_bytes[..take]);
+            buf = &mut buf[take..];
+            self.position_within_block += take as u8;
+            if self.position_within_block == BLOCK_LEN as u8 {
+                self.inner.offset += BLOCK_LEN as u64;
+                self.position_within_block = 0;
+            }
+        }
+    }
+
+    pub fn position(&self) -> u64 {
+        self.inner.offset + self.position_within_block as u64
+    }
+
+    pub fn set_position(&mut self, position: u64) {
+        self.position_within_block = (position % BLOCK_LEN as u64) as u8;
+        self.inner.offset = position - self.position_within_block as u64;
+    }
+}
+
+// Don't derive(Debug), because the state may be secret.
+impl fmt::Debug for OutputReader {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "OutputReader {{ position: {} }}", self.position())
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::io::Read for OutputReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.fill(buf);
+        Ok(buf.len())
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::io::Seek for OutputReader {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        let max_position = u64::max_value() as i128;
+        let target_position: i128 = match pos {
+            std::io::SeekFrom::Start(x) => x as i128,
+            std::io::SeekFrom::Current(x) => self.position() as i128 + x as i128,
+            std::io::SeekFrom::End(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "seek from end not supported",
+                ));
+            }
+        };
+        if target_position < 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "seek before start",
+            ));
+        }
+        self.set_position(cmp::min(target_position, max_position) as u64);
+        Ok(self.position())
     }
 }
