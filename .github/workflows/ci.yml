@@ -4,7 +4,7 @@ on: [push]
 
 jobs:
   cargo_tests:
-    name: Rust ${{ matrix.rust_version }} on ${{ matrix.os }}
+    name: ${{ matrix.rust_version }} ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -24,16 +24,20 @@ jobs:
     # More features tests. Note that "c_avx512" participates in dynamic feature
     # detection, so it'll be built, but it probably won't run.
     - run: cargo test --features=c_avx512,rayon
-    # Test vectors.
-    - run: cargo test
-      working-directory: ./test_vectors
     # Test benchmarks. Nightly only.
     - run: cargo test --benches
       if: matrix.rust_version == 'nightly'
+    # Test vectors.
+    - name: test vectors
+      run: cargo test
+      working-directory: ./test_vectors
 
   cross_tests:
-    name: cross tests
+    name: cross ${{ matrix.arch }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [armv7-unknown-linux-gnueabihf, aarch64-unknown-linux-gnu, mips-unknown-linux-gnu]
 
     steps:
     - uses: actions/checkout@v1
@@ -42,8 +46,10 @@ jobs:
         toolchain: stable
         override: true
     - run: cargo install cross
-    - run: cross test --target mips-unknown-linux-gnu
-    - run: cross test --target armv7-unknown-linux-gnueabihf
-    - run: cross test --target armv7-unknown-linux-gnueabihf --features=c_neon
-    - run: cross test --target aarch64-unknown-linux-gnu
-    - run: cross test --target aarch64-unknown-linux-gnu --features=c_neon
+    # Test the portable implementation on everything.
+    - run: cross test --target ${{ matrix.arch }}
+    # Test the NEON implementation on ARM targets.
+    - run: cross test --target ${{ matrix.arch }} --features=c_neon
+      if: startsWith(${{ matrix.arch }}, 'armv7-') || startsWith($${ matrix.arch }}, 'aarch64-')
+    # Test vectors. Note that this uses a hacky script due to path dependency limitations.
+    - run: ./test_vectors/cross_test.sh --target ${{ matrix.arch }}
