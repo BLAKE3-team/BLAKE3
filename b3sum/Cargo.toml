@@ -1,0 +1,23 @@
+[package]
+name = "b3sum"
+version = "0.1.0"
+authors = ["Jack O'Connor <oconnor663@gmail.com>"]
+edition = "2018"
+readme = "README.md"
+
+[features]
+default = ["memmap", "rayon"]
+rayon = ["blake3/rayon", "memmap"]
+
+[dependencies]
+anyhow = "1.0.25"
+arrayref = "0.3.5"
+blake3 = { version = "0.1", path = ".." }
+clap = { version = "2.33.0", default-features = false }
+hex = "0.4.0"
+memmap = { version = "0.7.0", optional = true }
+
+[dev-dependencies]
+assert_cmd = "0.12.0"
+duct = "0.13.3"
+tempfile = "3.1.0"
