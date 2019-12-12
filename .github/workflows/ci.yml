@@ -30,7 +30,6 @@ jobs:
     # Test benchmarks. Nightly only.
     - run: cargo test --benches
       if: matrix.rust_version == 'nightly'
-      working-directory: ./test_vectors
 
   cross_tests:
     name: cross tests
