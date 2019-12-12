@@ -65,17 +65,20 @@ pub fn generate_json() -> String {
         let mut hash_out = [0; OUTPUT_LEN];
         blake3::Hasher::new()
             .update(&input)
-            .finalize_xof(&mut hash_out);
+            .finalize_xof()
+            .fill(&mut hash_out);
 
         let mut keyed_hash_out = [0; OUTPUT_LEN];
         blake3::Hasher::new_keyed(TEST_KEY)
             .update(&input)
-            .finalize_xof(&mut keyed_hash_out);
+            .finalize_xof()
+            .fill(&mut keyed_hash_out);
 
         let mut derive_key_out = [0; OUTPUT_LEN];
         blake3::Hasher::new_derive_key(TEST_KEY)
             .update(&input)
-            .finalize_xof(&mut derive_key_out);
+            .finalize_xof()
+            .fill(&mut derive_key_out);
 
         cases.push(Case {
             input_len,
@@ -179,21 +182,21 @@ mod tests {
         let mut out = vec![0; expected_hash.len()];
         let mut hasher = blake3::Hasher::new();
         hasher.update(input);
-        hasher.finalize_xof(&mut out);
+        hasher.finalize_xof().fill(&mut out);
         assert_eq!(expected_hash, &out[..]);
         assert_eq!(&expected_hash[..32], hasher.finalize().as_bytes());
 
         let mut out = vec![0; expected_keyed_hash.len()];
         let mut hasher = blake3::Hasher::new_keyed(key);
         hasher.update(input);
-        hasher.finalize_xof(&mut out);
+        hasher.finalize_xof().fill(&mut out);
         assert_eq!(expected_keyed_hash, &out[..]);
         assert_eq!(&expected_keyed_hash[..32], hasher.finalize().as_bytes());
 
         let mut out = vec![0; expected_derive_key.len()];
         let mut hasher = blake3::Hasher::new_derive_key(key);
         hasher.update(input);
-        hasher.finalize_xof(&mut out);
+        hasher.finalize_xof().fill(&mut out);
         assert_eq!(expected_derive_key, &out[..]);
         assert_eq!(&expected_derive_key[..32], hasher.finalize().as_bytes());
     }
@@ -210,7 +213,7 @@ mod tests {
         for &b in input {
             hasher.update(&[b]);
         }
-        hasher.finalize_xof(&mut out);
+        hasher.finalize_xof().fill(&mut out);
         assert_eq!(expected_hash, &out[..]);
         assert_eq!(&expected_hash[..32], hasher.finalize().as_bytes());
 
@@ -219,7 +222,7 @@ mod tests {
         for &b in input {
             hasher.update(&[b]);
         }
-        hasher.finalize_xof(&mut out);
+        hasher.finalize_xof().fill(&mut out);
         assert_eq!(expected_keyed_hash, &out[..]);
         assert_eq!(&expected_keyed_hash[..32], hasher.finalize().as_bytes());
 
@@ -228,7 +231,7 @@ mod tests {
         for &b in input {
             hasher.update(&[b]);
         }
-        hasher.finalize_xof(&mut out);
+        hasher.finalize_xof().fill(&mut out);
         assert_eq!(expected_derive_key, &out[..]);
         assert_eq!(&expected_derive_key[..32], hasher.finalize().as_bytes());
     }
@@ -243,11 +246,11 @@ mod tests {
         assert_eq!(&expected_hash[..32], blake3::hash(input).as_bytes());
         assert_eq!(
             &expected_keyed_hash[..32],
-            blake3::keyed_hash(key, input).as_bytes()
+            &blake3::keyed_hash(key, input).as_bytes()[..],
         );
         assert_eq!(
             &expected_derive_key[..32],
-            blake3::derive_key(key, input).as_bytes()
+            &blake3::derive_key(key, input)[..],
         );
     }
 
