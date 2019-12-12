@@ -4,7 +4,7 @@ use core::convert::TryInto;
 const OUT_LEN: usize = 32;
 const KEY_LEN: usize = 32;
 const BLOCK_LEN: usize = 64;
-const CHUNK_LEN: usize = 2048;
+const CHUNK_LEN: usize = 1024;
 const ROUNDS: usize = 7;
 
 const CHUNK_START: u32 = 1 << 0;

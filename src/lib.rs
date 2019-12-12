@@ -39,7 +39,7 @@ pub const KEY_LEN: usize = 32;
 #[doc(hidden)]
 pub const BLOCK_LEN: usize = 64;
 #[doc(hidden)]
-pub const CHUNK_LEN: usize = 2048;
+pub const CHUNK_LEN: usize = 1024;
 
 // While iterating the compression function within a chunk, the CV is
 // represented as words, to avoid doing two extra endianness conversions for
