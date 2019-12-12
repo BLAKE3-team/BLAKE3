@@ -1,5 +1,4 @@
 use crate::{CVWords, OffsetDeltas, BLOCK_LEN, OUT_LEN};
-use arrayref::array_ref;
 
 pub const DEGREE: usize = 16;
 
