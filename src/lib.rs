@@ -63,33 +63,6 @@ const MSG_SCHEDULE: [[usize; 16]; 7] = [
     [12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11],
 ];
 
-// 17 is 1 + the largest supported SIMD degree (including AVX-512, currently in C).
-// Each hash_many() implementation can thus do `offset += offset_deltas[DEGREE]`
-// at the end of each batch.
-type OffsetDeltas = [u64; 17];
-
-const CHUNK_OFFSET_DELTAS: &OffsetDeltas = &[
-    CHUNK_LEN as u64 * 0,
-    CHUNK_LEN as u64 * 1,
-    CHUNK_LEN as u64 * 2,
-    CHUNK_LEN as u64 * 3,
-    CHUNK_LEN as u64 * 4,
-    CHUNK_LEN as u64 * 5,
-    CHUNK_LEN as u64 * 6,
-    CHUNK_LEN as u64 * 7,
-    CHUNK_LEN as u64 * 8,
-    CHUNK_LEN as u64 * 9,
-    CHUNK_LEN as u64 * 10,
-    CHUNK_LEN as u64 * 11,
-    CHUNK_LEN as u64 * 12,
-    CHUNK_LEN as u64 * 13,
-    CHUNK_LEN as u64 * 14,
-    CHUNK_LEN as u64 * 15,
-    CHUNK_LEN as u64 * 16,
-];
-
-const PARENT_OFFSET_DELTAS: &OffsetDeltas = &[0; 17];
-
 // These are the internal flags that we use to domain separate root/non-root,
 // chunk/parent, and chunk beginning/middle/end. These get set at the high end
 // of the block flags word in the compression function, so their values start
@@ -101,12 +74,12 @@ const ROOT: u8 = 1 << 3;
 const KEYED_HASH: u8 = 1 << 4;
 const DERIVE_KEY: u8 = 1 << 5;
 
-fn offset_low(offset: u64) -> u32 {
-    offset as u32
+fn counter_low(counter: u64) -> u32 {
+    counter as u32
 }
 
-fn offset_high(offset: u64) -> u32 {
-    (offset >> 32) as u32
+fn counter_high(counter: u64) -> u32 {
+    (counter >> 32) as u32
 }
 
 /// A BLAKE3 output of the default size, 32 bytes, which implements
@@ -181,7 +154,7 @@ struct Output {
     input_chaining_value: CVWords,
     block: [u8; 64],
     block_len: u8,
-    offset: u64,
+    counter: u64,
     flags: u8,
     platform: Platform,
 }
@@ -193,14 +166,14 @@ impl Output {
             &mut cv,
             &self.block,
             self.block_len,
-            self.offset,
+            self.counter,
             self.flags,
         );
         platform::le_bytes_from_words_32(&cv)
     }
 
     fn root_hash(&self) -> Hash {
-        debug_assert_eq!(self.offset, 0);
+        debug_assert_eq!(self.counter, 0);
         let mut cv = self.input_chaining_value;
         self.platform
             .compress_in_place(&mut cv, &self.block, self.block_len, 0, self.flags | ROOT);
@@ -212,7 +185,7 @@ impl Output {
             &self.input_chaining_value,
             &self.block,
             self.block_len,
-            self.offset,
+            self.counter,
             self.flags | ROOT,
         )
     }
@@ -221,7 +194,7 @@ impl Output {
 #[derive(Clone)]
 struct ChunkState {
     cv: CVWords,
-    offset: u64,
+    chunk_counter: u64,
     buf: [u8; BLOCK_LEN],
     buf_len: u8,
     blocks_compressed: u8,
@@ -230,25 +203,16 @@ struct ChunkState {
 }
 
 impl ChunkState {
-    fn new(key: &CVWords, offset: u64, flags: u8, platform: Platform) -> Self {
+    fn new(key: &CVWords, chunk_counter: u64, flags: u8, platform: Platform) -> Self {
         Self {
             cv: *key,
-            offset,
+            chunk_counter,
             buf: [0; BLOCK_LEN],
             buf_len: 0,
             blocks_compressed: 0,
             flags,
             platform,
         }
-    }
-
-    fn reset(&mut self, key: &CVWords, new_offset: u64) {
-        debug_assert_eq!(new_offset % CHUNK_LEN as u64, 0);
-        self.cv = *key;
-        self.offset = new_offset;
-        self.buf = [0; BLOCK_LEN];
-        self.buf_len = 0;
-        self.blocks_compressed = 0;
     }
 
     fn len(&self) -> usize {
@@ -283,7 +247,7 @@ impl ChunkState {
                     &mut self.cv,
                     &self.buf,
                     BLOCK_LEN as u8,
-                    self.offset,
+                    self.chunk_counter,
                     block_flags,
                 );
                 self.buf_len = 0;
@@ -299,7 +263,7 @@ impl ChunkState {
                 &mut self.cv,
                 array_ref!(input, 0, BLOCK_LEN),
                 BLOCK_LEN as u8,
-                self.offset,
+                self.chunk_counter,
                 block_flags,
             );
             self.blocks_compressed += 1;
@@ -318,7 +282,7 @@ impl ChunkState {
             input_chaining_value: self.cv,
             block: self.buf,
             block_len: self.buf_len,
-            offset: self.offset,
+            counter: self.chunk_counter,
             flags: block_flags,
             platform: self.platform,
         }
@@ -330,9 +294,9 @@ impl fmt::Debug for ChunkState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "ChunkState {{ len: {}, offset: {}, flags: {:?}, platform: {:?} }}",
+            "ChunkState {{ len: {}, chunk_counter: {}, flags: {:?}, platform: {:?} }}",
             self.len(),
-            self.offset,
+            self.chunk_counter,
             self.flags,
             self.platform
         )
@@ -353,6 +317,23 @@ impl fmt::Debug for ChunkState {
 //   to benefit from larger inputs, because more levels of the tree benefit can
 //   use full-width SIMD vectors for parent hashing. Without parallel parent
 //   hashing, we lose about 10% of overall throughput on AVX2 and AVX-512.
+
+// pub for benchmarks
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+pub enum IncrementCounter {
+    Yes,
+    No,
+}
+
+impl IncrementCounter {
+    fn yes(&self) -> bool {
+        match self {
+            IncrementCounter::Yes => true,
+            IncrementCounter::No => false,
+        }
+    }
+}
 
 // The largest power of two less than or equal to `n`, used for left_len()
 // immediately below, and also directly in Hasher::update().
@@ -395,14 +376,13 @@ where
 fn compress_chunks_parallel(
     input: &[u8],
     key: &CVWords,
-    offset: u64,
+    chunk_counter: u64,
     flags: u8,
     platform: Platform,
     out: &mut [u8],
 ) -> usize {
     debug_assert!(!input.is_empty(), "empty chunks below the root");
     debug_assert!(input.len() <= MAX_SIMD_DEGREE * CHUNK_LEN);
-    debug_assert_eq!(offset % CHUNK_LEN as u64, 0, "invalid offset");
 
     let mut chunks_exact = input.chunks_exact(CHUNK_LEN);
     let mut chunks_array = ArrayVec::<[&[u8; CHUNK_LEN]; MAX_SIMD_DEGREE]>::new();
@@ -412,8 +392,8 @@ fn compress_chunks_parallel(
     platform.hash_many(
         &chunks_array,
         key,
-        offset,
-        CHUNK_OFFSET_DELTAS,
+        chunk_counter,
+        IncrementCounter::Yes,
         flags,
         CHUNK_START,
         CHUNK_END,
@@ -424,8 +404,8 @@ fn compress_chunks_parallel(
     // chunk (meaning the empty message) is a different codepath.
     let chunks_so_far = chunks_array.len();
     if !chunks_exact.remainder().is_empty() {
-        let chunk_offset = offset + (chunks_so_far * CHUNK_LEN) as u64;
-        let mut chunk_state = ChunkState::new(key, chunk_offset, flags, platform);
+        let counter = chunk_counter + chunks_so_far as u64;
+        let mut chunk_state = ChunkState::new(key, counter, flags, platform);
         chunk_state.update(chunks_exact.remainder());
         *array_mut_ref!(out, chunks_so_far * OUT_LEN, OUT_LEN) =
             chunk_state.output().chaining_value();
@@ -462,8 +442,8 @@ fn compress_parents_parallel(
     platform.hash_many(
         &parents_array,
         key,
-        0, // Parents always use offset 0.
-        PARENT_OFFSET_DELTAS,
+        0, // Parents always use counter 0.
+        IncrementCounter::No,
         flags | PARENT,
         0, // Parents have no start flags.
         0, // Parents have no end flags.
@@ -496,7 +476,7 @@ fn compress_parents_parallel(
 fn compress_subtree_wide(
     input: &[u8],
     key: &CVWords,
-    offset: u64,
+    chunk_counter: u64,
     flags: u8,
     platform: Platform,
     out: &mut [u8],
@@ -505,7 +485,7 @@ fn compress_subtree_wide(
     // when it is 1. This allows Rayon the option of multi-threading even the
     // 2-chunk case, which can help performance on smaller platforms.
     if input.len() <= platform.simd_degree() * CHUNK_LEN {
-        return compress_chunks_parallel(input, key, offset, flags, platform, out);
+        return compress_chunks_parallel(input, key, chunk_counter, flags, platform, out);
     }
 
     // With more than simd_degree chunks, we need to recurse. Start by dividing
@@ -514,7 +494,7 @@ fn compress_subtree_wide(
     // of 3 or something, we'll need a more complicated strategy.)
     debug_assert_eq!(platform.simd_degree().count_ones(), 1, "power of 2");
     let (left, right) = input.split_at(left_len(input.len()));
-    let right_offset = offset + left.len() as u64;
+    let right_chunk_counter = chunk_counter + (left.len() / CHUNK_LEN) as u64;
 
     // Make space for the child outputs. Here we use MAX_SIMD_DEGREE_OR_2 to
     // account for the special case of returning 2 outputs when the SIMD degree
@@ -531,8 +511,8 @@ fn compress_subtree_wide(
 
     // Recurse! This uses multiple threads if the "rayon" feature is enabled.
     let (left_n, right_n) = join(
-        || compress_subtree_wide(left, key, offset, flags, platform, left_out),
-        || compress_subtree_wide(right, key, right_offset, flags, platform, right_out),
+        || compress_subtree_wide(left, key, chunk_counter, flags, platform, left_out),
+        || compress_subtree_wide(right, key, right_chunk_counter, flags, platform, right_out),
     );
 
     // The special case again. If simd_degree=1, then we'll have left_n=1 and
@@ -568,13 +548,14 @@ fn compress_subtree_wide(
 fn compress_subtree_to_parent_node(
     input: &[u8],
     key: &CVWords,
-    offset: u64,
+    chunk_counter: u64,
     flags: u8,
     platform: Platform,
 ) -> [u8; BLOCK_LEN] {
     debug_assert!(input.len() > CHUNK_LEN);
     let mut cv_array = [0; 2 * MAX_SIMD_DEGREE_OR_2 * OUT_LEN];
-    let mut num_cvs = compress_subtree_wide(input, &key, offset, flags, platform, &mut cv_array);
+    let mut num_cvs =
+        compress_subtree_wide(input, &key, chunk_counter, flags, platform, &mut cv_array);
     debug_assert!(num_cvs >= 2);
 
     // If MAX_SIMD_DEGREE is greater than 2 and there's enough input,
@@ -607,7 +588,7 @@ fn hash_all_at_once(input: &[u8], key: &CVWords, flags: u8) -> Output {
         input_chaining_value: *key,
         block: compress_subtree_to_parent_node(input, key, 0, flags, platform),
         block_len: BLOCK_LEN as u8,
-        offset: 0,
+        counter: 0,
         flags: flags | PARENT,
         platform,
     }
@@ -646,7 +627,7 @@ fn parent_node_output(
         input_chaining_value: *key,
         block,
         block_len: BLOCK_LEN as u8,
-        offset: 0,
+        counter: 0,
         flags: flags | PARENT,
         platform,
     }
@@ -694,11 +675,6 @@ impl Hasher {
         Self::new_internal(&key_words, DERIVE_KEY)
     }
 
-    /// The total number of input bytes so far.
-    pub fn count(&self) -> u64 {
-        self.chunk_state.offset + self.chunk_state.len() as u64
-    }
-
     // See comment in push_cv.
     fn merge_cv_stack(&mut self, total_len: u64) {
         let post_merge_stack_len = total_len.count_ones() as usize;
@@ -716,7 +692,7 @@ impl Hasher {
         }
     }
 
-    fn push_cv(&mut self, new_cv: &CVBytes, offset: u64) {
+    fn push_cv(&mut self, new_cv: &CVBytes, chunk_counter: u64) {
         // In reference_impl.rs, we merge the new CV with existing CVs from the
         // stack before pushing it. We can do that because we know more input
         // is coming, so we know none of the merges are root.
@@ -739,10 +715,10 @@ impl Hasher {
         // merging with the new CV itself.
         //
         // We still use the "count the 1 bits" algorithm, adjusted slightly for
-        // this setting, using the offset (the start of the new CV's bytes)
-        // rather than the final total (the end of the new CV's bytes). That
+        // this setting, using the new chunk's counter numer (the previous
+        // total number of chunks) rather than new total number of chunks. That
         // algorithm is explained in detail in the spec.
-        self.merge_cv_stack(offset);
+        self.merge_cv_stack(chunk_counter);
         self.cv_stack.push(*new_cv);
     }
 
@@ -762,9 +738,13 @@ impl Hasher {
                 // Then we'll proceed to hashing whole chunks below.
                 debug_assert_eq!(self.chunk_state.len(), CHUNK_LEN);
                 let chunk_cv = self.chunk_state.output().chaining_value();
-                self.push_cv(&chunk_cv, self.chunk_state.offset);
-                let new_offset = self.chunk_state.offset + CHUNK_LEN as u64;
-                self.chunk_state.reset(&self.key, new_offset);
+                self.push_cv(&chunk_cv, self.chunk_state.chunk_counter);
+                self.chunk_state = ChunkState::new(
+                    &self.key,
+                    self.chunk_state.chunk_counter + 1,
+                    self.chunk_state.flags,
+                    self.chunk_state.platform,
+                );
             } else {
                 return self;
             }
@@ -786,32 +766,33 @@ impl Hasher {
         while input.len() > CHUNK_LEN {
             debug_assert_eq!(self.chunk_state.len(), 0, "no partial chunk data");
             debug_assert_eq!(CHUNK_LEN.count_ones(), 1, "power of 2 chunk len");
-            debug_assert_eq!(self.chunk_state.offset % CHUNK_LEN as u64, 0);
             let mut subtree_len = largest_power_of_two_leq(input.len());
+            let count_so_far = self.chunk_state.chunk_counter * CHUNK_LEN as u64;
             // Shrink the subtree_len until it evenly divides the count so far.
             // We know it's a power of 2, so we can use a bitmask rather than
             // the more expensive modulus operation. Note that if the caller
             // consistently passes power-of-2 inputs of the same size (as is
             // hopefully typical), we'll always skip over this loop.
-            while (subtree_len - 1) as u64 & self.chunk_state.offset != 0 {
+            while (subtree_len - 1) as u64 & count_so_far != 0 {
                 subtree_len /= 2;
             }
             // The shrunken subtree_len might now be 1 chunk long. If so, hash
             // that one chunk by itself. Otherwise, compress the subtree into a
             // pair of CVs.
+            let subtree_chunks = (subtree_len / CHUNK_LEN) as u64;
             if subtree_len <= CHUNK_LEN {
                 debug_assert_eq!(subtree_len, CHUNK_LEN);
                 self.push_cv(
                     &ChunkState::new(
                         &self.key,
-                        self.chunk_state.offset,
+                        self.chunk_state.chunk_counter,
                         self.chunk_state.flags,
                         self.chunk_state.platform,
                     )
                     .update(&input[..subtree_len])
                     .output()
                     .chaining_value(),
-                    self.chunk_state.offset,
+                    self.chunk_state.chunk_counter,
                 );
             } else {
                 // This is the high-performance happy path, though getting here
@@ -819,7 +800,7 @@ impl Hasher {
                 let cv_pair = compress_subtree_to_parent_node(
                     &input[..subtree_len],
                     &self.key,
-                    self.chunk_state.offset,
+                    self.chunk_state.chunk_counter,
                     self.chunk_state.flags,
                     self.chunk_state.platform,
                 );
@@ -828,10 +809,13 @@ impl Hasher {
                 // Push the two CVs we received into the CV stack in order. Because
                 // the stack merges lazily, this guarantees we aren't merging the
                 // root.
-                self.push_cv(left_cv, self.chunk_state.offset);
-                self.push_cv(right_cv, self.chunk_state.offset + (subtree_len as u64 / 2));
+                self.push_cv(left_cv, self.chunk_state.chunk_counter);
+                self.push_cv(
+                    right_cv,
+                    self.chunk_state.chunk_counter + (subtree_chunks / 2),
+                );
             }
-            self.chunk_state.offset += subtree_len as u64;
+            self.chunk_state.chunk_counter += subtree_chunks;
             input = &input[subtree_len..];
         }
 
@@ -842,7 +826,7 @@ impl Hasher {
             // Having added some input to the chunk_state, we know what's in
             // the CV stack won't become the root node, and we can do an extra
             // merge. This simplifies finalize().
-            self.merge_cv_stack(self.chunk_state.offset);
+            self.merge_cv_stack(self.chunk_state.chunk_counter);
         }
 
         self
@@ -853,7 +837,7 @@ impl Hasher {
         // also. Convert it directly into an Output. Otherwise, we need to
         // merge subtrees below.
         if self.cv_stack.is_empty() {
-            debug_assert_eq!(self.chunk_state.offset, 0);
+            debug_assert_eq!(self.chunk_state.chunk_counter, 0);
             return self.chunk_state.output();
         }
 
@@ -874,7 +858,7 @@ impl Hasher {
         if self.chunk_state.len() > 0 {
             debug_assert_eq!(
                 self.cv_stack.len(),
-                self.chunk_state.offset.count_ones() as usize,
+                self.chunk_state.chunk_counter.count_ones() as usize,
                 "cv stack does not need a merge"
             );
             output = self.chunk_state.output();
@@ -930,10 +914,8 @@ impl fmt::Debug for Hasher {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Hasher {{ count: {}, flags: {:?}, platform: {:?} }}",
-            self.count(),
-            self.chunk_state.flags,
-            self.chunk_state.platform
+            "Hasher {{ flags: {:?}, platform: {:?} }}",
+            self.chunk_state.flags, self.chunk_state.platform
         )
     }
 }
@@ -982,19 +964,19 @@ impl OutputReader {
             buf = &mut buf[take..];
             self.position_within_block += take as u8;
             if self.position_within_block == BLOCK_LEN as u8 {
-                self.inner.offset += BLOCK_LEN as u64;
+                self.inner.counter += 1;
                 self.position_within_block = 0;
             }
         }
     }
 
     pub fn position(&self) -> u64 {
-        self.inner.offset + self.position_within_block as u64
+        self.inner.counter * BLOCK_LEN as u64 + self.position_within_block as u64
     }
 
     pub fn set_position(&mut self, position: u64) {
         self.position_within_block = (position % BLOCK_LEN as u64) as u8;
-        self.inner.offset = position - self.position_within_block as u64;
+        self.inner.counter = position / BLOCK_LEN as u64;
     }
 }
 

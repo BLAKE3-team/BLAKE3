@@ -1,4 +1,4 @@
-use crate::{portable, CVWords, OffsetDeltas, BLOCK_LEN};
+use crate::{portable, CVWords, IncrementCounter, BLOCK_LEN};
 use arrayref::{array_mut_ref, array_ref};
 
 #[cfg(feature = "c_avx512")]
@@ -108,25 +108,25 @@ impl Platform {
         cv: &mut CVWords,
         block: &[u8; BLOCK_LEN],
         block_len: u8,
-        offset: u64,
+        counter: u64,
         flags: u8,
     ) {
         match self {
-            Platform::Portable => portable::compress_in_place(cv, block, block_len, offset, flags),
+            Platform::Portable => portable::compress_in_place(cv, block, block_len, counter, flags),
             // Safe because detect() checked for platform support.
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::SSE41 | Platform::AVX2 => unsafe {
-                sse41::compress_in_place(cv, block, block_len, offset, flags)
+                sse41::compress_in_place(cv, block, block_len, counter, flags)
             },
             // Safe because detect() checked for platform support.
             #[cfg(feature = "c_avx512")]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => unsafe {
-                c_avx512::compress_in_place(cv, block, block_len, offset, flags)
+                c_avx512::compress_in_place(cv, block, block_len, counter, flags)
             },
             // No NEON compress_in_place() implementation yet.
             #[cfg(feature = "c_neon")]
-            Platform::NEON => portable::compress_in_place(cv, block, block_len, offset, flags),
+            Platform::NEON => portable::compress_in_place(cv, block, block_len, counter, flags),
         }
     }
 
@@ -135,25 +135,25 @@ impl Platform {
         cv: &CVWords,
         block: &[u8; BLOCK_LEN],
         block_len: u8,
-        offset: u64,
+        counter: u64,
         flags: u8,
     ) -> [u8; 64] {
         match self {
-            Platform::Portable => portable::compress_xof(cv, block, block_len, offset, flags),
+            Platform::Portable => portable::compress_xof(cv, block, block_len, counter, flags),
             // Safe because detect() checked for platform support.
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::SSE41 | Platform::AVX2 => unsafe {
-                sse41::compress_xof(cv, block, block_len, offset, flags)
+                sse41::compress_xof(cv, block, block_len, counter, flags)
             },
             // Safe because detect() checked for platform support.
             #[cfg(feature = "c_avx512")]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => unsafe {
-                c_avx512::compress_xof(cv, block, block_len, offset, flags)
+                c_avx512::compress_xof(cv, block, block_len, counter, flags)
             },
             // No NEON compress_xof() implementation yet.
             #[cfg(feature = "c_neon")]
-            Platform::NEON => portable::compress_xof(cv, block, block_len, offset, flags),
+            Platform::NEON => portable::compress_xof(cv, block, block_len, counter, flags),
         }
     }
 
@@ -171,8 +171,8 @@ impl Platform {
         &self,
         inputs: &[&A],
         key: &CVWords,
-        offset: u64,
-        offset_deltas: &OffsetDeltas,
+        counter: u64,
+        increment_counter: IncrementCounter,
         flags: u8,
         flags_start: u8,
         flags_end: u8,
@@ -182,8 +182,8 @@ impl Platform {
             Platform::Portable => portable::hash_many(
                 inputs,
                 key,
-                offset,
-                offset_deltas,
+                counter,
+                increment_counter,
                 flags,
                 flags_start,
                 flags_end,
@@ -195,8 +195,8 @@ impl Platform {
                 sse41::hash_many(
                     inputs,
                     key,
-                    offset,
-                    offset_deltas,
+                    counter,
+                    increment_counter,
                     flags,
                     flags_start,
                     flags_end,
@@ -209,8 +209,8 @@ impl Platform {
                 avx2::hash_many(
                     inputs,
                     key,
-                    offset,
-                    offset_deltas,
+                    counter,
+                    increment_counter,
                     flags,
                     flags_start,
                     flags_end,
@@ -224,8 +224,8 @@ impl Platform {
                 c_avx512::hash_many(
                     inputs,
                     key,
-                    offset,
-                    offset_deltas,
+                    counter,
+                    increment_counter,
                     flags,
                     flags_start,
                     flags_end,
@@ -238,8 +238,8 @@ impl Platform {
                 c_neon::hash_many(
                     inputs,
                     key,
-                    offset,
-                    offset_deltas,
+                    counter,
+                    increment_counter,
                     flags,
                     flags_start,
                     flags_end,

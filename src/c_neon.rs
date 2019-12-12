@@ -1,4 +1,4 @@
-use crate::{CVWords, OffsetDeltas, BLOCK_LEN, OUT_LEN};
+use crate::{CVWords, IncrementCounter, BLOCK_LEN, OUT_LEN};
 
 pub const DEGREE: usize = 4;
 
@@ -6,8 +6,8 @@ pub const DEGREE: usize = 4;
 pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
     inputs: &[&A],
     key: &CVWords,
-    offset: u64,
-    offset_deltas: &OffsetDeltas,
+    counter: u64,
+    increment_counter: IncrementCounter,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
@@ -22,8 +22,8 @@ pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
         inputs.len(),
         A::CAPACITY / BLOCK_LEN,
         key.as_ptr(),
-        offset,
-        offset_deltas.as_ptr(),
+        counter,
+        increment_counter.yes(),
         flags,
         flags_start,
         flags_end,
@@ -40,7 +40,7 @@ pub extern "C" fn blake3_compress_in_place_portable(
     cv: *mut u32,
     block: *const u8,
     block_len: u8,
-    offset: u64,
+    counter: u64,
     flags: u8,
 ) {
     unsafe {
@@ -48,7 +48,7 @@ pub extern "C" fn blake3_compress_in_place_portable(
             &mut *(cv as *mut [u32; 8]),
             &*(block as *const [u8; 64]),
             block_len,
-            offset,
+            counter,
             flags,
         )
     }
@@ -61,8 +61,8 @@ pub mod ffi {
             num_inputs: usize,
             blocks: usize,
             key: *const u32,
-            offset: u64,
-            offset_deltas: *const u64,
+            counter: u64,
+            increment_counter: bool,
             flags: u8,
             flags_start: u8,
             flags_end: u8,

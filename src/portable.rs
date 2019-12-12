@@ -1,5 +1,6 @@
 use crate::{
-    offset_high, offset_low, CVBytes, CVWords, OffsetDeltas, BLOCK_LEN, IV, MSG_SCHEDULE, OUT_LEN,
+    counter_high, counter_low, CVBytes, CVWords, IncrementCounter, BLOCK_LEN, IV, MSG_SCHEDULE,
+    OUT_LEN,
 };
 use arrayref::{array_mut_ref, array_ref};
 
@@ -38,7 +39,7 @@ fn compress_pre(
     cv: &CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
-    offset: u64,
+    counter: u64,
     flags: u8,
 ) -> [u32; 16] {
     let block_words = crate::platform::words_from_le_bytes_64(block);
@@ -56,8 +57,8 @@ fn compress_pre(
         IV[1],
         IV[2],
         IV[3],
-        offset_low(offset),
-        offset_high(offset),
+        counter_low(counter),
+        counter_high(counter),
         block_len as u32,
         flags as u32,
     ];
@@ -77,10 +78,10 @@ pub fn compress_in_place(
     cv: &mut CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
-    offset: u64,
+    counter: u64,
     flags: u8,
 ) {
-    let state = compress_pre(cv, block, block_len, offset, flags);
+    let state = compress_pre(cv, block, block_len, counter, flags);
 
     cv[0] = state[0] ^ state[8];
     cv[1] = state[1] ^ state[9];
@@ -96,10 +97,10 @@ pub fn compress_xof(
     cv: &CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
-    offset: u64,
+    counter: u64,
     flags: u8,
 ) -> [u8; 64] {
-    let mut state = compress_pre(cv, block, block_len, offset, flags);
+    let mut state = compress_pre(cv, block, block_len, counter, flags);
     state[0] ^= state[8];
     state[1] ^= state[9];
     state[2] ^= state[10];
@@ -122,7 +123,7 @@ pub fn compress_xof(
 pub fn hash1<A: arrayvec::Array<Item = u8>>(
     input: &A,
     key: &CVWords,
-    offset: u64,
+    counter: u64,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
@@ -140,7 +141,7 @@ pub fn hash1<A: arrayvec::Array<Item = u8>>(
             &mut cv,
             array_ref!(slice, 0, BLOCK_LEN),
             BLOCK_LEN as u8,
-            offset,
+            counter,
             block_flags,
         );
         block_flags = flags;
@@ -152,8 +153,8 @@ pub fn hash1<A: arrayvec::Array<Item = u8>>(
 pub fn hash_many<A: arrayvec::Array<Item = u8>>(
     inputs: &[&A],
     key: &CVWords,
-    mut offset: u64,
-    offset_deltas: &OffsetDeltas,
+    mut counter: u64,
+    increment_counter: IncrementCounter,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
@@ -164,13 +165,15 @@ pub fn hash_many<A: arrayvec::Array<Item = u8>>(
         hash1(
             input,
             key,
-            offset,
+            counter,
             flags,
             flags_start,
             flags_end,
             array_mut_ref!(output, 0, OUT_LEN),
         );
-        offset += offset_deltas[1];
+        if increment_counter.yes() {
+            counter += 1;
+        }
     }
 }
 

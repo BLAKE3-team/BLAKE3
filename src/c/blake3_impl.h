@@ -42,19 +42,6 @@ static const uint8_t MSG_SCHEDULE[7][16] = {
     {12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11},
 };
 
-// 17 is 1 + the largest supported SIMD degree. Each hash_many() implementation
-// can thus do `offset += offset_deltas[DEGREE]` at the end of each batch.
-typedef const uint64_t offset_deltas_t[17];
-
-static offset_deltas_t CHUNK_OFFSET_DELTAS = {
-    BLAKE3_CHUNK_LEN * 0,  BLAKE3_CHUNK_LEN * 1,  BLAKE3_CHUNK_LEN * 2,
-    BLAKE3_CHUNK_LEN * 3,  BLAKE3_CHUNK_LEN * 4,  BLAKE3_CHUNK_LEN * 5,
-    BLAKE3_CHUNK_LEN * 6,  BLAKE3_CHUNK_LEN * 7,  BLAKE3_CHUNK_LEN * 8,
-    BLAKE3_CHUNK_LEN * 9,  BLAKE3_CHUNK_LEN * 10, BLAKE3_CHUNK_LEN * 11,
-    BLAKE3_CHUNK_LEN * 12, BLAKE3_CHUNK_LEN * 13, BLAKE3_CHUNK_LEN * 14,
-    BLAKE3_CHUNK_LEN * 15, BLAKE3_CHUNK_LEN * 16,
-};
-
 // Count the number of 1 bits.
 INLINE uint8_t popcnt(uint64_t x) {
 #if __POPCNT__
@@ -69,10 +56,10 @@ INLINE uint8_t popcnt(uint64_t x) {
 #endif
 }
 
-INLINE uint32_t offset_low(uint64_t offset) { return (uint32_t)offset; }
+INLINE uint32_t counter_low(uint64_t counter) { return (uint32_t)counter; }
 
-INLINE uint32_t offset_high(uint64_t offset) {
-  return (uint32_t)(offset >> 32);
+INLINE uint32_t counter_high(uint64_t counter) {
+  return (uint32_t)(counter >> 32);
 }
 
 INLINE uint32_t load32(const void *src) {
@@ -96,50 +83,50 @@ INLINE void load_key_words(const uint8_t key[BLAKE3_KEY_LEN],
 // Declarations for implementation-specific functions.
 void blake3_compress_in_place_portable(uint32_t cv[8],
                                        const uint8_t block[BLAKE3_BLOCK_LEN],
-                                       uint8_t block_len, uint64_t offset,
+                                       uint8_t block_len, uint64_t counter,
                                        uint8_t flags);
 void blake3_compress_in_place_sse41(uint32_t cv[8],
                                     const uint8_t block[BLAKE3_BLOCK_LEN],
-                                    uint8_t block_len, uint64_t offset,
+                                    uint8_t block_len, uint64_t counter,
                                     uint8_t flags);
 void blake3_compress_in_place_avx512(uint32_t cv[8],
                                      const uint8_t block[BLAKE3_BLOCK_LEN],
-                                     uint8_t block_len, uint64_t offset,
+                                     uint8_t block_len, uint64_t counter,
                                      uint8_t flags);
 void blake3_compress_xof_portable(const uint32_t cv[8],
                                   const uint8_t block[BLAKE3_BLOCK_LEN],
-                                  uint8_t block_len, uint64_t offset,
+                                  uint8_t block_len, uint64_t counter,
                                   uint8_t flags, uint8_t out[64]);
 void blake3_compress_xof_sse41(const uint32_t cv[8],
                                const uint8_t block[BLAKE3_BLOCK_LEN],
-                               uint8_t block_len, uint64_t offset,
+                               uint8_t block_len, uint64_t counter,
                                uint8_t flags, uint8_t out[64]);
 void blake3_compress_xof_avx512(const uint32_t cv[8],
                                 const uint8_t block[BLAKE3_BLOCK_LEN],
-                                uint8_t block_len, uint64_t offset,
+                                uint8_t block_len, uint64_t counter,
                                 uint8_t flags, uint8_t out[64]);
 void blake3_hash_many_portable(const uint8_t *const *inputs, size_t num_inputs,
                                size_t blocks, const uint32_t key[8],
-                               uint64_t offset, offset_deltas_t od,
+                               uint64_t counter, bool increment_counter,
                                uint8_t flags, uint8_t flags_start,
                                uint8_t flags_end, uint8_t *out);
 void blake3_hash_many_sse41(const uint8_t *const *inputs, size_t num_inputs,
                             size_t blocks, const uint32_t key[8],
-                            uint64_t offset, offset_deltas_t od, uint8_t flags,
-                            uint8_t flags_start, uint8_t flags_end,
-                            uint8_t *out);
+                            uint64_t counter, bool increment_counter,
+                            uint8_t flags, uint8_t flags_start,
+                            uint8_t flags_end, uint8_t *out);
 void blake3_hash_many_avx2(const uint8_t *const *inputs, size_t num_inputs,
                            size_t blocks, const uint32_t key[8],
-                           uint64_t offset, offset_deltas_t od, uint8_t flags,
-                           uint8_t flags_start, uint8_t flags_end,
-                           uint8_t *out);
+                           uint64_t counter, bool increment_counter,
+                           uint8_t flags, uint8_t flags_start,
+                           uint8_t flags_end, uint8_t *out);
 void blake3_hash_many_avx512(const uint8_t *const *inputs, size_t num_inputs,
                              size_t blocks, const uint32_t key[8],
-                             uint64_t offset, offset_deltas_t od, uint8_t flags,
-                             uint8_t flags_start, uint8_t flags_end,
-                             uint8_t *out);
+                             uint64_t counter, bool increment_counter,
+                             uint8_t flags, uint8_t flags_start,
+                             uint8_t flags_end, uint8_t *out);
 void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
                            size_t blocks, const uint32_t key[8],
-                           uint64_t offset, offset_deltas_t od, uint8_t flags,
-                           uint8_t flags_start, uint8_t flags_end,
-                           uint8_t *out);
+                           uint64_t counter, bool increment_counter,
+                           uint8_t flags, uint8_t flags_start,
+                           uint8_t flags_end, uint8_t *out);

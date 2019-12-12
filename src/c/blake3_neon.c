@@ -212,26 +212,28 @@ INLINE void transpose_msg_vecs4(const uint8_t *const *inputs,
   transpose_vecs_128(&out[12]);
 }
 
-INLINE void load_offsets4(uint64_t offset, const uint64_t deltas[4],
-                          uint32x4_t *out_lo, uint32x4_t *out_hi) {
-  *out_lo =
-      set4(offset_low(offset + deltas[0]), offset_low(offset + deltas[1]),
-           offset_low(offset + deltas[2]), offset_low(offset + deltas[3]));
-  *out_hi =
-      set4(offset_high(offset + deltas[0]), offset_high(offset + deltas[1]),
-           offset_high(offset + deltas[2]), offset_high(offset + deltas[3]));
+INLINE void load_counters4(uint64_t counter, bool increment_counter,
+                           uint32x4_t *out_low, uint32x4_t *out_high) {
+  uint64_t mask = (increment_counter ? ~0 : 0);
+  *out_low = set4(
+      counter_low(counter + (mask & 0)), counter_low(counter + (mask & 1)),
+      counter_low(counter + (mask & 2)), counter_low(counter + (mask & 3)));
+  *out_high = set4(
+      counter_high(counter + (mask & 0)), counter_high(counter + (mask & 1)),
+      counter_high(counter + (mask & 2)), counter_high(counter + (mask & 3)));
 }
 
 void blake3_hash4_neon(const uint8_t *const *inputs, size_t blocks,
-                       const uint32_t key[8], uint64_t offset,
-                       offset_deltas_t offset_deltas, uint8_t flags,
+                       const uint32_t key[8], uint64_t counter,
+                       bool increment_counter, uint8_t flags,
                        uint8_t flags_start, uint8_t flags_end, uint8_t *out) {
   uint32x4_t h_vecs[8] = {
       set1_128(key[0]), set1_128(key[1]), set1_128(key[2]), set1_128(key[3]),
       set1_128(key[4]), set1_128(key[5]), set1_128(key[6]), set1_128(key[7]),
   };
-  uint32x4_t offset_low_vec, offset_high_vec;
-  load_offsets4(offset, offset_deltas, &offset_low_vec, &offset_high_vec);
+  uint32x4_t counter_low_vec, counter_high_vec;
+  load_counters4(counter, increment_counter, &counter_low_vec,
+                 &counter_high_vec);
   uint8_t block_flags = flags | flags_start;
 
   for (size_t block = 0; block < blocks; block++) {
@@ -244,10 +246,10 @@ void blake3_hash4_neon(const uint8_t *const *inputs, size_t blocks,
     transpose_msg_vecs4(inputs, block * BLAKE3_BLOCK_LEN, msg_vecs);
 
     uint32x4_t v[16] = {
-        h_vecs[0],       h_vecs[1],       h_vecs[2],       h_vecs[3],
-        h_vecs[4],       h_vecs[5],       h_vecs[6],       h_vecs[7],
-        set1_128(IV[0]), set1_128(IV[1]), set1_128(IV[2]), set1_128(IV[3]),
-        offset_low_vec,  offset_high_vec, block_len_vec,   block_flags_vec,
+        h_vecs[0],       h_vecs[1],        h_vecs[2],       h_vecs[3],
+        h_vecs[4],       h_vecs[5],        h_vecs[6],       h_vecs[7],
+        set1_128(IV[0]), set1_128(IV[1]),  set1_128(IV[2]), set1_128(IV[3]),
+        counter_low_vec, counter_high_vec, block_len_vec,   block_flags_vec,
     };
     round_fn4(v, msg_vecs, 0);
     round_fn4(v, msg_vecs, 1);
@@ -289,8 +291,8 @@ void blake3_hash4_neon(const uint8_t *const *inputs, size_t blocks,
  */
 
 INLINE void hash_one_neon(const uint8_t *input, size_t blocks,
-                          const uint32_t key[8], uint64_t offset, uint8_t flags,
-                          uint8_t flags_start, uint8_t flags_end,
+                          const uint32_t key[8], uint64_t counter,
+                          uint8_t flags, uint8_t flags_start, uint8_t flags_end,
                           uint8_t out[BLAKE3_OUT_LEN]) {
   uint32_t cv[8];
   memcpy(cv, key, BLAKE3_KEY_LEN);
@@ -302,7 +304,7 @@ INLINE void hash_one_neon(const uint8_t *input, size_t blocks,
     // TODO: Implement compress_neon. However note that according to
     // https://github.com/BLAKE2/BLAKE2/commit/7965d3e6e1b4193438b8d3a656787587d2579227,
     // compress_neon might not be any faster than compress_portable.
-    blake3_compress_in_place_portable(cv, input, BLAKE3_BLOCK_LEN, offset,
+    blake3_compress_in_place_portable(cv, input, BLAKE3_BLOCK_LEN, counter,
                                       block_flags);
     input = &input[BLAKE3_BLOCK_LEN];
     blocks -= 1;
@@ -313,23 +315,27 @@ INLINE void hash_one_neon(const uint8_t *input, size_t blocks,
 
 void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
                            size_t blocks, const uint32_t key[8],
-                           uint64_t offset, offset_deltas_t offset_deltas,
+                           uint64_t counter, bool increment_counter,
                            uint8_t flags, uint8_t flags_start,
                            uint8_t flags_end, uint8_t *out) {
   while (num_inputs >= 4) {
-    blake3_hash4_neon(inputs, blocks, key, offset, offset_deltas, flags,
+    blake3_hash4_neon(inputs, blocks, key, counter, increment_counter, flags,
                       flags_start, flags_end, out);
+    if (increment_counter) {
+      counter += 4;
+    }
     inputs += 4;
     num_inputs -= 4;
-    offset += offset_deltas[4];
     out = &out[4 * BLAKE3_OUT_LEN];
   }
   while (num_inputs > 0) {
-    hash_one_neon(inputs[0], blocks, key, offset, flags, flags_start, flags_end,
-                  out);
+    hash_one_neon(inputs[0], blocks, key, counter, flags, flags_start,
+                  flags_end, out);
+    if (increment_counter) {
+      counter += 1;
+    }
     inputs += 1;
     num_inputs -= 1;
-    offset += offset_deltas[1];
     out = &out[BLAKE3_OUT_LEN];
   }
 }

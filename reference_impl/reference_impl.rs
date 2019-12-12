@@ -56,7 +56,7 @@ fn round(state: &mut [u32; 16], m: &[u32; 16], schedule: &[usize; 16]) {
 fn compress(
     chaining_value: &[u32; 8],
     block_words: &[u32; 16],
-    offset: u64,
+    counter: u64,
     block_len: u32,
     flags: u32,
 ) -> [u32; 16] {
@@ -73,8 +73,8 @@ fn compress(
         IV[1],
         IV[2],
         IV[3],
-        offset as u32,
-        (offset >> 32) as u32,
+        counter as u32,
+        (counter >> 32) as u32,
         block_len,
         flags,
     ];
@@ -104,7 +104,7 @@ fn words_from_litte_endian_bytes(bytes: &[u8], words: &mut [u32]) {
 struct Output {
     input_chaining_value: [u32; 8],
     block_words: [u32; 16],
-    offset: u64,
+    counter: u64,
     block_len: u32,
     flags: u32,
 }
@@ -114,19 +114,22 @@ impl Output {
         first_8_words(compress(
             &self.input_chaining_value,
             &self.block_words,
-            self.offset,
+            self.counter, // the input chunk counter, or 0 for parent nodes
             self.block_len,
             self.flags,
         ))
     }
 
     fn root_output_bytes(&self, out_slice: &mut [u8]) {
-        let mut offset = 0;
+        // Root output comes from either the first chunk, or from a parent
+        // node, so the counter value when we get here is always 0.
+        debug_assert_eq!(self.counter, 0);
+        let mut output_block_counter = 0;
         for out_block in out_slice.chunks_mut(2 * OUT_LEN) {
             let words = compress(
                 &self.input_chaining_value,
                 &self.block_words,
-                offset,
+                output_block_counter,
                 self.block_len,
                 self.flags | ROOT,
             );
@@ -134,14 +137,14 @@ impl Output {
             for (word, out_word) in words.iter().zip(out_block.chunks_mut(4)) {
                 out_word.copy_from_slice(&word.to_le_bytes()[..out_word.len()]);
             }
-            offset += 2 * OUT_LEN as u64;
+            output_block_counter += 1;
         }
     }
 }
 
 struct ChunkState {
     chaining_value: [u32; 8],
-    offset: u64,
+    chunk_counter: u64,
     block: [u8; BLOCK_LEN],
     block_len: u8,
     blocks_compressed: u8,
@@ -149,10 +152,10 @@ struct ChunkState {
 }
 
 impl ChunkState {
-    fn new(key: &[u32; 8], offset: u64, flags: u32) -> Self {
+    fn new(key: &[u32; 8], chunk_counter: u64, flags: u32) -> Self {
         Self {
             chaining_value: *key,
-            offset,
+            chunk_counter,
             block: [0; BLOCK_LEN],
             block_len: 0,
             blocks_compressed: 0,
@@ -180,7 +183,7 @@ impl ChunkState {
                 self.chaining_value = first_8_words(compress(
                     &self.chaining_value,
                     &block_words,
-                    self.offset,
+                    self.chunk_counter,
                     BLOCK_LEN as u32,
                     self.flags | self.start_flag(),
                 ));
@@ -204,7 +207,7 @@ impl ChunkState {
             input_chaining_value: self.chaining_value,
             block_words,
             block_len: self.block_len as u32,
-            offset: self.offset,
+            counter: self.chunk_counter,
             flags: self.flags | self.start_flag() | CHUNK_END,
         }
     }
@@ -222,7 +225,7 @@ fn parent_output(
     Output {
         input_chaining_value: *key,
         block_words,
-        offset: 0,                   // Always 0 for parent nodes.
+        counter: 0,                  // Always 0 for parent nodes.
         block_len: BLOCK_LEN as u32, // Always BLOCK_LEN (64) for parent nodes.
         flags: PARENT | flags,
     }
@@ -275,14 +278,14 @@ impl Hasher {
         self.cv_stack[self.cv_stack_len as usize]
     }
 
-    fn push_chunk_chaining_value(&mut self, mut cv: [u32; 8], total_bytes: u64) {
+    fn push_chunk_chaining_value(&mut self, mut cv: [u32; 8], total_chunks: u64) {
         // The new chunk chaining value might complete some subtrees along the
         // right edge of the growing tree. For each completed subtree, pop its
         // left child CV off the stack and compress a new parent CV. After as
         // many parent compressions as possible, push the new CV onto the
         // stack. The final length of the stack will be the count of 1 bits in
-        // the total number of chunks or (equivalently) input bytes so far.
-        let final_stack_len = total_bytes.count_ones() as u8;
+        // the total number of chunks so far.
+        let final_stack_len = total_chunks.count_ones() as u8;
         while self.cv_stack_len >= final_stack_len {
             cv = parent_output(&self.pop_stack(), &cv, &self.key, self.chunk_state.flags)
                 .chaining_value();
@@ -295,10 +298,9 @@ impl Hasher {
         while !input.is_empty() {
             if self.chunk_state.len() == CHUNK_LEN {
                 let chunk_cv = self.chunk_state.output().chaining_value();
-                let new_chunk_offset = self.chunk_state.offset + CHUNK_LEN as u64;
-                self.push_chunk_chaining_value(chunk_cv, new_chunk_offset);
-                self.chunk_state =
-                    ChunkState::new(&self.key, new_chunk_offset, self.chunk_state.flags);
+                let total_chunks = self.chunk_state.chunk_counter + 1;
+                self.push_chunk_chaining_value(chunk_cv, total_chunks);
+                self.chunk_state = ChunkState::new(&self.key, total_chunks, self.chunk_state.flags);
             }
 
             let want = CHUNK_LEN - self.chunk_state.len();

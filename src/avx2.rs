@@ -3,7 +3,9 @@ use core::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::*;
 
-use crate::{offset_high, offset_low, CVWords, OffsetDeltas, BLOCK_LEN, IV, MSG_SCHEDULE, OUT_LEN};
+use crate::{
+    counter_high, counter_low, CVWords, IncrementCounter, BLOCK_LEN, IV, MSG_SCHEDULE, OUT_LEN,
+};
 use arrayref::{array_mut_ref, mut_array_refs};
 
 pub const DEGREE: usize = 8;
@@ -270,27 +272,28 @@ unsafe fn transpose_msg_vecs(inputs: &[*const u8; DEGREE], block_offset: usize) 
 }
 
 #[inline(always)]
-unsafe fn load_offsets(offset: u64, offset_deltas: &OffsetDeltas) -> (__m256i, __m256i) {
+unsafe fn load_counters(counter: u64, increment_counter: IncrementCounter) -> (__m256i, __m256i) {
+    let mask = if increment_counter.yes() { !0 } else { 0 };
     (
         set8(
-            offset_low(offset + offset_deltas[0]),
-            offset_low(offset + offset_deltas[1]),
-            offset_low(offset + offset_deltas[2]),
-            offset_low(offset + offset_deltas[3]),
-            offset_low(offset + offset_deltas[4]),
-            offset_low(offset + offset_deltas[5]),
-            offset_low(offset + offset_deltas[6]),
-            offset_low(offset + offset_deltas[7]),
+            counter_low(counter + (mask & 0)),
+            counter_low(counter + (mask & 1)),
+            counter_low(counter + (mask & 2)),
+            counter_low(counter + (mask & 3)),
+            counter_low(counter + (mask & 4)),
+            counter_low(counter + (mask & 5)),
+            counter_low(counter + (mask & 6)),
+            counter_low(counter + (mask & 7)),
         ),
         set8(
-            offset_high(offset + offset_deltas[0]),
-            offset_high(offset + offset_deltas[1]),
-            offset_high(offset + offset_deltas[2]),
-            offset_high(offset + offset_deltas[3]),
-            offset_high(offset + offset_deltas[4]),
-            offset_high(offset + offset_deltas[5]),
-            offset_high(offset + offset_deltas[6]),
-            offset_high(offset + offset_deltas[7]),
+            counter_high(counter + (mask & 0)),
+            counter_high(counter + (mask & 1)),
+            counter_high(counter + (mask & 2)),
+            counter_high(counter + (mask & 3)),
+            counter_high(counter + (mask & 4)),
+            counter_high(counter + (mask & 5)),
+            counter_high(counter + (mask & 6)),
+            counter_high(counter + (mask & 7)),
         ),
     )
 }
@@ -300,8 +303,8 @@ pub unsafe fn hash8(
     inputs: &[*const u8; DEGREE],
     blocks: usize,
     key: &CVWords,
-    offset: u64,
-    offset_deltas: &OffsetDeltas,
+    counter: u64,
+    increment_counter: IncrementCounter,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
@@ -317,7 +320,7 @@ pub unsafe fn hash8(
         set1(key[6]),
         set1(key[7]),
     ];
-    let (offset_low_vec, offset_high_vec) = load_offsets(offset, offset_deltas);
+    let (counter_low_vec, counter_high_vec) = load_counters(counter, increment_counter);
     let mut block_flags = flags | flags_start;
 
     for block in 0..blocks {
@@ -345,8 +348,8 @@ pub unsafe fn hash8(
             set1(IV[1]),
             set1(IV[2]),
             set1(IV[3]),
-            offset_low_vec,
-            offset_high_vec,
+            counter_low_vec,
+            counter_high_vec,
             block_len_vec,
             block_flags_vec,
         ];
@@ -384,8 +387,8 @@ pub unsafe fn hash8(
 pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
     mut inputs: &[&A],
     key: &CVWords,
-    mut offset: u64,
-    offset_deltas: &OffsetDeltas,
+    mut counter: u64,
+    increment_counter: IncrementCounter,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
@@ -401,22 +404,24 @@ pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
             input_ptrs,
             blocks,
             key,
-            offset,
-            offset_deltas,
+            counter,
+            increment_counter,
             flags,
             flags_start,
             flags_end,
             array_mut_ref!(out, 0, DEGREE * OUT_LEN),
         );
+        if increment_counter.yes() {
+            counter += DEGREE as u64;
+        }
         inputs = &inputs[DEGREE..];
-        offset += DEGREE as u64 * offset_deltas[1];
         out = &mut out[DEGREE * OUT_LEN..];
     }
     crate::sse41::hash_many(
         inputs,
         key,
-        offset,
-        offset_deltas,
+        counter,
+        increment_counter,
         flags,
         flags_start,
         flags_end,

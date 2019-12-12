@@ -1,4 +1,4 @@
-use crate::{CVBytes, CVWords, OffsetDeltas, BLOCK_LEN, CHUNK_LEN, OUT_LEN};
+use crate::{CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, OUT_LEN};
 use arrayref::array_ref;
 use arrayvec::ArrayVec;
 use core::usize;
@@ -48,13 +48,13 @@ pub fn paint_test_input(buf: &mut [u8]) {
 }
 
 type CompressInPlaceFn =
-    unsafe fn(cv: &mut CVWords, block: &[u8; BLOCK_LEN], block_len: u8, offset: u64, flags: u8);
+    unsafe fn(cv: &mut CVWords, block: &[u8; BLOCK_LEN], block_len: u8, counter: u64, flags: u8);
 
 type CompressXofFn = unsafe fn(
     cv: &CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
-    offset: u64,
+    counter: u64,
     flags: u8,
 ) -> [u8; 64];
 
@@ -64,18 +64,18 @@ pub fn test_compress_fn(compress_in_place_fn: CompressInPlaceFn, compress_xof_fn
     let block_len: u8 = 61;
     let mut block = [0; BLOCK_LEN];
     paint_test_input(&mut block[..block_len as usize]);
-    // Use an offset with set bits in both 32-bit words.
-    let offset = ((5 * CHUNK_LEN as u64) << 32) + 6 * CHUNK_LEN as u64;
+    // Use a counter with set bits in both 32-bit words.
+    let counter = (5u64 << 32) + 6;
     let flags = crate::CHUNK_END | crate::ROOT | crate::KEYED_HASH;
 
     let portable_out =
-        crate::portable::compress_xof(&initial_state, &block, block_len, offset as u64, flags);
+        crate::portable::compress_xof(&initial_state, &block, block_len, counter as u64, flags);
 
     let mut test_state = initial_state;
-    unsafe { compress_in_place_fn(&mut test_state, &block, block_len, offset as u64, flags) };
+    unsafe { compress_in_place_fn(&mut test_state, &block, block_len, counter as u64, flags) };
     let test_state_bytes = crate::platform::le_bytes_from_words_32(&test_state);
     let test_xof =
-        unsafe { compress_xof_fn(&initial_state, &block, block_len, offset as u64, flags) };
+        unsafe { compress_xof_fn(&initial_state, &block, block_len, counter as u64, flags) };
 
     assert_eq!(&portable_out[..32], &test_state_bytes[..]);
     assert_eq!(&portable_out[..], &test_xof[..]);
@@ -84,8 +84,8 @@ pub fn test_compress_fn(compress_in_place_fn: CompressInPlaceFn, compress_xof_fn
 type HashManyFn<A> = unsafe fn(
     inputs: &[&A],
     key: &CVWords,
-    offset: u64,
-    offset_deltas: &OffsetDeltas,
+    counter: u64,
+    increment_counter: IncrementCounter,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
@@ -101,8 +101,8 @@ pub fn test_hash_many_fn(
     const NUM_INPUTS: usize = 31;
     let mut input_buf = [0; CHUNK_LEN * NUM_INPUTS];
     crate::test::paint_test_input(&mut input_buf);
-    // An offset just prior to u32::MAX.
-    let offset = (1 << 32) - CHUNK_LEN as u64;
+    // A counter just prior to u32::MAX.
+    let counter = (1u64 << 32) - 1;
 
     // First hash chunks.
     let mut chunks = ArrayVec::<[&[u8; CHUNK_LEN]; NUM_INPUTS]>::new();
@@ -113,8 +113,8 @@ pub fn test_hash_many_fn(
     crate::portable::hash_many(
         &chunks,
         &TEST_KEY_WORDS,
-        offset,
-        crate::CHUNK_OFFSET_DELTAS,
+        counter,
+        IncrementCounter::Yes,
         crate::DERIVE_KEY,
         crate::CHUNK_START,
         crate::CHUNK_END,
@@ -126,8 +126,8 @@ pub fn test_hash_many_fn(
         hash_many_chunks_fn(
             &chunks[..],
             &TEST_KEY_WORDS,
-            offset,
-            crate::CHUNK_OFFSET_DELTAS,
+            counter,
+            IncrementCounter::Yes,
             crate::DERIVE_KEY,
             crate::CHUNK_START,
             crate::CHUNK_END,
@@ -153,7 +153,7 @@ pub fn test_hash_many_fn(
         &parents,
         &TEST_KEY_WORDS,
         0,
-        crate::PARENT_OFFSET_DELTAS,
+        IncrementCounter::No,
         crate::DERIVE_KEY | crate::PARENT,
         0,
         0,
@@ -166,7 +166,7 @@ pub fn test_hash_many_fn(
             &parents[..],
             &TEST_KEY_WORDS,
             0,
-            crate::PARENT_OFFSET_DELTAS,
+            IncrementCounter::No,
             crate::DERIVE_KEY | crate::PARENT,
             0,
             0,
@@ -202,10 +202,10 @@ fn test_reference_impl_size() {
 }
 
 #[test]
-fn test_offset_words() {
-    let offset: u64 = (1 << 32) + 2;
-    assert_eq!(crate::offset_low(offset), 2);
-    assert_eq!(crate::offset_high(offset), 1);
+fn test_counter_words() {
+    let counter: u64 = (1 << 32) + 2;
+    assert_eq!(crate::counter_low(counter), 2);
+    assert_eq!(crate::counter_high(counter), 1);
 }
 
 #[test]

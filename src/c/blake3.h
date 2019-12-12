@@ -11,10 +11,10 @@
 
 typedef struct {
   uint32_t cv[8];
-  uint64_t offset;
-  uint16_t count;
+  uint64_t chunk_counter;
   uint8_t buf[BLAKE3_BLOCK_LEN];
   uint8_t buf_len;
+  uint8_t blocks_compressed;
   uint8_t flags;
 } blake3_chunk_state;
 

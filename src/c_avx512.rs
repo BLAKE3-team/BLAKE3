@@ -1,4 +1,4 @@
-use crate::{CVWords, OffsetDeltas, BLOCK_LEN, OUT_LEN};
+use crate::{CVWords, IncrementCounter, BLOCK_LEN, OUT_LEN};
 
 pub const DEGREE: usize = 16;
 
@@ -7,10 +7,10 @@ pub unsafe fn compress_in_place(
     cv: &mut CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
-    offset: u64,
+    counter: u64,
     flags: u8,
 ) {
-    ffi::blake3_compress_in_place_avx512(cv.as_mut_ptr(), block.as_ptr(), block_len, offset, flags)
+    ffi::blake3_compress_in_place_avx512(cv.as_mut_ptr(), block.as_ptr(), block_len, counter, flags)
 }
 
 // Unsafe because this may only be called on platforms supporting AVX-512.
@@ -18,7 +18,7 @@ pub unsafe fn compress_xof(
     cv: &CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
-    offset: u64,
+    counter: u64,
     flags: u8,
 ) -> [u8; 64] {
     let mut out = [0u8; 64];
@@ -26,7 +26,7 @@ pub unsafe fn compress_xof(
         cv.as_ptr(),
         block.as_ptr(),
         block_len,
-        offset,
+        counter,
         flags,
         out.as_mut_ptr(),
     );
@@ -37,8 +37,8 @@ pub unsafe fn compress_xof(
 pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
     inputs: &[&A],
     key: &CVWords,
-    offset: u64,
-    offset_deltas: &OffsetDeltas,
+    counter: u64,
+    increment_counter: IncrementCounter,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
@@ -53,8 +53,8 @@ pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
         inputs.len(),
         A::CAPACITY / BLOCK_LEN,
         key.as_ptr(),
-        offset,
-        offset_deltas.as_ptr(),
+        counter,
+        increment_counter.yes(),
         flags,
         flags_start,
         flags_end,
@@ -68,14 +68,14 @@ pub mod ffi {
             cv: *mut u32,
             block: *const u8,
             block_len: u8,
-            offset: u64,
+            counter: u64,
             flags: u8,
         );
         pub fn blake3_compress_xof_avx512(
             cv: *const u32,
             block: *const u8,
             block_len: u8,
-            offset: u64,
+            counter: u64,
             flags: u8,
             out: *mut u8,
         );
@@ -84,13 +84,14 @@ pub mod ffi {
             num_inputs: usize,
             blocks: usize,
             key: *const u32,
-            offset: u64,
-            offset_deltas: *const u64,
+            counter: u64,
+            increment_counter: bool,
             flags: u8,
             flags_start: u8,
             flags_end: u8,
             out: *mut u8,
         );
+
     }
 }
 

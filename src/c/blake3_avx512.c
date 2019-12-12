@@ -111,12 +111,12 @@ INLINE void undiagonalize(__m128i *row0, __m128i *row2, __m128i *row3) {
 
 INLINE void compress_pre(__m128i rows[4], const uint32_t cv[8],
                          const uint8_t block[BLAKE3_BLOCK_LEN],
-                         uint8_t block_len, uint64_t offset, uint8_t flags) {
+                         uint8_t block_len, uint64_t counter, uint8_t flags) {
   rows[0] = loadu_128((uint8_t *)&cv[0]);
   rows[1] = loadu_128((uint8_t *)&cv[4]);
   rows[2] = set4(IV[0], IV[1], IV[2], IV[3]);
-  rows[3] = set4(offset_low(offset), offset_high(offset), (uint32_t)block_len,
-                 (uint32_t)flags);
+  rows[3] = set4(counter_low(counter), counter_high(counter),
+                 (uint32_t)block_len, (uint32_t)flags);
 
   __m128i m0 = loadu_128(&block[sizeof(__m128i) * 0]);
   __m128i m1 = loadu_128(&block[sizeof(__m128i) * 1]);
@@ -281,10 +281,10 @@ INLINE void compress_pre(__m128i rows[4], const uint32_t cv[8],
 
 void blake3_compress_xof_avx512(const uint32_t cv[8],
                                 const uint8_t block[BLAKE3_BLOCK_LEN],
-                                uint8_t block_len, uint64_t offset,
+                                uint8_t block_len, uint64_t counter,
                                 uint8_t flags, uint8_t out[64]) {
   __m128i rows[4];
-  compress_pre(rows, cv, block, block_len, offset, flags);
+  compress_pre(rows, cv, block, block_len, counter, flags);
   storeu_128(xor_128(rows[0], rows[2]), &out[0]);
   storeu_128(xor_128(rows[1], rows[3]), &out[16]);
   storeu_128(xor_128(rows[2], loadu_128((uint8_t *)&cv[0])), &out[32]);
@@ -293,10 +293,10 @@ void blake3_compress_xof_avx512(const uint32_t cv[8],
 
 void blake3_compress_in_place_avx512(uint32_t cv[8],
                                      const uint8_t block[BLAKE3_BLOCK_LEN],
-                                     uint8_t block_len, uint64_t offset,
+                                     uint8_t block_len, uint64_t counter,
                                      uint8_t flags) {
   __m128i rows[4];
-  compress_pre(rows, cv, block, block_len, offset, flags);
+  compress_pre(rows, cv, block, block_len, counter, flags);
   storeu_128(xor_128(rows[0], rows[2]), (uint8_t *)&cv[0]);
   storeu_128(xor_128(rows[1], rows[3]), (uint8_t *)&cv[4]);
 }
@@ -468,24 +468,29 @@ INLINE void transpose_msg_vecs4(const uint8_t *const *inputs,
   transpose_vecs_128(&out[12]);
 }
 
-INLINE void load_offsets4(uint64_t offset, const uint64_t deltas[4],
-                          __m128i *out_lo, __m128i *out_hi) {
-  __m256i a = _mm256_add_epi64(_mm256_set1_epi64x((int64_t)offset),
-                               _mm256_loadu_si256((const __m256i *)deltas));
-  *out_lo = _mm256_cvtepi64_epi32(a);
-  *out_hi = _mm256_cvtepi64_epi32(_mm256_srli_epi64(a, 32));
+INLINE void load_counters4(uint64_t counter, bool increment_counter,
+                           __m128i *out_lo, __m128i *out_hi) {
+  uint64_t mask = (increment_counter ? ~0 : 0);
+  __m256i mask_vec = _mm256_set1_epi64x(mask);
+  __m256i deltas = _mm256_setr_epi64x(0, 1, 2, 3);
+  deltas = _mm256_and_si256(mask_vec, deltas);
+  __m256i counters =
+      _mm256_add_epi64(_mm256_set1_epi64x((int64_t)counter), deltas);
+  *out_lo = _mm256_cvtepi64_epi32(counters);
+  *out_hi = _mm256_cvtepi64_epi32(_mm256_srli_epi64(counters, 32));
 }
 
 void blake3_hash4_avx512(const uint8_t *const *inputs, size_t blocks,
-                         const uint32_t key[8], uint64_t offset,
-                         offset_deltas_t offset_deltas, uint8_t flags,
+                         const uint32_t key[8], uint64_t counter,
+                         bool increment_counter, uint8_t flags,
                          uint8_t flags_start, uint8_t flags_end, uint8_t *out) {
   __m128i h_vecs[8] = {
       set1_128(key[0]), set1_128(key[1]), set1_128(key[2]), set1_128(key[3]),
       set1_128(key[4]), set1_128(key[5]), set1_128(key[6]), set1_128(key[7]),
   };
-  __m128i offset_low_vec, offset_high_vec;
-  load_offsets4(offset, offset_deltas, &offset_low_vec, &offset_high_vec);
+  __m128i counter_low_vec, counter_high_vec;
+  load_counters4(counter, increment_counter, &counter_low_vec,
+                 &counter_high_vec);
   uint8_t block_flags = flags | flags_start;
 
   for (size_t block = 0; block < blocks; block++) {
@@ -498,10 +503,10 @@ void blake3_hash4_avx512(const uint8_t *const *inputs, size_t blocks,
     transpose_msg_vecs4(inputs, block * BLAKE3_BLOCK_LEN, msg_vecs);
 
     __m128i v[16] = {
-        h_vecs[0],       h_vecs[1],       h_vecs[2],       h_vecs[3],
-        h_vecs[4],       h_vecs[5],       h_vecs[6],       h_vecs[7],
-        set1_128(IV[0]), set1_128(IV[1]), set1_128(IV[2]), set1_128(IV[3]),
-        offset_low_vec,  offset_high_vec, block_len_vec,   block_flags_vec,
+        h_vecs[0],       h_vecs[1],        h_vecs[2],       h_vecs[3],
+        h_vecs[4],       h_vecs[5],        h_vecs[6],       h_vecs[7],
+        set1_128(IV[0]), set1_128(IV[1]),  set1_128(IV[2]), set1_128(IV[3]),
+        counter_low_vec, counter_high_vec, block_len_vec,   block_flags_vec,
     };
     round_fn4(v, msg_vecs, 0);
     round_fn4(v, msg_vecs, 1);
@@ -714,24 +719,29 @@ INLINE void transpose_msg_vecs8(const uint8_t *const *inputs,
   transpose_vecs_256(&out[8]);
 }
 
-INLINE void load_offsets8(uint64_t offset, const uint64_t deltas[8],
-                          __m256i *out_lo, __m256i *out_hi) {
-  __m512i a = _mm512_add_epi64(_mm512_set1_epi64((int64_t)offset),
-                               _mm512_loadu_si512((const __m512i *)deltas));
-  *out_lo = _mm512_cvtepi64_epi32(a);
-  *out_hi = _mm512_cvtepi64_epi32(_mm512_srli_epi64(a, 32));
+INLINE void load_counters8(uint64_t counter, bool increment_counter,
+                           __m256i *out_lo, __m256i *out_hi) {
+  uint64_t mask = (increment_counter ? ~0 : 0);
+  __m512i mask_vec = _mm512_set1_epi64(mask);
+  __m512i deltas = _mm512_setr_epi64(0, 1, 2, 3, 4, 5, 6, 7);
+  deltas = _mm512_and_si512(mask_vec, deltas);
+  __m512i counters =
+      _mm512_add_epi64(_mm512_set1_epi64((int64_t)counter), deltas);
+  *out_lo = _mm512_cvtepi64_epi32(counters);
+  *out_hi = _mm512_cvtepi64_epi32(_mm512_srli_epi64(counters, 32));
 }
 
 void blake3_hash8_avx512(const uint8_t *const *inputs, size_t blocks,
-                         const uint32_t key[8], uint64_t offset,
-                         offset_deltas_t offset_deltas, uint8_t flags,
+                         const uint32_t key[8], uint64_t counter,
+                         bool increment_counter, uint8_t flags,
                          uint8_t flags_start, uint8_t flags_end, uint8_t *out) {
   __m256i h_vecs[8] = {
       set1_256(key[0]), set1_256(key[1]), set1_256(key[2]), set1_256(key[3]),
       set1_256(key[4]), set1_256(key[5]), set1_256(key[6]), set1_256(key[7]),
   };
-  __m256i offset_low_vec, offset_high_vec;
-  load_offsets8(offset, offset_deltas, &offset_low_vec, &offset_high_vec);
+  __m256i counter_low_vec, counter_high_vec;
+  load_counters8(counter, increment_counter, &counter_low_vec,
+                 &counter_high_vec);
   uint8_t block_flags = flags | flags_start;
 
   for (size_t block = 0; block < blocks; block++) {
@@ -744,10 +754,10 @@ void blake3_hash8_avx512(const uint8_t *const *inputs, size_t blocks,
     transpose_msg_vecs8(inputs, block * BLAKE3_BLOCK_LEN, msg_vecs);
 
     __m256i v[16] = {
-        h_vecs[0],       h_vecs[1],       h_vecs[2],       h_vecs[3],
-        h_vecs[4],       h_vecs[5],       h_vecs[6],       h_vecs[7],
-        set1_256(IV[0]), set1_256(IV[1]), set1_256(IV[2]), set1_256(IV[3]),
-        offset_low_vec,  offset_high_vec, block_len_vec,   block_flags_vec,
+        h_vecs[0],       h_vecs[1],        h_vecs[2],       h_vecs[3],
+        h_vecs[4],       h_vecs[5],        h_vecs[6],       h_vecs[7],
+        set1_256(IV[0]), set1_256(IV[1]),  set1_256(IV[2]), set1_256(IV[3]),
+        counter_low_vec, counter_high_vec, block_len_vec,   block_flags_vec,
     };
     round_fn8(v, msg_vecs, 0);
     round_fn8(v, msg_vecs, 1);
@@ -1018,12 +1028,16 @@ INLINE void transpose_msg_vecs16(const uint8_t *const *inputs,
   transpose_vecs_512(out);
 }
 
-INLINE void load_offsets16(uint64_t offset, const uint64_t deltas[16],
-                           __m512i *out_lo, __m512i *out_hi) {
-  __m512i a = _mm512_add_epi64(_mm512_set1_epi64((int64_t)offset),
-                               _mm512_loadu_si512((const __m512i *)&deltas[0]));
-  __m512i b = _mm512_add_epi64(_mm512_set1_epi64((int64_t)offset),
-                               _mm512_loadu_si512((const __m512i *)&deltas[8]));
+INLINE void load_counters16(uint64_t counter, bool increment_counter,
+                            __m512i *out_lo, __m512i *out_hi) {
+  uint64_t mask = (increment_counter ? ~0 : 0);
+  __m512i mask_vec = _mm512_set1_epi64(mask);
+  __m512i deltas_a = _mm512_setr_epi64(0, 1, 2, 3, 4, 5, 6, 7);
+  deltas_a = _mm512_and_si512(mask_vec, deltas_a);
+  __m512i deltas_b = _mm512_setr_epi64(8, 9, 10, 11, 12, 13, 14, 15);
+  deltas_b = _mm512_and_si512(mask_vec, deltas_b);
+  __m512i a = _mm512_add_epi64(_mm512_set1_epi64((int64_t)counter), deltas_a);
+  __m512i b = _mm512_add_epi64(_mm512_set1_epi64((int64_t)counter), deltas_b);
   __m512i lo_indexes = _mm512_setr_epi32(0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20,
                                          22, 24, 26, 28, 30);
   __m512i hi_indexes = _mm512_setr_epi32(1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21,
@@ -1033,16 +1047,17 @@ INLINE void load_offsets16(uint64_t offset, const uint64_t deltas[16],
 }
 
 void blake3_hash16_avx512(const uint8_t *const *inputs, size_t blocks,
-                          const uint32_t key[8], uint64_t offset,
-                          offset_deltas_t offset_deltas, uint8_t flags,
+                          const uint32_t key[8], uint64_t counter,
+                          bool increment_counter, uint8_t flags,
                           uint8_t flags_start, uint8_t flags_end,
                           uint8_t *out) {
   __m512i h_vecs[8] = {
       set1_512(key[0]), set1_512(key[1]), set1_512(key[2]), set1_512(key[3]),
       set1_512(key[4]), set1_512(key[5]), set1_512(key[6]), set1_512(key[7]),
   };
-  __m512i offset_low_vec, offset_high_vec;
-  load_offsets16(offset, offset_deltas, &offset_low_vec, &offset_high_vec);
+  __m512i counter_low_vec, counter_high_vec;
+  load_counters16(counter, increment_counter, &counter_low_vec,
+                  &counter_high_vec);
   uint8_t block_flags = flags | flags_start;
 
   for (size_t block = 0; block < blocks; block++) {
@@ -1055,10 +1070,10 @@ void blake3_hash16_avx512(const uint8_t *const *inputs, size_t blocks,
     transpose_msg_vecs16(inputs, block * BLAKE3_BLOCK_LEN, msg_vecs);
 
     __m512i v[16] = {
-        h_vecs[0],       h_vecs[1],       h_vecs[2],       h_vecs[3],
-        h_vecs[4],       h_vecs[5],       h_vecs[6],       h_vecs[7],
-        set1_512(IV[0]), set1_512(IV[1]), set1_512(IV[2]), set1_512(IV[3]),
-        offset_low_vec,  offset_high_vec, block_len_vec,   block_flags_vec,
+        h_vecs[0],       h_vecs[1],        h_vecs[2],       h_vecs[3],
+        h_vecs[4],       h_vecs[5],        h_vecs[6],       h_vecs[7],
+        set1_512(IV[0]), set1_512(IV[1]),  set1_512(IV[2]), set1_512(IV[3]),
+        counter_low_vec, counter_high_vec, block_len_vec,   block_flags_vec,
     };
     round_fn16(v, msg_vecs, 0);
     round_fn16(v, msg_vecs, 1);
@@ -1114,7 +1129,7 @@ void blake3_hash16_avx512(const uint8_t *const *inputs, size_t blocks,
  */
 
 INLINE void hash_one_avx512(const uint8_t *input, size_t blocks,
-                            const uint32_t key[8], uint64_t offset,
+                            const uint32_t key[8], uint64_t counter,
                             uint8_t flags, uint8_t flags_start,
                             uint8_t flags_end, uint8_t out[BLAKE3_OUT_LEN]) {
   uint32_t cv[8];
@@ -1124,7 +1139,7 @@ INLINE void hash_one_avx512(const uint8_t *input, size_t blocks,
     if (blocks == 1) {
       block_flags |= flags_end;
     }
-    blake3_compress_in_place_avx512(cv, input, BLAKE3_BLOCK_LEN, offset,
+    blake3_compress_in_place_avx512(cv, input, BLAKE3_BLOCK_LEN, counter,
                                     block_flags);
     input = &input[BLAKE3_BLOCK_LEN];
     blocks -= 1;
@@ -1135,39 +1150,47 @@ INLINE void hash_one_avx512(const uint8_t *input, size_t blocks,
 
 void blake3_hash_many_avx512(const uint8_t *const *inputs, size_t num_inputs,
                              size_t blocks, const uint32_t key[8],
-                             uint64_t offset, offset_deltas_t offset_deltas,
+                             uint64_t counter, bool increment_counter,
                              uint8_t flags, uint8_t flags_start,
                              uint8_t flags_end, uint8_t *out) {
   while (num_inputs >= 16) {
-    blake3_hash16_avx512(inputs, blocks, key, offset, offset_deltas, flags,
+    blake3_hash16_avx512(inputs, blocks, key, counter, increment_counter, flags,
                          flags_start, flags_end, out);
+    if (increment_counter) {
+      counter += 16;
+    }
     inputs += 16;
     num_inputs -= 16;
-    offset += offset_deltas[16];
     out = &out[16 * BLAKE3_OUT_LEN];
   }
   while (num_inputs >= 8) {
-    blake3_hash8_avx512(inputs, blocks, key, offset, offset_deltas, flags,
+    blake3_hash8_avx512(inputs, blocks, key, counter, increment_counter, flags,
                         flags_start, flags_end, out);
+    if (increment_counter) {
+      counter += 8;
+    }
     inputs += 8;
     num_inputs -= 8;
-    offset += offset_deltas[8];
     out = &out[8 * BLAKE3_OUT_LEN];
   }
   while (num_inputs >= 4) {
-    blake3_hash4_avx512(inputs, blocks, key, offset, offset_deltas, flags,
+    blake3_hash4_avx512(inputs, blocks, key, counter, increment_counter, flags,
                         flags_start, flags_end, out);
+    if (increment_counter) {
+      counter += 4;
+    }
     inputs += 4;
     num_inputs -= 4;
-    offset += offset_deltas[4];
     out = &out[4 * BLAKE3_OUT_LEN];
   }
   while (num_inputs > 0) {
-    hash_one_avx512(inputs[0], blocks, key, offset, flags, flags_start,
+    hash_one_avx512(inputs[0], blocks, key, counter, flags, flags_start,
                     flags_end, out);
+    if (increment_counter) {
+      counter += 1;
+    }
     inputs += 1;
     num_inputs -= 1;
-    offset += offset_deltas[1];
     out = &out[BLAKE3_OUT_LEN];
   }
 }

@@ -4,7 +4,8 @@ use core::arch::x86::*;
 use core::arch::x86_64::*;
 
 use crate::{
-    offset_high, offset_low, CVBytes, CVWords, OffsetDeltas, BLOCK_LEN, IV, MSG_SCHEDULE, OUT_LEN,
+    counter_high, counter_low, CVBytes, CVWords, IncrementCounter, BLOCK_LEN, IV, MSG_SCHEDULE,
+    OUT_LEN,
 };
 use arrayref::{array_mut_ref, array_ref, mut_array_refs};
 
@@ -129,15 +130,15 @@ unsafe fn compress_pre(
     cv: &CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
-    offset: u64,
+    counter: u64,
     flags: u8,
 ) -> [__m128i; 4] {
     let row1 = &mut loadu(cv.as_ptr().add(0) as *const u8);
     let row2 = &mut loadu(cv.as_ptr().add(4) as *const u8);
     let row3 = &mut set4(IV[0], IV[1], IV[2], IV[3]);
     let row4 = &mut set4(
-        offset_low(offset),
-        offset_high(offset),
+        counter_low(counter),
+        counter_high(counter),
         block_len as u32,
         flags as u32,
     );
@@ -313,10 +314,10 @@ pub unsafe fn compress_in_place(
     cv: &mut CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
-    offset: u64,
+    counter: u64,
     flags: u8,
 ) {
-    let [row1, row2, row3, row4] = compress_pre(cv, block, block_len, offset, flags);
+    let [row1, row2, row3, row4] = compress_pre(cv, block, block_len, counter, flags);
     storeu(xor(row1, row3), cv.as_mut_ptr().add(0) as *mut u8);
     storeu(xor(row2, row4), cv.as_mut_ptr().add(4) as *mut u8);
 }
@@ -326,11 +327,11 @@ pub unsafe fn compress_xof(
     cv: &CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
-    offset: u64,
+    counter: u64,
     flags: u8,
 ) -> [u8; 64] {
     let [mut row1, mut row2, mut row3, mut row4] =
-        compress_pre(cv, block, block_len, offset, flags);
+        compress_pre(cv, block, block_len, counter, flags);
     row1 = xor(row1, row3);
     row2 = xor(row2, row4);
     row3 = xor(row3, loadu(cv.as_ptr().add(0) as *const u8));
@@ -506,19 +507,20 @@ unsafe fn transpose_msg_vecs(inputs: &[*const u8; DEGREE], block_offset: usize) 
 }
 
 #[inline(always)]
-unsafe fn load_offsets(offset: u64, offset_deltas: &OffsetDeltas) -> (__m128i, __m128i) {
+unsafe fn load_counters(counter: u64, increment_counter: IncrementCounter) -> (__m128i, __m128i) {
+    let mask = if increment_counter.yes() { !0 } else { 0 };
     (
         set4(
-            offset_low(offset + offset_deltas[0]),
-            offset_low(offset + offset_deltas[1]),
-            offset_low(offset + offset_deltas[2]),
-            offset_low(offset + offset_deltas[3]),
+            counter_low(counter + (mask & 0)),
+            counter_low(counter + (mask & 1)),
+            counter_low(counter + (mask & 2)),
+            counter_low(counter + (mask & 3)),
         ),
         set4(
-            offset_high(offset + offset_deltas[0]),
-            offset_high(offset + offset_deltas[1]),
-            offset_high(offset + offset_deltas[2]),
-            offset_high(offset + offset_deltas[3]),
+            counter_high(counter + (mask & 0)),
+            counter_high(counter + (mask & 1)),
+            counter_high(counter + (mask & 2)),
+            counter_high(counter + (mask & 3)),
         ),
     )
 }
@@ -528,8 +530,8 @@ pub unsafe fn hash4(
     inputs: &[*const u8; DEGREE],
     blocks: usize,
     key: &CVWords,
-    offset: u64,
-    offset_deltas: &OffsetDeltas,
+    counter: u64,
+    increment_counter: IncrementCounter,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
@@ -545,7 +547,7 @@ pub unsafe fn hash4(
         set1(key[6]),
         set1(key[7]),
     ];
-    let (offset_low_vec, offset_high_vec) = load_offsets(offset, offset_deltas);
+    let (counter_low_vec, counter_high_vec) = load_counters(counter, increment_counter);
     let mut block_flags = flags | flags_start;
 
     for block in 0..blocks {
@@ -573,8 +575,8 @@ pub unsafe fn hash4(
             set1(IV[1]),
             set1(IV[2]),
             set1(IV[3]),
-            offset_low_vec,
-            offset_high_vec,
+            counter_low_vec,
+            counter_high_vec,
             block_len_vec,
             block_flags_vec,
         ];
@@ -616,7 +618,7 @@ pub unsafe fn hash4(
 unsafe fn hash1<A: arrayvec::Array<Item = u8>>(
     input: &A,
     key: &CVWords,
-    offset: u64,
+    counter: u64,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
@@ -634,7 +636,7 @@ unsafe fn hash1<A: arrayvec::Array<Item = u8>>(
             &mut cv,
             array_ref!(slice, 0, BLOCK_LEN),
             BLOCK_LEN as u8,
-            offset,
+            counter,
             block_flags,
         );
         block_flags = flags;
@@ -647,8 +649,8 @@ unsafe fn hash1<A: arrayvec::Array<Item = u8>>(
 pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
     mut inputs: &[&A],
     key: &CVWords,
-    mut offset: u64,
-    offset_deltas: &OffsetDeltas,
+    mut counter: u64,
+    increment_counter: IncrementCounter,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
@@ -664,28 +666,32 @@ pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
             input_ptrs,
             blocks,
             key,
-            offset,
-            offset_deltas,
+            counter,
+            increment_counter,
             flags,
             flags_start,
             flags_end,
             array_mut_ref!(out, 0, DEGREE * OUT_LEN),
         );
+        if increment_counter.yes() {
+            counter += DEGREE as u64;
+        }
         inputs = &inputs[DEGREE..];
-        offset += DEGREE as u64 * offset_deltas[1];
         out = &mut out[DEGREE * OUT_LEN..];
     }
     for (&input, output) in inputs.iter().zip(out.chunks_exact_mut(OUT_LEN)) {
         hash1(
             input,
             key,
-            offset,
+            counter,
             flags,
             flags_start,
             flags_end,
             array_mut_ref!(output, 0, OUT_LEN),
         );
-        offset += offset_deltas[1];
+        if increment_counter.yes() {
+            counter += 1;
+        }
     }
 }
 
