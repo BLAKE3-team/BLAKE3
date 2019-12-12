@@ -35,6 +35,9 @@ jobs:
     - name: test b3sum
       run: cargo test
       working-directory: ./b3sum
+    - name: test b3sum --no-default-features
+      run: cargo test --no-default-features
+      working-directory: ./b3sum
 
   cross_tests:
     name: cross ${{ matrix.arch }}

@@ -4,18 +4,28 @@ fn defined(var: &str) -> bool {
     env::var_os(var).is_some()
 }
 
-fn is_windows() -> bool {
+fn target_arch() -> String {
     let target = env::var("TARGET").unwrap();
     let target_components: Vec<&str> = target.split("-").collect();
-    let target_os = target_components[2];
-    target_os == "windows"
+    target_components[0].to_string()
+}
+
+fn target_os() -> String {
+    let target = env::var("TARGET").unwrap();
+    let target_components: Vec<&str> = target.split("-").collect();
+    target_components[2].to_string()
+}
+
+fn is_windows() -> bool {
+    target_os() == "windows"
+}
+
+fn is_x86_64() -> bool {
+    target_arch() == "x86_64"
 }
 
 fn is_armv7() -> bool {
-    let target = env::var("TARGET").unwrap();
-    let target_components: Vec<&str> = target.split("-").collect();
-    let target_arch = target_components[0];
-    target_arch == "armv7"
+    target_arch() == "armv7"
 }
 
 fn new_build() -> cc::Build {
@@ -27,7 +37,12 @@ fn new_build() -> cc::Build {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    if defined("CARGO_FEATURE_C_AVX512") {
+    // "c_avx512' is a no-op for non-x86_64 targets. It also participates in
+    // dynamic CPU feature detection, so it's generally safe to enable.
+    // However, it probably won't build in some older environments without
+    // AVX-512 support in the C compiler, and it's disabled by default for that
+    // reason.
+    if defined("CARGO_FEATURE_C_AVX512") && is_x86_64() {
         let mut build = new_build();
         build.file("src/c/blake3_avx512.c");
         if is_windows() {

@@ -6,14 +6,13 @@ edition = "2018"
 
 [features]
 default = ["std"]
-# Like SSE4.1 and AVX2, the AVX-512 implementation participates in dynamic
-# feature detection. A binary with "c_avx512" on is still cross-platform.
+# Like SSE4.1 and AVX2, the AVX-512 implementation participates in dynamic CPU
+# feature detection. A binary with "c_avx512" on is still cross-platform. This
+# feature has no effect on non-x86.
 c_avx512 = []
 # The NEON implementation does not participate in dynamic feature detection,
 # which is currently x86-only. If "c_neon" is on, NEON support is assumed. Note
-# that AArch64 always supports NEON, but support on ARMv7 varies. (See also
-# comments about ARMv7 in build.rs. You'll probably need to uncomment some
-# flags there to convince the C compiler to turn on NEON support.)
+# that AArch64 always supports NEON, but support on ARMv7 varies.
 c_neon = []
 std = []
 
@@ -21,6 +20,13 @@ std = []
 arrayref = "0.3.5"
 arrayvec = { version = "0.5.1", default-features = false, features = ["array-sizes-33-128"] }
 constant_time_eq = "0.1.4"
+# A performance note for the "rayon" feature: Multi-threading can have
+# significant overhead for small inputs, particularly on x86 where individual
+# cores are very fast. On the other hand, on slower platforms like ARM,
+# multi-threading can be beneficial for all inputs. There's no one input size
+# threshold that would work well everywhere, and this crate doesn't try to be
+# clever. If you're going to enable the "rayon" feature, you should benchmark
+# it for your specific use case.
 rayon = { version = "1.2.1", optional = true }
 cfg-if = "0.1.10"
 

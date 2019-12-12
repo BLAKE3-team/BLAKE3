@@ -8,6 +8,7 @@ mod test;
 #[doc(hidden)]
 pub mod avx2;
 #[cfg(feature = "c_avx512")]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[doc(hidden)]
 pub mod c_avx512;
 #[cfg(feature = "c_neon")]

@@ -2,6 +2,7 @@ use crate::{portable, CVWords, OffsetDeltas, BLOCK_LEN};
 use arrayref::{array_mut_ref, array_ref};
 
 #[cfg(feature = "c_avx512")]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use crate::c_avx512;
 #[cfg(feature = "c_neon")]
 use crate::c_neon;
@@ -9,10 +10,14 @@ use crate::c_neon;
 use crate::{avx2, sse41};
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "c_avx512")] {
-        pub const MAX_SIMD_DEGREE: usize = 16;
-    } else if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
-        pub const MAX_SIMD_DEGREE: usize = 8;
+    if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "c_avx512")] {
+                pub const MAX_SIMD_DEGREE: usize = 16;
+            } else {
+                pub const MAX_SIMD_DEGREE: usize = 8;
+            }
+        }
     } else if #[cfg(feature = "c_neon")] {
         pub const MAX_SIMD_DEGREE: usize = 4;
     } else {
@@ -25,10 +30,14 @@ cfg_if::cfg_if! {
 // allowed to use cmp::max, so we have to hardcode this additional constant
 // value. Get rid of this once cmp::max is a const fn.
 cfg_if::cfg_if! {
-    if #[cfg(feature = "c_avx512")] {
-        pub const MAX_SIMD_DEGREE_OR_2: usize = 16;
-    } else if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
-        pub const MAX_SIMD_DEGREE_OR_2: usize = 8;
+    if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "c_avx512")] {
+                pub const MAX_SIMD_DEGREE_OR_2: usize = 16;
+            } else {
+                pub const MAX_SIMD_DEGREE_OR_2: usize = 8;
+            }
+        }
     } else if #[cfg(feature = "c_neon")] {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 4;
     } else {
@@ -44,6 +53,7 @@ pub enum Platform {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     AVX2,
     #[cfg(feature = "c_avx512")]
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     AVX512,
     #[cfg(feature = "c_neon")]
     NEON,
@@ -84,6 +94,7 @@ impl Platform {
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX2 => 8,
             #[cfg(feature = "c_avx512")]
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => 16,
             #[cfg(feature = "c_neon")]
             Platform::NEON => 4,
@@ -109,6 +120,7 @@ impl Platform {
             },
             // Safe because detect() checked for platform support.
             #[cfg(feature = "c_avx512")]
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => unsafe {
                 c_avx512::compress_in_place(cv, block, block_len, offset, flags)
             },
@@ -135,6 +147,7 @@ impl Platform {
             },
             // Safe because detect() checked for platform support.
             #[cfg(feature = "c_avx512")]
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => unsafe {
                 c_avx512::compress_xof(cv, block, block_len, offset, flags)
             },
@@ -206,6 +219,7 @@ impl Platform {
             },
             // Safe because detect() checked for platform support.
             #[cfg(feature = "c_avx512")]
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => unsafe {
                 c_avx512::hash_many(
                     inputs,

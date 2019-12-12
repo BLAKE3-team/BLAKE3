@@ -61,6 +61,7 @@ fn hash_reader(
     Ok(hasher.finalize_xof())
 }
 
+#[cfg(feature = "memmap")]
 fn maybe_memmap_file(file: &File) -> Result<Option<memmap::Mmap>> {
     let metadata = file.metadata()?;
     let file_size = metadata.len();
@@ -93,11 +94,13 @@ fn maybe_hash_memmap(
     base_hasher: &blake3::Hasher,
     file: &File,
 ) -> Result<Option<blake3::OutputReader>> {
-    if let Some(map) = maybe_memmap_file(file)? {
-        Ok(Some(base_hasher.clone().update(&map).finalize_xof()))
-    } else {
-        Ok(None)
+    #[cfg(feature = "memmap")]
+    {
+        if let Some(map) = maybe_memmap_file(file)? {
+            return Ok(Some(base_hasher.clone().update(&map).finalize_xof()));
+        }
     }
+    Ok(None)
 }
 
 fn write_output(mut output: blake3::OutputReader, mut len: u64) -> Result<()> {

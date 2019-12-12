@@ -6,7 +6,9 @@ edition = "2018"
 readme = "README.md"
 
 [features]
-default = ["memmap", "rayon"]
+default = ["rayon", "c_avx512"]
+c_avx512 = ["blake3/c_avx512"]
+c_neon = ["blake3/c_neon"]
 rayon = ["blake3/rayon", "memmap"]
 
 [dependencies]
