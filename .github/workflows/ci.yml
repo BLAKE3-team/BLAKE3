@@ -24,6 +24,8 @@ jobs:
     # More features tests. Note that "c_avx512" participates in dynamic feature
     # detection, so it'll be built, but it probably won't run.
     - run: cargo test --features=c_avx512,rayon
+    # Test release mode. This does more iteratations in test_fuzz_hasher.
+    - run: cargo test --release
     # Test benchmarks. Nightly only.
     - run: cargo test --benches
       if: matrix.rust_version == 'nightly'
