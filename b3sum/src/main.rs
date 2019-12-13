@@ -96,13 +96,13 @@ fn maybe_memmap_file(file: &File) -> Result<Option<memmap::Mmap>> {
 // The fast path: Try to hash a file by mem-mapping it first. This is faster if
 // it works, but it's not always possible.
 fn maybe_hash_memmap(
-    base_hasher: &blake3::Hasher,
-    file: &File,
+    _base_hasher: &blake3::Hasher,
+    _file: &File,
 ) -> Result<Option<blake3::OutputReader>> {
     #[cfg(feature = "memmap")]
     {
-        if let Some(map) = maybe_memmap_file(file)? {
-            return Ok(Some(base_hasher.clone().update(&map).finalize_xof()));
+        if let Some(map) = maybe_memmap_file(_file)? {
+            return Ok(Some(_base_hasher.clone().update(&map).finalize_xof()));
         }
     }
     Ok(None)
