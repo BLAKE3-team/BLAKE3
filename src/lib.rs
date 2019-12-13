@@ -20,6 +20,7 @@
 //! assert_eq!(hash1, hash2);
 //!
 //! // Extended output.
+//! # #[cfg(feature = "std")] {
 //! let mut output = Vec::new();
 //! blake3::Hasher::new()
 //!     .update(b"foobarbaz")
@@ -28,6 +29,7 @@
 //!     .read_to_end(&mut output)?;
 //! assert_eq!(output.len(), 1000);
 //! assert_eq!(&output[..32], hash1.as_bytes());
+//! # }
 //! # Ok(())
 //! # }
 //! ```
