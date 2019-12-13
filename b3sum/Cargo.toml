@@ -13,7 +13,6 @@ rayon = ["blake3/rayon", "memmap"]
 
 [dependencies]
 anyhow = "1.0.25"
-arrayref = "0.3.5"
 blake3 = { version = "0.1", path = ".." }
 clap = { version = "2.33.0", default-features = false }
 hex = "0.4.0"

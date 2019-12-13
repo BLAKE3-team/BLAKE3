@@ -1,51 +1,47 @@
 use anyhow::{bail, Context, Result};
-use arrayref::array_ref;
 use clap::{App, Arg};
 use std::cmp;
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::prelude::*;
+
+const FILE_ARG: &str = "file";
+const LENGTH_ARG: &str = "length";
+const KEYED_ARG: &str = "keyed";
+const DERIVE_KEY_ARG: &str = "derive-key";
+const NO_NAMES_ARG: &str = "no-names";
 
 fn clap_parse_argv() -> clap::ArgMatches<'static> {
     App::new("b3sum")
         .version(env!("CARGO_PKG_VERSION"))
-        .arg(Arg::with_name("file").multiple(true))
+        .arg(Arg::with_name(FILE_ARG).multiple(true))
         .arg(
-            Arg::with_name("length")
-                .long("length")
+            Arg::with_name(LENGTH_ARG)
+                .long(LENGTH_ARG)
                 .short("l")
                 .takes_value(true)
                 .value_name("LEN")
                 .help("The number of output bytes, prior to hex."),
         )
         .arg(
-            Arg::with_name("key")
-                .long("key")
-                .takes_value(true)
-                .value_name("KEY")
-                .help("The keyed hashing mode."),
+            Arg::with_name(KEYED_ARG)
+                .long(KEYED_ARG)
+                .requires(FILE_ARG)
+                .help("Use the keyed mode, with the 32-byte key read from stdin."),
         )
         .arg(
-            Arg::with_name("derive-key")
-                .long("derive-key")
-                .takes_value(true)
-                .value_name("KEY")
-                .conflicts_with("key")
-                .help("The key derivation mode."),
+            Arg::with_name(DERIVE_KEY_ARG)
+                .long(DERIVE_KEY_ARG)
+                .conflicts_with(KEYED_ARG)
+                .requires(FILE_ARG)
+                .help("Use the KDF mode, with the 32-byte key read from stdin."),
         )
         .arg(
-            Arg::with_name("no-names")
-                .long("no-names")
+            Arg::with_name(NO_NAMES_ARG)
+                .long(NO_NAMES_ARG)
                 .help("Omit filenames in the output."),
         )
         .get_matches()
-}
-
-fn parse_key(key_str: &str) -> Result<[u8; blake3::KEY_LEN]> {
-    if key_str.len() != 2 * blake3::KEY_LEN {
-        bail!("Key must be 64 hex chars, got {}.", key_str.len());
-    }
-    let bytes = hex::decode(key_str).context("Failed to parse key bytes.")?;
-    Ok(*array_ref!(bytes, 0, blake3::KEY_LEN))
 }
 
 // The slow path, for inputs that we can't memmap.
@@ -135,23 +131,42 @@ fn hash_file(
     }
 }
 
+fn read_key_from_stdin() -> Result<[u8; blake3::KEY_LEN]> {
+    let mut bytes = Vec::with_capacity(blake3::KEY_LEN + 1);
+    let n = std::io::stdin()
+        .lock()
+        .take(blake3::KEY_LEN as u64 + 1)
+        .read_to_end(&mut bytes)?;
+    if n < 32 {
+        bail!(
+            "expected {} key bytes from stdin, found {}",
+            blake3::KEY_LEN,
+            n,
+        )
+    } else if n > 32 {
+        bail!("read more than {} key bytes from stdin", blake3::KEY_LEN)
+    } else {
+        Ok(bytes[..blake3::KEY_LEN].try_into().unwrap())
+    }
+}
+
 fn main() -> Result<()> {
-    let matches = clap_parse_argv();
-    let len: u64 = if let Some(len) = matches.value_of("length") {
+    let args = clap_parse_argv();
+    let len: u64 = if let Some(len) = args.value_of(LENGTH_ARG) {
         len.parse().context("Failed to parse length.")?
     } else {
         blake3::OUT_LEN as u64
     };
-    let base_hasher = if let Some(key_str) = matches.value_of("key") {
-        blake3::Hasher::new_keyed(&parse_key(key_str)?)
-    } else if let Some(key_str) = matches.value_of("derive-key") {
-        blake3::Hasher::new_derive_key(&parse_key(key_str)?)
+    let base_hasher = if args.is_present(KEYED_ARG) {
+        blake3::Hasher::new_keyed(&read_key_from_stdin()?)
+    } else if args.is_present(DERIVE_KEY_ARG) {
+        blake3::Hasher::new_derive_key(&read_key_from_stdin()?)
     } else {
         blake3::Hasher::new()
     };
-    let print_names = !matches.is_present("no-names");
+    let print_names = !args.is_present(NO_NAMES_ARG);
     let mut did_error = false;
-    if let Some(files) = matches.values_of_os("file") {
+    if let Some(files) = args.values_of_os(FILE_ARG) {
         for filepath in files {
             let filepath_str = filepath.to_string_lossy();
             match hash_file(&base_hasher, filepath) {
