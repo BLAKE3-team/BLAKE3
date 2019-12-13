@@ -21,25 +21,25 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
                 .short("l")
                 .takes_value(true)
                 .value_name("LEN")
-                .help("The number of output bytes, prior to hex."),
+                .help("The number of output bytes, prior to hex encoding"),
         )
         .arg(
             Arg::with_name(KEYED_ARG)
                 .long(KEYED_ARG)
                 .requires(FILE_ARG)
-                .help("Use the keyed mode, with the 32-byte key read from stdin."),
+                .help("Uses the keyed mode, with the 32-byte key read from stdin"),
         )
         .arg(
             Arg::with_name(DERIVE_KEY_ARG)
                 .long(DERIVE_KEY_ARG)
                 .conflicts_with(KEYED_ARG)
                 .requires(FILE_ARG)
-                .help("Use the KDF mode, with the 32-byte key read from stdin."),
+                .help("Uses the KDF mode, with the 32-byte key read from stdin"),
         )
         .arg(
             Arg::with_name(NO_NAMES_ARG)
                 .long(NO_NAMES_ARG)
-                .help("Omit filenames in the output."),
+                .help("Omits filenames in the output"),
         )
         .get_matches()
 }

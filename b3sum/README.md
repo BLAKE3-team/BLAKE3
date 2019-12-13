@@ -7,14 +7,14 @@ USAGE:
     b3sum [FLAGS] [OPTIONS] [file]...
 
 FLAGS:
-    -h, --help        Prints help information
-        --no-names    Omit filenames in the output.
-    -V, --version     Prints version information
+        --derive-key    Uses the KDF mode, with the 32-byte key read from stdin
+    -h, --help          Prints help information
+        --keyed         Uses the keyed mode, with the 32-byte key read from stdin
+        --no-names      Omits filenames in the output
+    -V, --version       Prints version information
 
 OPTIONS:
-        --derive-key <KEY>    The key derivation mode.
-        --key <KEY>           The keyed hashing mode.
-    -l, --length <LEN>        The number of output bytes, prior to hex.
+    -l, --length <LEN>    The number of output bytes, prior to hex encoding
 
 ARGS:
     <file>...
