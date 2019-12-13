@@ -198,7 +198,7 @@ fn test_reference_impl_size() {
     // that happens, we can either disable this test, or test for multiple
     // expected values. For now, the purpose of this test is to make sure we
     // notice if that happens.
-    assert_eq!(1848, core::mem::size_of::<reference_impl::Hasher>());
+    assert_eq!(1880, core::mem::size_of::<reference_impl::Hasher>());
 }
 
 #[test]

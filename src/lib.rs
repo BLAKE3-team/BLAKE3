@@ -639,8 +639,8 @@ fn parent_node_output(
 pub struct Hasher {
     key: CVWords,
     chunk_state: ChunkState,
-    // 2^53 * 2048 = 2^64
-    cv_stack: ArrayVec<[CVBytes; 53]>,
+    // 2^54 * CHUNK_LEN = 2^64
+    cv_stack: ArrayVec<[CVBytes; 54]>,
 }
 
 impl Hasher {

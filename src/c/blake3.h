@@ -6,7 +6,7 @@
 #define BLAKE3_OUT_LEN 32
 #define BLAKE3_BLOCK_LEN 64
 #define BLAKE3_CHUNK_LEN 1024
-#define BLAKE3_MAX_DEPTH 53
+#define BLAKE3_MAX_DEPTH 54
 #define BLAKE3_MAX_SIMD_DEGREE 16
 
 typedef struct {

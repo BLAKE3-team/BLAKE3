@@ -235,8 +235,8 @@ fn parent_output(
 pub struct Hasher {
     chunk_state: ChunkState,
     key: [u32; 8],
-    cv_stack: [[u32; 8]; 53], // Space for 53 subtree chaining values:
-    cv_stack_len: u8,         // 2^53 * CHUNK_LEN = 2^64
+    cv_stack: [[u32; 8]; 54], // Space for 54 subtree chaining values:
+    cv_stack_len: u8,         // 2^54 * CHUNK_LEN = 2^64
 }
 
 impl Hasher {
@@ -244,7 +244,7 @@ impl Hasher {
         Self {
             chunk_state: ChunkState::new(key, 0, flags),
             key: *key,
-            cv_stack: [[0; 8]; 53],
+            cv_stack: [[0; 8]; 54],
             cv_stack_len: 0,
         }
     }
