@@ -1,3 +1,37 @@
+//! The official Rust implementation of the [BLAKE3](https://blake3.io)
+//! cryptographic hash function.
+//!
+//! # Examples
+//!
+//! ```
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! use blake3::{hash, Hasher};
+//! use std::io::prelude::*;
+//!
+//! // Hash an input all at once.
+//! let hash1 = blake3::hash(b"foobarbaz");
+//!
+//! // Hash an input incrementally.
+//! let mut hasher = blake3::Hasher::new();
+//! hasher.update(b"foo");
+//! hasher.update(b"bar");
+//! hasher.update(b"baz");
+//! let hash2 = hasher.finalize();
+//! assert_eq!(hash1, hash2);
+//!
+//! // Extended output.
+//! let mut output = Vec::new();
+//! blake3::Hasher::new()
+//!     .update(b"foobarbaz")
+//!     .finalize_xof()
+//!     .take(1000)
+//!     .read_to_end(&mut output)?;
+//! assert_eq!(output.len(), 1000);
+//! assert_eq!(&output[..32], hash1.as_bytes());
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
@@ -28,7 +62,7 @@ use core::cmp;
 use core::fmt;
 use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
 
-/// The number of bytes in the default output, 32.
+/// The number of bytes in a [`Hash`](struct.Hash.html), 32.
 pub const OUT_LEN: usize = 32;
 
 /// The number of bytes in a key, 32.
@@ -82,23 +116,37 @@ fn counter_high(counter: u64) -> u32 {
     (counter >> 32) as u32
 }
 
-/// A BLAKE3 output of the default size, 32 bytes, which implements
-/// constant-time equality.
+/// An output of the default size, 32 bytes, which provides constant-time
+/// equality checking.
+///
+/// `Hash` implements [`From`] and [`Into`] for `[u8; 32]`, and it provides an
+/// explicit [`as_bytes`] method returning `&[u8; 32]`. However, byte arrays
+/// and slices don't provide constant-time equality checking, which is often a
+/// security requirement in software that handles private data. `Hash` doesn't
+/// implement [`Deref`] or [`AsRef`], to avoid situations where a type
+/// conversion happens implicitly and the constant-time property is
+/// accidentally lost.
+///
+/// [`From`]: https://doc.rust-lang.org/std/convert/trait.From.html
+/// [`Into`]: https://doc.rust-lang.org/std/convert/trait.Into.html
+/// [`as_bytes`]: #method.as_bytes
+/// [`Deref`]: https://doc.rust-lang.org/stable/std/ops/trait.Deref.html
+/// [`AsRef`]: https://doc.rust-lang.org/std/convert/trait.AsRef.html
 #[derive(Clone, Copy, Hash)]
 pub struct Hash([u8; OUT_LEN]);
 
 impl Hash {
     /// The bytes of the `Hash`. Note that byte arrays don't provide
-    /// constant-time equality, so if  you need to compare hashes, prefer the
-    /// `Hash` type.
+    /// constant-time equality checking, so if  you need to compare hashes,
+    /// prefer the `Hash` type.
     pub fn as_bytes(&self) -> &[u8; OUT_LEN] {
         &self.0
     }
 
     /// The hexadecimal encoding of the `Hash`. The returned [`ArrayString`] is
-    /// a fixed size and does not allocate memory on the heap. Note that
-    /// [`ArrayString`] doesn't provide constant-time equality, so if you need
-    /// to compare hashes, prefer the `Hash` type.
+    /// a fixed size and doesn't allocate memory on the heap. Note that
+    /// [`ArrayString`] doesn't provide constant-time equality checking, so if
+    /// you need to compare hashes, prefer the `Hash` type.
     ///
     /// [`ArrayString`]: https://docs.rs/arrayvec/0.5.1/arrayvec/struct.ArrayString.html
     pub fn to_hex(&self) -> ArrayString<[u8; 2 * OUT_LEN]> {
@@ -595,17 +643,45 @@ fn hash_all_at_once(input: &[u8], key: &CVWords, flags: u8) -> Output {
 }
 
 /// The default hash function.
+///
+/// For an incremental version that accepts multiple writes, see [`Hasher`].
+///
+/// [`Hasher`]: struct.Hasher.html
 pub fn hash(input: &[u8]) -> Hash {
     hash_all_at_once(input, IV, 0).root_hash()
 }
 
 /// The keyed hash function.
+///
+/// This is suitable for use as a message authentication code, like HMAC. In
+/// that use case, the constant-time equality checking provided by
+/// [`Hash`](struct.Hash.html) is almost always a security requirement, and
+/// callers need to be careful not to compare MACs as raw bytes.
 pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
     let key_words = platform::words_from_le_bytes_32(key);
     hash_all_at_once(input, &key_words, KEYED_HASH).root_hash()
 }
 
 /// The key derivation function.
+///
+/// Given a 32-byte (256-bit) cryptographic key and a context string, this
+/// function returns a 32-byte derived subkey. Key derivation is important when
+/// you want to use the same key in multiple algorithms or use cases. Deriving
+/// a separate subkey for each use case protects you from bad interactions
+/// between algorithms. (For example, one algorithm might publish some value
+/// that another algorithm considers secret.) Derived keys also mitigate the
+/// damage from one part of your application accidentally leaking its key.
+///
+/// The context string should be globally unique, application-specific, and
+/// hardcoded. A good default format for such strings is `"[application]
+/// [commit timestamp] [purpose]"`, e.g., `"example.com 2019-12-25 16:18:03
+/// session tokens v1"`.
+///
+/// If your input key is some size other than 32 bytes, you can convert it to
+/// 32 bytes using [`hash`]. This is similar to the "extract" stage in the
+/// "extract-then-expand" paradigm of HKDF.
+///
+/// [`hash`]: fn.hash.html
 pub fn derive_key(key: &[u8; KEY_LEN], context: &[u8]) -> [u8; OUT_LEN] {
     let key_words = platform::words_from_le_bytes_32(key);
     hash_all_at_once(context, &key_words, DERIVE_KEY)
@@ -633,8 +709,7 @@ fn parent_node_output(
     }
 }
 
-/// An incremental hash state that can accept any number of writes, with
-/// support for extendable output.
+/// An incremental hash state that can accept any number of writes.
 #[derive(Clone)]
 pub struct Hasher {
     key: CVWords,
@@ -657,17 +732,21 @@ impl Hasher {
         Self::new_internal(IV, 0)
     }
 
-    /// Construct a new `Hasher` for the keyed hash function.
+    /// Construct a new `Hasher` for the keyed hash function. See
+    /// [`keyed_hash`].
+    ///
+    /// [`keyed_hash`]: fn.keyed_hash.html
     pub fn new_keyed(key: &[u8; KEY_LEN]) -> Self {
         let key_words = platform::words_from_le_bytes_32(key);
         Self::new_internal(&key_words, KEYED_HASH)
     }
 
-    /// Construct a new `Hasher` for the key derivation function.
+    /// Construct a new `Hasher` for the key derivation function. See
+    /// [`derive_key`].
     ///
-    /// Note that the input in this case is intended to be an
-    /// application-specific context string. Most callers should hardcode such
-    /// strings and prefer the [`derive_key`] function.
+    /// Note that the input to [`derive_key`] should be a hardcoded context
+    /// string. Most callers that don't need extended output should prefer the
+    /// standalone function for that reason.
     ///
     /// [`derive_key`]: fn.derive_key.html
     pub fn new_derive_key(key: &[u8; KEY_LEN]) -> Self {
@@ -724,6 +803,15 @@ impl Hasher {
 
     /// Add input bytes to the hash state. You can call this any number of
     /// times.
+    ///
+    /// Note that the degree of SIMD and multi-threading parallelism that
+    /// `Hasher` can use is limited by the size of this input buffer. The 8 KiB
+    /// buffer currently used by [`std::io::copy`] is enough to leverage AVX2,
+    /// for example, but not enough to leverage AVX-512. If multi-threading is
+    /// enabled (the `rayon` feature), the optimal input buffer size will vary
+    /// considerably across different CPUs, and it may be several mebibytes.
+    ///
+    /// [`std::io::copy`]: https://doc.rust-lang.org/std/io/fn.copy.html
     pub fn update(&mut self, mut input: &[u8]) -> &mut Self {
         // If we have some partial chunk bytes in the internal chunk_state, we
         // need to finish that chunk first.
@@ -895,7 +983,8 @@ impl Hasher {
         self.final_output().root_hash()
     }
 
-    /// Finalize the hash state and return an incremental [`OutputReader`].
+    /// Finalize the hash state and return an [`OutputReader`], which can
+    /// supply any number of output bytes.
     ///
     /// This method is idempotent. Calling it twice will give the same result.
     /// You can also add more input and finalize again.
@@ -933,10 +1022,8 @@ impl std::io::Write for Hasher {
     }
 }
 
-/// An incremental reader for BLAKE3 output, returned by
-/// [`Hasher::finalize_xof`].
-///
-/// [`Hasher::finalize_xof`]: struct.Hasher.html#method.finalize_xof
+/// An incremental reader for extended output, returned by
+/// [`Hasher::finalize_xof`](struct.Hasher.html#method.finalize_xof).
 #[derive(Clone)]
 pub struct OutputReader {
     inner: Output,
@@ -945,16 +1032,20 @@ pub struct OutputReader {
 
 impl OutputReader {
     /// Fill a buffer with output bytes and advance the position of the
-    /// `OutputReader`.
+    /// `OutputReader`. This is equivalent to [`Read::read`], except that it
+    /// doesn't return a `Result`. Both methods always fill the entire buffer.
     ///
-    /// Note that `OutputReader` does not buffer output bytes internally, so
+    /// Note that `OutputReader` doesn't buffer output bytes internally, so
     /// calling `fill` repeatedly with a short-length or odd-length slice will
-    /// perform the same compression multiple times. A length that's a multiple
-    /// of 64 is more efficient.
+    /// end up performing the same compression multiple times. If you're
+    /// reading output in a loop, prefer a slice length that's a multiple of
+    /// 64.
     ///
     /// The maximum output size of BLAKE3 is 2<sup>64</sup>-1 bytes. If you try
     /// to extract more than that, for example by seeking near the end and
     /// reading further, the behavior is unspecified.
+    ///
+    /// [`Read::read`]: #method.read
     pub fn fill(&mut self, mut buf: &mut [u8]) {
         while !buf.is_empty() {
             let block: [u8; BLOCK_LEN] = self.inner.root_output_block();
@@ -970,10 +1061,22 @@ impl OutputReader {
         }
     }
 
+    /// Return the current read position in the output stream. The position of
+    /// a new `OutputReader` starts at 0, and each call to [`fill`] or
+    /// [`Read::read`] moves the position forward by the number of bytes read.
+    ///
+    /// [`fill`]: #method.fill
+    /// [`Read::read`]: #method.read
     pub fn position(&self) -> u64 {
         self.inner.counter * BLOCK_LEN as u64 + self.position_within_block as u64
     }
 
+    /// Seek to a new read position in the output stream. This is equivalent to
+    /// calling [`Seek::seek`] with [`SeekFrom::Start`], except that it doesn't
+    /// return a `Result`.
+    ///
+    /// [`Seek::seek`]: #method.seek
+    /// [`SeekFrom::Start`]: https://doc.rust-lang.org/std/io/enum.SeekFrom.html
     pub fn set_position(&mut self, position: u64) {
         self.position_within_block = (position % BLOCK_LEN as u64) as u8;
         self.inner.counter = position / BLOCK_LEN as u64;
