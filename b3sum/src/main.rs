@@ -21,6 +21,7 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
                 .short("l")
                 .takes_value(true)
                 .value_name("LEN")
+                .default_value("32")
                 .help("The number of output bytes, prior to hex encoding"),
         )
         .arg(
@@ -152,11 +153,11 @@ fn read_key_from_stdin() -> Result<[u8; blake3::KEY_LEN]> {
 
 fn main() -> Result<()> {
     let args = clap_parse_argv();
-    let len: u64 = if let Some(len) = args.value_of(LENGTH_ARG) {
-        len.parse().context("Failed to parse length.")?
-    } else {
-        blake3::OUT_LEN as u64
-    };
+    let len: u64 = args
+        .value_of(LENGTH_ARG)
+        .unwrap()
+        .parse()
+        .context("Failed to parse length.")?;
     let base_hasher = if args.is_present(KEYED_ARG) {
         blake3::Hasher::new_keyed(&read_key_from_stdin()?)
     } else if args.is_present(DERIVE_KEY_ARG) {

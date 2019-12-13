@@ -14,7 +14,7 @@ FLAGS:
     -V, --version       Prints version information
 
 OPTIONS:
-    -l, --length <LEN>    The number of output bytes, prior to hex encoding
+    -l, --length <LEN>    The number of output bytes, prior to hex encoding [default: 32]
 
 ARGS:
     <file>...
