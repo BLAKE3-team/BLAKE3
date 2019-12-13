@@ -233,6 +233,11 @@ fn bench_atonce_0001_chunk(b: &mut Bencher) {
 }
 
 #[bench]
+fn bench_atonce_0002_kib(b: &mut Bencher) {
+    bench_atonce(b, 2 * KIB);
+}
+
+#[bench]
 fn bench_atonce_0004_kib(b: &mut Bencher) {
     bench_atonce(b, 4 * KIB);
 }
@@ -290,6 +295,11 @@ fn bench_incremental_0001_block(b: &mut Bencher) {
 #[bench]
 fn bench_incremental_0001_chunk(b: &mut Bencher) {
     bench_incremental(b, CHUNK_LEN);
+}
+
+#[bench]
+fn bench_incremental_0002_kib(b: &mut Bencher) {
+    bench_incremental(b, 2 * KIB);
 }
 
 #[bench]
@@ -356,6 +366,11 @@ fn bench_reference_0001_block(b: &mut Bencher) {
 #[bench]
 fn bench_reference_0001_chunk(b: &mut Bencher) {
     bench_reference(b, CHUNK_LEN);
+}
+
+#[bench]
+fn bench_reference_0002_kib(b: &mut Bencher) {
+    bench_reference(b, 2 * KIB);
 }
 
 #[bench]
