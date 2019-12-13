@@ -32,6 +32,11 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
                 .conflicts_with("key")
                 .help("The key derivation mode."),
         )
+        .arg(
+            Arg::with_name("no-names")
+                .long("no-names")
+                .help("Omit filenames in the output."),
+        )
         .get_matches()
 }
 
@@ -144,9 +149,9 @@ fn main() -> Result<()> {
     } else {
         blake3::Hasher::new()
     };
+    let print_names = !matches.is_present("no-names");
     let mut did_error = false;
     if let Some(files) = matches.values_of_os("file") {
-        let print_names = files.len() > 1;
         for filepath in files {
             let filepath_str = filepath.to_string_lossy();
             match hash_file(&base_hasher, filepath) {
