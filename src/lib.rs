@@ -19,14 +19,11 @@
 //! let hash2 = hasher.finalize();
 //! assert_eq!(hash1, hash2);
 //!
-//! // Extended output.
+//! // Extended output. OutputReader implements std::io::Read.
 //! # #[cfg(feature = "std")] {
 //! let mut output = Vec::new();
-//! blake3::Hasher::new()
-//!     .update(b"foobarbaz")
-//!     .finalize_xof()
-//!     .take(1000)
-//!     .read_to_end(&mut output)?;
+//! let mut output_reader = hasher.finalize_xof();
+//! output_reader.take(1000).read_to_end(&mut output)?;
 //! assert_eq!(output.len(), 1000);
 //! assert_eq!(&output[..32], hash1.as_bytes());
 //! # }
