@@ -114,16 +114,13 @@ impl Output {
         first_8_words(compress(
             &self.input_chaining_value,
             &self.block_words,
-            self.counter, // the input chunk counter, or 0 for parent nodes
+            self.counter,
             self.block_len,
             self.flags,
         ))
     }
 
     fn root_output_bytes(&self, out_slice: &mut [u8]) {
-        // Root output comes from either the first chunk, or from a parent
-        // node, so the counter value when we get here is always 0.
-        debug_assert_eq!(self.counter, 0);
         let mut output_block_counter = 0;
         for out_block in out_slice.chunks_mut(2 * OUT_LEN) {
             let words = compress(
@@ -177,6 +174,8 @@ impl ChunkState {
 
     fn update(&mut self, mut input: &[u8]) {
         while !input.is_empty() {
+            // If the block buffer is full, compress it and clear it. More
+            // input is coming, so this compression is not CHUNK_END.
             if self.block_len as usize == BLOCK_LEN {
                 let mut block_words = [0; 16];
                 words_from_litte_endian_bytes(&self.block, &mut block_words);
@@ -192,6 +191,7 @@ impl ChunkState {
                 self.block_len = 0;
             }
 
+            // Copy input bytes into the block buffer.
             let want = BLOCK_LEN - self.block_len as usize;
             let take = min(want, input.len());
             self.block[self.block_len as usize..][..take].copy_from_slice(&input[..take]);
@@ -296,6 +296,8 @@ impl Hasher {
     /// Add input to the hash state. This can be called any number of times.
     pub fn update(&mut self, mut input: &[u8]) {
         while !input.is_empty() {
+            // If the current chunk is complete, finalize it and reset the
+            // chunk state. More input is coming, so this chunk is not ROOT.
             if self.chunk_state.len() == CHUNK_LEN {
                 let chunk_cv = self.chunk_state.output().chaining_value();
                 let total_chunks = self.chunk_state.chunk_counter + 1;
@@ -303,6 +305,7 @@ impl Hasher {
                 self.chunk_state = ChunkState::new(&self.key, total_chunks, self.chunk_state.flags);
             }
 
+            // Compress input bytes into the current chunk state.
             let want = CHUNK_LEN - self.chunk_state.len();
             let take = min(want, input.len());
             self.chunk_state.update(&input[..take]);
