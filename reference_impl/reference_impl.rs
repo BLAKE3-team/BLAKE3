@@ -283,12 +283,13 @@ impl Hasher {
         // right edge of the growing tree. For each completed subtree, pop its
         // left child CV off the stack and compress a new parent CV. After as
         // many parent compressions as possible, push the new CV onto the
-        // stack. The final length of the stack will be the count of 1 bits in
-        // the total number of chunks so far.
-        let final_stack_len = total_chunks.count_ones() as u8;
-        while self.cv_stack_len >= final_stack_len {
+        // stack. The number of completed subtrees is the same as the number of
+        // trailing 0 bits in the total number of chunks so far.
+        let mut trailing_bit_mask = 1;
+        while total_chunks & trailing_bit_mask == 0 {
             cv = parent_output(&self.pop_stack(), &cv, &self.key, self.chunk_state.flags)
                 .chaining_value();
+            trailing_bit_mask <<= 1;
         }
         self.push_stack(&cv);
     }
