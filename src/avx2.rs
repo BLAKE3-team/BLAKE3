@@ -44,36 +44,32 @@ unsafe fn set8(a: u32, b: u32, c: u32, d: u32, e: u32, f: u32, g: u32, h: u32) -
     )
 }
 
+// These rotations are the "simple version". For the "complicated version", see
+// https://github.com/sneves/blake2-avx2/blob/b3723921f668df09ece52dcd225a36d4a4eea1d9/blake2s-common.h#L63-L66.
+// For a discussion of the tradeoffs, see
+// https://github.com/sneves/blake2-avx2/pull/5. In short:
+// - This version performs better on modern x86 chips, Skylake and later.
+// - LLVM is able to optimize this version to AVX-512 rotation instructions
+//   when those are enabled.
+
 #[inline(always)]
 unsafe fn rot16(x: __m256i) -> __m256i {
-    _mm256_shuffle_epi8(
-        x,
-        _mm256_set_epi8(
-            13, 12, 15, 14, 9, 8, 11, 10, 5, 4, 7, 6, 1, 0, 3, 2, 13, 12, 15, 14, 9, 8, 11, 10, 5,
-            4, 7, 6, 1, 0, 3, 2,
-        ),
-    )
+    _mm256_or_si256(_mm256_srli_epi32(x, 16), _mm256_slli_epi32(x, 32 - 16))
 }
 
 #[inline(always)]
 unsafe fn rot12(x: __m256i) -> __m256i {
-    _mm256_or_si256(_mm256_srli_epi32(x, 12), _mm256_slli_epi32(x, 20))
+    _mm256_or_si256(_mm256_srli_epi32(x, 12), _mm256_slli_epi32(x, 32 - 12))
 }
 
 #[inline(always)]
 unsafe fn rot8(x: __m256i) -> __m256i {
-    _mm256_shuffle_epi8(
-        x,
-        _mm256_set_epi8(
-            12, 15, 14, 13, 8, 11, 10, 9, 4, 7, 6, 5, 0, 3, 2, 1, 12, 15, 14, 13, 8, 11, 10, 9, 4,
-            7, 6, 5, 0, 3, 2, 1,
-        ),
-    )
+    _mm256_or_si256(_mm256_srli_epi32(x, 8), _mm256_slli_epi32(x, 32 - 8))
 }
 
 #[inline(always)]
 unsafe fn rot7(x: __m256i) -> __m256i {
-    _mm256_or_si256(_mm256_srli_epi32(x, 7), _mm256_slli_epi32(x, 25))
+    _mm256_or_si256(_mm256_srli_epi32(x, 7), _mm256_slli_epi32(x, 32 - 7))
 }
 
 #[inline(always)]
