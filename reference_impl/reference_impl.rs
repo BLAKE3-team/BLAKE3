@@ -149,9 +149,9 @@ struct ChunkState {
 }
 
 impl ChunkState {
-    fn new(key: &[u32; 8], chunk_counter: u64, flags: u32) -> Self {
+    fn new(key: [u32; 8], chunk_counter: u64, flags: u32) -> Self {
         Self {
-            chaining_value: *key,
+            chaining_value: key,
             chunk_counter,
             block: [0; BLOCK_LEN],
             block_len: 0,
@@ -214,21 +214,30 @@ impl ChunkState {
 }
 
 fn parent_output(
-    left_child_cv: &[u32; 8],
-    right_child_cv: &[u32; 8],
-    key: &[u32; 8],
+    left_child_cv: [u32; 8],
+    right_child_cv: [u32; 8],
+    key: [u32; 8],
     flags: u32,
 ) -> Output {
     let mut block_words = [0; 16];
-    block_words[..8].copy_from_slice(left_child_cv);
-    block_words[8..].copy_from_slice(right_child_cv);
+    block_words[..8].copy_from_slice(&left_child_cv);
+    block_words[8..].copy_from_slice(&right_child_cv);
     Output {
-        input_chaining_value: *key,
+        input_chaining_value: key,
         block_words,
         counter: 0,                  // Always 0 for parent nodes.
         block_len: BLOCK_LEN as u32, // Always BLOCK_LEN (64) for parent nodes.
         flags: PARENT | flags,
     }
+}
+
+fn parent_cv(
+    left_child_cv: [u32; 8],
+    right_child_cv: [u32; 8],
+    key: [u32; 8],
+    flags: u32,
+) -> [u32; 8] {
+    parent_output(left_child_cv, right_child_cv, key, flags).chaining_value()
 }
 
 /// An incremental hasher that can accept any number of writes.
@@ -240,10 +249,10 @@ pub struct Hasher {
 }
 
 impl Hasher {
-    fn new_internal(key: &[u32; 8], flags: u32) -> Self {
+    fn new_internal(key: [u32; 8], flags: u32) -> Self {
         Self {
             chunk_state: ChunkState::new(key, 0, flags),
-            key: *key,
+            key,
             cv_stack: [[0; 8]; 54],
             cv_stack_len: 0,
         }
@@ -251,25 +260,25 @@ impl Hasher {
 
     /// Construct a new `Hasher` for the regular hash function.
     pub fn new() -> Self {
-        Self::new_internal(&IV, 0)
+        Self::new_internal(IV, 0)
     }
 
     /// Construct a new `Hasher` for the keyed hash function.
     pub fn new_keyed(key: &[u8; KEY_LEN]) -> Self {
         let mut key_words = [0; 8];
         words_from_litte_endian_bytes(key, &mut key_words);
-        Self::new_internal(&key_words, KEYED_HASH)
+        Self::new_internal(key_words, KEYED_HASH)
     }
 
     /// Construct a new `Hasher` for the key derivation function.
     pub fn new_derive_key(key: &[u8; KEY_LEN]) -> Self {
         let mut key_words = [0; 8];
         words_from_litte_endian_bytes(key, &mut key_words);
-        Self::new_internal(&key_words, DERIVE_KEY)
+        Self::new_internal(key_words, DERIVE_KEY)
     }
 
-    fn push_stack(&mut self, cv: &[u32; 8]) {
-        self.cv_stack[self.cv_stack_len as usize] = *cv;
+    fn push_stack(&mut self, cv: [u32; 8]) {
+        self.cv_stack[self.cv_stack_len as usize] = cv;
         self.cv_stack_len += 1;
     }
 
@@ -278,20 +287,21 @@ impl Hasher {
         self.cv_stack[self.cv_stack_len as usize]
     }
 
-    fn push_chunk_chaining_value(&mut self, mut cv: [u32; 8], total_chunks: u64) {
-        // The new chunk chaining value might complete some subtrees along the
-        // right edge of the growing tree. For each completed subtree, pop its
-        // left child CV off the stack and compress a new parent CV. After as
-        // many parent compressions as possible, push the new CV onto the
-        // stack. The number of completed subtrees is the same as the number of
-        // trailing 0 bits in the total number of chunks so far.
+    fn push_chunk_chaining_value(&mut self, chunk_cv: [u32; 8], total_chunks: u64) {
+        // This chunk might complete some subtrees. For each completed subtree,
+        // `new_cv` will be the right child, and the CV at the top of the CV
+        // stack will be the left child. Pop the left child off the stack,
+        // merge the children into a new parent CV, and overwrite `new_cv` with
+        // the result. Finally, push `new_cv` onto the CV stack. The number of
+        // completed subtrees will be the same as the number of trailing 0 bits
+        // in the total number of chunks so far.
+        let mut new_cv = chunk_cv;
         let mut trailing_bit_mask = 1;
         while total_chunks & trailing_bit_mask == 0 {
-            cv = parent_output(&self.pop_stack(), &cv, &self.key, self.chunk_state.flags)
-                .chaining_value();
+            new_cv = parent_cv(self.pop_stack(), new_cv, self.key, self.chunk_state.flags);
             trailing_bit_mask <<= 1;
         }
-        self.push_stack(&cv);
+        self.push_stack(new_cv);
     }
 
     /// Add input to the hash state. This can be called any number of times.
@@ -303,7 +313,7 @@ impl Hasher {
                 let chunk_cv = self.chunk_state.output().chaining_value();
                 let total_chunks = self.chunk_state.chunk_counter + 1;
                 self.push_chunk_chaining_value(chunk_cv, total_chunks);
-                self.chunk_state = ChunkState::new(&self.key, total_chunks, self.chunk_state.flags);
+                self.chunk_state = ChunkState::new(self.key, total_chunks, self.chunk_state.flags);
             }
 
             // Compress input bytes into the current chunk state.
@@ -324,9 +334,9 @@ impl Hasher {
         while parent_nodes_remaining > 0 {
             parent_nodes_remaining -= 1;
             output = parent_output(
-                &self.cv_stack[parent_nodes_remaining],
-                &output.chaining_value(),
-                &self.key,
+                self.cv_stack[parent_nodes_remaining],
+                output.chaining_value(),
+                self.key,
                 self.chunk_state.flags,
             );
         }
