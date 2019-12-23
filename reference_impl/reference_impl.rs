@@ -287,7 +287,7 @@ impl Hasher {
         self.cv_stack[self.cv_stack_len as usize]
     }
 
-    fn push_chunk_chaining_value(&mut self, chunk_cv: [u32; 8], total_chunks: u64) {
+    fn push_chunk_chaining_value(&mut self, mut new_cv: [u32; 8], mut total_chunks: u64) {
         // This chunk might complete some subtrees. For each completed subtree,
         // `new_cv` will be the right child, and the CV at the top of the CV
         // stack will be the left child. Pop the left child off the stack,
@@ -295,11 +295,9 @@ impl Hasher {
         // the result. Finally, push `new_cv` onto the CV stack. The number of
         // completed subtrees will be the same as the number of trailing 0 bits
         // in the total number of chunks so far.
-        let mut new_cv = chunk_cv;
-        let mut trailing_bit_mask = 1;
-        while total_chunks & trailing_bit_mask == 0 {
+        while total_chunks & 1 == 0 {
             new_cv = parent_cv(self.pop_stack(), new_cv, self.key, self.chunk_state.flags);
-            trailing_bit_mask <<= 1;
+            total_chunks >>= 1;
         }
         self.push_stack(new_cv);
     }
