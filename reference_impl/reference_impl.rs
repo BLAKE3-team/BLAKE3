@@ -246,6 +246,7 @@ pub struct Hasher {
     key: [u32; 8],
     cv_stack: [[u32; 8]; 54], // Space for 54 subtree chaining values:
     cv_stack_len: u8,         // 2^54 * CHUNK_LEN = 2^64
+    flags: u32,
 }
 
 impl Hasher {
@@ -255,6 +256,7 @@ impl Hasher {
             key,
             cv_stack: [[0; 8]; 54],
             cv_stack_len: 0,
+            flags,
         }
     }
 
@@ -297,7 +299,7 @@ impl Hasher {
         // the same as the number of trailing 1 bits in the previous total
         // number of chunks.
         while previous_total & 1 == 1 {
-            new_cv = parent_cv(self.pop_stack(), new_cv, self.key, self.chunk_state.flags);
+            new_cv = parent_cv(self.pop_stack(), new_cv, self.key, self.flags);
             previous_total >>= 1;
         }
         self.push_stack(new_cv);
@@ -312,7 +314,7 @@ impl Hasher {
                 let chunk_cv = self.chunk_state.output().chaining_value();
                 let counter = self.chunk_state.chunk_counter;
                 self.add_chunk_chaining_value(chunk_cv, counter);
-                self.chunk_state = ChunkState::new(self.key, counter + 1, self.chunk_state.flags);
+                self.chunk_state = ChunkState::new(self.key, counter + 1, self.flags);
             }
 
             // Compress input bytes into the current chunk state.
@@ -336,7 +338,7 @@ impl Hasher {
                 self.cv_stack[parent_nodes_remaining],
                 output.chaining_value(),
                 self.key,
-                self.chunk_state.flags,
+                self.flags,
             );
         }
         output.root_output_bytes(out_slice);
