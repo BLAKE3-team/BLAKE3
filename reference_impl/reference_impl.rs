@@ -287,17 +287,18 @@ impl Hasher {
         self.cv_stack[self.cv_stack_len as usize]
     }
 
-    fn push_chunk_chaining_value(&mut self, mut new_cv: [u32; 8], mut total_chunks: u64) {
+    fn add_chunk_chaining_value(&mut self, mut new_cv: [u32; 8], mut previous_total: u64) {
         // This chunk might complete some subtrees. For each completed subtree,
-        // `new_cv` will be the right child, and the CV at the top of the CV
-        // stack will be the left child. Pop the left child off the stack,
-        // merge the children into a new parent CV, and overwrite `new_cv` with
-        // the result. Finally, push `new_cv` onto the CV stack. The number of
-        // completed subtrees will be the same as the number of trailing 0 bits
-        // in the total number of chunks so far.
-        while total_chunks & 1 == 0 {
+        // its left child will be the current top entry in the CV stack, and
+        // its right child will be the current value of `new_cv`. Pop each left
+        // child off the stack, merge it with `new_cv`, and overwrite `new_cv`
+        // with the result. After all these merges, push the resulting value of
+        // `new_cv` onto the CV stack. The number of merges we need to do is
+        // the same as the number of trailing 1 bits in the previous total
+        // number of chunks.
+        while previous_total & 1 == 1 {
             new_cv = parent_cv(self.pop_stack(), new_cv, self.key, self.chunk_state.flags);
-            total_chunks >>= 1;
+            previous_total >>= 1;
         }
         self.push_stack(new_cv);
     }
@@ -309,9 +310,9 @@ impl Hasher {
             // chunk state. More input is coming, so this chunk is not ROOT.
             if self.chunk_state.len() == CHUNK_LEN {
                 let chunk_cv = self.chunk_state.output().chaining_value();
-                let total_chunks = self.chunk_state.chunk_counter + 1;
-                self.push_chunk_chaining_value(chunk_cv, total_chunks);
-                self.chunk_state = ChunkState::new(self.key, total_chunks, self.chunk_state.flags);
+                let counter = self.chunk_state.chunk_counter;
+                self.add_chunk_chaining_value(chunk_cv, counter);
+                self.chunk_state = ChunkState::new(self.key, counter + 1, self.chunk_state.flags);
             }
 
             // Compress input bytes into the current chunk state.
