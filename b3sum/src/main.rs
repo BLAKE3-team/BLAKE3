@@ -34,8 +34,9 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
             Arg::with_name(DERIVE_KEY_ARG)
                 .long(DERIVE_KEY_ARG)
                 .conflicts_with(KEYED_ARG)
-                .requires(FILE_ARG)
-                .help("Uses the KDF mode, with the 32-byte key read from stdin"),
+                .takes_value(true)
+                .value_name("CONTEXT")
+                .help("Uses the key derivation mode, with the input as key material"),
         )
         .arg(
             Arg::with_name(NO_NAMES_ARG)
@@ -160,8 +161,8 @@ fn main() -> Result<()> {
         .context("Failed to parse length.")?;
     let base_hasher = if args.is_present(KEYED_ARG) {
         blake3::Hasher::new_keyed(&read_key_from_stdin()?)
-    } else if args.is_present(DERIVE_KEY_ARG) {
-        blake3::Hasher::new_derive_key(&read_key_from_stdin()?)
+    } else if let Some(context) = args.value_of(DERIVE_KEY_ARG) {
+        blake3::Hasher::new_derive_key(context)
     } else {
         blake3::Hasher::new()
     };

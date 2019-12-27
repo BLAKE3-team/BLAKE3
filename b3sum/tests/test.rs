@@ -72,13 +72,14 @@ fn test_keyed() {
 
 #[test]
 fn test_derive_key() {
-    let key = [99; blake3::KEY_LEN];
+    let context = "BLAKE3 2019-12-28 10:28:41 example context";
     let f = tempfile::NamedTempFile::new().unwrap();
-    f.as_file().write_all(b"context").unwrap();
+    f.as_file().write_all(b"key material").unwrap();
     f.as_file().flush().unwrap();
-    let expected = hex::encode(blake3::derive_key(&key, b"context"));
-    let output = cmd!(b3sum_exe(), "--derive-key", "--no-names", f.path())
-        .stdin_bytes(&key[..])
+    let mut derive_key_out = [0; blake3::OUT_LEN];
+    blake3::derive_key(context, b"key material", &mut derive_key_out);
+    let expected = hex::encode(&derive_key_out);
+    let output = cmd!(b3sum_exe(), "--derive-key", context, "--no-names", f.path())
         .read()
         .unwrap();
     assert_eq!(&*expected, &*output);

@@ -115,7 +115,7 @@ pub fn test_hash_many_fn(
         &TEST_KEY_WORDS,
         counter,
         IncrementCounter::Yes,
-        crate::DERIVE_KEY,
+        crate::KEYED_HASH,
         crate::CHUNK_START,
         crate::CHUNK_END,
         &mut portable_chunks_out,
@@ -128,7 +128,7 @@ pub fn test_hash_many_fn(
             &TEST_KEY_WORDS,
             counter,
             IncrementCounter::Yes,
-            crate::DERIVE_KEY,
+            crate::KEYED_HASH,
             crate::CHUNK_START,
             crate::CHUNK_END,
             &mut test_chunks_out,
@@ -154,7 +154,7 @@ pub fn test_hash_many_fn(
         &TEST_KEY_WORDS,
         0,
         IncrementCounter::No,
-        crate::DERIVE_KEY | crate::PARENT,
+        crate::KEYED_HASH | crate::PARENT,
         0,
         0,
         &mut portable_parents_out,
@@ -167,7 +167,7 @@ pub fn test_hash_many_fn(
             &TEST_KEY_WORDS,
             0,
             IncrementCounter::No,
-            crate::DERIVE_KEY | crate::PARENT,
+            crate::KEYED_HASH | crate::PARENT,
             0,
             0,
             &mut test_parents_out,
@@ -298,17 +298,19 @@ fn test_compare_reference_impl() {
 
         // derive_key
         {
-            let mut reference_hasher = reference_impl::Hasher::new_derive_key(&TEST_KEY);
+            let context = "BLAKE3 2019-12-27 16:13:59 example context";
+            let mut reference_hasher = reference_impl::Hasher::new_derive_key(context);
             reference_hasher.update(input);
             let mut expected_out = [0; OUT];
             reference_hasher.finalize(&mut expected_out);
 
-            let test_out = crate::derive_key(&TEST_KEY, input);
-            assert_eq!(&test_out, array_ref!(expected_out, 0, 32));
-            let mut hasher = crate::Hasher::new_derive_key(&TEST_KEY);
+            let mut test_out = [0; OUT];
+            crate::derive_key(context, input, &mut test_out);
+            assert_eq!(&test_out[..], &expected_out[..]);
+            let mut hasher = crate::Hasher::new_derive_key(context);
             hasher.update(input);
             assert_eq!(&hasher.finalize(), array_ref!(expected_out, 0, 32));
-            assert_eq!(&hasher.finalize(), &test_out);
+            assert_eq!(&hasher.finalize(), array_ref!(test_out, 0, 32));
             let mut extended = [0; OUT];
             hasher.finalize_xof().fill(&mut extended);
             assert_eq!(&extended[..], &expected_out[..]);

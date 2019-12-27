@@ -12,7 +12,8 @@ const CHUNK_END: u32 = 1 << 1;
 const PARENT: u32 = 1 << 2;
 const ROOT: u32 = 1 << 3;
 const KEYED_HASH: u32 = 1 << 4;
-const DERIVE_KEY: u32 = 1 << 5;
+const DERIVE_KEY_CONTEXT: u32 = 1 << 5;
+const DERIVE_KEY_MATERIAL: u32 = 1 << 6;
 
 const IV: [u32; 8] = [
     0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
@@ -272,11 +273,16 @@ impl Hasher {
         Self::new_internal(key_words, KEYED_HASH)
     }
 
-    /// Construct a new `Hasher` for the key derivation function.
-    pub fn new_derive_key(key: &[u8; KEY_LEN]) -> Self {
-        let mut key_words = [0; 8];
-        words_from_litte_endian_bytes(key, &mut key_words);
-        Self::new_internal(key_words, DERIVE_KEY)
+    /// Construct a new `Hasher` for the key derivation function. The context
+    /// string should be hardcoded, globally unique, and application-specific.
+    pub fn new_derive_key(context: &str) -> Self {
+        let mut context_hasher = Hasher::new_internal(IV, DERIVE_KEY_CONTEXT);
+        context_hasher.update(context.as_bytes());
+        let mut context_key = [0; KEY_LEN];
+        context_hasher.finalize(&mut context_key);
+        let mut context_key_words = [0; 8];
+        words_from_litte_endian_bytes(&context_key, &mut context_key_words);
+        Self::new_internal(context_key_words, DERIVE_KEY_MATERIAL)
     }
 
     fn push_stack(&mut self, cv: [u32; 8]) {

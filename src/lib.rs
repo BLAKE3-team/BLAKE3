@@ -105,7 +105,8 @@ const CHUNK_END: u8 = 1 << 1;
 const PARENT: u8 = 1 << 2;
 const ROOT: u8 = 1 << 3;
 const KEYED_HASH: u8 = 1 << 4;
-const DERIVE_KEY: u8 = 1 << 5;
+const DERIVE_KEY_CONTEXT: u8 = 1 << 5;
+const DERIVE_KEY_MATERIAL: u8 = 1 << 6;
 
 fn counter_low(counter: u64) -> u32 {
     counter as u32
@@ -663,29 +664,32 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 
 /// The key derivation function.
 ///
-/// Given a 32-byte (256-bit) cryptographic key and a context string, this
-/// function returns a 32-byte derived subkey. Key derivation is important when
-/// you want to use the same key in multiple algorithms or use cases. Deriving
-/// a separate subkey for each use case protects you from bad interactions
-/// between algorithms. (For example, one algorithm might publish some value
-/// that another algorithm considers secret.) Derived keys also mitigate the
+/// Given cryptographic key material of any length and a context string of any
+/// length, this function outputs a derived subkey of any length. **The context
+/// string should be hardcoded, globally unique, and application-specific.** A
+/// good default format for such strings is `"[application] [commit timestamp]
+/// [purpose]"`, e.g., `"example.com 2019-12-25 16:18:03 session tokens v1"`.
+///
+/// Key derivation is important when you want to use the same key in multiple
+/// algorithms or use cases. Using the same key with different cryptographic
+/// algorithms is generally forbidden, and deriving a separate subkey for each
+/// use case protects you from bad interactions. Derived keys also mitigate the
 /// damage from one part of your application accidentally leaking its key.
 ///
-/// The context string should be globally unique, application-specific, and
-/// hardcoded. A good default format for such strings is `"[application]
-/// [commit timestamp] [purpose]"`, e.g., `"example.com 2019-12-25 16:18:03
-/// session tokens v1"`.
+/// As a rare exception to that general rule, however, it is possible to use
+/// `derive_key` with key material that you are already using with another
+/// algorithm. You might need to do this if you're adding features to an
+/// existing application, which does not yet use key derivation internally.
+/// However, you still must not share key material with algorithms that forbid
+/// key reuse entirely, like a one-time pad.
 ///
-/// If your input key is some size other than 32 bytes, you can convert it to
-/// 32 bytes using [`hash`]. This is similar to the "extract" stage in the
-/// "extract-then-expand" paradigm of HKDF.
-///
-/// [`hash`]: fn.hash.html
-pub fn derive_key(key: &[u8; KEY_LEN], context: &[u8]) -> [u8; OUT_LEN] {
-    let key_words = platform::words_from_le_bytes_32(key);
-    hash_all_at_once(context, &key_words, DERIVE_KEY)
-        .root_hash()
-        .into()
+/// [`Hasher::new_derive_key`]: struct.Hasher.html#method.new_derive_key
+/// [`Hasher::finalize_xof`]: struct.Hasher.html#method.finalize_xof
+pub fn derive_key(context: &str, key_material: &[u8], output: &mut [u8]) {
+    let context_key = hash_all_at_once(context.as_bytes(), IV, DERIVE_KEY_CONTEXT).root_hash();
+    let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
+    let inner_output = hash_all_at_once(key_material, &context_key_words, DERIVE_KEY_MATERIAL);
+    OutputReader::new(inner_output).fill(output);
 }
 
 fn parent_node_output(
@@ -741,16 +745,14 @@ impl Hasher {
     }
 
     /// Construct a new `Hasher` for the key derivation function. See
-    /// [`derive_key`].
-    ///
-    /// Note that the input to [`derive_key`] should be a hardcoded context
-    /// string. Most callers that don't need extended output should prefer the
-    /// standalone function for that reason.
+    /// [`derive_key`]. The context string should be hardcoded, globally
+    /// unique, and application-specific.
     ///
     /// [`derive_key`]: fn.derive_key.html
-    pub fn new_derive_key(key: &[u8; KEY_LEN]) -> Self {
-        let key_words = platform::words_from_le_bytes_32(key);
-        Self::new_internal(&key_words, DERIVE_KEY)
+    pub fn new_derive_key(context: &str) -> Self {
+        let context_key = hash_all_at_once(context.as_bytes(), IV, DERIVE_KEY_CONTEXT).root_hash();
+        let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
+        Self::new_internal(&context_key_words, DERIVE_KEY_MATERIAL)
     }
 
     // See comment in push_cv.
@@ -990,10 +992,7 @@ impl Hasher {
     ///
     /// [`OutputReader`]: struct.OutputReader.html
     pub fn finalize_xof(&self) -> OutputReader {
-        OutputReader {
-            inner: self.final_output(),
-            position_within_block: 0,
-        }
+        OutputReader::new(self.final_output())
     }
 }
 
@@ -1030,6 +1029,13 @@ pub struct OutputReader {
 }
 
 impl OutputReader {
+    fn new(inner: Output) -> Self {
+        Self {
+            inner,
+            position_within_block: 0,
+        }
+    }
+
     /// Fill a buffer with output bytes and advance the position of the
     /// `OutputReader`. This is equivalent to [`Read::read`], except that it
     /// doesn't return a `Result`. Both methods always fill the entire buffer.
