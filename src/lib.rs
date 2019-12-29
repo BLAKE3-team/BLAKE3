@@ -36,6 +36,13 @@
 #[cfg(test)]
 mod test;
 
+// The guts module is for incremental use cases like the `bao` crate that need
+// to explicitly compute chunk and parent chaining values. It is semi-stable
+// and likely to keep working, but largely undocumented and not intended for
+// widespread use.
+#[doc(hidden)]
+pub mod guts;
+
 // These modules are pub for benchmarks only. They are not stable.
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[doc(hidden)]
@@ -67,12 +74,14 @@ pub const OUT_LEN: usize = 32;
 /// The number of bytes in a key, 32.
 pub const KEY_LEN: usize = 32;
 
-// These constants are pub for tests and benchmarks only. Their names are not
-// stable.
+// These constants are pub for incremental use cases like `bao`, as well as
+// tests and benchmarks. Most callers should not need them.
 #[doc(hidden)]
 pub const BLOCK_LEN: usize = 64;
 #[doc(hidden)]
 pub const CHUNK_LEN: usize = 1024;
+#[doc(hidden)]
+pub const MAX_DEPTH: usize = 54; // 2^54 * CHUNK_LEN = 2^64
 
 // While iterating the compression function within a chunk, the CV is
 // represented as words, to avoid doing two extra endianness conversions for
@@ -717,8 +726,7 @@ fn parent_node_output(
 pub struct Hasher {
     key: CVWords,
     chunk_state: ChunkState,
-    // 2^54 * CHUNK_LEN = 2^64
-    cv_stack: ArrayVec<[CVBytes; 54]>,
+    cv_stack: ArrayVec<[CVBytes; MAX_DEPTH]>,
 }
 
 impl Hasher {
