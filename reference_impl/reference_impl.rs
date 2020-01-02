@@ -302,7 +302,7 @@ impl Hasher {
         // child off the stack, merge it with `new_cv`, and overwrite `new_cv`
         // with the result. After all these merges, push the final value of
         // `new_cv` onto the stack. The number of completed subtrees is given
-        // by the number of trailing 0 bits in the new total number of chunks.
+        // by the number of trailing 0-bits in the new total number of chunks.
         while total_chunks & 1 == 0 {
             new_cv = parent_cv(self.pop_stack(), new_cv, self.key, self.flags);
             total_chunks >>= 1;
