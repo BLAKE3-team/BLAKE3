@@ -41,7 +41,13 @@ TODO
 
 ## History
 
-TODO: BLAKE, BLAKE3, Bao
+BLAKE3 is essentially an adapted version of [BLAKE2](https://blake2.net)
+using the tree [Bao](https://github.com/oconnor663/baokeshed) tree mode.
+
+BLAKE2 is an established cryptographic hash function, for example
+supported by OpenSSL, and used in countless applications.
+Bao is a tree hashing mode satisfying the requirements for provably
+secure tree hashing.
 
 ## Contributing
 
@@ -50,7 +56,6 @@ Please see [CONTRIBUTING.md](CONTRIBUTING.md)
 ## Licensing
 
 The source code in the present repository is dual-licensed under Apache
-2 and 
+2 and CC0 licences.
 
-TODO: Apache 2 and CC0
 
