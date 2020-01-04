@@ -9,19 +9,28 @@ MerkleTree under the hood.)
 1. Capable of streaming and random-access verification. (Again: the magic of Merkle Trees.)
 1. Carefully engineered to be simple and safe to use, with no "modes" or tweaks required.
 
+The complete specifications and design rationale are available as a
+[PDF](https://github.com/BLAKE3-team/BLAKE3-specs/raw/master/blake3.pdf) and its
+[LaTeX source](https://github.com/BLAKE3-team/BLAKE3-specs/).
+
 This repository provides the reference implementation of BLAKE3, which
 is coded in Rust and includes portable as well as optimized code for
 various instructions sets.
 
-The complete specifications and design rationale are available as a
-[PDF](https://github.com/BLAKE3-team/BLAKE3-specs/raw/master/blake3.pdf) and its
-[LaTeX source](https://github.com/BLAKE3-team/BLAKE3-specs/).
+The [`b3sum` sub-crate](./b3sum) provides a command line interface.
+SSE4.1 and AVX2 implementations are provided in Rust, enabled by
+default, with dynamic CPU feature detection. AVX-512 and NEON
+implementation are available via C FFI, controlled by the `c_avx512` and
+`c_neon` features. Rayon-based multi-threading is controlled by the
+`rayon` feature.
+
+Eventually docs will be published on docs.rs. For now, you can build and
+view the docs locally with `cargo doc --open`.
 
 The following graph shows BLAKE3's multi-threaded throughput on an Intel
 Kany Lake processor:
 
 ![benchmarks](media/speed.png)
-
 
 BLAKE3 was designed by:
 
@@ -57,5 +66,6 @@ Please see [CONTRIBUTING.md](CONTRIBUTING.md)
 
 The source code in the present repository is dual-licensed under Apache
 2 and CC0 licences.
+
 
 

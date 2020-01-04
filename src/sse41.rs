@@ -3,7 +3,10 @@ use core::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::*;
 
-use crate::{offset_high, offset_low, BLOCK_LEN, IV, MSG_SCHEDULE, OUT_LEN};
+use crate::{
+    counter_high, counter_low, CVBytes, CVWords, IncrementCounter, BLOCK_LEN, IV, MSG_SCHEDULE,
+    OUT_LEN,
+};
 use arrayref::{array_mut_ref, array_ref, mut_array_refs};
 
 pub const DEGREE: usize = 4;
@@ -40,30 +43,32 @@ unsafe fn set4(a: u32, b: u32, c: u32, d: u32) -> __m128i {
     _mm_setr_epi32(a as i32, b as i32, c as i32, d as i32)
 }
 
+// These rotations are the "simple version". For the "complicated version", see
+// https://github.com/sneves/blake2-avx2/blob/b3723921f668df09ece52dcd225a36d4a4eea1d9/blake2s-common.h#L63-L66.
+// For a discussion of the tradeoffs, see
+// https://github.com/sneves/blake2-avx2/pull/5. In short:
+// - This version performs better on modern x86 chips, Skylake and later.
+// - LLVM is able to optimize this version to AVX-512 rotation instructions
+//   when those are enabled.
+
 #[inline(always)]
 unsafe fn rot16(a: __m128i) -> __m128i {
-    _mm_shuffle_epi8(
-        a,
-        _mm_set_epi8(13, 12, 15, 14, 9, 8, 11, 10, 5, 4, 7, 6, 1, 0, 3, 2),
-    )
+    _mm_or_si128(_mm_srli_epi32(a, 16), _mm_slli_epi32(a, 32 - 16))
 }
 
 #[inline(always)]
 unsafe fn rot12(a: __m128i) -> __m128i {
-    xor(_mm_srli_epi32(a, 12), _mm_slli_epi32(a, 32 - 12))
+    _mm_or_si128(_mm_srli_epi32(a, 12), _mm_slli_epi32(a, 32 - 12))
 }
 
 #[inline(always)]
 unsafe fn rot8(a: __m128i) -> __m128i {
-    _mm_shuffle_epi8(
-        a,
-        _mm_set_epi8(12, 15, 14, 13, 8, 11, 10, 9, 4, 7, 6, 5, 0, 3, 2, 1),
-    )
+    _mm_or_si128(_mm_srli_epi32(a, 8), _mm_slli_epi32(a, 32 - 8))
 }
 
 #[inline(always)]
 unsafe fn rot7(a: __m128i) -> __m128i {
-    xor(_mm_srli_epi32(a, 7), _mm_slli_epi32(a, 32 - 7))
+    _mm_or_si128(_mm_srli_epi32(a, 7), _mm_slli_epi32(a, 32 - 7))
 }
 
 #[inline(always)]
@@ -122,20 +127,20 @@ unsafe fn undiagonalize(row1: &mut __m128i, row3: &mut __m128i, row4: &mut __m12
     *row3 = _mm_shuffle_epi32(*row3, _MM_SHUFFLE!(2, 1, 0, 3));
 }
 
-#[target_feature(enable = "sse4.1")]
-pub unsafe fn compress(
-    cv: &[u32; 8],
+#[inline(always)]
+unsafe fn compress_pre(
+    cv: &CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
-    offset: u64,
+    counter: u64,
     flags: u8,
-) -> [u32; 16] {
-    let row1 = &mut loadu(cv.as_ptr().add(0) as _);
-    let row2 = &mut loadu(cv.as_ptr().add(4) as _);
+) -> [__m128i; 4] {
+    let row1 = &mut loadu(cv.as_ptr().add(0) as *const u8);
+    let row2 = &mut loadu(cv.as_ptr().add(4) as *const u8);
     let row3 = &mut set4(IV[0], IV[1], IV[2], IV[3]);
     let row4 = &mut set4(
-        offset_low(offset),
-        offset_high(offset),
+        counter_low(counter),
+        counter_high(counter),
         block_len as u32,
         flags as u32,
     );
@@ -303,12 +308,37 @@ pub unsafe fn compress(
     g2(row1, row2, row3, row4, buf);
     undiagonalize(row1, row3, row4);
 
-    *row1 = xor(*row1, *row3);
-    *row2 = xor(*row2, *row4);
-    *row3 = xor(*row3, loadu(cv.as_ptr().add(0) as *const u8));
-    *row4 = xor(*row4, loadu(cv.as_ptr().add(4) as *const u8));
+    [*row1, *row2, *row3, *row4]
+}
 
-    core::mem::transmute([*row1, *row2, *row3, *row4])
+#[target_feature(enable = "sse4.1")]
+pub unsafe fn compress_in_place(
+    cv: &mut CVWords,
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    counter: u64,
+    flags: u8,
+) {
+    let [row1, row2, row3, row4] = compress_pre(cv, block, block_len, counter, flags);
+    storeu(xor(row1, row3), cv.as_mut_ptr().add(0) as *mut u8);
+    storeu(xor(row2, row4), cv.as_mut_ptr().add(4) as *mut u8);
+}
+
+#[target_feature(enable = "sse4.1")]
+pub unsafe fn compress_xof(
+    cv: &CVWords,
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    counter: u64,
+    flags: u8,
+) -> [u8; 64] {
+    let [mut row1, mut row2, mut row3, mut row4] =
+        compress_pre(cv, block, block_len, counter, flags);
+    row1 = xor(row1, row3);
+    row2 = xor(row2, row4);
+    row3 = xor(row3, loadu(cv.as_ptr().add(0) as *const u8));
+    row4 = xor(row4, loadu(cv.as_ptr().add(4) as *const u8));
+    core::mem::transmute([row1, row2, row3, row4])
 }
 
 #[inline(always)]
@@ -479,19 +509,20 @@ unsafe fn transpose_msg_vecs(inputs: &[*const u8; DEGREE], block_offset: usize) 
 }
 
 #[inline(always)]
-unsafe fn load_offsets(offset: u64, offset_deltas: &[u64; 16]) -> (__m128i, __m128i) {
+unsafe fn load_counters(counter: u64, increment_counter: IncrementCounter) -> (__m128i, __m128i) {
+    let mask = if increment_counter.yes() { !0 } else { 0 };
     (
         set4(
-            offset_low(offset + offset_deltas[0]),
-            offset_low(offset + offset_deltas[1]),
-            offset_low(offset + offset_deltas[2]),
-            offset_low(offset + offset_deltas[3]),
+            counter_low(counter + (mask & 0)),
+            counter_low(counter + (mask & 1)),
+            counter_low(counter + (mask & 2)),
+            counter_low(counter + (mask & 3)),
         ),
         set4(
-            offset_high(offset + offset_deltas[0]),
-            offset_high(offset + offset_deltas[1]),
-            offset_high(offset + offset_deltas[2]),
-            offset_high(offset + offset_deltas[3]),
+            counter_high(counter + (mask & 0)),
+            counter_high(counter + (mask & 1)),
+            counter_high(counter + (mask & 2)),
+            counter_high(counter + (mask & 3)),
         ),
     )
 }
@@ -500,9 +531,9 @@ unsafe fn load_offsets(offset: u64, offset_deltas: &[u64; 16]) -> (__m128i, __m1
 pub unsafe fn hash4(
     inputs: &[*const u8; DEGREE],
     blocks: usize,
-    key: &[u32; 8],
-    offset: u64,
-    offset_deltas: &[u64; 16],
+    key: &CVWords,
+    counter: u64,
+    increment_counter: IncrementCounter,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
@@ -518,7 +549,7 @@ pub unsafe fn hash4(
         set1(key[6]),
         set1(key[7]),
     ];
-    let (offset_low_vec, offset_high_vec) = load_offsets(offset, offset_deltas);
+    let (counter_low_vec, counter_high_vec) = load_counters(counter, increment_counter);
     let mut block_flags = flags | flags_start;
 
     for block in 0..blocks {
@@ -546,8 +577,8 @@ pub unsafe fn hash4(
             set1(IV[1]),
             set1(IV[2]),
             set1(IV[3]),
-            offset_low_vec,
-            offset_high_vec,
+            counter_low_vec,
+            counter_high_vec,
             block_len_vec,
             block_flags_vec,
         ];
@@ -588,12 +619,12 @@ pub unsafe fn hash4(
 #[target_feature(enable = "sse4.1")]
 unsafe fn hash1<A: arrayvec::Array<Item = u8>>(
     input: &A,
-    key: &[u32; 8],
-    offset: u64,
+    key: &CVWords,
+    counter: u64,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
-    out: &mut [u8; OUT_LEN],
+    out: &mut CVBytes,
 ) {
     debug_assert_eq!(A::CAPACITY % BLOCK_LEN, 0, "uneven blocks");
     let mut cv = *key;
@@ -603,26 +634,25 @@ unsafe fn hash1<A: arrayvec::Array<Item = u8>>(
         if slice.len() == BLOCK_LEN {
             block_flags |= flags_end;
         }
-        let out = compress(
-            &cv,
+        compress_in_place(
+            &mut cv,
             array_ref!(slice, 0, BLOCK_LEN),
             BLOCK_LEN as u8,
-            offset,
+            counter,
             block_flags,
         );
-        cv = *array_ref!(out, 0, 8);
         block_flags = flags;
         slice = &slice[BLOCK_LEN..];
     }
-    *out = core::mem::transmute(cv) // x86 is little endian
+    *out = core::mem::transmute(cv); // x86 is little-endian
 }
 
 #[target_feature(enable = "sse4.1")]
 pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
     mut inputs: &[&A],
-    key: &[u32; 8],
-    mut offset: u64,
-    offset_deltas: &[u64; 16],
+    key: &CVWords,
+    mut counter: u64,
+    increment_counter: IncrementCounter,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
@@ -638,35 +668,38 @@ pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
             input_ptrs,
             blocks,
             key,
-            offset,
-            offset_deltas,
+            counter,
+            increment_counter,
             flags,
             flags_start,
             flags_end,
             array_mut_ref!(out, 0, DEGREE * OUT_LEN),
         );
+        if increment_counter.yes() {
+            counter += DEGREE as u64;
+        }
         inputs = &inputs[DEGREE..];
-        offset += DEGREE as u64 * offset_deltas[1];
         out = &mut out[DEGREE * OUT_LEN..];
     }
     for (&input, output) in inputs.iter().zip(out.chunks_exact_mut(OUT_LEN)) {
         hash1(
             input,
             key,
-            offset,
+            counter,
             flags,
             flags_start,
             flags_end,
             array_mut_ref!(output, 0, OUT_LEN),
         );
-        offset += offset_deltas[1];
+        if increment_counter.yes() {
+            counter += 1;
+        }
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::*;
 
     #[test]
     fn test_transpose() {
@@ -705,231 +738,7 @@ mod test {
         if !crate::platform::sse41_detected() {
             return;
         }
-
-        let initial_state = [1, 2, 3, 4, 5, 6, 7, 8];
-        let block_len: u8 = 27;
-        let mut block = [0; BLOCK_LEN];
-        crate::test::paint_test_input(&mut block[..block_len as usize]);
-        // Use an offset with set bits in both 32-bit words.
-        let offset = ((5 * CHUNK_LEN as u64) << 32) + 6 * CHUNK_LEN as u64;
-        let flags = Flags::CHUNK_END | Flags::ROOT;
-
-        let portable_out = portable::compress(
-            &initial_state,
-            &block,
-            block_len,
-            offset as u64,
-            flags.bits(),
-        );
-
-        let simd_out = unsafe {
-            super::compress(
-                &initial_state,
-                &block,
-                block_len,
-                offset as u64,
-                flags.bits(),
-            )
-        };
-
-        assert_eq!(portable_out, simd_out);
-    }
-
-    #[test]
-    fn test_parents() {
-        if !crate::platform::sse41_detected() {
-            return;
-        }
-
-        let mut input = [0; DEGREE * BLOCK_LEN];
-        crate::test::paint_test_input(&mut input);
-        let parents = [
-            array_ref!(input, 0 * BLOCK_LEN, BLOCK_LEN),
-            array_ref!(input, 1 * BLOCK_LEN, BLOCK_LEN),
-            array_ref!(input, 2 * BLOCK_LEN, BLOCK_LEN),
-            array_ref!(input, 3 * BLOCK_LEN, BLOCK_LEN),
-        ];
-        let key = [99, 98, 97, 96, 95, 94, 93, 92];
-
-        let mut portable_out = [0; DEGREE * OUT_LEN];
-        for (parent, out) in parents.iter().zip(portable_out.chunks_exact_mut(OUT_LEN)) {
-            let out_words =
-                portable::compress(&key, parent, BLOCK_LEN as u8, 0, Flags::PARENT.bits());
-            out.copy_from_slice(&bytes_from_state_words(array_ref!(out_words, 0, 8)));
-        }
-
-        let mut simd_out = [0; DEGREE * OUT_LEN];
-        let inputs = [
-            parents[0].as_ptr(),
-            parents[1].as_ptr(),
-            parents[2].as_ptr(),
-            parents[3].as_ptr(),
-        ];
-        unsafe {
-            hash4(
-                &inputs,
-                1,
-                &key,
-                0,
-                PARENT_OFFSET_DELTAS,
-                0,
-                Flags::PARENT.bits(),
-                0,
-                &mut simd_out,
-            );
-        }
-
-        assert_eq!(&portable_out[..], &simd_out[..]);
-    }
-
-    #[test]
-    fn test_chunks() {
-        if !crate::platform::sse41_detected() {
-            return;
-        }
-
-        let mut input = [0; DEGREE * CHUNK_LEN];
-        crate::test::paint_test_input(&mut input);
-        let chunks = [
-            array_ref!(input, 0 * CHUNK_LEN, CHUNK_LEN),
-            array_ref!(input, 1 * CHUNK_LEN, CHUNK_LEN),
-            array_ref!(input, 2 * CHUNK_LEN, CHUNK_LEN),
-            array_ref!(input, 3 * CHUNK_LEN, CHUNK_LEN),
-        ];
-        let key = [108, 107, 106, 105, 104, 103, 102, 101];
-        // Use an offset with set bits in both 32-bit words.
-        let initial_offset = ((5 * CHUNK_LEN as u64) << 32) + 6 * CHUNK_LEN as u64;
-
-        let mut portable_out = [0; DEGREE * OUT_LEN];
-        for ((chunk_index, chunk), out) in chunks
-            .iter()
-            .enumerate()
-            .zip(portable_out.chunks_exact_mut(OUT_LEN))
-        {
-            let mut cv = key;
-            for (block_index, block) in chunk.chunks_exact(BLOCK_LEN).enumerate() {
-                let mut block_flags = Flags::KEYED_HASH;
-                if block_index == 0 {
-                    block_flags |= Flags::CHUNK_START;
-                }
-                if block_index == CHUNK_LEN / BLOCK_LEN - 1 {
-                    block_flags |= Flags::CHUNK_END;
-                }
-                let out = portable::compress(
-                    &cv,
-                    array_ref!(block, 0, BLOCK_LEN),
-                    BLOCK_LEN as u8,
-                    initial_offset + (chunk_index * CHUNK_LEN) as u64,
-                    block_flags.bits(),
-                );
-                cv = *array_ref!(out, 0, 8);
-            }
-            out.copy_from_slice(&bytes_from_state_words(&cv));
-        }
-
-        let mut simd_out = [0; DEGREE * OUT_LEN];
-        let inputs = [
-            chunks[0].as_ptr(),
-            chunks[1].as_ptr(),
-            chunks[2].as_ptr(),
-            chunks[3].as_ptr(),
-        ];
-        unsafe {
-            hash4(
-                &inputs,
-                CHUNK_LEN / BLOCK_LEN,
-                &key,
-                initial_offset,
-                CHUNK_OFFSET_DELTAS,
-                Flags::KEYED_HASH.bits(),
-                Flags::CHUNK_START.bits(),
-                Flags::CHUNK_END.bits(),
-                &mut simd_out,
-            );
-        }
-
-        assert_eq!(&portable_out[..], &simd_out[..]);
-    }
-
-    #[test]
-    fn test_hash1_1() {
-        if !crate::platform::sse41_detected() {
-            return;
-        }
-
-        let block = [1; BLOCK_LEN];
-        let key = [2; 8];
-        let offset = 3 * CHUNK_LEN as u64;
-        let flags = 4;
-        let flags_start = 8;
-        let flags_end = 16;
-
-        let mut portable_out = [0; OUT_LEN];
-        portable::hash1(
-            &block,
-            &key,
-            offset,
-            flags,
-            flags_start,
-            flags_end,
-            &mut portable_out,
-        );
-
-        let mut test_out = [0; OUT_LEN];
-        unsafe {
-            hash1(
-                &block,
-                &key,
-                offset,
-                flags,
-                flags_start,
-                flags_end,
-                &mut test_out,
-            );
-        }
-
-        assert_eq!(portable_out, test_out);
-    }
-
-    #[test]
-    fn test_hash1_3() {
-        if !crate::platform::sse41_detected() {
-            return;
-        }
-
-        let mut blocks = [0; BLOCK_LEN * 3];
-        crate::test::paint_test_input(&mut blocks);
-        let key = [2; 8];
-        let offset = 3 * CHUNK_LEN as u64;
-        let flags = 4;
-        let flags_start = 8;
-        let flags_end = 16;
-
-        let mut portable_out = [0; OUT_LEN];
-        portable::hash1(
-            &blocks,
-            &key,
-            offset,
-            flags,
-            flags_start,
-            flags_end,
-            &mut portable_out,
-        );
-
-        let mut test_out = [0; OUT_LEN];
-        unsafe {
-            hash1(
-                &blocks,
-                &key,
-                offset,
-                flags,
-                flags_start,
-                flags_end,
-                &mut test_out,
-            );
-        }
-
-        assert_eq!(portable_out, test_out);
+        crate::test::test_compress_fn(compress_in_place, compress_xof);
     }
 
     #[test]
@@ -937,48 +746,6 @@ mod test {
         if !crate::platform::sse41_detected() {
             return;
         }
-
-        // 31 = 16 + 8 + 4 + 2 + 1
-        const INPUT_LEN: usize = 3 * BLOCK_LEN;
-        const NUM_INPUTS: usize = 31;
-        let mut input_buf = [0; NUM_INPUTS * INPUT_LEN];
-        crate::test::paint_test_input(&mut input_buf);
-        let mut inputs = arrayvec::ArrayVec::<[&[u8; INPUT_LEN]; NUM_INPUTS]>::new();
-        for i in 0..NUM_INPUTS {
-            inputs.push(array_ref!(input_buf, i * INPUT_LEN, INPUT_LEN));
-        }
-        let key = [2; 8];
-        let offset = 3 * CHUNK_LEN as u64;
-        let flags = 4;
-        let flags_start = 8;
-        let flags_end = 16;
-
-        let mut portable_out = [0; OUT_LEN * NUM_INPUTS];
-        portable::hash_many(
-            &inputs,
-            &key,
-            offset,
-            CHUNK_OFFSET_DELTAS,
-            flags,
-            flags_start,
-            flags_end,
-            &mut portable_out,
-        );
-
-        let mut test_out = [0; OUT_LEN * NUM_INPUTS];
-        unsafe {
-            hash_many(
-                &inputs,
-                &key,
-                offset,
-                CHUNK_OFFSET_DELTAS,
-                flags,
-                flags_start,
-                flags_end,
-                &mut test_out,
-            );
-        }
-
-        assert_eq!(&portable_out[..], &test_out[..]);
+        crate::test::test_hash_many_fn(hash_many, hash_many);
     }
 }

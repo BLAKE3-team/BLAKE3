@@ -4,7 +4,7 @@ use core::convert::TryInto;
 const OUT_LEN: usize = 32;
 const KEY_LEN: usize = 32;
 const BLOCK_LEN: usize = 64;
-const CHUNK_LEN: usize = 2048;
+const CHUNK_LEN: usize = 1024;
 const ROUNDS: usize = 7;
 
 const CHUNK_START: u32 = 1 << 0;
@@ -12,7 +12,8 @@ const CHUNK_END: u32 = 1 << 1;
 const PARENT: u32 = 1 << 2;
 const ROOT: u32 = 1 << 3;
 const KEYED_HASH: u32 = 1 << 4;
-const DERIVE_KEY: u32 = 1 << 5;
+const DERIVE_KEY_CONTEXT: u32 = 1 << 5;
+const DERIVE_KEY_MATERIAL: u32 = 1 << 6;
 
 const IV: [u32; 8] = [
     0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
@@ -56,7 +57,7 @@ fn round(state: &mut [u32; 16], m: &[u32; 16], schedule: &[usize; 16]) {
 fn compress(
     chaining_value: &[u32; 8],
     block_words: &[u32; 16],
-    offset: u64,
+    counter: u64,
     block_len: u32,
     flags: u32,
 ) -> [u32; 16] {
@@ -73,8 +74,8 @@ fn compress(
         IV[1],
         IV[2],
         IV[3],
-        offset as u32,
-        (offset >> 32) as u32,
+        counter as u32,
+        (counter >> 32) as u32,
         block_len,
         flags,
     ];
@@ -104,7 +105,7 @@ fn words_from_litte_endian_bytes(bytes: &[u8], words: &mut [u32]) {
 struct Output {
     input_chaining_value: [u32; 8],
     block_words: [u32; 16],
-    offset: u64,
+    counter: u64,
     block_len: u32,
     flags: u32,
 }
@@ -114,19 +115,19 @@ impl Output {
         first_8_words(compress(
             &self.input_chaining_value,
             &self.block_words,
-            self.offset,
+            self.counter,
             self.block_len,
             self.flags,
         ))
     }
 
     fn root_output_bytes(&self, out_slice: &mut [u8]) {
-        let mut offset = 0;
+        let mut output_block_counter = 0;
         for out_block in out_slice.chunks_mut(2 * OUT_LEN) {
             let words = compress(
                 &self.input_chaining_value,
                 &self.block_words,
-                offset,
+                output_block_counter,
                 self.block_len,
                 self.flags | ROOT,
             );
@@ -134,14 +135,14 @@ impl Output {
             for (word, out_word) in words.iter().zip(out_block.chunks_mut(4)) {
                 out_word.copy_from_slice(&word.to_le_bytes()[..out_word.len()]);
             }
-            offset += 2 * OUT_LEN as u64;
+            output_block_counter += 1;
         }
     }
 }
 
 struct ChunkState {
     chaining_value: [u32; 8],
-    offset: u64,
+    chunk_counter: u64,
     block: [u8; BLOCK_LEN],
     block_len: u8,
     blocks_compressed: u8,
@@ -149,10 +150,10 @@ struct ChunkState {
 }
 
 impl ChunkState {
-    fn new(key: &[u32; 8], offset: u64, flags: u32) -> Self {
+    fn new(key: [u32; 8], chunk_counter: u64, flags: u32) -> Self {
         Self {
-            chaining_value: *key,
-            offset,
+            chaining_value: key,
+            chunk_counter,
             block: [0; BLOCK_LEN],
             block_len: 0,
             blocks_compressed: 0,
@@ -174,13 +175,15 @@ impl ChunkState {
 
     fn update(&mut self, mut input: &[u8]) {
         while !input.is_empty() {
+            // If the block buffer is full, compress it and clear it. More
+            // input is coming, so this compression is not CHUNK_END.
             if self.block_len as usize == BLOCK_LEN {
                 let mut block_words = [0; 16];
                 words_from_litte_endian_bytes(&self.block, &mut block_words);
                 self.chaining_value = first_8_words(compress(
                     &self.chaining_value,
                     &block_words,
-                    self.offset,
+                    self.chunk_counter,
                     BLOCK_LEN as u32,
                     self.flags | self.start_flag(),
                 ));
@@ -189,6 +192,7 @@ impl ChunkState {
                 self.block_len = 0;
             }
 
+            // Copy input bytes into the block buffer.
             let want = BLOCK_LEN - self.block_len as usize;
             let take = min(want, input.len());
             self.block[self.block_len as usize..][..take].copy_from_slice(&input[..take]);
@@ -204,103 +208,121 @@ impl ChunkState {
             input_chaining_value: self.chaining_value,
             block_words,
             block_len: self.block_len as u32,
-            offset: self.offset,
+            counter: self.chunk_counter,
             flags: self.flags | self.start_flag() | CHUNK_END,
         }
     }
 }
 
 fn parent_output(
-    left_child_cv: &[u32; 8],
-    right_child_cv: &[u32; 8],
-    key: &[u32; 8],
+    left_child_cv: [u32; 8],
+    right_child_cv: [u32; 8],
+    key: [u32; 8],
     flags: u32,
 ) -> Output {
     let mut block_words = [0; 16];
-    block_words[..8].copy_from_slice(left_child_cv);
-    block_words[8..].copy_from_slice(right_child_cv);
+    block_words[..8].copy_from_slice(&left_child_cv);
+    block_words[8..].copy_from_slice(&right_child_cv);
     Output {
-        input_chaining_value: *key,
+        input_chaining_value: key,
         block_words,
-        offset: 0,                   // Always 0 for parent nodes.
+        counter: 0,                  // Always 0 for parent nodes.
         block_len: BLOCK_LEN as u32, // Always BLOCK_LEN (64) for parent nodes.
         flags: PARENT | flags,
     }
+}
+
+fn parent_cv(
+    left_child_cv: [u32; 8],
+    right_child_cv: [u32; 8],
+    key: [u32; 8],
+    flags: u32,
+) -> [u32; 8] {
+    parent_output(left_child_cv, right_child_cv, key, flags).chaining_value()
 }
 
 /// An incremental hasher that can accept any number of writes.
 pub struct Hasher {
     chunk_state: ChunkState,
     key: [u32; 8],
-    subtree_stack: [[u32; 8]; 53], // Space for 53 subtree chaining values:
-    subtree_stack_len: u8,         // 2^53 * CHUNK_LEN = 2^64
+    cv_stack: [[u32; 8]; 54], // Space for 54 subtree chaining values:
+    cv_stack_len: u8,         // 2^54 * CHUNK_LEN = 2^64
+    flags: u32,
 }
 
 impl Hasher {
-    fn new_internal(key: &[u32; 8], flags: u32) -> Self {
+    fn new_internal(key: [u32; 8], flags: u32) -> Self {
         Self {
             chunk_state: ChunkState::new(key, 0, flags),
-            key: *key,
-            subtree_stack: [[0; 8]; 53],
-            subtree_stack_len: 0,
+            key,
+            cv_stack: [[0; 8]; 54],
+            cv_stack_len: 0,
+            flags,
         }
     }
 
-    /// Construct a new `Hasher` for the default **hash** mode.
+    /// Construct a new `Hasher` for the regular hash function.
     pub fn new() -> Self {
-        Self::new_internal(&IV, 0)
+        Self::new_internal(IV, 0)
     }
 
-    /// Construct a new `Hasher` for the **keyed_hash** mode.
+    /// Construct a new `Hasher` for the keyed hash function.
     pub fn new_keyed(key: &[u8; KEY_LEN]) -> Self {
         let mut key_words = [0; 8];
         words_from_litte_endian_bytes(key, &mut key_words);
-        Self::new_internal(&key_words, KEYED_HASH)
+        Self::new_internal(key_words, KEYED_HASH)
     }
 
-    /// Construct a new `Hasher` for the **derive_key** mode.
-    pub fn new_derive_key(key: &[u8; KEY_LEN]) -> Self {
-        let mut key_words = [0; 8];
-        words_from_litte_endian_bytes(key, &mut key_words);
-        Self::new_internal(&key_words, DERIVE_KEY)
+    /// Construct a new `Hasher` for the key derivation function. The context
+    /// string should be hardcoded, globally unique, and application-specific.
+    pub fn new_derive_key(context: &str) -> Self {
+        let mut context_hasher = Hasher::new_internal(IV, DERIVE_KEY_CONTEXT);
+        context_hasher.update(context.as_bytes());
+        let mut context_key = [0; KEY_LEN];
+        context_hasher.finalize(&mut context_key);
+        let mut context_key_words = [0; 8];
+        words_from_litte_endian_bytes(&context_key, &mut context_key_words);
+        Self::new_internal(context_key_words, DERIVE_KEY_MATERIAL)
     }
 
-    fn push_stack(&mut self, cv: &[u32; 8]) {
-        self.subtree_stack[self.subtree_stack_len as usize] = *cv;
-        self.subtree_stack_len += 1;
+    fn push_stack(&mut self, cv: [u32; 8]) {
+        self.cv_stack[self.cv_stack_len as usize] = cv;
+        self.cv_stack_len += 1;
     }
 
     fn pop_stack(&mut self) -> [u32; 8] {
-        self.subtree_stack_len -= 1;
-        self.subtree_stack[self.subtree_stack_len as usize]
+        self.cv_stack_len -= 1;
+        self.cv_stack[self.cv_stack_len as usize]
     }
 
-    fn push_chunk_chaining_value(&mut self, mut cv: [u32; 8], total_bytes: u64) {
-        // The new chunk chaining value might complete some subtrees along the
-        // right edge of the growing tree. For each completed subtree, pop its
-        // left child CV off the stack and compress a new parent CV. After as
-        // many parent compressions as possible, push the new CV onto the
-        // stack. The final length of the stack will be the count of 1 bits in
-        // the total number of chunks or (equivalently) input bytes so far.
-        let final_stack_len = total_bytes.count_ones() as u8;
-        while self.subtree_stack_len >= final_stack_len {
-            cv = parent_output(&self.pop_stack(), &cv, &self.key, self.chunk_state.flags)
-                .chaining_value();
+    fn add_chunk_chaining_value(&mut self, mut new_cv: [u32; 8], mut total_chunks: u64) {
+        // This chunk might complete some subtrees. For each completed subtree,
+        // its left child will be the current top entry in the CV stack, and
+        // its right child will be the current value of `new_cv`. Pop each left
+        // child off the stack, merge it with `new_cv`, and overwrite `new_cv`
+        // with the result. After all these merges, push the final value of
+        // `new_cv` onto the stack. The number of completed subtrees is given
+        // by the number of trailing 0 bits in the new total number of chunks.
+        while total_chunks & 1 == 0 {
+            new_cv = parent_cv(self.pop_stack(), new_cv, self.key, self.flags);
+            total_chunks >>= 1;
         }
-        self.push_stack(&cv);
+        self.push_stack(new_cv);
     }
 
     /// Add input to the hash state. This can be called any number of times.
     pub fn update(&mut self, mut input: &[u8]) {
         while !input.is_empty() {
+            // If the current chunk is complete, finalize it and reset the
+            // chunk state. More input is coming, so this chunk is not ROOT.
             if self.chunk_state.len() == CHUNK_LEN {
                 let chunk_cv = self.chunk_state.output().chaining_value();
-                let new_chunk_offset = self.chunk_state.offset + CHUNK_LEN as u64;
-                self.push_chunk_chaining_value(chunk_cv, new_chunk_offset);
-                self.chunk_state =
-                    ChunkState::new(&self.key, new_chunk_offset, self.chunk_state.flags);
+                let total_chunks = self.chunk_state.chunk_counter + 1;
+                self.add_chunk_chaining_value(chunk_cv, total_chunks);
+                self.chunk_state = ChunkState::new(self.key, total_chunks, self.flags);
             }
 
+            // Compress input bytes into the current chunk state.
             let want = CHUNK_LEN - self.chunk_state.len();
             let take = min(want, input.len());
             self.chunk_state.update(&input[..take]);
@@ -314,14 +336,14 @@ impl Hasher {
         // parent chaining values along the right edge of the tree, until we
         // have the root Output.
         let mut output = self.chunk_state.output();
-        let mut parent_nodes_remaining = self.subtree_stack_len as usize;
+        let mut parent_nodes_remaining = self.cv_stack_len as usize;
         while parent_nodes_remaining > 0 {
             parent_nodes_remaining -= 1;
             output = parent_output(
-                &self.subtree_stack[parent_nodes_remaining],
-                &output.chaining_value(),
-                &self.key,
-                self.chunk_state.flags,
+                self.cv_stack[parent_nodes_remaining],
+                output.chaining_value(),
+                self.key,
+                self.flags,
             );
         }
         output.root_output_bytes(out_slice);
