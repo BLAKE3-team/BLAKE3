@@ -686,14 +686,20 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 /// damage from one part of your application accidentally leaking its key.
 ///
 /// As a rare exception to that general rule, however, it is possible to use
-/// `derive_key` with key material that you are already using with another
-/// algorithm. You might need to do this if you're adding features to an
-/// existing application, which does not yet use key derivation internally.
+/// `derive_key` itself with key material that you are already using with
+/// another algorithm. You might need to do this if you're adding features to
+/// an existing application, which does not yet use key derivation internally.
 /// However, you still must not share key material with algorithms that forbid
 /// key reuse entirely, like a one-time pad.
 ///
+/// Note that BLAKE3 is not a password hash, and **`derive_key` should never be
+/// used with passwords.** Instead, use a dedicated password hash like
+/// [Argon2]. Password hashes are entirely different from generic hash
+/// functions, with opposite design requirements.
+///
 /// [`Hasher::new_derive_key`]: struct.Hasher.html#method.new_derive_key
 /// [`Hasher::finalize_xof`]: struct.Hasher.html#method.finalize_xof
+/// [Argon2]: https://en.wikipedia.org/wiki/Argon2
 pub fn derive_key(context: &str, key_material: &[u8], output: &mut [u8]) {
     let context_key = hash_all_at_once(context.as_bytes(), IV, DERIVE_KEY_CONTEXT).root_hash();
     let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
