@@ -6,7 +6,7 @@ edition = "2018"
 [dependencies]
 # If you ever change these path dependencies, you'll probably need to update
 # cross_test.sh, or CI will break. I'm sorry >.<
-blake3 = { path = "../" }
+blake3 = { path = "../", features=["c_avx512"] }
 hex = "0.4.0"
 reference_impl = { path = "../reference_impl" }
 serde = { version = "1.0", features = ["derive"] }
