@@ -62,7 +62,11 @@ secure tree hashing.
 
 Please see [CONTRIBUTING.md](CONTRIBUTING.md)
 
-## Licensing
+## Intellectual property
 
-The source code in the present repository is dual-licensed under Apache
-2 and CC0 licences.
+The source code in the present repository is dual-licensed under CC0 1.0
+and Apache 2.0 licences.
+
+The Rust code is copyright Jack O'Connor, 2019. 
+The C code is copyright Samuel Neves and Jack O'Connor, 2019.
+
