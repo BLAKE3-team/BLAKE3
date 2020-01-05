@@ -84,3 +84,12 @@ fn test_derive_key() {
         .unwrap();
     assert_eq!(&*expected, &*output);
 }
+
+#[test]
+fn test_length_without_value_is_an_error() {
+    let result = cmd!(b3sum_exe(), "--length")
+        .stdin_bytes("foo")
+        .stderr_capture()
+        .run();
+    assert!(result.is_err());
+}

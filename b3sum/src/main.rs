@@ -21,8 +21,7 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
                 .short("l")
                 .takes_value(true)
                 .value_name("LEN")
-                .default_value("32")
-                .help("The number of output bytes, prior to hex encoding"),
+                .help("The number of output bytes, prior to hex encoding (default 32)"),
         )
         .arg(
             Arg::with_name(KEYED_ARG)
@@ -156,7 +155,7 @@ fn main() -> Result<()> {
     let args = clap_parse_argv();
     let len: u64 = args
         .value_of(LENGTH_ARG)
-        .unwrap()
+        .unwrap_or("32")
         .parse()
         .context("Failed to parse length.")?;
     let base_hasher = if args.is_present(KEYED_ARG) {
