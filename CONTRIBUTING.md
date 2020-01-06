@@ -19,7 +19,7 @@ If you contribute code and submit a patch, please note the following:
 
 * We use Rust's stable branch for developing BLAKE3.
 * Pull requests should target the `master` branch.
-* Try to follow the established Rust [style guidelines](https://doc.rust-lang.org/1.0.0/style/)
+* Try to follow the established Rust [style guidelines](https://doc.rust-lang.org/1.0.0/style/).
 
 Also please make sure to create new unit tests covering your code additions. You can execute the tests by running:
 
