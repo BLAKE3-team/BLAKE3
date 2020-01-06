@@ -45,10 +45,10 @@ BLAKE3 was designed by:
 The development of BLAKE3 was sponsored by
 [Teserakt](https://teserakt.io) and [Zcash](https://z.cash/).
 
-*WARNING*: BLAKE3 is not a password hash, because it's designed to be
-fast, whereas password hashing should not be fast. If you hash passwords
-to store the hashes or if you derive keys from passwords, we recommend
-[Argon2](https://github.com/P-H-C/phc-winner-argon2).
+*WARNING*: BLAKE3 is not a password hashing algorithm, because it's
+designed to be fast, whereas password hashing should not be fast. If you
+hash passwords to store the hashes or if you derive keys from passwords,
+we recommend [Argon2](https://github.com/P-H-C/phc-winner-argon2).
 
 ## Usage
 
