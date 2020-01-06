@@ -43,7 +43,7 @@ BLAKE3 was designed by:
 * [@zookozcash](https://github.com/zookozcash) (Zooko)
 
 The development of BLAKE3 was sponsored by
-[Teserakt](https://teserakt.io) and [Zcash](https://z.cash/).
+[Teserakt](https://teserakt.io) and [Electric Coin Company](https://electriccoin.co).
 
 *WARNING*: BLAKE3 is not a password hashing algorithm, because it's
 designed to be fast, whereas password hashing should not be fast. If you
