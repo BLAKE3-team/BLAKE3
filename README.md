@@ -9,6 +9,10 @@ MerkleTree under the hood.)
 1. Capable of verified streaming and incremental updates. (Again: the magic of Merkle Trees.)
 1. Carefully engineered to be simple and safe to use, with no "flavors" or variants.
 
+<p align="center">
+<img src="media/speed.svg" alt="performance graph">
+</p>
+
 The complete specifications and design rationale are available as a
 [PDF](https://github.com/BLAKE3-team/BLAKE3-specs/raw/master/blake3.pdf) and its
 [LaTeX source](https://github.com/BLAKE3-team/BLAKE3-specs/).
@@ -26,11 +30,6 @@ implementation, which is portable and `no_std`-compatible.
 The [`b3sum` sub-crate](./b3sum) provides a command line interface. You
 can install it with `cargo install b3sum`. It includes multi-threading
 and AVX-512 support by default.
-
-The following graph shows BLAKE3's single-threaded throughput on an
-Intel Skylake-SP processor:
-
-![benchmarks](media/speed.png)
 
 BLAKE3 was designed by:
 
