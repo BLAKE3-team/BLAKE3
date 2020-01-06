@@ -7,15 +7,18 @@ BLAKE3 is a cryptographic hash function that is:
 goes. (For you specialists reading this: this is because it is actually a
 Merkle tree under the hood.)
 1. Capable of verified streaming and incremental updates. (Again: the magic of Merkle trees.)
+1. Supporting simple hashing as well as PRF, MAC, KDF, XOF
 1. Carefully engineered to be simple and safe to use, with no "flavors" or variants.
 
 <p align="center">
 <img src="media/speed.svg" alt="performance graph">
 </p>
 
-The complete specifications and design rationale are available as a
-[PDF](https://github.com/BLAKE3-team/BLAKE3-specs/raw/master/blake3.pdf) and its
-[LaTeX source](https://github.com/BLAKE3-team/BLAKE3-specs/).
+BLAKE3 is based on an optimized instance of the established hash
+function [BLAKE2](https://blake2.net), and on the
+[Bao](https://github.com/oconnor663/baokeshed) tree mode.
+The BLAKE3 specifications and design rationale are available in the
+[BLAKE3 paper](https://github.com/BLAKE3-team/BLAKE3-specs/).
 
 This repository provides the official Rust implementation of BLAKE3, the
 [`blake3`](https://crates.io/crates/blake3) crate. It includes optimized
@@ -39,6 +42,9 @@ BLAKE3 was designed by:
 * [@veorq](https://github.com/veorq) (Jean-Philippe Aumasson)
 * [@zookozcash](https://github.com/zookozcash) (Zooko)
 
+The development of BLAKE3 was sponsored by
+[Teserakt](https://teserakt.io) and [Zcash](https://z.cash/).
+
 *WARNING*: BLAKE3 is not a password hash, because it's designed to be
 fast, whereas password hashing should not be fast. If you hash passwords
 to store the hashes or if you derive keys from passwords, we recommend
@@ -47,16 +53,6 @@ to store the hashes or if you derive keys from passwords, we recommend
 ## Usage
 
 TODO
-
-## History
-
-BLAKE3 is essentially an adapted version of [BLAKE2](https://blake2.net)
-using the [Bao](https://github.com/oconnor663/baokeshed) tree mode.
-
-BLAKE2 is an established cryptographic hash function, for example
-supported by OpenSSL, and used in countless applications.
-Bao is a tree hashing mode satisfying the requirements for provably
-secure tree hashing.
 
 ## Contributing
 
