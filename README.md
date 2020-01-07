@@ -37,7 +37,7 @@ and AVX-512 support by default.
 
 BLAKE3 was designed by:
 
-* [@oconnor63 ](https://github.com/oconnor63) (Jack O'Connor)
+* [@oconnor663 ](https://github.com/oconnor663) (Jack O'Connor)
 * [@sneves](https://github.com/sneves) (Samuel Neves)
 * [@veorq](https://github.com/veorq) (Jean-Philippe Aumasson)
 * [@zookozcash](https://github.com/zookozcash) (Zooko)
