@@ -27,7 +27,7 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
             Arg::with_name(KEYED_ARG)
                 .long(KEYED_ARG)
                 .requires(FILE_ARG)
-                .help("Uses the keyed mode, with the 32-byte key read from stdin"),
+                .help("Uses the keyed mode, with the raw 32-byte key read from stdin"),
         )
         .arg(
             Arg::with_name(DERIVE_KEY_ARG)
