@@ -70,7 +70,7 @@ hashing it:
 # Create a 1 GB file.
 head -c 1000000000 /dev/zero > /tmp/bigfile
 # Hash it with SHA-256.
-time sha256sum /tmp/bigfile
+time openssl sha256 /tmp/bigfile
 # Hash it with BLAKE3.
 time b3sum /tmp/bigfile
 ```
