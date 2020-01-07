@@ -5,9 +5,6 @@
 //!
 //! ```
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! use blake3::{hash, Hasher};
-//! use std::io::prelude::*;
-//!
 //! // Hash an input all at once.
 //! let hash1 = blake3::hash(b"foobarbaz");
 //!
@@ -19,12 +16,11 @@
 //! let hash2 = hasher.finalize();
 //! assert_eq!(hash1, hash2);
 //!
-//! // Extended output. OutputReader implements std::io::Read.
+//! // Extended output. OutputReader also implements Read and Seek.
 //! # #[cfg(feature = "std")] {
-//! let mut output = Vec::new();
+//! let mut output = [0; 1000];
 //! let mut output_reader = hasher.finalize_xof();
-//! output_reader.take(1000).read_to_end(&mut output)?;
-//! assert_eq!(output.len(), 1000);
+//! output_reader.fill(&mut output);
 //! assert_eq!(&output[..32], hash1.as_bytes());
 //! # }
 //! # Ok(())
