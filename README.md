@@ -1,27 +1,33 @@
-# <img src="media/BLAKE3.svg" alt="BLAKE3" height=50>
+# <a href="#"><img src="media/BLAKE3.svg" alt="BLAKE3" height=50></a>
 
-BLAKE3 is a cryptographic hash function that is carefully engineered to
-be simple and safe to use, and that is:
+BLAKE3 is a cryptographic hash function that is:
 
-1. **Much faster** than SHA2 (even with SHA extensions), SHA3, and BLAKE2. 
-1. **Highly parallelizable**: The more data and the more cores, the faster it
-goes, thanks to its Merkle tree structure.
-1. Capable of **verified streaming and incremental updates**.
-1. Supporting normal hashing as well as **PRF, MAC, KDF, XOF**.
+1. **Much faster** than MD5, SHA-1, SHA-2, SHA-3, and BLAKE2.
+1. **Secure**, unlike MD5 and SHA-1. And secure against length
+   extension, unlike SHA-2.
+1. **Highly parallelizable** across any number of threads and SIMD
+   lanes, because of its internal tree structure.
+1. Capable of **verified streaming** and **incremental updates**, again
+   because of the tree structure.
+1. A **PRF**, a **MAC**, a **KDF**, and an **XOF**, as well as a regular
+   hash.
+1. **One algorithm, with no variants**, which is fast on x86-64 and also
+   on smaller architectures.
 
-BLAKE3 is based on an optimized instance of the established hash
-function [BLAKE2](https://blake2.net), and on the
-[Bao](https://github.com/oconnor663/bao) tree mode.
-The BLAKE3 specifications and design rationale are available in the
-[BLAKE3 paper](https://github.com/BLAKE3-team/BLAKE3-specs/).
-
-The following graph shows BLAKE3's throughput on a recent
-server processor (Intel Cascade Lake-SP 8275CL):
+The chart below shows BLAKE3's performance on modern server hardware, an
+Intel Cascade Lake-SP 8275CL processor:
 
 <p align="center">
 <img src="media/speed.svg" alt="performance graph">
 </p>
 
+BLAKE3 is based on an optimized instance of the established hash
+function [BLAKE2](https://blake2.net), and on the [original Bao tree
+mode](https://github.com/oconnor663/bao/blob/master/docs/spec_0.9.1.md).
+The BLAKE3 specifications and design rationale are available in the
+[BLAKE3 paper](https://github.com/BLAKE3-team/BLAKE3-specs/). The
+current version of [Bao](https://github.com/oconnor663/bao) implements
+verified streaming with BLAKE3.
 
 This repository provides the official Rust implementation of BLAKE3,
 with
@@ -62,7 +68,6 @@ we recommend [Argon2](https://github.com/P-H-C/phc-winner-argon2).*
 
 This repository provides the `b3sum` command line utility and the
 `blake3` Rust crate.
-Below we provide basic usage instructions:
 
 ### The b3sum utility
 
