@@ -1,4 +1,4 @@
-# BLAKE3 
+# <img src="media/BLAKE3.svg" alt="BLAKE3" height=50>
 
 BLAKE3 is a cryptographic hash function that is carefully engineered to
 be simple and safe to use, and that is:
