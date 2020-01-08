@@ -3,7 +3,7 @@
 BLAKE3 is a cryptographic hash function that is carefully engineered to
 be simple and safe to use, and that is:
 
-1. **Much faster** than SHA2, SHA3, and BLAKE2.
+1. **Much faster** than SHA2 (even with SHA extensions), SHA3, and BLAKE2. 
 1. **Highly parallelizable**: The more data and the more cores, the faster it
 goes, thanks to its Merkle tree structure.
 1. Capable of **verified streaming and incremental updates**.
@@ -53,10 +53,10 @@ BLAKE3 was designed by:
 The development of BLAKE3 was sponsored by
 [Teserakt](https://teserakt.io) and [Electric Coin Company](https://electriccoin.co).
 
-*WARNING*: BLAKE3 is not a password hashing algorithm, because it's
+*NOTE: BLAKE3 is not a password hashing algorithm, because it's
 designed to be fast, whereas password hashing should not be fast. If you
 hash passwords to store the hashes or if you derive keys from passwords,
-we recommend [Argon2](https://github.com/P-H-C/phc-winner-argon2).
+we recommend [Argon2](https://github.com/P-H-C/phc-winner-argon2).*
 
 ## Usage
 
@@ -66,6 +66,8 @@ Below we provide basic usage instructions:
 
 ### The b3sum utility
 
+The `b3sum` utility allows you to process files and data from standard
+input using BLAKE3 in any of its three modes.
 To use `b3sum` on the command line, [install Rust and
 Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html),
 and then run:
@@ -77,7 +79,7 @@ cargo install b3sum
 If `rustup` didn't configure your `PATH` for you, you might need to go
 looking for the installed binary in e.g. `~/.cargo/bin`. You can test
 out how fast BLAKE3 is on your machine by creating a big file and
-hashing it:
+hashing it, for example as follows:
 
 ```bash
 # Create a 1 GB file.
@@ -151,8 +153,8 @@ Please see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Intellectual property
 
-The Rust code is copyright Jack O'Connor, 2019. The C code is copyright
-Samuel Neves and Jack O'Connor, 2019.
+The Rust code is copyright Jack O'Connor, 2019-2020. 
+The C code is copyright Samuel Neves and Jack O'Connor, 2019-2020.
 
 This work is released into the public domain with CC0 1.0.
 Alternatively, it is licensed under the Apache License 2.0.
