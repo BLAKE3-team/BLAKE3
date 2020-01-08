@@ -2,17 +2,16 @@
 
 BLAKE3 is a cryptographic hash function that is:
 
-1. **Much faster** than MD5, SHA-1, SHA-2, SHA-3, and BLAKE2.
-1. **Secure**, unlike MD5 and SHA-1. And secure against length
-   extension, unlike SHA-2.
-1. **Highly parallelizable** across any number of threads and SIMD
-   lanes, because of its internal tree structure.
-1. Capable of **verified streaming** and **incremental updates**, again
-   because of the tree structure.
-1. A **PRF**, a **MAC**, a **KDF**, and an **XOF**, as well as a regular
-   hash.
-1. **One algorithm, with no variants**, which is fast on x86-64 and also
-   on smaller architectures.
+- **Much faster** than MD5, SHA-1, SHA-2, SHA-3, and BLAKE2.
+- **Secure**, unlike MD5 and SHA-1. And secure against length extension,
+  unlike SHA-2.
+- **Highly parallelizable** across any number of threads and SIMD lanes,
+  because it's a Merkle tree on the inside.
+- Capable of **verified streaming** and **incremental updates**, again
+  because it's a Merkle tree.
+- A **PRF**, **MAC**, **KDF**, and **XOF**, as well as a regular hash.
+- **One algorithm with no variants**, which is fast on x86-64 and also
+  on smaller architectures.
 
 The chart below shows BLAKE3's performance on modern server hardware, an
 Intel Cascade Lake-SP 8275CL processor:
