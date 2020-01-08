@@ -1,6 +1,6 @@
 # Contributing
 
-We welcome and encourage third-party contributions to BLAKE3, be it reports of issues encountered while using the software, suggestions of new features, or proposals of patches.
+We welcome and encourage third-party contributions to BLAKE3, be it reports of issues encountered while using the software or proposals of patches.
 
 ## Bug reports
 
