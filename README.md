@@ -116,7 +116,7 @@ Besides `hash`, BLAKE3 provides two other modes, `keyed_hash` and
 `derive_key`. The `keyed_hash` mode takes a 256-bit key:
 
 ```rust
-// MAC an output all at once.
+// MAC an input all at once.
 let example_key = [42u8; 32];
 let mac1 = blake3::keyed_hash(&example_key, b"example input");
 
@@ -151,9 +151,8 @@ Please see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Intellectual property
 
-The source code in the present repository is dual-licensed under CC0 1.0
-and Apache 2.0 licences.
+The Rust code is copyright Jack O'Connor, 2019. The C code is copyright
+Samuel Neves and Jack O'Connor, 2019.
 
-The Rust code is copyright Jack O'Connor, 2019. 
-The C code is copyright Samuel Neves and Jack O'Connor, 2019.
-
+This work is released into the public domain with CC0 1.0.
+Alternatively, it is licensed under the Apache License 2.0.
