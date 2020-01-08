@@ -7,7 +7,7 @@ be simple and safe to use, and that is:
 1. **Highly parallelizable**: The more data and the more cores, the faster it
 goes, thanks to its Merkle tree structure.
 1. Capable of **verified streaming and incremental updates**.
-1. Supporting normal hashing as well as PRF, MAC, KDF, XOF
+1. Supporting normal hashing as well as **PRF, MAC, KDF, XOF**.
 
 BLAKE3 is based on an optimized instance of the established hash
 function [BLAKE2](https://blake2.net), and on the
