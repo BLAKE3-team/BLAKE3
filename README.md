@@ -11,7 +11,7 @@ goes, thanks to its Merkle tree structure.
 
 BLAKE3 is based on an optimized instance of the established hash
 function [BLAKE2](https://blake2.net), and on the
-[Bao](https://github.com/oconnor663/baokeshed) tree mode.
+[Bao](https://github.com/oconnor663/bao) tree mode.
 The BLAKE3 specifications and design rationale are available in the
 [BLAKE3 paper](https://github.com/BLAKE3-team/BLAKE3-specs/).
 
