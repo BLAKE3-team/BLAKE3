@@ -659,7 +659,7 @@ pub fn hash(input: &[u8]) -> Hash {
 /// The keyed hash function.
 ///
 /// This is suitable for use as a message authentication code, for
-/// example to replace an HMAC instance. 
+/// example to replace an HMAC instance.
 ///  In that use case, the constant-time equality checking provided by
 /// [`Hash`](struct.Hash.html) is almost always a security requirement, and
 /// callers need to be careful not to compare MACs as raw bytes.
