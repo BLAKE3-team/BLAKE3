@@ -1,3 +1,5 @@
+#![no_std]
+
 use core::cmp::min;
 use core::convert::TryInto;
 
