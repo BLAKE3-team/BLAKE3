@@ -34,6 +34,9 @@ INLINE size_t chunk_state_len(const blake3_chunk_state *self) {
 
 INLINE size_t chunk_state_fill_buf(blake3_chunk_state *self,
                                    const uint8_t *input, size_t input_len) {
+  if (input_len == 0) {
+      return 0;
+  }
   size_t take = BLAKE3_BLOCK_LEN - ((size_t)self->buf_len);
   if (take > input_len) {
     take = input_len;
