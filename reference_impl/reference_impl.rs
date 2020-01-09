@@ -5,7 +5,6 @@ const OUT_LEN: usize = 32;
 const KEY_LEN: usize = 32;
 const BLOCK_LEN: usize = 64;
 const CHUNK_LEN: usize = 1024;
-const ROUNDS: usize = 7;
 
 const CHUNK_START: u32 = 1 << 0;
 const CHUNK_END: u32 = 1 << 1;
@@ -19,15 +18,7 @@ const IV: [u32; 8] = [
     0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
 ];
 
-const MSG_SCHEDULE: [[usize; 16]; ROUNDS] = [
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-    [2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8],
-    [3, 4, 10, 12, 13, 2, 7, 14, 6, 5, 9, 0, 11, 15, 8, 1],
-    [10, 7, 12, 9, 14, 3, 13, 15, 4, 0, 11, 2, 5, 8, 1, 6],
-    [12, 13, 9, 11, 15, 10, 14, 8, 7, 2, 5, 3, 0, 1, 6, 4],
-    [9, 14, 11, 5, 8, 12, 15, 1, 13, 3, 0, 10, 2, 6, 4, 7],
-    [11, 15, 5, 0, 1, 9, 8, 6, 14, 10, 2, 12, 3, 4, 7, 13],
-];
+const MSG_PERMUTATION: [usize; 16] = [2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8];
 
 // The mixing function, G, which mixes either a column or a diagonal.
 fn g(state: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize, mx: u32, my: u32) {
@@ -41,17 +32,25 @@ fn g(state: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize, mx: u32, my:
     state[b] = (state[b] ^ state[c]).rotate_right(7);
 }
 
-fn round(state: &mut [u32; 16], m: &[u32; 16], schedule: &[usize; 16]) {
+fn round(state: &mut [u32; 16], m: &[u32; 16]) {
     // Mix the columns.
-    g(state, 0, 4, 8, 12, m[schedule[0]], m[schedule[1]]);
-    g(state, 1, 5, 9, 13, m[schedule[2]], m[schedule[3]]);
-    g(state, 2, 6, 10, 14, m[schedule[4]], m[schedule[5]]);
-    g(state, 3, 7, 11, 15, m[schedule[6]], m[schedule[7]]);
+    g(state, 0, 4, 8, 12, m[0], m[1]);
+    g(state, 1, 5, 9, 13, m[2], m[3]);
+    g(state, 2, 6, 10, 14, m[4], m[5]);
+    g(state, 3, 7, 11, 15, m[6], m[7]);
     // Mix the diagonals.
-    g(state, 0, 5, 10, 15, m[schedule[8]], m[schedule[9]]);
-    g(state, 1, 6, 11, 12, m[schedule[10]], m[schedule[11]]);
-    g(state, 2, 7, 8, 13, m[schedule[12]], m[schedule[13]]);
-    g(state, 3, 4, 9, 14, m[schedule[14]], m[schedule[15]]);
+    g(state, 0, 5, 10, 15, m[8], m[9]);
+    g(state, 1, 6, 11, 12, m[10], m[11]);
+    g(state, 2, 7, 8, 13, m[12], m[13]);
+    g(state, 3, 4, 9, 14, m[14], m[15]);
+}
+
+fn permute(m: &mut [u32; 16]) {
+    let mut permuted = [0; 16];
+    for i in 0..16 {
+        permuted[i] = m[MSG_PERMUTATION[i]];
+    }
+    *m = permuted;
 }
 
 fn compress(
@@ -79,9 +78,22 @@ fn compress(
         block_len,
         flags,
     ];
-    for r in 0..ROUNDS {
-        round(&mut state, &block_words, &MSG_SCHEDULE[r]);
-    }
+    let mut block = *block_words;
+
+    round(&mut state, &block); // round 1
+    permute(&mut block);
+    round(&mut state, &block); // round 2
+    permute(&mut block);
+    round(&mut state, &block); // round 3
+    permute(&mut block);
+    round(&mut state, &block); // round 4
+    permute(&mut block);
+    round(&mut state, &block); // round 5
+    permute(&mut block);
+    round(&mut state, &block); // round 6
+    permute(&mut block);
+    round(&mut state, &block); // round 7
+
     for i in 0..8 {
         state[i] ^= state[i + 8];
         state[i + 8] ^= chaining_value[i];
