@@ -2,8 +2,11 @@
 name = "b3sum"
 version = "0.1.0"
 authors = ["Jack O'Connor <oconnor663@gmail.com>"]
-edition = "2018"
+description = "a command line implementation of the BLAKE3 hash function"
+repository = "https://github.com/BLAKE3-team/BLAKE3"
+license = "CC0"
 readme = "README.md"
+edition = "2018"
 
 [features]
 default = ["rayon", "c_avx512"]
