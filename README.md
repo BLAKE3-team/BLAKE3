@@ -24,9 +24,10 @@ BLAKE3 is based on an optimized instance of the established hash
 function [BLAKE2](https://blake2.net), and on the [original Bao tree
 mode](https://github.com/oconnor663/bao/blob/master/docs/spec_0.9.1.md).
 The BLAKE3 specifications and design rationale are available in the
-[BLAKE3 paper](https://github.com/BLAKE3-team/BLAKE3-specs/). The
-current version of [Bao](https://github.com/oconnor663/bao) implements
-verified streaming with BLAKE3.
+[BLAKE3
+paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf).
+The current version of [Bao](https://github.com/oconnor663/bao)
+implements verified streaming with BLAKE3.
 
 This repository provides the official Rust implementation of BLAKE3,
 with
