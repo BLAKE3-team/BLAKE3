@@ -5,13 +5,14 @@ import json
 from os import path
 import subprocess
 
-PROJECT_DIR = path.dirname(__file__)
-TEST_VECTORS = json.load(open(path.join(PROJECT_DIR, "test_vectors.json")))
+HERE = path.dirname(__file__)
+TEST_VECTORS_PATH = path.join(HERE, "..", "test_vectors", "test_vectors.json")
+TEST_VECTORS = json.load(open(TEST_VECTORS_PATH))
 TEST_CONTEXT = "BLAKE3 2019-12-27 16:29:52 test vectors context"
 
 
 def run_blake3(args, input):
-    output = subprocess.run([path.join(PROJECT_DIR, "blake3")] + args,
+    output = subprocess.run([path.join(HERE, "blake3")] + args,
                             input=input,
                             stdout=subprocess.PIPE,
                             check=True)
