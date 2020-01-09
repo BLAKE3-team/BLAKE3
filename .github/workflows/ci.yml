@@ -62,3 +62,13 @@ jobs:
       if: startsWith(matrix.arch, 'armv7-') || startsWith(matrix.arch, 'aarch64-')
     # Test vectors. Note that this uses a hacky script due to path dependency limitations.
     - run: ./test_vectors/cross_test.sh --target ${{ matrix.arch }}
+
+  # Currently only on x86.
+  c_tests:
+    name: C tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - run: make test
+      working-directory: ./c
