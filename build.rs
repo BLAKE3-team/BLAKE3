@@ -44,7 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // reason.
     if defined("CARGO_FEATURE_C_AVX512") && is_x86_64() {
         let mut build = new_build();
-        build.file("src/c/blake3_avx512.c");
+        build.file("c/blake3_avx512.c");
         if is_windows() {
             // Note that a lot of versions of MSVC don't support /arch:AVX512,
             // and they'll discard it with a warning, hopefully leading to a
@@ -62,7 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Note that blake3_neon.c normally depends on the blake3_portable.c
         // for the single-instance compression function, but we expose
         // portable.rs over FFI instead. See c_neon.rs.
-        build.file("src/c/blake3_neon.c");
+        build.file("c/blake3_neon.c");
         // ARMv7 platforms that support NEON generally need the following
         // flags. AArch64 supports NEON by default and does not support -mpfu.
         if is_armv7() {
@@ -80,7 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-env-changed=CFLAGS");
 
     // Ditto for source files, though these shouldn't change as often.
-    for file in std::fs::read_dir("src/c")? {
+    for file in std::fs::read_dir("c")? {
         println!(
             "cargo:rerun-if-changed={}",
             file?.path().to_str().expect("utf-8")
