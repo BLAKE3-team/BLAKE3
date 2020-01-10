@@ -34,9 +34,6 @@ INLINE size_t chunk_state_len(const blake3_chunk_state *self) {
 
 INLINE size_t chunk_state_fill_buf(blake3_chunk_state *self,
                                    const uint8_t *input, size_t input_len) {
-  if (input_len == 0) {
-      return 0;
-  }
   size_t take = BLAKE3_BLOCK_LEN - ((size_t)self->buf_len);
   if (take > input_len) {
     take = input_len;
@@ -206,6 +203,14 @@ INLINE void hasher_push_chunk_cv(blake3_hasher *self,
 
 void blake3_hasher_update(blake3_hasher *self, const void *input,
                           size_t input_len) {
+  // Explicitly checking for zero avoids causing UB by passing a null pointer
+  // to memcpy. This comes up in practice with things like:
+  //   std::vector<uint8_t> v;
+  //   blake3_hasher_update(&hasher, v.data(), v.size());
+  if (input_len == 0) {
+      return;
+  }
+
   const uint8_t *input_bytes = (const uint8_t *)input;
 
   // If we already have a partial chunk, or if this is the very first chunk
@@ -275,6 +280,14 @@ void blake3_hasher_update(blake3_hasher *self, const void *input,
 
 void blake3_hasher_finalize(const blake3_hasher *self, uint8_t *out,
                             size_t out_len) {
+  // Explicitly checking for zero avoids causing UB by passing a null pointer
+  // to memcpy. This comes up in practice with things like:
+  //   std::vector<uint8_t> v;
+  //   blake3_hasher_finalize(&hasher, v.data(), v.size());
+  if (out_len == 0) {
+      return;
+  }
+
   // If the subtree stack is empty, then the current chunk is the root.
   if (self->cv_stack_len == 0) {
     output_t output = chunk_state_output(&self->chunk);
