@@ -105,7 +105,7 @@ fn first_8_words(compression_output: [u32; 16]) -> [u32; 8] {
     compression_output[0..8].try_into().unwrap()
 }
 
-fn words_from_litte_endian_bytes(bytes: &[u8], words: &mut [u32]) {
+fn words_from_little_endian_bytes(bytes: &[u8], words: &mut [u32]) {
     for (bytes_block, word) in bytes.chunks_exact(4).zip(words.iter_mut()) {
         *word = u32::from_le_bytes(bytes_block.try_into().unwrap());
     }
@@ -191,7 +191,7 @@ impl ChunkState {
             // input is coming, so this compression is not CHUNK_END.
             if self.block_len as usize == BLOCK_LEN {
                 let mut block_words = [0; 16];
-                words_from_litte_endian_bytes(&self.block, &mut block_words);
+                words_from_little_endian_bytes(&self.block, &mut block_words);
                 self.chaining_value = first_8_words(compress(
                     &self.chaining_value,
                     &block_words,
@@ -215,7 +215,7 @@ impl ChunkState {
 
     fn output(&self) -> Output {
         let mut block_words = [0; 16];
-        words_from_litte_endian_bytes(&self.block, &mut block_words);
+        words_from_little_endian_bytes(&self.block, &mut block_words);
         Output {
             input_chaining_value: self.chaining_value,
             block_words,
@@ -281,7 +281,7 @@ impl Hasher {
     /// Construct a new `Hasher` for the keyed hash function.
     pub fn new_keyed(key: &[u8; KEY_LEN]) -> Self {
         let mut key_words = [0; 8];
-        words_from_litte_endian_bytes(key, &mut key_words);
+        words_from_little_endian_bytes(key, &mut key_words);
         Self::new_internal(key_words, KEYED_HASH)
     }
 
@@ -293,7 +293,7 @@ impl Hasher {
         let mut context_key = [0; KEY_LEN];
         context_hasher.finalize(&mut context_key);
         let mut context_key_words = [0; 8];
-        words_from_litte_endian_bytes(&context_key, &mut context_key_words);
+        words_from_little_endian_bytes(&context_key, &mut context_key_words);
         Self::new_internal(context_key_words, DERIVE_KEY_MATERIAL)
     }
 
