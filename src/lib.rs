@@ -656,6 +656,11 @@ pub fn hash(input: &[u8]) -> Hash {
     hash_all_at_once(input, IV, 0).root_hash()
 }
 
+#[no_mangle]
+pub extern "C" fn blake3_hash(input: &[u8]) -> Hash {
+    hash_all_at_once(input, IV, 0).root_hash()
+}
+
 /// The keyed hash function.
 ///
 /// This is suitable for use as a message authentication code, for

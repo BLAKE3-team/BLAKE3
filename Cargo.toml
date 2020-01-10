@@ -21,6 +21,10 @@ c_avx512 = []
 c_neon = []
 std = []
 
+[lib]
+name = "blake3"
+crate-type = ["staticlib"]
+
 [dependencies]
 arrayref = "0.3.5"
 arrayvec = { version = "0.5.1", default-features = false, features = ["array-sizes-33-128"] }
