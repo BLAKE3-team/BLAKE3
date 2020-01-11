@@ -180,14 +180,14 @@ impl From<Hash> for [u8; OUT_LEN] {
 /// This implementation is constant-time.
 impl PartialEq for Hash {
     fn eq(&self, other: &Hash) -> bool {
-        constant_time_eq::constant_time_eq(&self.0[..], &other.0[..])
+        constant_time_eq::constant_time_eq_32(&self.0, &other.0)
     }
 }
 
 /// This implementation is constant-time.
 impl PartialEq<[u8; OUT_LEN]> for Hash {
     fn eq(&self, other: &[u8; OUT_LEN]) -> bool {
-        constant_time_eq::constant_time_eq(&self.0[..], other)
+        constant_time_eq::constant_time_eq_32(&self.0, other)
     }
 }
 
