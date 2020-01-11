@@ -298,7 +298,7 @@ fn test_compare_reference_impl() {
 
         // derive_key
         {
-            let context = "BLAKE3 2019-12-27 16:13:59 example context";
+            let context = "BLAKE3 2019-12-27 16:13:59 example context (not the test vector one)";
             let mut reference_hasher = reference_impl::Hasher::new_derive_key(context);
             reference_hasher.update(input);
             let mut expected_out = [0; OUT];
