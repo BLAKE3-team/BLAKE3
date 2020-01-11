@@ -24,7 +24,7 @@ std = []
 [dependencies]
 arrayref = "0.3.5"
 arrayvec = { version = "0.5.1", default-features = false, features = ["array-sizes-33-128"] }
-constant_time_eq = "0.1.4"
+constant_time_eq = "0.1.5"
 # A performance note for the "rayon" feature: Multi-threading can have
 # significant overhead for small inputs, particularly on x86 where individual
 # cores are very fast. On the other hand, on slower platforms like ARM,
