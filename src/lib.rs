@@ -113,10 +113,12 @@ const KEYED_HASH: u8 = 1 << 4;
 const DERIVE_KEY_CONTEXT: u8 = 1 << 5;
 const DERIVE_KEY_MATERIAL: u8 = 1 << 6;
 
+#[inline]
 fn counter_low(counter: u64) -> u32 {
     counter as u32
 }
 
+#[inline]
 fn counter_high(counter: u64) -> u32 {
     (counter >> 32) as u32
 }
@@ -144,6 +146,7 @@ impl Hash {
     /// The bytes of the `Hash`. Note that byte arrays don't provide
     /// constant-time equality checking, so if  you need to compare hashes,
     /// prefer the `Hash` type.
+    #[inline]
     pub fn as_bytes(&self) -> &[u8; OUT_LEN] {
         &self.0
     }
@@ -166,12 +169,14 @@ impl Hash {
 }
 
 impl From<[u8; OUT_LEN]> for Hash {
+    #[inline]
     fn from(bytes: [u8; OUT_LEN]) -> Self {
         Self(bytes)
     }
 }
 
 impl From<Hash> for [u8; OUT_LEN] {
+    #[inline]
     fn from(hash: Hash) -> Self {
         hash.0
     }
@@ -179,6 +184,7 @@ impl From<Hash> for [u8; OUT_LEN] {
 
 /// This implementation is constant-time.
 impl PartialEq for Hash {
+    #[inline]
     fn eq(&self, other: &Hash) -> bool {
         constant_time_eq::constant_time_eq(&self.0[..], &other.0[..])
     }
@@ -186,6 +192,7 @@ impl PartialEq for Hash {
 
 /// This implementation is constant-time.
 impl PartialEq<[u8; OUT_LEN]> for Hash {
+    #[inline]
     fn eq(&self, other: &[u8; OUT_LEN]) -> bool {
         constant_time_eq::constant_time_eq(&self.0[..], other)
     }
@@ -380,6 +387,7 @@ pub enum IncrementCounter {
 }
 
 impl IncrementCounter {
+    #[inline]
     fn yes(&self) -> bool {
         match self {
             IncrementCounter::Yes => true,
@@ -409,6 +417,7 @@ fn left_len(content_len: usize) -> usize {
 // right side off to another thread, if idle threads are available. If the
 // "rayon" feature is disabled, just make ordinary function calls for the left
 // and the right.
+#[inline]
 fn join<A, B, RA, RB>(oper_a: A, oper_b: B) -> (RA, RB)
 where
     A: FnOnce() -> RA + Send,
@@ -1021,11 +1030,13 @@ impl fmt::Debug for Hasher {
 #[cfg(feature = "std")]
 impl std::io::Write for Hasher {
     /// This is equivalent to [`update`](#method.update).
+    #[inline]
     fn write(&mut self, input: &[u8]) -> std::io::Result<usize> {
         self.update(input);
         Ok(input.len())
     }
 
+    #[inline]
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
@@ -1108,6 +1119,7 @@ impl fmt::Debug for OutputReader {
 
 #[cfg(feature = "std")]
 impl std::io::Read for OutputReader {
+    #[inline]
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.fill(buf);
         Ok(buf.len())

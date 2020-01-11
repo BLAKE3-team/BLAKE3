@@ -18,10 +18,12 @@ impl ChunkState {
         ))
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    #[inline]
     pub fn update(&mut self, input: &[u8]) -> &mut Self {
         self.0.update(input);
         self
