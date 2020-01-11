@@ -4,33 +4,33 @@ fn defined(var: &str) -> bool {
     env::var_os(var).is_some()
 }
 
-fn target_arch() -> String {
+fn target_components() -> Vec<String> {
     let target = env::var("TARGET").unwrap();
-    let target_components: Vec<&str> = target.split("-").collect();
-    target_components[0].to_string()
-}
-
-fn target_os() -> String {
-    let target = env::var("TARGET").unwrap();
-    let target_components: Vec<&str> = target.split("-").collect();
-    target_components[2].to_string()
-}
-
-fn is_windows() -> bool {
-    target_os() == "windows"
+    target.split("-").map(|s| s.to_string()).collect()
 }
 
 fn is_x86_64() -> bool {
-    target_arch() == "x86_64"
+    target_components()[0] == "x86_64"
 }
 
 fn is_armv7() -> bool {
-    target_arch() == "armv7"
+    target_components()[0] == "armv7"
+}
+
+// Windows targets may be using the MSVC toolchain or the GNU toolchain. The
+// right compiler flags to use depend on the toolchain. (And we don't want to
+// use flag_if_supported, because we don't want features to be silently
+// disabled by old compilers.)
+fn is_windows_msvc() -> bool {
+    // Some targets are only two components long, so check in steps.
+    target_components()[1] == "pc"
+        && target_components()[2] == "windows"
+        && target_components()[3] == "msvc"
 }
 
 fn new_build() -> cc::Build {
     let mut build = cc::Build::new();
-    if !is_windows() {
+    if !is_windows_msvc() {
         build.flag("-std=c11");
     }
     build
@@ -45,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if defined("CARGO_FEATURE_C_AVX512") && is_x86_64() {
         let mut build = new_build();
         build.file("c/blake3_avx512.c");
-        if is_windows() {
+        if is_windows_msvc() {
             // Note that a lot of versions of MSVC don't support /arch:AVX512,
             // and they'll discard it with a warning, hopefully leading to a
             // build error.
