@@ -37,12 +37,12 @@ keyed_hash, and derive_key modes. The input in each case is filled with a
 251-byte-long repeating pattern: 0, 1, 2, ..., 249, 250, 0, 1, ... The key used
 with keyed_hash is the 32-byte ASCII string given in the 'key' field below. For
 derive_key, the test input is used as the input key, and the context string is
-'BLAKE3 2019-12-27 16:29:52 example context'. (As good practice for following
-the security requirements of derive_key, test runners should make that context
-string a hardcoded constant, and we do not provided it in machine-readable
-form.) Outputs are encoded as hexadecimal. Each case is an extended output, and
-implementations should also check that the first 32 bytes match their
-default-length output.
+'BLAKE3 2019-12-27 16:29:52 test vectors context'. (As good practice for
+following the security requirements of derive_key, test runners should make
+that context string a hardcoded constant, and we do not provided it in
+machine-readable form.) Outputs are encoded as hexadecimal. Each case is an
+extended output, and implementations should also check that the first 32 bytes
+match their default-length output.
 "#;
 
 // Paint the input with a repeating byte pattern. We use a cycle length of 251,
