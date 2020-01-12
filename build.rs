@@ -36,6 +36,38 @@ fn new_build() -> cc::Build {
     build
 }
 
+const WINDOWS_MSVC_ERROR: &str = r#"
+The "c_avx512" feature is enabled, but your version of the MSVC C compiler does
+not support the "/arch:AVX512" flag. If you are building the "b3sum" or
+"bao_bin" crates, you can disable AVX-512 with Cargo's "--no-default-features"
+flag. (Note that this also disables other default features like Rayon-based
+multithreading, which you can re-enable with "--features=rayon".) Other crates
+might or might not support this workaround.
+"#;
+
+const GNU_ERROR: &str = r#"
+The "c_avx512" feature is enabled, but your C compiler does not support the
+"-mavx512f" flag. If you are building the "b3sum" or "bao_bin" crates, you can
+disable AVX-512 with Cargo's "--no-default-features" flag. (Note that this also
+disables other default features like Rayon-based multithreading, which you can
+re-enable with "--features=rayon".) Other crates might or might not support
+this workaround.
+"#;
+
+fn check_for_avx512_compiler_support(build: &cc::Build) {
+    if is_windows_msvc() {
+        if !build.is_flag_supported("/arch:AVX512").unwrap() {
+            eprintln!("{}", WINDOWS_MSVC_ERROR.trim());
+            std::process::exit(1);
+        }
+    } else {
+        if !build.is_flag_supported("-mavx512f").unwrap() {
+            eprintln!("{}", GNU_ERROR.trim());
+            std::process::exit(1);
+        }
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // "c_avx512' is a no-op for non-x86_64 targets. It also participates in
     // dynamic CPU feature detection, so it's generally safe to enable.
@@ -44,6 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // reason.
     if defined("CARGO_FEATURE_C_AVX512") && is_x86_64() {
         let mut build = new_build();
+        check_for_avx512_compiler_support(&build);
         build.file("c/blake3_avx512.c");
         if is_windows_msvc() {
             // Note that a lot of versions of MSVC don't support /arch:AVX512,
