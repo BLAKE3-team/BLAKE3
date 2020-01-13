@@ -125,12 +125,13 @@ fn write_hex_output(mut output: blake3::OutputReader, mut len: u64) -> Result<()
 }
 
 fn write_raw_output(mut output: blake3::OutputReader, mut len: u64) -> Result<()> {
-    let mut stdout = std::io::stdout().lock();
+    let stdout = std::io::stdout();
+    let mut handler = stdout.lock();
     let mut block = [0; blake3::BLOCK_LEN];
     while len > 0 {
         output.fill(&mut block);
         let take_bytes = cmp::min(len, block.len() as u64);
-        stdout.write(&block[..take_bytes as usize])?;
+        handler.write(&block[..take_bytes as usize])?;
         len -= take_bytes;
     }
 
