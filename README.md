@@ -48,6 +48,7 @@ with
   interface. You can install it with `cargo install b3sum`. It includes
   multi-threading and AVX-512 support by default.
 
+* [![Actions Status](https://github.com/BLAKE3-team/BLAKE3/workflows/tests/badge.svg)](https://github.com/BLAKE3-team/BLAKE3/actions)
 
 BLAKE3 was designed by:
 
