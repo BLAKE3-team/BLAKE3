@@ -125,7 +125,7 @@ fn write_hex_output(mut output: blake3::OutputReader, mut len: u64) -> Result<()
 }
 
 fn write_raw_output(mut output: blake3::OutputReader, mut len: u64) -> Result<()> {
-    let mut stdout = std::io::stdout();
+    let mut stdout = std::io::stdout().lock();
     let mut block = [0; blake3::BLOCK_LEN];
     while len > 0 {
         output.fill(&mut block);
