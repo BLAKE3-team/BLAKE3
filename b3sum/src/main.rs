@@ -191,28 +191,26 @@ fn main() -> Result<()> {
 
     if let Some(files) = args.values_of_os(FILE_ARG) {
         if raw_output && files.len() > 1 {
-            did_error = true;
-            eprintln!("b3sum: Only one filename can be provided when using --raw");
-        } else {
-            for filepath in files {
-                let filepath_str = filepath.to_string_lossy();
-                match hash_file(&base_hasher, filepath) {
-                    Ok(output) => {
-                        if raw_output {
-                            write_raw_output(output, len)?;
+            bail!("b3sum: Only one filename can be provided when using --raw");
+        }
+        for filepath in files {
+            let filepath_str = filepath.to_string_lossy();
+            match hash_file(&base_hasher, filepath) {
+                Ok(output) => {
+                    if raw_output {
+                        write_raw_output(output, len)?;
+                    } else {
+                        write_hex_output(output, len)?;
+                        if print_names {
+                            println!("  {}", filepath_str);
                         } else {
-                            write_hex_output(output, len)?;
-                            if print_names {
-                                println!("  {}", filepath_str);
-                            } else {
-                                println!();
-                            }
+                            println!();
                         }
                     }
-                    Err(e) => {
-                        did_error = true;
-                        eprintln!("b3sum: {}: {}", filepath_str, e);
-                    }
+                }
+                Err(e) => {
+                    did_error = true;
+                    eprintln!("b3sum: {}: {}", filepath_str, e);
                 }
             }
         }
