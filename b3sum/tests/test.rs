@@ -108,7 +108,15 @@ fn test_length_without_value_is_an_error() {
 
 #[test]
 fn test_raw_with_multi_files_is_an_error() {
-    let result = cmd!(b3sum_exe(), "--raw", "file1", "file2")
+    let f1 = tempfile::NamedTempFile::new().unwrap();
+    let f2 = tempfile::NamedTempFile::new().unwrap();
+
+    // Make sure it doesn't error with just one file
+    let result = cmd!(b3sum_exe(), "--raw", f1.path()).stdout_capture().run();
+    assert!(result.is_ok());
+
+    // Make sure it errors when both file are passed
+    let result = cmd!(b3sum_exe(), "--raw", f1.path(), f2.path())
         .stderr_capture()
         .run();
     assert!(result.is_err());
