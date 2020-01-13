@@ -17,13 +17,13 @@ fn test_hash_one() {
 #[test]
 fn test_hash_one_raw() {
     let expected = blake3::hash(b"foo").as_bytes().to_owned();
-    let mut stdout = Vec::new();
-    let mut output_reader = cmd!(b3sum_exe(), "--raw")
+    let output = cmd!(b3sum_exe(), "--raw")
         .stdin_bytes("foo")
-        .reader()
-        .unwrap();
-    output_reader.read_to_end(&mut stdout).unwrap();
-    assert_eq!(expected, stdout.as_slice());
+        .stdout_capture()
+        .run()
+        .unwrap()
+        .stdout;
+    assert_eq!(expected, output.as_slice());
 }
 
 #[test]
