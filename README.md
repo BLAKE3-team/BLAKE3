@@ -70,7 +70,7 @@ we recommend [Argon2](https://github.com/P-H-C/phc-winner-argon2).*
 This repository provides the `b3sum` command line utility and the
 `blake3` Rust crate.
 
-### The b3sum utility
+### The `b3sum` utility
 
 The `b3sum` utility allows you to process files and data from standard
 input using BLAKE3 in any of its three modes.
