@@ -40,6 +40,10 @@ jobs:
     - name: test b3sum --no-default-features
       run: cargo test --no-default-features
       working-directory: ./b3sum
+    # Test C code.
+    - name: cargo test C bindings
+      run: cargo test
+      working-directory: ./c/blake3_c_rust_bindings
 
   cross_tests:
     name: cross ${{ matrix.arch }}
@@ -65,7 +69,7 @@ jobs:
 
   # Currently only on x86.
   c_tests:
-    name: C tests
+    name: C Makefile tests
     runs-on: ubuntu-latest
 
     steps:

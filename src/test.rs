@@ -267,15 +267,18 @@ fn test_compare_reference_impl() {
             let mut expected_out = [0; OUT];
             reference_hasher.finalize(&mut expected_out);
 
+            // all at once
             let test_out = crate::hash(input);
-            assert_eq!(&test_out, array_ref!(expected_out, 0, 32));
+            assert_eq!(test_out, *array_ref!(expected_out, 0, 32));
+            // incremental
             let mut hasher = crate::Hasher::new();
             hasher.update(input);
-            assert_eq!(&hasher.finalize(), array_ref!(expected_out, 0, 32));
-            assert_eq!(&hasher.finalize(), &test_out);
+            assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+            assert_eq!(hasher.finalize(), test_out);
+            // xof
             let mut extended = [0; OUT];
             hasher.finalize_xof().fill(&mut extended);
-            assert_eq!(&extended[..], &expected_out[..]);
+            assert_eq!(extended[..], expected_out[..]);
         }
 
         // keyed
@@ -285,15 +288,18 @@ fn test_compare_reference_impl() {
             let mut expected_out = [0; OUT];
             reference_hasher.finalize(&mut expected_out);
 
+            // all at once
             let test_out = crate::keyed_hash(&TEST_KEY, input);
-            assert_eq!(&test_out, array_ref!(expected_out, 0, 32));
+            assert_eq!(test_out, *array_ref!(expected_out, 0, 32));
+            // incremental
             let mut hasher = crate::Hasher::new_keyed(&TEST_KEY);
             hasher.update(input);
-            assert_eq!(&hasher.finalize(), array_ref!(expected_out, 0, 32));
-            assert_eq!(&hasher.finalize(), &test_out);
+            assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+            assert_eq!(hasher.finalize(), test_out);
+            // xof
             let mut extended = [0; OUT];
             hasher.finalize_xof().fill(&mut extended);
-            assert_eq!(&extended[..], &expected_out[..]);
+            assert_eq!(extended[..], expected_out[..]);
         }
 
         // derive_key
@@ -304,16 +310,19 @@ fn test_compare_reference_impl() {
             let mut expected_out = [0; OUT];
             reference_hasher.finalize(&mut expected_out);
 
+            // all at once
             let mut test_out = [0; OUT];
             crate::derive_key(context, input, &mut test_out);
-            assert_eq!(&test_out[..], &expected_out[..]);
+            assert_eq!(test_out[..], expected_out[..]);
+            // incremental
             let mut hasher = crate::Hasher::new_derive_key(context);
             hasher.update(input);
-            assert_eq!(&hasher.finalize(), array_ref!(expected_out, 0, 32));
-            assert_eq!(&hasher.finalize(), array_ref!(test_out, 0, 32));
+            assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+            assert_eq!(hasher.finalize(), *array_ref!(test_out, 0, 32));
+            // xof
             let mut extended = [0; OUT];
             hasher.finalize_xof().fill(&mut extended);
-            assert_eq!(&extended[..], &expected_out[..]);
+            assert_eq!(extended[..], expected_out[..]);
         }
     }
 }
@@ -348,12 +357,13 @@ fn test_compare_update_multiple() {
             dbg!(second_update);
             let second_input = &input_buf[first_update..][..second_update];
             let total_input = &input_buf[..first_update + second_update];
+
             // Clone the hasher with first_update bytes already written, so
             // that the next iteration can reuse it.
             let mut test_hasher = test_hasher.clone();
             test_hasher.update(second_input);
-
-            assert_eq!(reference_hash(total_input), test_hasher.finalize());
+            let expected = reference_hash(total_input);
+            assert_eq!(expected, test_hasher.finalize());
         }
     }
 }
