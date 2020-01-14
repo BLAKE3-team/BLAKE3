@@ -1,3 +1,22 @@
+//! This is the reference implementation of BLAKE3. It is used for testing and
+//! as a readable example of the algorithms involved. Section 5.1 of [the BLAKE3
+//! spec](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf)
+//! discusses this implementation. You can render docs for this implementation
+//! by running `cargo doc --open` in this directory.
+//!
+//! # Example
+//!
+//! ```
+//! let mut hasher = reference_impl::Hasher::new();
+//! hasher.update(b"abc");
+//! hasher.update(b"def");
+//! let mut hash = [0; 32];
+//! hasher.finalize(&mut hash);
+//! let mut extended_hash = [0; 500];
+//! hasher.finalize(&mut extended_hash);
+//! assert_eq!(hash, extended_hash[..32]);
+//! ```
+
 use core::cmp::min;
 use core::convert::TryInto;
 
@@ -307,6 +326,7 @@ impl Hasher {
         self.cv_stack[self.cv_stack_len as usize]
     }
 
+    // Section 5.1.2 of the BLAKE3 spec explains this algorithm in more detail.
     fn add_chunk_chaining_value(&mut self, mut new_cv: [u32; 8], mut total_chunks: u64) {
         // This chunk might complete some subtrees. For each completed subtree,
         // its left child will be the current top entry in the CV stack, and
