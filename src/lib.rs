@@ -166,6 +166,27 @@ impl Hash {
         }
         s
     }
+
+    /// Parse a fixed-length hexidecimal string and return the resulting Hash.
+    ///
+    /// [`ArrayString`]: https://docs.rs/arrayvec/0.5.1/arrayvec/struct.ArrayString.html
+    pub fn from_hex(hex: ArrayString<[u8; 2 * OUT_LEN]>) -> Result<Self, std::io::ErrorKind> {
+        let mut bytes: [u8; OUT_LEN] = [0; OUT_LEN];
+        for (i, pair) in hex.as_str().as_bytes().chunks(2).enumerate() {
+            bytes[i] = hex_val(pair[0])? << 4 | hex_val(pair[1])?;
+        }
+
+        return Ok(Hash::from(bytes));
+
+        fn hex_val(c: u8) -> Result<u8, std::io::ErrorKind> {
+            match c {
+                b'A'..=b'F' => Ok(c - b'A' + 10),
+                b'a'..=b'f' => Ok(c - b'a' + 10),
+                b'0'..=b'9' => Ok(c - b'0'),
+                _ => Err(std::io::ErrorKind::InvalidInput),
+            }
+        }
+    }
 }
 
 impl From<[u8; OUT_LEN]> for Hash {
@@ -179,6 +200,16 @@ impl From<Hash> for [u8; OUT_LEN] {
     #[inline]
     fn from(hash: Hash) -> Self {
         hash.0
+    }
+}
+
+impl core::str::FromStr for Hash {
+    type Err = std::io::ErrorKind;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let string = ArrayString::<[u8; OUT_LEN * 2]>::from(s)
+            .map_err(|_| std::io::ErrorKind::InvalidInput)?;
+        Hash::from_hex(string)
     }
 }
 

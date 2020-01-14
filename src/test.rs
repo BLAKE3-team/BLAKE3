@@ -449,3 +449,22 @@ fn test_msg_schdule_permutation() {
 
     assert_eq!(generated, crate::MSG_SCHEDULE);
 }
+
+#[test]
+fn test_hex_encoding_decoding() {
+    let digest_str = "04e0bb39f30b1a3feb89f536c93be15055482df748674b00d26e5a75777702e9";
+    let mut hasher = crate::Hasher::new();
+    hasher.update(b"foo");
+    let digest = hasher.finalize();
+    assert_eq!(digest.to_hex().as_str(), digest_str);
+
+    // Test round trip
+    let input = arrayvec::ArrayString::from(digest_str).unwrap();
+    assert_eq!(digest.to_hex().as_str(), digest_str);
+    let digest = crate::Hash::from_hex(input).unwrap();
+    assert_eq!(digest.to_hex().as_str(), digest_str);
+
+    // Test string parsing
+    let digest: crate::Hash = digest_str.parse().unwrap();
+    assert_eq!(digest.to_hex().as_str(), digest_str);
+}
