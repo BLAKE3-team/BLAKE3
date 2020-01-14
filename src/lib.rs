@@ -170,7 +170,7 @@ impl Hash {
     /// Parse a fixed-length hexidecimal string and return the resulting Hash.
     ///
     /// [`ArrayString`]: https://docs.rs/arrayvec/0.5.1/arrayvec/struct.ArrayString.html
-    pub fn from_hex(hex: ArrayString<[u8; 2 * OUT_LEN]>) -> Result<Self, std::io::ErrorKind> {
+    pub fn from_hex(hex: ArrayString<[u8; 2 * OUT_LEN]>) -> Result<Self, &'static str> {
         let mut bytes: [u8; OUT_LEN] = [0; OUT_LEN];
         for (i, pair) in hex.as_str().as_bytes().chunks(2).enumerate() {
             bytes[i] = hex_val(pair[0])? << 4 | hex_val(pair[1])?;
@@ -178,12 +178,12 @@ impl Hash {
 
         return Ok(Hash::from(bytes));
 
-        fn hex_val(c: u8) -> Result<u8, std::io::ErrorKind> {
-            match c {
-                b'A'..=b'F' => Ok(c - b'A' + 10),
-                b'a'..=b'f' => Ok(c - b'a' + 10),
-                b'0'..=b'9' => Ok(c - b'0'),
-                _ => Err(std::io::ErrorKind::InvalidInput),
+        fn hex_val(byte: u8) -> Result<u8, &'static str> {
+            match byte {
+                b'A'..=b'F' => Ok(byte - b'A' + 10),
+                b'a'..=b'f' => Ok(byte - b'a' + 10),
+                b'0'..=b'9' => Ok(byte - b'0'),
+                _ => Err("blake3: Unable able to parse hexadecimal hash. Invalid character."),
             }
         }
     }
@@ -204,11 +204,12 @@ impl From<Hash> for [u8; OUT_LEN] {
 }
 
 impl core::str::FromStr for Hash {
-    type Err = std::io::ErrorKind;
+    type Err = &'static str;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let string = ArrayString::<[u8; OUT_LEN * 2]>::from(s)
-            .map_err(|_| std::io::ErrorKind::InvalidInput)?;
+        let string = ArrayString::<[u8; OUT_LEN * 2]>::from(s).map_err(|_| {
+            "blake3: Invalid str length. Only 32 byte digests can be parsed from a 64 char hex encoded str."
+        })?;
         Hash::from_hex(string)
     }
 }
