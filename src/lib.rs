@@ -114,7 +114,7 @@ const DERIVE_KEY_CONTEXT: u8 = 1 << 5;
 const DERIVE_KEY_MATERIAL: u8 = 1 << 6;
 
 /// Errors from parsing hex values
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ParseError {
     /// Hexadecimal str contains invalid character
     InvalidChar,
