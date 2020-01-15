@@ -177,12 +177,18 @@ impl Hash {
         s
     }
 
-    /// Parse a fixed-length hexidecimal string and return the resulting Hash.
+    /// Parse a hexidecimal string and return the resulting Hash.
     ///
-    /// [`ArrayString`]: https://docs.rs/arrayvec/0.5.1/arrayvec/struct.ArrayString.html
-    pub fn from_hex(hex: ArrayString<[u8; 2 * OUT_LEN]>) -> Result<Self, ParseError> {
+    /// The string must be 64 characters long, producting a 32 byte digest.
+    /// All other string length will return a `ParseError::InvalidLen`.
+    pub fn from_hex(hex: &str) -> Result<Self, ParseError> {
+        let str_bytes = hex.as_bytes();
+        if str_bytes.len() != OUT_LEN * 2 {
+            return Err(ParseError::InvalidLen);
+        }
+
         let mut bytes: [u8; OUT_LEN] = [0; OUT_LEN];
-        for (i, pair) in hex.as_str().as_bytes().chunks(2).enumerate() {
+        for (i, pair) in str_bytes.chunks(2).enumerate() {
             bytes[i] = hex_val(pair[0])? << 4 | hex_val(pair[1])?;
         }
 
@@ -217,9 +223,7 @@ impl core::str::FromStr for Hash {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let string =
-            ArrayString::<[u8; OUT_LEN * 2]>::from(s).map_err(|_| ParseError::InvalidLen)?;
-        Hash::from_hex(string)
+        Hash::from_hex(s)
     }
 }
 

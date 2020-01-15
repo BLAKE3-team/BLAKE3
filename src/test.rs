@@ -459,12 +459,10 @@ fn test_hex_encoding_decoding() {
     assert_eq!(digest.to_hex().as_str(), digest_str);
 
     // Test round trip
-    let input = arrayvec::ArrayString::from(digest_str).unwrap();
-    assert_eq!(digest.to_hex().as_str(), digest_str);
-    let digest = crate::Hash::from_hex(input).unwrap();
+    let digest = crate::Hash::from_hex(digest_str).unwrap();
     assert_eq!(digest.to_hex().as_str(), digest_str);
 
-    // Test string parsing
+    // Test string parsing via FromStr
     let digest: crate::Hash = digest_str.parse().unwrap();
     assert_eq!(digest.to_hex().as_str(), digest_str);
 }
