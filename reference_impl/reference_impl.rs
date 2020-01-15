@@ -307,7 +307,7 @@ impl Hasher {
     /// Construct a new `Hasher` for the key derivation function. The context
     /// string should be hardcoded, globally unique, and application-specific.
     pub fn new_derive_key(context: &str) -> Self {
-        let mut context_hasher = Hasher::new_internal(IV, DERIVE_KEY_CONTEXT);
+        let mut context_hasher = Self::new_internal(IV, DERIVE_KEY_CONTEXT);
         context_hasher.update(context.as_bytes());
         let mut context_key = [0; KEY_LEN];
         context_hasher.finalize(&mut context_key);
