@@ -78,6 +78,9 @@ fn maybe_memmap_file(file: &File) -> Result<Option<memmap::Mmap>> {
         // Mapping an empty file currently fails.
         // https://github.com/danburkert/memmap-rs/issues/72
         None
+    } else if file_size < 16 * 1024 {
+        // Mapping small files is not worth it.
+        None
     } else {
         // Explicitly set the length of the memory map, so that filesystem
         // changes can't race to violate the invariants we just checked.
