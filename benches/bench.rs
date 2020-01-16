@@ -258,6 +258,11 @@ fn bench_atonce_1024_kib(b: &mut Bencher) {
     bench_atonce(b, 1024 * KIB);
 }
 
+#[bench]
+fn bench_atonce_406668786(b: &mut Bencher) {
+    bench_atonce(b, 406668786);
+}
+
 fn bench_incremental(b: &mut Bencher, len: usize) {
     let mut input = RandomInput::new(b, len);
     b.iter(|| blake3::Hasher::new().update(input.get()).finalize());

@@ -332,3 +332,8 @@ fn bench_incremental_0512_kib(b: &mut Bencher) {
 fn bench_incremental_1024_kib(b: &mut Bencher) {
     bench_incremental(b, 1024 * KIB);
 }
+
+#[bench]
+fn bench_incremental_406668786(b: &mut Bencher) {
+    bench_incremental(b, 406668786);
+}
