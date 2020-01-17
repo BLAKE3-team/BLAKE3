@@ -10,6 +10,8 @@ FLAGS:
     -h, --help        Prints help information
         --keyed       Uses the keyed mode, with the raw 32-byte key read from stdin
         --no-names    Omits filenames in the output
+        --raw         Writes raw output bytes to stdout, rather than hex. --no-names is implied.
+                      In this case, only a single input is allowed
     -V, --version     Prints version information
 
 OPTIONS:
