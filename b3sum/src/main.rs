@@ -46,7 +46,7 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
         .arg(
             Arg::with_name(RAW_ARG)
                 .long(RAW_ARG)
-                .help("Raw output without hexidecimal encoding. \nOnly one filename may be provided and no filenames will be displayed."),
+                .help("Writes raw output bytes to stdout, rather than hex. --no-names is implied.\nIn this case, only a single input is allowed"),
         )
         .get_matches()
 }
