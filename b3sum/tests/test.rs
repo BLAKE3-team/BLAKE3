@@ -11,7 +11,19 @@ pub fn b3sum_exe() -> PathBuf {
 fn test_hash_one() {
     let expected = blake3::hash(b"foo").to_hex();
     let output = cmd!(b3sum_exe()).stdin_bytes("foo").read().unwrap();
-    assert_eq!(&*expected, &*output);
+    assert_eq!(&*expected, output);
+}
+
+#[test]
+fn test_hash_one_raw() {
+    let expected = blake3::hash(b"foo").as_bytes().to_owned();
+    let output = cmd!(b3sum_exe(), "--raw")
+        .stdin_bytes("foo")
+        .stdout_capture()
+        .run()
+        .unwrap()
+        .stdout;
+    assert_eq!(expected, output.as_slice());
 }
 
 #[test]
@@ -89,6 +101,22 @@ fn test_derive_key() {
 fn test_length_without_value_is_an_error() {
     let result = cmd!(b3sum_exe(), "--length")
         .stdin_bytes("foo")
+        .stderr_capture()
+        .run();
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_raw_with_multi_files_is_an_error() {
+    let f1 = tempfile::NamedTempFile::new().unwrap();
+    let f2 = tempfile::NamedTempFile::new().unwrap();
+
+    // Make sure it doesn't error with just one file
+    let result = cmd!(b3sum_exe(), "--raw", f1.path()).stdout_capture().run();
+    assert!(result.is_ok());
+
+    // Make sure it errors when both file are passed
+    let result = cmd!(b3sum_exe(), "--raw", f1.path(), f2.path())
         .stderr_capture()
         .run();
     assert!(result.is_err());

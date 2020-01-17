@@ -10,6 +10,7 @@ const LENGTH_ARG: &str = "length";
 const KEYED_ARG: &str = "keyed";
 const DERIVE_KEY_ARG: &str = "derive-key";
 const NO_NAMES_ARG: &str = "no-names";
+const RAW_ARG: &str = "raw";
 
 fn clap_parse_argv() -> clap::ArgMatches<'static> {
     App::new("b3sum")
@@ -41,6 +42,11 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
             Arg::with_name(NO_NAMES_ARG)
                 .long(NO_NAMES_ARG)
                 .help("Omits filenames in the output"),
+        )
+        .arg(
+            Arg::with_name(RAW_ARG)
+                .long(RAW_ARG)
+                .help("Raw output without hexidecimal encoding. \nOnly one filename may be provided and no filenames will be displayed."),
         )
         .get_matches()
 }
@@ -108,7 +114,7 @@ fn maybe_hash_memmap(
     Ok(None)
 }
 
-fn write_output(mut output: blake3::OutputReader, mut len: u64) -> Result<()> {
+fn write_hex_output(mut output: blake3::OutputReader, mut len: u64) -> Result<()> {
     // Encoding multiples of the block size is most efficient.
     let mut block = [0; blake3::BLOCK_LEN];
     while len > 0 {
@@ -118,6 +124,15 @@ fn write_output(mut output: blake3::OutputReader, mut len: u64) -> Result<()> {
         print!("{}", &hex_str[..2 * take_bytes as usize]);
         len -= take_bytes;
     }
+    Ok(())
+}
+
+fn write_raw_output(output: blake3::OutputReader, len: u64) -> Result<()> {
+    let mut output = output.take(len);
+    let stdout = std::io::stdout();
+    let mut handler = stdout.lock();
+    std::io::copy(&mut output, &mut handler)?;
+
     Ok(())
 }
 
@@ -169,22 +184,31 @@ fn main() -> Result<()> {
         blake3::Hasher::new()
     };
     let print_names = !args.is_present(NO_NAMES_ARG);
+    let raw_output = args.is_present(RAW_ARG);
     let mut did_error = false;
+
     if let Some(files) = args.values_of_os(FILE_ARG) {
+        if raw_output && files.len() > 1 {
+            bail!("b3sum: Only one filename can be provided when using --raw");
+        }
         for filepath in files {
             let filepath_str = filepath.to_string_lossy();
             match hash_file(&base_hasher, filepath) {
                 Ok(output) => {
-                    write_output(output, len)?;
-                    if print_names {
-                        println!("  {}", filepath_str);
+                    if raw_output {
+                        write_raw_output(output, len)?;
                     } else {
-                        println!();
+                        write_hex_output(output, len)?;
+                        if print_names {
+                            println!("  {}", filepath_str);
+                        } else {
+                            println!();
+                        }
                     }
                 }
                 Err(e) => {
                     did_error = true;
-                    println!("b3sum: {}: {}", filepath_str, e);
+                    eprintln!("b3sum: {}: {}", filepath_str, e);
                 }
             }
         }
@@ -192,8 +216,12 @@ fn main() -> Result<()> {
         let stdin = std::io::stdin();
         let stdin = stdin.lock();
         let output = hash_reader(&base_hasher, stdin)?;
-        write_output(output, len)?;
-        println!();
+        if raw_output {
+            write_raw_output(output, len)?;
+        } else {
+            write_hex_output(output, len)?;
+            println!();
+        }
     }
     std::process::exit(if did_error { 1 } else { 0 });
 }
