@@ -535,6 +535,10 @@ fn compress_parents_parallel(
 // wouldn't be able to implement exendable ouput.) Note that this function is
 // not used when the whole input is only 1 chunk long; that's a different
 // codepath.
+//
+// Why not just have the caller split the input on the first update(), instead
+// of implementing this special rule? Because we don't want to limit SIMD or
+// multi-threading parallelism for that update().
 fn compress_subtree_wide(
     input: &[u8],
     key: &CVWords,
@@ -603,7 +607,8 @@ fn compress_subtree_wide(
 // last parent node, however. Instead, return its message bytes (the
 // concatenated chaining values of its children). This is necessary when the
 // first call to update() supplies a complete subtree, because the topmost
-// parent node of that subtree could end up being the root.
+// parent node of that subtree could end up being the root. It's also necessary
+// for extended output in the general case.
 //
 // As with compress_subtree_wide(), this function is not used on inputs of 1
 // chunk or less. That's a different codepath.
