@@ -512,6 +512,9 @@ unsafe fn transpose_msg_vecs(inputs: &[*const u8; DEGREE], block_offset: usize) 
         loadu(inputs[2].add(block_offset + 3 * 4 * DEGREE)),
         loadu(inputs[3].add(block_offset + 3 * 4 * DEGREE)),
     ];
+    for i in 0..DEGREE {
+        _mm_prefetch(inputs[i].add(block_offset + 256) as * const i8, _MM_HINT_T0);
+    }
     let squares = mut_array_refs!(&mut vecs, DEGREE, DEGREE, DEGREE, DEGREE);
     transpose_vecs(squares.0);
     transpose_vecs(squares.1);
