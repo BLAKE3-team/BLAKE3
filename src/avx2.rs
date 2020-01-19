@@ -380,7 +380,7 @@ pub unsafe fn hash8(
 }
 
 #[target_feature(enable = "avx2")]
-pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
+pub unsafe fn hash_many<A: tinyvec::Array<Item = u8>>(
     mut inputs: &[&A],
     key: &CVWords,
     mut counter: u64,

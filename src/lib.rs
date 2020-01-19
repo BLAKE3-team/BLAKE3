@@ -59,7 +59,6 @@ pub mod portable;
 pub mod sse41;
 
 use arrayref::{array_mut_ref, array_ref};
-use arrayvec::{ArrayString, ArrayVec};
 use core::cmp;
 use core::fmt;
 use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
@@ -150,22 +149,6 @@ impl Hash {
     pub fn as_bytes(&self) -> &[u8; OUT_LEN] {
         &self.0
     }
-
-    /// The hexadecimal encoding of the `Hash`. The returned [`ArrayString`] is
-    /// a fixed size and doesn't allocate memory on the heap. Note that
-    /// [`ArrayString`] doesn't provide constant-time equality checking, so if
-    /// you need to compare hashes, prefer the `Hash` type.
-    ///
-    /// [`ArrayString`]: https://docs.rs/arrayvec/0.5.1/arrayvec/struct.ArrayString.html
-    pub fn to_hex(&self) -> ArrayString<[u8; 2 * OUT_LEN]> {
-        let mut s = ArrayString::new();
-        let table = b"0123456789abcdef";
-        for &b in self.0.iter() {
-            s.push(table[(b >> 4) as usize] as char);
-            s.push(table[(b & 0xf) as usize] as char);
-        }
-        s
-    }
 }
 
 impl From<[u8; OUT_LEN]> for Hash {
@@ -202,7 +185,25 @@ impl Eq for Hash {}
 
 impl fmt::Debug for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Hash({})", self.to_hex())
+        write!(f, "Hash({:x})", self)
+    }
+}
+
+impl fmt::LowerHex for Hash {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for b in self.as_bytes() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::UpperHex for Hash {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for b in self.as_bytes() {
+            write!(f, "{:02X}", b)?;
+        }
+        Ok(())
     }
 }
 
@@ -447,12 +448,14 @@ fn compress_chunks_parallel(
     debug_assert!(input.len() <= MAX_SIMD_DEGREE * CHUNK_LEN);
 
     let mut chunks_exact = input.chunks_exact(CHUNK_LEN);
-    let mut chunks_array = ArrayVec::<[&[u8; CHUNK_LEN]; MAX_SIMD_DEGREE]>::new();
-    for chunk in &mut chunks_exact {
-        chunks_array.push(array_ref!(chunk, 0, CHUNK_LEN));
+    let mut chunks_array = [&[0u8; CHUNK_LEN]; MAX_SIMD_DEGREE];
+    let mut chunks_so_far = 0;
+    for (a, b) in chunks_array.iter_mut().zip(&mut chunks_exact) {
+        *a = array_ref!(b, 0, CHUNK_LEN);
+        chunks_so_far += 1;
     }
     platform.hash_many(
-        &chunks_array,
+        &chunks_array[..chunks_so_far],
         key,
         chunk_counter,
         IncrementCounter::Yes,
@@ -464,7 +467,6 @@ fn compress_chunks_parallel(
 
     // Hash the remaining partial chunk, if there is one. Note that the empty
     // chunk (meaning the empty message) is a different codepath.
-    let chunks_so_far = chunks_array.len();
     if !chunks_exact.remainder().is_empty() {
         let counter = chunk_counter + chunks_so_far as u64;
         let mut chunk_state = ChunkState::new(key, counter, flags, platform);
@@ -497,12 +499,14 @@ fn compress_parents_parallel(
     let mut parents_exact = child_chaining_values.chunks_exact(BLOCK_LEN);
     // Use MAX_SIMD_DEGREE_OR_2 rather than MAX_SIMD_DEGREE here, because of
     // the requirements of compress_subtree_wide().
-    let mut parents_array = ArrayVec::<[&[u8; BLOCK_LEN]; MAX_SIMD_DEGREE_OR_2]>::new();
-    for parent in &mut parents_exact {
-        parents_array.push(array_ref!(parent, 0, BLOCK_LEN));
+    let mut parents_array = [&[0u8; BLOCK_LEN]; MAX_SIMD_DEGREE_OR_2];
+    let mut parents_so_far = 0;
+    for (a, b) in parents_array.iter_mut().zip(&mut parents_exact) {
+        *a = array_ref!(b, 0, BLOCK_LEN);
+        parents_so_far += 1;
     }
     platform.hash_many(
-        &parents_array,
+        &parents_array[..parents_so_far],
         key,
         0, // Parents always use counter 0.
         IncrementCounter::No,
@@ -513,7 +517,6 @@ fn compress_parents_parallel(
     );
 
     // If there's an odd child left over, it becomes an output.
-    let parents_so_far = parents_array.len();
     if !parents_exact.remainder().is_empty() {
         out[parents_so_far * OUT_LEN..][..OUT_LEN].copy_from_slice(parents_exact.remainder());
         parents_so_far + 1
@@ -738,7 +741,7 @@ fn parent_node_output(
 pub struct Hasher {
     key: CVWords,
     chunk_state: ChunkState,
-    cv_stack: ArrayVec<[CVBytes; MAX_DEPTH]>,
+    cv_stack: tinyvec::ArrayVec<[CVBytes; MAX_DEPTH]>,
 }
 
 impl Hasher {
@@ -746,7 +749,7 @@ impl Hasher {
         Self {
             key: *key,
             chunk_state: ChunkState::new(key, 0, flags, Platform::detect()),
-            cv_stack: ArrayVec::new(),
+            cv_stack: tinyvec::ArrayVec::from_array_len([Default::default(); MAX_DEPTH], 0),
         }
     }
 

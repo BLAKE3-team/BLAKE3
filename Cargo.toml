@@ -23,7 +23,6 @@ std = []
 
 [dependencies]
 arrayref = "0.3.5"
-arrayvec = { version = "0.5.1", default-features = false, features = ["array-sizes-33-128"] }
 constant_time_eq = "0.1.5"
 # A performance note for the "rayon" feature: Multi-threading can have
 # significant overhead for small inputs, particularly on x86 where individual
@@ -34,6 +33,11 @@ constant_time_eq = "0.1.5"
 # it for your specific use case.
 rayon = { version = "1.2.1", optional = true }
 cfg-if = "0.1.10"
+
+# replace with crates.io version when available (probably 0.3.0 or 0.2.1)
+[dependencies.tinyvec]
+git = "https://github.com/Lokathor/tinyvec"
+features = ["nightly_const_generics", "alloc"]
 
 [dev-dependencies]
 page_size = "0.4.1"

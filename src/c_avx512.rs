@@ -34,7 +34,7 @@ pub unsafe fn compress_xof(
 }
 
 // Unsafe because this may only be called on platforms supporting AVX-512.
-pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
+pub unsafe fn hash_many<A: tinyvec::Array<Item = u8>>(
     inputs: &[&A],
     key: &CVWords,
     counter: u64,

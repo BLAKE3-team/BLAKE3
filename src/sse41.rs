@@ -629,7 +629,7 @@ pub unsafe fn hash4(
 }
 
 #[target_feature(enable = "sse4.1")]
-unsafe fn hash1<A: arrayvec::Array<Item = u8>>(
+unsafe fn hash1<A: tinyvec::Array<Item = u8>>(
     input: &A,
     key: &CVWords,
     counter: u64,
@@ -660,7 +660,7 @@ unsafe fn hash1<A: arrayvec::Array<Item = u8>>(
 }
 
 #[target_feature(enable = "sse4.1")]
-pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
+pub unsafe fn hash_many<A: tinyvec::Array<Item = u8>>(
     mut inputs: &[&A],
     key: &CVWords,
     mut counter: u64,

@@ -1,6 +1,5 @@
 use crate::{CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, OUT_LEN};
 use arrayref::array_ref;
-use arrayvec::ArrayVec;
 use core::usize;
 use rand::prelude::*;
 
@@ -105,9 +104,9 @@ pub fn test_hash_many_fn(
     let counter = (1u64 << 32) - 1;
 
     // First hash chunks.
-    let mut chunks = ArrayVec::<[&[u8; CHUNK_LEN]; NUM_INPUTS]>::new();
-    for i in 0..NUM_INPUTS {
-        chunks.push(array_ref!(input_buf, i * CHUNK_LEN, CHUNK_LEN));
+    let mut chunks = [&[0u8; CHUNK_LEN]; NUM_INPUTS];
+    for (i, chunk) in (0..NUM_INPUTS).into_iter().zip(&mut chunks) {
+        *chunk = array_ref!(input_buf, i * CHUNK_LEN, CHUNK_LEN);
     }
     let mut portable_chunks_out = [0; NUM_INPUTS * OUT_LEN];
     crate::portable::hash_many(
@@ -144,9 +143,9 @@ pub fn test_hash_many_fn(
     }
 
     // Then hash parents.
-    let mut parents = ArrayVec::<[&[u8; 2 * OUT_LEN]; NUM_INPUTS]>::new();
-    for i in 0..NUM_INPUTS {
-        parents.push(array_ref!(input_buf, i * 2 * OUT_LEN, 2 * OUT_LEN));
+    let mut parents = [&[0u8; 2 * OUT_LEN]; NUM_INPUTS];
+    for (i, parent) in (0..NUM_INPUTS).into_iter().zip(&mut parents) {
+        *parent = array_ref!(input_buf, i * 2 * OUT_LEN, 2 * OUT_LEN);
     }
     let mut portable_parents_out = [0; NUM_INPUTS * OUT_LEN];
     crate::portable::hash_many(

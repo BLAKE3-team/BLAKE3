@@ -167,7 +167,7 @@ impl Platform {
     // after every block, there's a small but measurable performance loss.
     // Compressing chunks with a dedicated loop avoids this.
 
-    pub(crate) fn hash_many<A: arrayvec::Array<Item = u8>>(
+    pub(crate) fn hash_many<A: tinyvec::Array<Item = u8>>(
         &self,
         inputs: &[&A],
         key: &CVWords,

@@ -120,7 +120,7 @@ pub fn compress_xof(
     crate::platform::le_bytes_from_words_64(&state)
 }
 
-pub fn hash1<A: arrayvec::Array<Item = u8>>(
+pub fn hash1<A: tinyvec::Array<Item = u8>>(
     input: &A,
     key: &CVWords,
     counter: u64,
@@ -150,7 +150,7 @@ pub fn hash1<A: arrayvec::Array<Item = u8>>(
     *out = crate::platform::le_bytes_from_words_32(&cv);
 }
 
-pub fn hash_many<A: arrayvec::Array<Item = u8>>(
+pub fn hash_many<A: tinyvec::Array<Item = u8>>(
     inputs: &[&A],
     key: &CVWords,
     mut counter: u64,
