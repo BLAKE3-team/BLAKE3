@@ -9,6 +9,7 @@ const FILE_ARG: &str = "file";
 const LENGTH_ARG: &str = "length";
 const KEYED_ARG: &str = "keyed";
 const DERIVE_KEY_ARG: &str = "derive-key";
+const NO_MMAP_ARG: &str = "no-mmap";
 const NO_NAMES_ARG: &str = "no-names";
 const RAW_ARG: &str = "raw";
 
@@ -37,6 +38,11 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
                 .takes_value(true)
                 .value_name("CONTEXT")
                 .help("Uses the key derivation mode, with the input as key material"),
+        )
+        .arg(
+            Arg::with_name(NO_MMAP_ARG)
+                .long(NO_MMAP_ARG)
+                .help("Never use memory maps"),
         )
         .arg(
             Arg::with_name(NO_NAMES_ARG)
@@ -104,11 +110,14 @@ fn maybe_memmap_file(file: &File) -> Result<Option<memmap::Mmap>> {
 fn maybe_hash_memmap(
     _base_hasher: &blake3::Hasher,
     _file: &File,
+    mmap: bool,
 ) -> Result<Option<blake3::OutputReader>> {
     #[cfg(feature = "memmap")]
     {
-        if let Some(map) = maybe_memmap_file(_file)? {
-            return Ok(Some(_base_hasher.clone().update(&map).finalize_xof()));
+        if mmap {
+            if let Some(map) = maybe_memmap_file(_file)? {
+                return Ok(Some(_base_hasher.clone().update(&map).finalize_xof()));
+            }
         }
     }
     Ok(None)
@@ -140,9 +149,10 @@ fn write_raw_output(output: blake3::OutputReader, len: u64) -> Result<()> {
 fn hash_file(
     base_hasher: &blake3::Hasher,
     filepath: &std::ffi::OsStr,
+    mmap: bool,
 ) -> Result<blake3::OutputReader> {
     let file = File::open(filepath)?;
-    if let Some(output) = maybe_hash_memmap(&base_hasher, &file)? {
+    if let Some(output) = maybe_hash_memmap(&base_hasher, &file, mmap)? {
         Ok(output) // the fast path
     } else {
         // the slow path
@@ -183,6 +193,7 @@ fn main() -> Result<()> {
     } else {
         blake3::Hasher::new()
     };
+    let mmap = !args.is_present(NO_MMAP_ARG);
     let print_names = !args.is_present(NO_NAMES_ARG);
     let raw_output = args.is_present(RAW_ARG);
     let mut did_error = false;
@@ -193,7 +204,7 @@ fn main() -> Result<()> {
         }
         for filepath in files {
             let filepath_str = filepath.to_string_lossy();
-            match hash_file(&base_hasher, filepath) {
+            match hash_file(&base_hasher, filepath, mmap) {
                 Ok(output) => {
                     if raw_output {
                         write_raw_output(output, len)?;

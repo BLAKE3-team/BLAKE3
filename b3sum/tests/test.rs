@@ -98,6 +98,19 @@ fn test_derive_key() {
 }
 
 #[test]
+fn test_no_mmap() {
+    let f = tempfile::NamedTempFile::new().unwrap();
+    f.as_file().write_all(b"foo").unwrap();
+    f.as_file().flush().unwrap();
+
+    let expected = blake3::hash(b"foo").to_hex();
+    let output = cmd!(b3sum_exe(), "--no-mmap", "--no-names", f.path())
+        .read()
+        .unwrap();
+    assert_eq!(&*expected, &*output);
+}
+
+#[test]
 fn test_length_without_value_is_an_error() {
     let result = cmd!(b3sum_exe(), "--length")
         .stdin_bytes("foo")
