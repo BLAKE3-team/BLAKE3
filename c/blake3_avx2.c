@@ -293,7 +293,7 @@ void blake3_hash8_avx2(const uint8_t *const *inputs, size_t blocks,
   storeu(h_vecs[7], &out[7 * sizeof(__m256i)]);
 }
 
-#if defined(BLAKE3_USE_SSE41)
+#if !defined(BLAKE3_NO_SSE41)
 void blake3_hash_many_sse41(const uint8_t *const *inputs, size_t num_inputs,
                             size_t blocks, const uint32_t key[8],
                             uint64_t counter, bool increment_counter,
@@ -322,7 +322,7 @@ void blake3_hash_many_avx2(const uint8_t *const *inputs, size_t num_inputs,
     num_inputs -= DEGREE;
     out = &out[DEGREE * BLAKE3_OUT_LEN];
   }
-#if defined(BLAKE3_USE_SSE41)
+#if !defined(BLAKE3_NO_SSE41)
   blake3_hash_many_sse41(inputs, num_inputs, blocks, key, counter,
                          increment_counter, flags, flags_start, flags_end, out);
 #else
