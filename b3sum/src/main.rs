@@ -3,12 +3,13 @@ use clap::{App, Arg};
 use std::cmp;
 use std::convert::TryInto;
 use std::fs::File;
-use std::io::prelude::*;
+use std::io::{prelude::*, ErrorKind};
 
 const FILE_ARG: &str = "file";
 const LENGTH_ARG: &str = "length";
 const KEYED_ARG: &str = "keyed";
 const DERIVE_KEY_ARG: &str = "derive-key";
+const BUFFER_SIZE: &str = "buffer-size";
 const NO_MMAP_ARG: &str = "no-mmap";
 const NO_NAMES_ARG: &str = "no-names";
 const RAW_ARG: &str = "raw";
@@ -40,6 +41,14 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
                 .help("Uses the key derivation mode, with the input as key material"),
         )
         .arg(
+            Arg::with_name(BUFFER_SIZE)
+                .long(BUFFER_SIZE)
+                .takes_value(true)
+                .value_name("SIZE")
+                .hidden(true)
+                .help("Input buffer size"),
+        )
+        .arg(
             Arg::with_name(NO_MMAP_ARG)
                 .long(NO_MMAP_ARG)
                 .help("Never use memory maps"),
@@ -57,22 +66,56 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
         .get_matches()
 }
 
+enum LazyBuffer {
+    Size(usize),
+    Buffer(Box<[u8]>),
+}
+
+impl LazyBuffer {
+    fn new(size: usize) -> Self {
+        Self::Size(size)
+    }
+
+    fn get(&mut self) -> &mut [u8] {
+        if let Self::Size(size) = *self {
+            *self = Self::Buffer(vec![0; size].into_boxed_slice());
+        }
+
+        match *self {
+            Self::Size(_) => unreachable!(),
+            Self::Buffer(ref mut buf) => buf,
+        }
+    }
+}
+
+// The buffer should be as large of possible, while still fitting into the L3
+// cache. Most desktop processors have at least 1 MiB of L3 cache per physical
+// core, and at most 2 threads per core, so we should use at most 512 KiB per
+// logical core. Use half that value just to be safe. TODO: benchmark
+fn default_buffer_size() -> usize {
+    256 * 1024 * num_cpus::get()
+}
+
 // The slow path, for inputs that we can't memmap.
 fn hash_reader(
     base_hasher: &blake3::Hasher,
     mut reader: impl Read,
+    buffer: &mut [u8],
 ) -> Result<blake3::OutputReader> {
     let mut hasher = base_hasher.clone();
-    // TODO: This is a narrow copy, so it might not take advantage of SIMD or
-    // threads. With a larger buffer size, most of that performance can be
-    // recovered. However, this requires some platform-specific tuning, based
-    // on both the SIMD degree and the number of cores. A double-buffering
-    // strategy is also helpful, where a dedicated background thread reads
-    // input into one buffer while another thread is calling update() on a
-    // second buffer. Since this is the slow path anyway, do the simple thing
-    // for now.
-    std::io::copy(&mut reader, &mut hasher)?;
-    Ok(hasher.finalize_xof())
+    // TODO: A double-buffering strategy might also be helpful, where a
+    // dedicated background thread reads input into one buffer while another
+    // thread is calling update() on a second buffer.
+    loop {
+        match reader.read(buffer) {
+            Ok(0) => return Ok(hasher.finalize_xof()),
+            Ok(len) => {
+                hasher.update(&buffer[..len]);
+            }
+            Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e)?,
+        }
+    }
 }
 
 #[cfg(feature = "memmap")]
@@ -150,13 +193,14 @@ fn hash_file(
     base_hasher: &blake3::Hasher,
     filepath: &std::ffi::OsStr,
     mmap: bool,
+    buffer: &mut LazyBuffer,
 ) -> Result<blake3::OutputReader> {
     let file = File::open(filepath)?;
     if let Some(output) = maybe_hash_memmap(&base_hasher, &file, mmap)? {
         Ok(output) // the fast path
     } else {
         // the slow path
-        hash_reader(&base_hasher, file)
+        hash_reader(&base_hasher, file, buffer.get())
     }
 }
 
@@ -193,6 +237,16 @@ fn main() -> Result<()> {
     } else {
         blake3::Hasher::new()
     };
+    let buffer_size = args
+        .value_of(BUFFER_SIZE)
+        .unwrap_or("0")
+        .parse()
+        .context("Failed to parse buffer size.")?;
+    let mut buffer = LazyBuffer::new(if buffer_size > 0 {
+        buffer_size
+    } else {
+        default_buffer_size()
+    });
     let mmap = !args.is_present(NO_MMAP_ARG);
     let print_names = !args.is_present(NO_NAMES_ARG);
     let raw_output = args.is_present(RAW_ARG);
@@ -204,7 +258,7 @@ fn main() -> Result<()> {
         }
         for filepath in files {
             let filepath_str = filepath.to_string_lossy();
-            match hash_file(&base_hasher, filepath, mmap) {
+            match hash_file(&base_hasher, filepath, mmap, &mut buffer) {
                 Ok(output) => {
                     if raw_output {
                         write_raw_output(output, len)?;
@@ -226,7 +280,7 @@ fn main() -> Result<()> {
     } else {
         let stdin = std::io::stdin();
         let stdin = stdin.lock();
-        let output = hash_reader(&base_hasher, stdin)?;
+        let output = hash_reader(&base_hasher, stdin, buffer.get())?;
         if raw_output {
             write_raw_output(output, len)?;
         } else {
