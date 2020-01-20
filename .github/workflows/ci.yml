@@ -44,6 +44,10 @@ jobs:
     - name: cargo test C bindings
       run: cargo test
       working-directory: ./c/blake3_c_rust_bindings
+    # Reference impl doc test.
+    - name: reference impl doc test
+      run: cargo test
+      working-directory: ./reference_impl
 
   cross_tests:
     name: cross ${{ matrix.arch }}
