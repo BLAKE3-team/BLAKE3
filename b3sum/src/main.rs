@@ -42,7 +42,7 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
         .arg(
             Arg::with_name(NO_MMAP_ARG)
                 .long(NO_MMAP_ARG)
-                .help("Never use memory maps"),
+                .help("Disables memory mapping"),
         )
         .arg(
             Arg::with_name(NO_NAMES_ARG)
@@ -110,14 +110,11 @@ fn maybe_memmap_file(file: &File) -> Result<Option<memmap::Mmap>> {
 fn maybe_hash_memmap(
     _base_hasher: &blake3::Hasher,
     _file: &File,
-    mmap: bool,
 ) -> Result<Option<blake3::OutputReader>> {
     #[cfg(feature = "memmap")]
     {
-        if mmap {
-            if let Some(map) = maybe_memmap_file(_file)? {
-                return Ok(Some(_base_hasher.clone().update(&map).finalize_xof()));
-            }
+        if let Some(map) = maybe_memmap_file(_file)? {
+            return Ok(Some(_base_hasher.clone().update(&map).finalize_xof()));
         }
     }
     Ok(None)
@@ -149,15 +146,16 @@ fn write_raw_output(output: blake3::OutputReader, len: u64) -> Result<()> {
 fn hash_file(
     base_hasher: &blake3::Hasher,
     filepath: &std::ffi::OsStr,
-    mmap: bool,
+    mmap_disabled: bool,
 ) -> Result<blake3::OutputReader> {
     let file = File::open(filepath)?;
-    if let Some(output) = maybe_hash_memmap(&base_hasher, &file, mmap)? {
-        Ok(output) // the fast path
-    } else {
-        // the slow path
-        hash_reader(&base_hasher, file)
+    if !mmap_disabled {
+        if let Some(output) = maybe_hash_memmap(&base_hasher, &file)? {
+            return Ok(output); // the fast path
+        }
     }
+    // the slow path
+    hash_reader(&base_hasher, file)
 }
 
 fn read_key_from_stdin() -> Result<[u8; blake3::KEY_LEN]> {
@@ -193,7 +191,7 @@ fn main() -> Result<()> {
     } else {
         blake3::Hasher::new()
     };
-    let mmap = !args.is_present(NO_MMAP_ARG);
+    let mmap_disabled = args.is_present(NO_MMAP_ARG);
     let print_names = !args.is_present(NO_NAMES_ARG);
     let raw_output = args.is_present(RAW_ARG);
     let mut did_error = false;
@@ -204,7 +202,7 @@ fn main() -> Result<()> {
         }
         for filepath in files {
             let filepath_str = filepath.to_string_lossy();
-            match hash_file(&base_hasher, filepath, mmap) {
+            match hash_file(&base_hasher, filepath, mmap_disabled) {
                 Ok(output) => {
                     if raw_output {
                         write_raw_output(output, len)?;
