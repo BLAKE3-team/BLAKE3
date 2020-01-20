@@ -882,12 +882,17 @@ impl Hasher {
             debug_assert_eq!(CHUNK_LEN.count_ones(), 1, "power of 2 chunk len");
             let mut subtree_len = largest_power_of_two_leq(input.len());
             let count_so_far = self.chunk_state.chunk_counter * CHUNK_LEN as u64;
-            // Shrink the subtree_len until it evenly divides the count so far.
-            // We know it's a power of 2, so we can use a bitmask rather than
-            // the more expensive modulus operation. Note that if the caller
-            // consistently passes power-of-2 inputs of the same size (as is
-            // hopefully typical), we'll always skip over this loop.
-            while (subtree_len - 1) as u64 & count_so_far != 0 {
+            // Shrink the subtree_len until *half of it* it evenly divides the
+            // count so far. Why half? Because compress_subtree_to_parent_node
+            // will return a pair of chaining values, each representing half of
+            // the input. As long as those evenly divide the input so far,
+            // we're good. We know that subtree_len itself is a power of 2, so
+            // we can use a bitmasking trick instead of an actual remainder
+            // operation. (Note that if the caller consistently passes
+            // power-of-2 inputs of the same size, as is hopefully typical,
+            // this loop condition will always fail, and subtree_len will
+            // always be the full length of the input.)
+            while ((subtree_len / 2) - 1) as u64 & count_so_far != 0 {
                 subtree_len /= 2;
             }
             // The shrunken subtree_len might now be 1 chunk long. If so, hash
