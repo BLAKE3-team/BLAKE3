@@ -57,6 +57,19 @@ INLINE uint8_t popcnt(uint64_t x) {
 #endif
 }
 
+// Largest power of two less than or equal to x. As a special case, returns 1
+// when x is 0. Based on
+// https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2.
+INLINE uint64_t round_down_to_power_of_2(uint64_t x) {
+  x |= x >> 1;
+  x |= x >> 2;
+  x |= x >> 4;
+  x |= x >> 8;
+  x |= x >> 16;
+  x |= x >> 32;
+  return (x >> 1) + 1;
+}
+
 INLINE uint32_t counter_low(uint64_t counter) { return (uint32_t)counter; }
 
 INLINE uint32_t counter_high(uint64_t counter) {
