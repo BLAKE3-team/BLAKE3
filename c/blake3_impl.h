@@ -50,8 +50,8 @@ INLINE uint8_t popcnt(uint64_t x) {
 #else
   uint8_t count = 0;
   while (x > 0) {
-    count += ((uint8_t)x) & 1;
-    x >>= 1;
+    count += 1;
+    x &= x - 1;
   }
   return count;
 #endif
