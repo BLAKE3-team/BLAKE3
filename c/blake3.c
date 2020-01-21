@@ -82,8 +82,8 @@ INLINE output_t make_output(const uint32_t input_cv[8],
 INLINE void output_chaining_value(const output_t *self, uint8_t cv[32]) {
   uint32_t cv_words[8];
   memcpy(cv_words, self->input_cv, 32);
-  blake3_compress_in_place(cv_words, self->block, self->block_len, self->counter,
-                    self->flags);
+  blake3_compress_in_place(cv_words, self->block, self->block_len,
+                           self->counter, self->flags);
   memcpy(cv, cv_words, 32);
 }
 
@@ -93,7 +93,7 @@ INLINE void output_root_bytes(const output_t *self, uint8_t *out,
   uint8_t wide_buf[64];
   while (out_len > 0) {
     blake3_compress_xof(self->input_cv, self->block, self->block_len,
-                 output_block_counter, self->flags | ROOT, wide_buf);
+                        output_block_counter, self->flags | ROOT, wide_buf);
     size_t memcpy_len;
     if (out_len > 64) {
       memcpy_len = 64;
@@ -114,9 +114,9 @@ INLINE void chunk_state_update(blake3_chunk_state *self, const uint8_t *input,
     input += take;
     input_len -= take;
     if (input_len > 0) {
-      blake3_compress_in_place(self->cv, self->buf, BLAKE3_BLOCK_LEN,
-                        self->chunk_counter,
-                        self->flags | chunk_state_maybe_start_flag(self));
+      blake3_compress_in_place(
+          self->cv, self->buf, BLAKE3_BLOCK_LEN, self->chunk_counter,
+          self->flags | chunk_state_maybe_start_flag(self));
       self->blocks_compressed += 1;
       self->buf_len = 0;
       memset(self->buf, 0, BLAKE3_BLOCK_LEN);
@@ -124,8 +124,9 @@ INLINE void chunk_state_update(blake3_chunk_state *self, const uint8_t *input,
   }
 
   while (input_len > BLAKE3_BLOCK_LEN) {
-    blake3_compress_in_place(self->cv, input, BLAKE3_BLOCK_LEN, self->chunk_counter,
-                      self->flags | chunk_state_maybe_start_flag(self));
+    blake3_compress_in_place(self->cv, input, BLAKE3_BLOCK_LEN,
+                             self->chunk_counter,
+                             self->flags | chunk_state_maybe_start_flag(self));
     self->blocks_compressed += 1;
     input += BLAKE3_BLOCK_LEN;
     input_len -= BLAKE3_BLOCK_LEN;
@@ -208,7 +209,7 @@ void blake3_hasher_update(blake3_hasher *self, const void *input,
   //   std::vector<uint8_t> v;
   //   blake3_hasher_update(&hasher, v.data(), v.size());
   if (input_len == 0) {
-      return;
+    return;
   }
 
   const uint8_t *input_bytes = (const uint8_t *)input;
@@ -252,8 +253,8 @@ void blake3_hasher_update(blake3_hasher *self, const void *input,
       num_chunks += 1;
     }
     blake3_hash_many(chunks, num_chunks, BLAKE3_CHUNK_LEN / BLAKE3_BLOCK_LEN,
-              self->key, self->chunk.chunk_counter, true, self->chunk.flags,
-              CHUNK_START, CHUNK_END, out);
+                     self->key, self->chunk.chunk_counter, true,
+                     self->chunk.flags, CHUNK_START, CHUNK_END, out);
     for (size_t chunk_index = 0; chunk_index < num_chunks; chunk_index++) {
       // The chunk state is empty here, but it stores the counter of the next
       // chunk hash we need to push. Use that counter, and then move it forward.
@@ -285,7 +286,7 @@ void blake3_hasher_finalize(const blake3_hasher *self, uint8_t *out,
   //   std::vector<uint8_t> v;
   //   blake3_hasher_finalize(&hasher, v.data(), v.size());
   if (out_len == 0) {
-      return;
+    return;
   }
 
   // If the subtree stack is empty, then the current chunk is the root.

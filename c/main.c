@@ -51,15 +51,15 @@ int parse_key(char *hex_key, uint8_t out[BLAKE3_KEY_LEN]) {
 
 /* A little repetition here */
 enum cpu_feature {
-    SSE2     = 1 << 0,
-    SSSE3    = 1 << 1,
-    SSE41    = 1 << 2,
-    AVX      = 1 << 3,
-    AVX2     = 1 << 4,
-    AVX512F  = 1 << 5,
-    AVX512VL = 1 << 6,
-    /* ... */
-    UNDEFINED = 1 << 30
+  SSE2 = 1 << 0,
+  SSSE3 = 1 << 1,
+  SSE41 = 1 << 2,
+  AVX = 1 << 3,
+  AVX2 = 1 << 4,
+  AVX512F = 1 << 5,
+  AVX512VL = 1 << 6,
+  /* ... */
+  UNDEFINED = 1 << 30
 };
 
 extern enum cpu_feature g_cpu_features;
@@ -80,7 +80,8 @@ int main(int argc, char **argv) {
       unsigned long long out_len_ll = strtoull(argv[2], &endptr, 10);
       // TODO: There are so many possible error conditions for parsing a
       //       non-negative size_t...I probably missed something.
-      if (errno != 0 || out_len > SIZE_MAX || endptr == argv[2] || *endptr != 0) {
+      if (errno != 0 || out_len > SIZE_MAX || endptr == argv[2] ||
+          *endptr != 0) {
         fprintf(stderr, "Bad length argument.\n");
         return 1;
       }
@@ -111,12 +112,12 @@ int main(int argc, char **argv) {
   assert(buf != NULL);
   size_t buf_len = 0;
   while (1) {
-      size_t n = fread(&buf[buf_len], 1, buf_capacity - buf_len, stdin);
-      if (n == 0) {
-        break;
-      }
-      buf_len += n;
-      assert(buf_len < buf_capacity);
+    size_t n = fread(&buf[buf_len], 1, buf_capacity - buf_len, stdin);
+    if (n == 0) {
+      break;
+    }
+    buf_len += n;
+    assert(buf_len < buf_capacity);
   }
 
   const int mask = get_cpu_features();
@@ -125,7 +126,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Testing 0x%08X\n", feature);
     g_cpu_features = feature;
     blake3_hasher hasher;
-    switch(mode) {
+    switch (mode) {
     case HASH_MODE:
       blake3_hasher_init(&hasher);
       break;
@@ -155,6 +156,6 @@ int main(int argc, char **argv) {
     printf("\n");
     free(out);
     feature = (feature - mask) & mask;
-  } while(feature != 0);
+  } while (feature != 0);
   return 0;
 }

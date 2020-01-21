@@ -213,7 +213,7 @@ INLINE void transpose_msg_vecs(const uint8_t *const *inputs,
   out[13] = loadu(&inputs[5][block_offset + 1 * sizeof(__m256i)]);
   out[14] = loadu(&inputs[6][block_offset + 1 * sizeof(__m256i)]);
   out[15] = loadu(&inputs[7][block_offset + 1 * sizeof(__m256i)]);
-  for(size_t i = 0; i < 8; ++i) {
+  for (size_t i = 0; i < 8; ++i) {
     _mm_prefetch(&inputs[i][block_offset + 256], _MM_HINT_T0);
   }
   transpose_vecs(&out[0]);
@@ -301,10 +301,10 @@ void blake3_hash_many_sse41(const uint8_t *const *inputs, size_t num_inputs,
                             uint8_t flags_end, uint8_t *out);
 #else
 void blake3_hash_many_portable(const uint8_t *const *inputs, size_t num_inputs,
-                            size_t blocks, const uint32_t key[8],
-                            uint64_t counter, bool increment_counter,
-                            uint8_t flags, uint8_t flags_start,
-                            uint8_t flags_end, uint8_t *out);
+                               size_t blocks, const uint32_t key[8],
+                               uint64_t counter, bool increment_counter,
+                               uint8_t flags, uint8_t flags_start,
+                               uint8_t flags_end, uint8_t *out);
 #endif
 
 void blake3_hash_many_avx2(const uint8_t *const *inputs, size_t num_inputs,
@@ -327,6 +327,7 @@ void blake3_hash_many_avx2(const uint8_t *const *inputs, size_t num_inputs,
                          increment_counter, flags, flags_start, flags_end, out);
 #else
   blake3_hash_many_portable(inputs, num_inputs, blocks, key, counter,
-                         increment_counter, flags, flags_start, flags_end, out);
+                            increment_counter, flags, flags_start, flags_end,
+                            out);
 #endif
 }
