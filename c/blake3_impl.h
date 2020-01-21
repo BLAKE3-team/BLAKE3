@@ -29,6 +29,33 @@
 #define INLINE __attribute__((always_inline)) static inline
 #endif
 
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_IX86) ||            \
+    defined(_M_X64)
+#define IS_X86
+#endif
+
+#if defined(__arm__)
+#define IS_ARM
+#endif
+
+#if defined(IS_X86)
+#define MAX_SIMD_DEGREE 16
+#elif defined(BLAKE3_USE_NEON)
+#define MAX_SIMD_DEGREE 4
+#else
+#define MAX_SIMD_DEGREE 1
+#endif
+
+// There are some places where we want a static size that's equal to the
+// MAX_SIMD_DEGREE, but also at least 2.
+#if defined(IS_X86)
+#define MAX_SIMD_DEGREE_OR_2 16
+#elif defined(BLAKE3_USE_NEON)
+#define MAX_SIMD_DEGREE_OR_2 4
+#else
+#define MAX_SIMD_DEGREE_OR_2 2
+#endif
+
 static const uint32_t IV[8] = {0x6A09E667UL, 0xBB67AE85UL, 0x3C6EF372UL,
                                0xA54FF53AUL, 0x510E527FUL, 0x9B05688CUL,
                                0x1F83D9ABUL, 0x5BE0CD19UL};
@@ -108,3 +135,5 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
                       size_t blocks, const uint32_t key[8], uint64_t counter,
                       bool increment_counter, uint8_t flags,
                       uint8_t flags_start, uint8_t flags_end, uint8_t *out);
+
+size_t blake3_simd_degree();

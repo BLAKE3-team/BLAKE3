@@ -157,5 +157,6 @@ int main(int argc, char **argv) {
     free(out);
     feature = (feature - mask) & mask;
   } while (feature != 0);
+  free(buf);
   return 0;
 }

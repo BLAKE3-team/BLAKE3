@@ -2,16 +2,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "blake3.h"
-
-#if defined(__x86_64__) || defined(__i386__) || defined(_M_IX86) ||            \
-    defined(_M_X64)
-#define IS_X86
-#endif
-
-#if defined(__arm__)
-#define IS_ARM
-#endif
+#include "blake3_impl.h"
 
 #if defined(IS_X86)
 #if defined(_MSC_VER)
@@ -82,7 +73,7 @@ void blake3_hash_many_avx512(const uint8_t *const *inputs, size_t num_inputs,
 #endif
 #endif
 
-#if defined(IS_ARM) && !defined(BLAKE3_NO_NEON)
+#if defined(IS_ARM) && defined(BLAKE3_USE_NEON)
 void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
                            size_t blocks, const uint32_t key[8],
                            uint64_t counter, bool increment_counter,
@@ -287,4 +278,30 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
   blake3_hash_many_portable(inputs, num_inputs, blocks, key, counter,
                             increment_counter, flags, flags_start, flags_end,
                             out);
+}
+
+// The dynamically detected SIMD degree of the current platform.
+size_t blake3_simd_degree() {
+  const enum cpu_feature features = get_cpu_features();
+#if defined(IS_X86)
+#if !defined(BLAKE3_NO_AVX512)
+  if (features & AVX512F) {
+    return 16;
+  }
+#endif
+#if !defined(BLAKE3_NO_AVX2)
+  if (features & AVX2) {
+    return 8;
+  }
+#endif
+#if !defined(BLAKE3_NO_SSE41)
+  if (features & SSE41) {
+    return 4;
+  }
+#endif
+#endif
+#if defined(BLAKE3_USE_NEON)
+  return 4;
+#endif
+  return 1;
 }

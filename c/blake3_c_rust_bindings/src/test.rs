@@ -226,7 +226,6 @@ pub fn test_hash_many_fn(hash_many_fn: HashManyFn) {
         );
     }
     for n in 0..NUM_INPUTS {
-        #[cfg(feature = "std")]
         dbg!(n);
         assert_eq!(
             &portable_chunks_out[n * OUT_LEN..][..OUT_LEN],
@@ -271,7 +270,6 @@ pub fn test_hash_many_fn(hash_many_fn: HashManyFn) {
         );
     }
     for n in 0..NUM_INPUTS {
-        #[cfg(feature = "std")]
         dbg!(n);
         assert_eq!(
             &portable_parents_out[n * OUT_LEN..][..OUT_LEN],
@@ -326,7 +324,6 @@ fn test_compare_reference_impl() {
     paint_test_input(&mut input_buf);
     for &case in TEST_CASES {
         let input = &input_buf[..case];
-        #[cfg(feature = "std")]
         dbg!(case);
 
         // regular
@@ -393,14 +390,12 @@ fn test_compare_update_multiple() {
     paint_test_input(&mut input_buf);
 
     for &first_update in short_test_cases {
-        #[cfg(feature = "std")]
         dbg!(first_update);
         let first_input = &input_buf[..first_update];
         let mut test_hasher = crate::Hasher::new();
         test_hasher.update(first_input);
 
         for &second_update in short_test_cases {
-            #[cfg(feature = "std")]
             dbg!(second_update);
             let second_input = &input_buf[first_update..][..second_update];
             let total_input = &input_buf[..first_update + second_update];
@@ -432,14 +427,12 @@ fn test_fuzz_hasher() {
     // Use a fixed RNG seed for reproducibility.
     let mut rng = rand_chacha::ChaCha8Rng::from_seed([1; 32]);
     for _num_test in 0..num_tests {
-        #[cfg(feature = "std")]
         dbg!(_num_test);
         let mut hasher = crate::Hasher::new();
         let mut total_input = 0;
         // For each test, write 3 inputs of random length.
         for _ in 0..3 {
             let input_len = rng.gen_range(0, INPUT_MAX + 1);
-            #[cfg(feature = "std")]
             dbg!(input_len);
             let input = &input_buf[total_input..][..input_len];
             hasher.update(input);
