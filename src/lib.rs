@@ -785,7 +785,17 @@ impl Hasher {
         Self::new_internal(&context_key_words, DERIVE_KEY_MATERIAL)
     }
 
-    // See comment in push_cv.
+    // As described in push_cv() below, we do "lazy merging", delaying merges
+    // until right before the next CV is about to be added. This is different
+    // from the reference implementation. Another difference is that we aren't
+    // always merging 1 chunk at a time. Instead, each CV might represent any
+    // power-of-two number of chunks, as long as the smaller-above-larger stack
+    // order is maintained. Instead of the "count the trailing 0-bits"
+    // algorithm described in the spec, we use a "count the total number of
+    // 1-bits" variant that doesn't require us to retain the subtree size of
+    // the CV on top of the stack. The principle is the same: each CV that
+    // should remain in the stack is represented by a 1-bit in the total number
+    // of chunks (or bytes) so far.
     fn merge_cv_stack(&mut self, total_len: u64) {
         let post_merge_stack_len = total_len.count_ones() as usize;
         while self.cv_stack.len() > post_merge_stack_len {
@@ -802,32 +812,40 @@ impl Hasher {
         }
     }
 
+    // In reference_impl.rs, we merge the new CV with existing CVs from the
+    // stack before pushing it. We can do that because we know more input is
+    // coming, so we know none of the merges are root.
+    //
+    // This setting is different. We want to feed as much input as possible to
+    // compress_subtree_wide(), without setting aside anything for the
+    // chunk_state. If the user gives us 64 KiB, we want to parallelize over
+    // all 64 KiB at once as a single subtree, if at all possible.
+    //
+    // This leads to two problems:
+    // 1) This 64 KiB input might be the only call that ever gets made to
+    //    update. In this case, the root node of the 64 KiB subtree would be
+    //    the root node of the whole tree, and it would need to be ROOT
+    //    finalized. We can't compress it until we know.
+    // 2) This 64 KiB input might complete a larger tree, whose root node is
+    //    similarly going to be the the root of the whole tree. For example,
+    //    maybe we have 196 KiB (that is, 128 + 64) hashed so far. We can't
+    //    compress the node at the root of the 256 KiB subtree until we know
+    //    how to finalize it.
+    //
+    // The second problem is solved with "lazy merging". That is, when we're
+    // about to add a CV to the stack, we don't merge it with anything first,
+    // as the reference impl does. Instead we do merges using the *previous* CV
+    // that was added, which is sitting on top of the stack, and we put the new
+    // CV (unmerged) on top of the stack afterwards. This guarantees that we
+    // never merge the root node until finalize().
+    //
+    // Solving the first problem requires an additional tool,
+    // compress_subtree_to_parent_node(). That function always returns the top
+    // *two* chaining values of the subtree it's compressing. We then do lazy
+    // merging with each of them separately, so that the second CV will always
+    // remain unmerged. (The compress_subtree_to_parent_node also helps us
+    // support extendable output when we're hashing an input all-at-once.)
     fn push_cv(&mut self, new_cv: &CVBytes, chunk_counter: u64) {
-        // In reference_impl.rs, we merge the new CV with existing CVs from the
-        // stack before pushing it. We can do that because we know more input
-        // is coming, so we know none of the merges are root.
-        //
-        // This setting is different. We want to feed as much input as possible
-        // to compress_subtree_wide(), without setting aside anything in the
-        // chunk_state. If the user gives us 64 KiB, we want to parallelize
-        // over all 64 KiB at once as a single subtree, rather than hashing 32
-        // KiB followed by 16 KiB followed by...etc.
-        //
-        // But we have to worry about the possibility that no more input comes
-        // in the future. That 64 KiB might be bring the total to e.g. 128 KiB.
-        // We shouldn't merge that whole 128 KiB tree yet, because if no more
-        // input comes in the future, then we'll have merged the root node. We
-        // need that node for extendable output, not to mention setting the
-        // ROOT flag properly.
-        //
-        // To deal with this, we merge the CV stack lazily. We do a merge of
-        // what's in there *just* before adding a new CV, and we don't do any
-        // merging with the new CV itself.
-        //
-        // We still use the "count the 1 bits" algorithm, adjusted slightly for
-        // this setting, using the new chunk's counter numer (the previous
-        // total number of chunks) rather than new total number of chunks. That
-        // algorithm is explained in detail in the spec.
         self.merge_cv_stack(chunk_counter);
         self.cv_stack.push(*new_cv);
     }
