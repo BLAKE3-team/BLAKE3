@@ -70,10 +70,20 @@ static const uint8_t MSG_SCHEDULE[7][16] = {
     {11, 15, 5, 0, 1, 9, 8, 6, 14, 10, 2, 12, 3, 4, 7, 13},
 };
 
+INLINE uint32_t counter_low(uint64_t counter) { return (uint32_t)counter; }
+
+INLINE uint32_t counter_high(uint64_t counter) {
+  return (uint32_t)(counter >> 32);
+}
+
 // Count the number of 1 bits.
 INLINE uint8_t popcnt(uint64_t x) {
 #if __POPCNT__
+#ifdef __x86_64__
   return (uint8_t)_mm_popcnt_u64(x);
+#else
+  return (uint8_t)(_mm_popcnt_u32(counter_low(x)) + _mm_popcnt_u32(counter_high(x)));
+#endif
 #else
   uint8_t count = 0;
   while (x > 0) {
@@ -95,12 +105,6 @@ INLINE uint64_t round_down_to_power_of_2(uint64_t x) {
   x |= x >> 16;
   x |= x >> 32;
   return (x >> 1) + 1;
-}
-
-INLINE uint32_t counter_low(uint64_t counter) { return (uint32_t)counter; }
-
-INLINE uint32_t counter_high(uint64_t counter) {
-  return (uint32_t)(counter >> 32);
 }
 
 INLINE uint32_t load32(const void *src) {
