@@ -438,14 +438,16 @@ INLINE void transpose_msg_vecs(const uint8_t *const *inputs,
 }
 
 INLINE void load_counters(uint64_t counter, bool increment_counter,
-                          __m128i *out_low, __m128i *out_high) {
-  uint64_t mask = (increment_counter ? ~0 : 0);
-  *out_low = set4(
-      counter_low(counter + (mask & 0)), counter_low(counter + (mask & 1)),
-      counter_low(counter + (mask & 2)), counter_low(counter + (mask & 3)));
-  *out_high = set4(
-      counter_high(counter + (mask & 0)), counter_high(counter + (mask & 1)),
-      counter_high(counter + (mask & 2)), counter_high(counter + (mask & 3)));
+                          __m128i *out_lo, __m128i *out_hi) {
+  const __m128i mask = _mm_set1_epi32(-(uint32_t)increment_counter);
+  const __m128i add0 = _mm_set_epi32(3, 2, 1, 0);
+  const __m128i add1 = _mm_and_si128(mask, add0);
+  __m128i l = _mm_add_epi32(_mm_set1_epi32(counter), add1);
+  __m128i carry = _mm_cmpgt_epi32(_mm_xor_si128(add1, _mm_set1_epi32(0x80000000)), 
+                                  _mm_xor_si128(   l, _mm_set1_epi32(0x80000000)));
+  __m128i h = _mm_sub_epi32(_mm_set1_epi32(counter >> 32), carry);
+  *out_lo = l;
+  *out_hi = h;
 }
 
 void blake3_hash4_sse41(const uint8_t *const *inputs, size_t blocks,
