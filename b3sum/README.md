@@ -1,7 +1,7 @@
 # b3sum
 
 ```
-b3sum 0.1.2
+b3sum 0.1.3
 
 USAGE:
     b3sum [FLAGS] [OPTIONS] [file]...
@@ -9,6 +9,7 @@ USAGE:
 FLAGS:
     -h, --help        Prints help information
         --keyed       Uses the keyed mode, with the raw 32-byte key read from stdin
+        --no-mmap     Disables memory mapping
         --no-names    Omits filenames in the output
         --raw         Writes raw output bytes to stdout, rather than hex. --no-names is implied.
                       In this case, only a single input is allowed
