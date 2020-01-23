@@ -103,8 +103,21 @@ int main(int argc, char **argv) {
     argv += 2;
   }
 
-  uint8_t buf[65536] = {0};
-  size_t n = fread(buf, 1, sizeof(buf), stdin);
+  // We're going to hash the input multiple times, so we need to buffer it all.
+  // This is just for test cases, so go ahead and assume that the input is less
+  // than 1 MiB.
+  size_t buf_capacity = 1 << 20;
+  uint8_t *buf = malloc(buf_capacity);
+  assert(buf != NULL);
+  size_t buf_len = 0;
+  while (1) {
+      size_t n = fread(&buf[buf_len], 1, buf_capacity - buf_len, stdin);
+      if (n == 0) {
+        break;
+      }
+      buf_len += n;
+      assert(buf_len < buf_capacity);
+  }
 
   const int mask = get_cpu_features();
   int feature = 0;
@@ -126,7 +139,7 @@ int main(int argc, char **argv) {
       abort();
     }
 
-    blake3_hasher_update(&hasher, buf, n);
+    blake3_hasher_update(&hasher, buf, buf_len);
 
     // TODO: An incremental output reader API to avoid this allocation.
     uint8_t *out = malloc(out_len);
