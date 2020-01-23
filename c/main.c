@@ -78,14 +78,11 @@ int main(int argc, char **argv) {
     if (strcmp("--length", argv[1]) == 0) {
       char *endptr = NULL;
       unsigned long long out_len_ll = strtoull(argv[2], &endptr, 10);
-      // TODO: There are so many possible error conditions for parsing a
-      //       non-negative size_t...I probably missed something.
       if (errno != 0 || out_len > SIZE_MAX || endptr == argv[2] ||
           *endptr != 0) {
         fprintf(stderr, "Bad length argument.\n");
         return 1;
       }
-      // TODO: A more sanitary cast?
       out_len = (size_t)out_len_ll;
     } else if (strcmp("--keyed", argv[1]) == 0) {
       mode = KEYED_HASH_MODE;
@@ -104,9 +101,11 @@ int main(int argc, char **argv) {
     argv += 2;
   }
 
-  // We're going to hash the input multiple times, so we need to buffer it all.
-  // This is just for test cases, so go ahead and assume that the input is less
-  // than 1 MiB.
+  /* 
+   * We're going to hash the input multiple times, so we need to buffer it all.
+   * This is just for test cases, so go ahead and assume that the input is less
+   * than 1 MiB. 
+   */
   size_t buf_capacity = 1 << 20;
   uint8_t *buf = malloc(buf_capacity);
   assert(buf != NULL);
@@ -142,7 +141,7 @@ int main(int argc, char **argv) {
 
     blake3_hasher_update(&hasher, buf, buf_len);
 
-    // TODO: An incremental output reader API to avoid this allocation.
+    /* TODO: An incremental output reader API to avoid this allocation. */
     uint8_t *out = malloc(out_len);
     memset(out, 0, out_len);
     if (out_len > 0 && out == NULL) {

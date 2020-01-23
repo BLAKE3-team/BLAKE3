@@ -1,4 +1,5 @@
-#pragma once
+#ifndef BLAKE3_IMPL_H
+#define BLAKE3_IMPL_H
 
 #include <assert.h>
 #include <stdbool.h>
@@ -6,36 +7,46 @@
 #include <stdint.h>
 #include <string.h>
 
-#if __POPCNT__
-#include <nmmintrin.h>
-#endif
-
 #include "blake3.h"
 
 // internal flags
-#define CHUNK_START 1
-#define CHUNK_END 2
-#define PARENT 4
-#define ROOT 8
-#define KEYED_HASH 16
-#define DERIVE_KEY_CONTEXT 32
-#define DERIVE_KEY_MATERIAL 64
+enum blake3_flags {
+  CHUNK_START         = 1 << 0,
+  CHUNK_END           = 1 << 1,
+  PARENT              = 1 << 2,
+  ROOT                = 1 << 3,
+  KEYED_HASH          = 1 << 4,
+  DERIVE_KEY_CONTEXT  = 1 << 5,
+  DERIVE_KEY_MATERIAL = 1 << 6,
+};
 
 // This C implementation tries to support recent versions of GCC, Clang, and
 // MSVC.
 #if defined(_MSC_VER)
-#define INLINE __forceinline static
+#define INLINE static __forceinline
 #else
-#define INLINE __attribute__((always_inline)) static inline
+#define INLINE static inline __attribute__((always_inline))
 #endif
 
-#if defined(__x86_64__) || defined(__i386__) || defined(_M_IX86) ||            \
-    defined(_M_X64)
+#if defined(__x86_64__) || defined(_M_X64) 
 #define IS_X86
+#define IS_X86_64
+#endif
+
+#if defined(__i386__) || defined(_M_IX86)
+#define IS_X86
+#define IS_X86_32
 #endif
 
 #if defined(__arm__)
 #define IS_ARM
+#endif
+
+#if defined(IS_X86)
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+#include <immintrin.h>
 #endif
 
 #if defined(IS_X86)
@@ -48,13 +59,7 @@
 
 // There are some places where we want a static size that's equal to the
 // MAX_SIMD_DEGREE, but also at least 2.
-#if defined(IS_X86)
-#define MAX_SIMD_DEGREE_OR_2 16
-#elif defined(BLAKE3_USE_NEON)
-#define MAX_SIMD_DEGREE_OR_2 4
-#else
-#define MAX_SIMD_DEGREE_OR_2 2
-#endif
+#define MAX_SIMD_DEGREE_OR_2 (MAX_SIMD_DEGREE > 2 ? MAX_SIMD_DEGREE : 2)
 
 static const uint32_t IV[8] = {0x6A09E667UL, 0xBB67AE85UL, 0x3C6EF372UL,
                                0xA54FF53AUL, 0x510E527FUL, 0x9B05688CUL,
@@ -70,13 +75,44 @@ static const uint8_t MSG_SCHEDULE[7][16] = {
     {11, 15, 5, 0, 1, 9, 8, 6, 14, 10, 2, 12, 3, 4, 7, 13},
 };
 
-// Count the number of 1 bits.
-INLINE uint8_t popcnt(uint64_t x) {
-#if __POPCNT__
-  return (uint8_t)_mm_popcnt_u64(x);
+/* Find index of the highest set bit */
+/* x is assumed to be nonzero.       */
+static unsigned int fls(uint64_t x) {
+#if defined(__GNUC__) || defined(__clang__)
+  return 63 ^ __builtin_clzll(x);
+#elif defined(_MSC_VER) && defined(IS_X86_64)
+  unsigned long index;
+  _BitScanReverse64(&index, x);
+  return index;
+#elif defined(_MSC_VER) && defined(IS_X86_32)
+  if(x >> 32) {
+    unsigned long index;
+    _BitScanReverse(&index, x >> 32);
+    return 32 + index;
+  } else {
+    unsigned long index;
+    _BitScanReverse(&index, x);
+    return index;
+  }
 #else
-  uint8_t count = 0;
-  while (x > 0) {
+  unsigned int c = 0;
+  if(x & 0xffffffff00000000ULL) { x >>= 32; c += 32; }
+  if(x & 0x00000000ffff0000ULL) { x >>= 16; c += 16; }
+  if(x & 0x000000000000ff00ULL) { x >>=  8; c +=  8; }
+  if(x & 0x00000000000000f0ULL) { x >>=  4; c +=  4; }
+  if(x & 0x000000000000000cULL) { x >>=  2; c +=  2; }
+  if(x & 0x0000000000000002ULL) {           c +=  1; }
+  return c;
+#endif
+}
+
+// Count the number of 1 bits.
+INLINE unsigned int popcnt(uint64_t x) {
+#if defined(__GNUC__) || defined(__clang__)
+  return __builtin_popcountll(x);
+#else
+  unsigned int count = 0;
+  while (x != 0) {
     count += 1;
     x &= x - 1;
   }
@@ -85,16 +121,9 @@ INLINE uint8_t popcnt(uint64_t x) {
 }
 
 // Largest power of two less than or equal to x. As a special case, returns 1
-// when x is 0. Based on
-// https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2.
+// when x is 0. 
 INLINE uint64_t round_down_to_power_of_2(uint64_t x) {
-  x |= x >> 1;
-  x |= x >> 2;
-  x |= x >> 4;
-  x |= x >> 8;
-  x |= x >> 16;
-  x |= x >> 32;
-  return (x >> 1) + 1;
+  return 1ULL << fls(x | 1);
 }
 
 INLINE uint32_t counter_low(uint64_t counter) { return (uint32_t)counter; }
@@ -137,3 +166,6 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
                       uint8_t flags_start, uint8_t flags_end, uint8_t *out);
 
 size_t blake3_simd_degree();
+
+
+#endif /* BLAKE3_IMPL_H */

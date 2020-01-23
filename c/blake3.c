@@ -484,7 +484,7 @@ void blake3_hasher_update(blake3_hasher *self, const void *input,
   // Because we might need to break up the input to form powers of 2, or to
   // evenly divide what we already have, this part runs in a loop.
   while (input_len > BLAKE3_CHUNK_LEN) {
-    size_t subtree_len = (size_t)round_down_to_power_of_2((uint64_t)input_len);
+    size_t subtree_len = round_down_to_power_of_2(input_len);
     uint64_t count_so_far = self->chunk.chunk_counter * BLAKE3_CHUNK_LEN;
     // Shrink the subtree_len until *half of it* it evenly divides the count so
     // far. Why half? Because compress_subtree_to_parent_node will return a
@@ -522,7 +522,7 @@ void blake3_hasher_update(blake3_hasher *self, const void *input,
                      self->chunk.chunk_counter + (subtree_chunks / 2));
     }
     self->chunk.chunk_counter += subtree_chunks;
-    input_bytes = input_bytes + subtree_len;
+    input_bytes += subtree_len;
     input_len -= subtree_len;
   }
 
