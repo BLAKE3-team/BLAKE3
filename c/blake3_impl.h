@@ -77,7 +77,7 @@ static const uint8_t MSG_SCHEDULE[7][16] = {
 
 /* Find index of the highest set bit */
 /* x is assumed to be nonzero.       */
-static unsigned int fls(uint64_t x) {
+static unsigned int highest_one(uint64_t x) {
 #if defined(__GNUC__) || defined(__clang__)
   return 63 ^ __builtin_clzll(x);
 #elif defined(_MSC_VER) && defined(IS_X86_64)
@@ -123,7 +123,7 @@ INLINE unsigned int popcnt(uint64_t x) {
 // Largest power of two less than or equal to x. As a special case, returns 1
 // when x is 0. 
 INLINE uint64_t round_down_to_power_of_2(uint64_t x) {
-  return 1ULL << fls(x | 1);
+  return 1ULL << highest_one(x | 1);
 }
 
 INLINE uint32_t counter_low(uint64_t counter) { return (uint32_t)counter; }
