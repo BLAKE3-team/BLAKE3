@@ -15,6 +15,8 @@ extern "C" {
 #define BLAKE3_MAX_DEPTH 54
 #define BLAKE3_MAX_SIMD_DEGREE 16
 
+// This struct is a private implementation detail. It has to be here because
+// it's part of blake3_hasher below.
 typedef struct {
   uint32_t cv[8];
   uint64_t chunk_counter;
