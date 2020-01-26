@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Context, Error, Result};
 use clap::{App, Arg};
 use std::cmp;
 use std::convert::TryInto;
@@ -186,12 +186,15 @@ fn read_key_from_stdin() -> Result<[u8; blake3::KEY_LEN]> {
 
 fn check_file(input: impl Read, mmap_disabled: bool) -> Result<u64> {
     let hasher = blake3::Hasher::new();
-    let reader = std::io::BufReader::new(input);
     let mut num_failed = 0;
-    for line in reader.lines() {
-        let line: String = line?;
+
+    let reader = std::io::BufReader::new(input);
+    for (line_num, line) in reader.lines().enumerate() {
+        // Read the line and trim it
+        let line: String = line.with_context(|| format!("line {}", line_num + 1))?;
         let line = line.trim();
 
+        // Skip the line if it's a comment or empty
         if line.starts_with('#') {
             continue;
         }
@@ -199,21 +202,31 @@ fn check_file(input: impl Read, mmap_disabled: bool) -> Result<u64> {
             continue;
         }
 
+        // Split line by whitespace
         let mut line = line.split_whitespace();
 
-        let hash: &str = line.next().unwrap(); // TODO
-        let hash = hex::decode(hash)?;
+        // Get the hash value and parse the hex value
+        let hash: &str = line.next().expect("Unexpected missing value");
+        let hash = hex::decode(hash)
+            .with_context(|| format!("error decoding hex on line {}", line_num + 1))?;
 
-        let filename: &str = line.next().unwrap(); // TODO
+        // Get the filename
+        let filename: &str = line
+            .next()
+            .ok_or_else(|| Error::msg(format!("missing filename on line {}", line_num + 1)))?;
         let os_filename: std::ffi::OsString = filename.into();
 
+        // Hash the file
         let hasher = hasher.clone();
-        let check_reader = hash_file(&hasher, &os_filename, mmap_disabled)?;
         let mut check_hash = Vec::<u8>::with_capacity(hash.len());
+        let check_reader = hash_file(&hasher, &os_filename, mmap_disabled)
+            .with_context(|| format!("filename: {}", filename))?;
         check_reader
             .take(hash.len() as u64)
             .read_to_end(&mut check_hash)?;
 
+        // Check if hashes match.
+        // TODO: Should this be constant time?
         if check_hash == hash {
             println!("{}: OK", filename);
         } else {
@@ -230,8 +243,10 @@ fn check_files(args: clap::ArgMatches) -> Result<u64> {
     let mmap_disabled = args.is_present(NO_MMAP_ARG);
     if let Some(files) = args.values_of_os(FILE_ARG) {
         for filepath in files {
-            let file = File::open(filepath)?;
-            num_failed += check_file(file, mmap_disabled)?;
+            let file = File::open(filepath)
+                .with_context(|| format!("checking {}: ", filepath.to_string_lossy()))?;
+            num_failed += check_file(file, mmap_disabled)
+                .with_context(|| format!("checking {}: ", filepath.to_string_lossy()))?;
         }
     } else {
         let stdin = std::io::stdin();
