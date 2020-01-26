@@ -12,6 +12,7 @@ const DERIVE_KEY_ARG: &str = "derive-key";
 const NO_MMAP_ARG: &str = "no-mmap";
 const NO_NAMES_ARG: &str = "no-names";
 const RAW_ARG: &str = "raw";
+const CHECK_ARG: &str = "check";
 
 fn clap_parse_argv() -> clap::ArgMatches<'static> {
     App::new("b3sum")
@@ -53,6 +54,12 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
             Arg::with_name(RAW_ARG)
                 .long(RAW_ARG)
                 .help("Writes raw output bytes to stdout, rather than hex. --no-names is implied.\nIn this case, only a single input is allowed"),
+        )
+        .arg(
+            Arg::with_name(CHECK_ARG)
+                .long(CHECK_ARG)
+                .short("c")
+                .help("read BLAKE3 sums from the [file]s and check them"),
         )
         .get_matches()
 }
@@ -177,8 +184,79 @@ fn read_key_from_stdin() -> Result<[u8; blake3::KEY_LEN]> {
     }
 }
 
+fn check_file(input: impl Read, mmap_disabled: bool) -> Result<u64> {
+    let hasher = blake3::Hasher::new();
+    let reader = std::io::BufReader::new(input);
+    let mut num_failed = 0;
+    for line in reader.lines() {
+        let line: String = line?;
+        let line = line.trim();
+
+        if line.starts_with('#') {
+            continue;
+        }
+        if line.len() == 0 {
+            continue;
+        }
+
+        let mut line = line.split_whitespace();
+
+        let hash: &str = line.next().unwrap(); // TODO
+        let hash = hex::decode(hash)?;
+
+        let filename: &str = line.next().unwrap(); // TODO
+        let os_filename: std::ffi::OsString = filename.into();
+
+        let hasher = hasher.clone();
+        let check_reader = hash_file(&hasher, &os_filename, mmap_disabled)?;
+        let mut check_hash = Vec::<u8>::with_capacity(hash.len());
+        check_reader
+            .take(hash.len() as u64)
+            .read_to_end(&mut check_hash)?;
+
+        if check_hash == hash {
+            println!("{}: OK", filename);
+        } else {
+            println!("{}: FAILED", filename);
+            num_failed += 1;
+        }
+    }
+
+    Ok(num_failed)
+}
+
+fn check_files(args: clap::ArgMatches) -> Result<u64> {
+    let mut num_failed = 0;
+    let mmap_disabled = args.is_present(NO_MMAP_ARG);
+    if let Some(files) = args.values_of_os(FILE_ARG) {
+        for filepath in files {
+            let file = File::open(filepath)?;
+            num_failed += check_file(file, mmap_disabled)?;
+        }
+    } else {
+        let stdin = std::io::stdin();
+        let stdin = stdin.lock();
+        num_failed = check_file(stdin, mmap_disabled)?;
+    }
+
+    Ok(num_failed)
+}
+
 fn main() -> Result<()> {
     let args = clap_parse_argv();
+
+    // Check files
+    if args.is_present(CHECK_ARG) {
+        let num_failed = check_files(args)?;
+        if num_failed != 0 {
+            eprintln!("b3sum: {} computed checksum(s) did NOT match", num_failed);
+            std::process::exit(2);
+        } else {
+            std::process::exit(0);
+        }
+    }
+
+    // Hash files
     let len: u64 = args
         .value_of(LENGTH_ARG)
         .unwrap_or("32")

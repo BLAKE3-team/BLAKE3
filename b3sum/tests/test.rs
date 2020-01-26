@@ -134,3 +134,16 @@ fn test_raw_with_multi_files_is_an_error() {
         .run();
     assert!(result.is_err());
 }
+
+#[test]
+fn test_check() {
+    let in_file = tempfile::NamedTempFile::new().unwrap();
+    in_file.as_file().write_all(b"foo").unwrap();
+    in_file.as_file().flush().unwrap();
+
+    // Check the resuts by doing a round-trip via stdin / stdout
+    let result = cmd!(b3sum_exe(), in_file.path())
+        .pipe(cmd!(b3sum_exe(), "--check"))
+        .run();
+    assert!(result.is_ok());
+}
