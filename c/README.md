@@ -114,6 +114,6 @@ currently better with Clang than with GCC.
 The C implementation does not currently support multi-threading. OpenMP
 support or similar might be added in the future.
 
-Both the C and Rust implementations support output of any lenght, but
+Both the C and Rust implementations support output of any length, but
 only the Rust implementation provides an incremental (and seekable)
 output reader. This might also be added in the future.
