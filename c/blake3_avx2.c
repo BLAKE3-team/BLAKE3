@@ -216,7 +216,7 @@ INLINE void transpose_msg_vecs(const uint8_t *const *inputs,
 
 INLINE void load_counters(uint64_t counter, bool increment_counter,
                           __m256i *out_lo, __m256i *out_hi) {
-  const __m256i mask = _mm256_set1_epi32(-(uint32_t)increment_counter);
+  const __m256i mask = _mm256_set1_epi32(-(int32_t)increment_counter);
   const __m256i add0 = _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0);
   const __m256i add1 = _mm256_and_si256(mask, add0);
   __m256i l = _mm256_add_epi32(_mm256_set1_epi32(counter), add1);
