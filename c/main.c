@@ -119,6 +119,13 @@ int main(int argc, char **argv) {
     assert(buf_len < buf_capacity);
   }
 
+  /* TODO: An incremental output reader API to avoid this allocation. */
+  uint8_t* out = malloc(out_len);
+  if (out_len > 0 && out == NULL) {
+      fprintf(stderr, "malloc() failed.\n");
+      return 1;
+  }
+
   const int mask = get_cpu_features();
   int feature = 0;
   do {
@@ -140,22 +147,14 @@ int main(int argc, char **argv) {
     }
 
     blake3_hasher_update(&hasher, buf, buf_len);
-
-    /* TODO: An incremental output reader API to avoid this allocation. */
-    uint8_t *out = malloc(out_len);
-    memset(out, 0, out_len);
-    if (out_len > 0 && out == NULL) {
-      fprintf(stderr, "malloc() failed.\n");
-      return 1;
-    }
     blake3_hasher_finalize(&hasher, out, out_len);
     for (size_t i = 0; i < out_len; i++) {
       printf("%02x", out[i]);
     }
     printf("\n");
-    free(out);
     feature = (feature - mask) & mask;
   } while (feature != 0);
+  free(out);
   free(buf);
   return 0;
 }
