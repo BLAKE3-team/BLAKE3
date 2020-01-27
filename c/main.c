@@ -143,11 +143,11 @@ int main(int argc, char **argv) {
 
     /* TODO: An incremental output reader API to avoid this allocation. */
     uint8_t *out = malloc(out_len);
-    memset(out, 0, out_len);
     if (out_len > 0 && out == NULL) {
       fprintf(stderr, "malloc() failed.\n");
       return 1;
     }
+    memset(out, 0, out_len);
     blake3_hasher_finalize(&hasher, out, out_len);
     for (size_t i = 0; i < out_len; i++) {
       printf("%02x", out[i]);
