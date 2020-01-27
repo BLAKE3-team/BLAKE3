@@ -29,26 +29,38 @@ The default output size is 256 bits. The current version of
 [Bao](https://github.com/oconnor663/bao) implements verified streaming
 with BLAKE3.
 
-This repository provides the official Rust implementation of BLAKE3,
-with
+This repository is the official implementation of BLAKE3. It includes:
 
 * The [`blake3`](https://crates.io/crates/blake3) Rust crate, which
-  includes optimized SIMD implementations, using dynamic CPU feature
+  includes optimized SIMD implementations, with dynamic CPU feature
   detection on x86. SSE4.1 and AVX2 support are implemented in Rust,
-  while AVX-512 and ARM NEON support are implemented in C and controlled
-  by the `c_avx512` and `c_neon` features. Multi-threading is
-  implemented with [Rayon](https://github.com/rayon-rs/rayon) and
-  controlled by the `rayon` feature. 
+  while AVX-512 and ARM NEON support are imported from the C
+  implementation and controlled by the `c_avx512` and `c_neon` features.
+  Multi-threading is implemented with
+  [Rayon](https://github.com/rayon-rs/rayon) and controlled by the
+  `rayon` feature. 
 
-* A simplified [reference
-  implementation](reference_impl/reference_impl.rs), which is portable
-  and `no_std`-compatible.
+* The [`b3sum`](https://crates.io/crates/b3sum) Rust crate, which
+  provides a command line interface. You can install it from
+  [crates.io](https://crates.io/crates/b3sum) with `cargo install
+  b3sum`. It enables the multi-threading and AVX-512 features of the
+  `blake3` crate by default.
 
-* The [`b3sum` sub-crate](./b3sum), which provides a command line
-  interface. You can install it with `cargo install b3sum`. It includes
-  multi-threading and AVX-512 support by default.
+* The [C implementation](c), which like the Rust implementation includes
+  SIMD code and dynamic CPU feature detection on x86. Unlike the Rust
+  implementation, it's not currently multi-threaded. The
+  [README](c/README.md) provides build examples.
 
-* [![Actions Status](https://github.com/BLAKE3-team/BLAKE3/workflows/tests/badge.svg)](https://github.com/BLAKE3-team/BLAKE3/actions)
+* The [reference implementation](reference_impl/reference_impl.rs),
+  which is discussed in Section 5.1 of the [BLAKE3
+  paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf).
+  This implementation is much smaller and simpler than the optimized
+  ones above. If you want to see how BLAKE3 works, or you're writing a
+  port that doesn't need multi-threading or SIMD optimizations, start
+  here.
+
+* [![Actions
+  Status](https://github.com/BLAKE3-team/BLAKE3/workflows/tests/badge.svg)](https://github.com/BLAKE3-team/BLAKE3/actions)
 
 BLAKE3 was designed by:
 
