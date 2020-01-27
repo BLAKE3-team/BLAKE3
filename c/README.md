@@ -88,9 +88,28 @@ gcc -shared -O3 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 \
     blake3.c blake3_dispatch.c blake3_portable.c -o libblake3.so
 ```
 
-### ARM
+### ARM NEON
 
-TODO: add NEON support to `blake3_dispatch.c`.
+The NEON implementation is not enabled by default on ARM, since not all
+ARM targets support it. To enable it, set `BLAKE3_USE_NEON=1`. Here's an
+example of building a shared library on ARM Linux with NEON support:
+
+```bash
+gcc -shared -O3 -DBLAKE3_USE_NEON blake3.c blake3_dispatch.c \
+    blake3_portable.c blake3_neon.c -o libblake3.so
+```
+
+Note that on some targets (ARMv7 in particular), extra flags may be
+required to activate NEON support in the compiler. If you see an error
+like...
+
+```
+/usr/lib/gcc/armv7l-unknown-linux-gnueabihf/9.2.0/include/arm_neon.h:635:1: error: inlining failed
+in call to always_inline ‘vaddq_u32’: target specific option mismatch
+```
+
+...then you may need to add something like `-mfpu=neon-vfpv4
+-mfloat-abi=hard`.
 
 ### Other Platforms
 

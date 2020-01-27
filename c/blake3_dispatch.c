@@ -73,7 +73,7 @@ void blake3_hash_many_avx512(const uint8_t *const *inputs, size_t num_inputs,
 #endif
 #endif
 
-#if defined(IS_ARM) && defined(BLAKE3_USE_NEON)
+#if defined(BLAKE3_USE_NEON)
 void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
                            size_t blocks, const uint32_t key[8],
                            uint64_t counter, bool increment_counter,
@@ -191,10 +191,8 @@ static
     }
     g_cpu_features = features;
     return features;
-#elif defined(IS_ARM)
-    /* How to detect NEON? */
-    return 0;
 #else
+    /* How to detect NEON? */
     return 0;
 #endif
   }
@@ -275,6 +273,13 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
   }
 #endif
 #endif
+
+#if defined(BLAKE3_USE_NEON)
+  blake3_hash_many_neon(inputs, num_inputs, blocks, key, counter,
+                        increment_counter, flags, flags_start, flags_end, out);
+  return;
+#endif
+
   blake3_hash_many_portable(inputs, num_inputs, blocks, key, counter,
                             increment_counter, flags, flags_start, flags_end,
                             out);

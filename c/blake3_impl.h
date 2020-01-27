@@ -38,10 +38,6 @@ enum blake3_flags {
 #define IS_X86_32
 #endif
 
-#if defined(__arm__)
-#define IS_ARM
-#endif
-
 #if defined(IS_X86)
 #if defined(_MSC_VER)
 #include <intrin.h>
