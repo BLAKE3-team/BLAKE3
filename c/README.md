@@ -75,6 +75,10 @@ gcc -shared -O3 blake3.c blake3_dispatch.c blake3_portable.c \
     blake3_avx2.o blake3_avx512.o blake3_sse41.o -o libblake3.so
 ```
 
+Note that building `blake3_avx512.c` requires both `-mavx512f` and
+`-mavx512vl` under GCC and Clang, as shown above. Under MSVC, the single
+`/arch:AVX512` flag is sufficient.
+
 If you want to omit SIMD code on x86, you need to explicitly disable
 each instruction set. Here's an example of building a shared library on
 Linux with no SIMD support:
