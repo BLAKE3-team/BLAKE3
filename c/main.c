@@ -1,3 +1,9 @@
+/*
+ * This main file is intended for testing via `make test`. It does not build in
+ * other settings. See README.md in this directory for examples of how to build
+ * C code.
+ */
+
 #include <assert.h>
 #include <errno.h>
 #include <stdbool.h>
