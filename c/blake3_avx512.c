@@ -1044,7 +1044,7 @@ INLINE void transpose_msg_vecs16(const uint8_t *const *inputs,
 
 INLINE void load_counters16(uint64_t counter, bool increment_counter,
                             __m512i *out_lo, __m512i *out_hi) {
-  const __m512i mask = _mm512_set1_epi32(-(uint32_t)increment_counter);
+  const __m512i mask = _mm512_set1_epi32(-(int32_t)increment_counter);
   const __m512i add0 = _mm512_set_epi32(15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
   const __m512i add1 = _mm512_and_si512(mask, add0);
   __m512i l = _mm512_add_epi32(_mm512_set1_epi32(counter), add1);

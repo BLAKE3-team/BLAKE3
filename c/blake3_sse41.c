@@ -439,7 +439,7 @@ INLINE void transpose_msg_vecs(const uint8_t *const *inputs,
 
 INLINE void load_counters(uint64_t counter, bool increment_counter,
                           __m128i *out_lo, __m128i *out_hi) {
-  const __m128i mask = _mm_set1_epi32(-(uint32_t)increment_counter);
+  const __m128i mask = _mm_set1_epi32(-(int32_t)increment_counter);
   const __m128i add0 = _mm_set_epi32(3, 2, 1, 0);
   const __m128i add1 = _mm_and_si128(mask, add0);
   __m128i l = _mm_add_epi32(_mm_set1_epi32(counter), add1);
