@@ -83,6 +83,7 @@ int main(int argc, char **argv) {
     }
     if (strcmp("--length", argv[1]) == 0) {
       char *endptr = NULL;
+      errno = 0;
       unsigned long long out_len_ll = strtoull(argv[2], &endptr, 10);
       if (errno != 0 || out_len > SIZE_MAX || endptr == argv[2] ||
           *endptr != 0) {
