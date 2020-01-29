@@ -1,24 +1,24 @@
 This is the C implementation of BLAKE3. The public API consists of one
 struct and five functions in [`blake3.h`](blake3.h):
 
-- `typedef struct {...} blake3_hasher`: An incremental BLAKE3 hashing
+- **`typedef struct {...} blake3_hasher`** An incremental BLAKE3 hashing
   state, which can accept any number of updates.
-- `blake3_hasher_init(...)`: Initialize a `blake3_hasher` in the default
-  hashing mode.
-- `blake3_hasher_init_keyed(...)`: Initialize a `blake3_hasher` in the
-  keyed hashing mode, which accepts a 256-bit key.
-- `blake3_hasher_init_derive_key(...)`: Initialize a `blake3_hasher` in
-  the key derivation mode, which accepts a context string of any length.
-  In this mode, the key material is given as input after initialization.
-  The context string should be hardcoded, globally unique, and
-  application-specific. A good default format for such strings is
-  `"[application] [commit timestamp] [purpose]"`, e.g., `"example.com
-  2019-12-25 16:18:03 session tokens v1"`.
-- `blake3_hasher_update(...)`: Add input to the hasher. This can be
+- **`blake3_hasher_init(...)`** Initialize a `blake3_hasher` in the
+  default hashing mode.
+- **`blake3_hasher_init_keyed(...)`** Initialize a `blake3_hasher` in
+  the keyed hashing mode, which accepts a 256-bit key.
+- **`blake3_hasher_init_derive_key(...)`** Initialize a `blake3_hasher`
+  in the key derivation mode, which accepts a context string of any
+  length. In this mode, the key material is given as input after
+  initialization. The context string should be hardcoded, globally
+  unique, and application-specific. A good default format for such
+  strings is `"[application] [commit timestamp] [purpose]"`, e.g.,
+  `"example.com 2019-12-25 16:18:03 session tokens v1"`.
+- **`blake3_hasher_update(...)`** Add input to the hasher. This can be
   called any number of times.
-- `blake3_hasher_finalize(...)`: Finalize the hasher and emit an output
-  of any length. This does not modify the hasher itself. It is possible
-  to finalize again after adding more input.
+- **`blake3_hasher_finalize(...)`** Finalize the hasher and emit an
+  output of any length. This does not modify the hasher itself. It is
+  possible to finalize again after adding more input.
 
 ## Example
 
