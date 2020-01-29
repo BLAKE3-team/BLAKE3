@@ -22,32 +22,47 @@ struct and five functions in [`blake3.h`](blake3.h):
 
 ## Example
 
+Here's an example program that hashes bytes from standard input and
+prints the result:
+
 ```c
-#include <stdio.h>
 #include "blake3.h"
+#include <stdio.h>
 
 int main() {
-    // Initialize the hasher.
-    blake3_hasher hasher;
-    blake3_hasher_init(&hasher);
+  // Initialize the hasher.
+  blake3_hasher hasher;
+  blake3_hasher_init(&hasher);
 
-    // Write some input bytes.
-    blake3_hasher_update(&hasher, "foo", 3);
-    blake3_hasher_update(&hasher, "bar", 3);
-    blake3_hasher_update(&hasher, "baz", 3);
+  // Read input bytes from stdin.
+  unsigned char buf[65536];
+  size_t n;
+  while ((n = fread(buf, 1, 65536, stdin)) > 0) {
+    blake3_hasher_update(&hasher, buf, n);
+  }
 
-    // Finalize the hash. BLAKE3_OUT_LEN is 32 bytes, but extended outputs are
-    // also supported.
-    uint8_t output[BLAKE3_OUT_LEN];
-    blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
+  // Finalize the hash. BLAKE3_OUT_LEN is the default output length, 32 bytes.
+  uint8_t output[BLAKE3_OUT_LEN];
+  blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
 
-    // Print the hash as hexadecimal.
-    for (size_t i = 0; i < BLAKE3_OUT_LEN; i++) {
-      printf("%02x", output[i]);
-    }
-    printf("\n");
-    return 0;
+  // Print the hash as hexadecimal.
+  for (size_t i = 0; i < BLAKE3_OUT_LEN; i++) {
+    printf("%02x", output[i]);
+  }
+  printf("\n");
+  return 0;
 }
+```
+
+If you save the example code above as `example.c`, and you're on x86,
+you can compile a working binary like this:
+
+```bash
+gcc -c -O3 -msse4.1 blake3_sse41.c -o blake3_sse41.o
+gcc -c -O3 -mavx2 blake3_avx2.c -o blake3_avx2.o
+gcc -c -O3 -mavx512f -mavx512vl blake3_avx512.c -o blake3_avx512.o
+gcc -O3 example.c blake3.c blake3_dispatch.c blake3_portable.c \
+    blake3_avx2.o blake3_avx512.o blake3_sse41.o -o blake3
 ```
 
 ## Building
