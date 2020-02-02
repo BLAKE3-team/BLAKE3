@@ -741,6 +741,9 @@ fn parent_node_output(
 }
 
 /// An incremental hash state that can accept any number of writes.
+///
+/// In addition to its inherent methods, this type implements several commonly
+/// used traits from the [`digest`](https://crates.io/crates/digest) crate.
 #[derive(Clone)]
 pub struct Hasher {
     key: CVWords,

@@ -1,3 +1,5 @@
+//! Implementations for commonly used traits from the `digest` crate.
+
 use crate::{Hasher, OutputReader};
 use digest::generic_array::{
     typenum::{U32, U64},
