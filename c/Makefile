@@ -33,7 +33,7 @@ all: blake3.c blake3_dispatch.c blake3_portable.c main.c $(TARGETS)
 blake3_sse41.o: blake3_sse41.c
 	$(CC) $(CFLAGS) $(EXTRAFLAGS) -c $^ -o $@ -msse4.1
 
-blake3_avx2.o: blake3_avx2.c # blake3_sse41.c
+blake3_avx2.o: blake3_avx2.c
 	$(CC) $(CFLAGS) $(EXTRAFLAGS) -c $^ -o $@ -mavx2
 
 blake3_avx512.o: blake3_avx512.c
@@ -42,7 +42,7 @@ blake3_avx512.o: blake3_avx512.c
 blake3_neon.o: blake3_neon.c
 	$(CC) $(CFLAGS) $(EXTRAFLAGS) -c $^ -o $@
 
-test: CFLAGS += -DBLAKE3_TESTING -fsanitize=address -fsanitize=undefined
+test: CFLAGS += -DBLAKE3_TESTING -fsanitize=address,undefined
 test: all
 	./test.py
 
