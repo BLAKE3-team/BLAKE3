@@ -19,7 +19,7 @@ c_avx512 = []
 # which is currently x86-only. If "c_neon" is on, NEON support is assumed. Note
 # that AArch64 always supports NEON, but support on ARMv7 varies.
 c_neon = []
-std = []
+std = ["digest/std"]
 
 [dependencies]
 arrayref = "0.3.5"
@@ -34,6 +34,7 @@ constant_time_eq = "0.1.5"
 # it for your specific use case.
 rayon = { version = "1.2.1", optional = true }
 cfg-if = "0.1.10"
+digest = "0.8.1"
 
 [dev-dependencies]
 page_size = "0.4.1"

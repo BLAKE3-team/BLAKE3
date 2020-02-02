@@ -58,6 +58,8 @@ pub mod portable;
 #[doc(hidden)]
 pub mod sse41;
 
+mod digest;
+
 use arrayref::{array_mut_ref, array_ref};
 use arrayvec::{ArrayString, ArrayVec};
 use core::cmp;
@@ -1074,6 +1076,12 @@ impl fmt::Debug for Hasher {
             "Hasher {{ flags: {:?}, platform: {:?} }}",
             self.chunk_state.flags, self.chunk_state.platform
         )
+    }
+}
+
+impl Default for Hasher {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
