@@ -460,3 +460,12 @@ fn test_msg_schdule_permutation() {
 
     assert_eq!(generated, crate::MSG_SCHEDULE);
 }
+
+#[test]
+fn test_reset() {
+    let mut hasher = crate::Hasher::new();
+    hasher.update(&[42; 3 * CHUNK_LEN + 7]);
+    hasher.reset();
+    hasher.update(&[42; CHUNK_LEN + 3]);
+    assert_eq!(hasher.finalize(), crate::hash(&[42; CHUNK_LEN + 3]));
+}

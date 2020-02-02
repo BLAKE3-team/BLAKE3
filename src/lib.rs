@@ -785,6 +785,23 @@ impl Hasher {
         Self::new_internal(&context_key_words, DERIVE_KEY_MATERIAL)
     }
 
+    /// Reset the `Hasher` to its initial state.
+    ///
+    /// This is functionally the same as overwriting the `Hasher` with a new
+    /// one, using the same key or context string if any. However, depending on
+    /// how much inlining the optimizer does, moving a `Hasher` might copy its
+    /// entire CV stack, most of which is useless uninitialized bytes. This
+    /// methods avoids that copy.
+    pub fn reset(&mut self) {
+        self.chunk_state = ChunkState::new(
+            &self.key,
+            0,
+            self.chunk_state.flags,
+            self.chunk_state.platform,
+        );
+        self.cv_stack.clear();
+    }
+
     // As described in push_cv() below, we do "lazy merging", delaying merges
     // until right before the next CV is about to be added. This is different
     // from the reference implementation. Another difference is that we aren't
