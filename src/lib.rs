@@ -1085,6 +1085,7 @@ impl fmt::Debug for Hasher {
 }
 
 impl Default for Hasher {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
