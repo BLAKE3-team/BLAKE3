@@ -12,12 +12,14 @@ impl digest::BlockInput for Hasher {
 }
 
 impl digest::Input for Hasher {
+    #[inline]
     fn input<B: AsRef<[u8]>>(&mut self, data: B) {
         self.update(data.as_ref());
     }
 }
 
 impl digest::Reset for Hasher {
+    #[inline]
     fn reset(&mut self) {
         self.reset(); // the inherent method
     }
@@ -26,6 +28,7 @@ impl digest::Reset for Hasher {
 impl digest::FixedOutput for Hasher {
     type OutputSize = U32;
 
+    #[inline]
     fn fixed_result(self) -> GenericArray<u8, Self::OutputSize> {
         GenericArray::clone_from_slice(self.finalize().as_bytes())
     }
@@ -34,12 +37,14 @@ impl digest::FixedOutput for Hasher {
 impl digest::ExtendableOutput for Hasher {
     type Reader = OutputReader;
 
+    #[inline]
     fn xof_result(self) -> Self::Reader {
         self.finalize_xof()
     }
 }
 
 impl digest::XofReader for OutputReader {
+    #[inline]
     fn read(&mut self, buffer: &mut [u8]) {
         self.fill(buffer);
     }
@@ -49,19 +54,23 @@ impl crypto_mac::Mac for Hasher {
     type OutputSize = U32;
     type KeySize = U32;
 
+    #[inline]
     fn new(key: &GenericArray<u8, Self::KeySize>) -> Self {
         let key_bytes: [u8; 32] = (*key).into();
         Hasher::new_keyed(&key_bytes)
     }
 
+    #[inline]
     fn input(&mut self, data: &[u8]) {
         self.update(data);
     }
 
+    #[inline]
     fn reset(&mut self) {
         self.reset();
     }
 
+    #[inline]
     fn result(self) -> crypto_mac::MacResult<Self::OutputSize> {
         crypto_mac::MacResult::new((*self.finalize().as_bytes()).into())
     }
