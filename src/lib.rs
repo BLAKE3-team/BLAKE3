@@ -798,7 +798,7 @@ impl Hasher {
     /// how much inlining the optimizer does, moving a `Hasher` might copy its
     /// entire CV stack, most of which is useless uninitialized bytes. This
     /// methods avoids that copy.
-    pub fn reset(&mut self) {
+    pub fn reset(&mut self) -> &mut Self {
         self.chunk_state = ChunkState::new(
             &self.key,
             0,
@@ -806,6 +806,7 @@ impl Hasher {
             self.chunk_state.platform,
         );
         self.cv_stack.clear();
+        self
     }
 
     // As described in push_cv() below, we do "lazy merging", delaying merges

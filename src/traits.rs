@@ -84,7 +84,7 @@ mod test {
         // Trait implementations.
         let mut hasher2: crate::Hasher = digest::Digest::new();
         digest::Digest::input(&mut hasher2, b"xxx");
-        digest::Digest::reset(&mut hasher2); // avoid the reset() inherent method
+        digest::Digest::reset(&mut hasher2);
         digest::Digest::input(&mut hasher2, b"foo");
         digest::Digest::input(&mut hasher2, b"bar");
         digest::Digest::input(&mut hasher2, b"baz");
