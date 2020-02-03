@@ -3,6 +3,7 @@ use clap::{App, Arg};
 use std::cmp;
 use std::convert::TryInto;
 use std::fs::File;
+use std::io;
 use std::io::prelude::*;
 
 const FILE_ARG: &str = "file";
@@ -57,21 +58,37 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
         .get_matches()
 }
 
+// A 16 KiB buffer is enough to take advantage of all the SIMD instruction sets
+// that we support, but `std::io::copy` currently uses 8 KiB. Most platforms
+// can support at least 64 KiB, and there's some performance benefit to using
+// bigger reads, so that's what we use here.
+fn copy_wide(mut reader: impl Read, hasher: &mut blake3::Hasher) -> io::Result<u64> {
+    let mut buffer = [0; 65536];
+    let mut total = 0;
+    loop {
+        match reader.read(&mut buffer) {
+            Ok(0) => return Ok(total),
+            Ok(n) => {
+                hasher.update(&buffer[..n]);
+                total += n as u64;
+            }
+            Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 // The slow path, for inputs that we can't memmap.
-fn hash_reader(
-    base_hasher: &blake3::Hasher,
-    mut reader: impl Read,
-) -> Result<blake3::OutputReader> {
+fn hash_reader(base_hasher: &blake3::Hasher, reader: impl Read) -> Result<blake3::OutputReader> {
     let mut hasher = base_hasher.clone();
-    // TODO: This is a narrow copy, so it might not take advantage of SIMD or
-    // threads. With a larger buffer size, most of that performance can be
-    // recovered. However, this requires some platform-specific tuning, based
-    // on both the SIMD degree and the number of cores. A double-buffering
-    // strategy is also helpful, where a dedicated background thread reads
-    // input into one buffer while another thread is calling update() on a
-    // second buffer. Since this is the slow path anyway, do the simple thing
-    // for now.
-    std::io::copy(&mut reader, &mut hasher)?;
+    // This is currently all single-threaded. Doing multi-threaded hashing
+    // without memory mapping is tricky, since all your worker threads have to
+    // stop every time you refill the buffer, and that ends up being a lot of
+    // overhead. To solve that, we need a more complicated double-buffering
+    // strategy where a background thread fills one buffer while the worker
+    // threads are hashing the other one. We might implement that in the
+    // future, but since this is the slow path anyway, it's not high priority.
+    copy_wide(reader, &mut hasher)?;
     Ok(hasher.finalize_xof())
 }
 
@@ -114,7 +131,14 @@ fn maybe_hash_memmap(
     #[cfg(feature = "memmap")]
     {
         if let Some(map) = maybe_memmap_file(_file)? {
-            return Ok(Some(_base_hasher.clone().update(&map).finalize_xof()));
+            // Memory mapping worked. Use Rayon-based multi-threading to split
+            // up the whole file across many worker threads.
+            return Ok(Some(
+                _base_hasher
+                    .clone()
+                    .update_with_join::<blake3::join::RayonJoin>(&map)
+                    .finalize_xof(),
+            ));
         }
     }
     Ok(None)

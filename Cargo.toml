@@ -21,6 +21,10 @@ c_avx512 = []
 c_neon = []
 std = ["digest/std"]
 
+[package.metadata.docs.rs]
+# Document blake3::join::RayonJoin on docs.rs.
+features = ["rayon"]
+
 [dependencies]
 arrayref = "0.3.5"
 arrayvec = { version = "0.5.1", default-features = false, features = ["array-sizes-33-128"] }

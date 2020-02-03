@@ -417,3 +417,85 @@ fn bench_reference_0512_kib(b: &mut Bencher) {
 fn bench_reference_1024_kib(b: &mut Bencher) {
     bench_reference(b, 1024 * KIB);
 }
+
+#[cfg(feature = "rayon")]
+fn bench_rayon(b: &mut Bencher, len: usize) {
+    let mut input = RandomInput::new(b, len);
+    b.iter(|| {
+        blake3::Hasher::new()
+            .update_with_join::<blake3::join::RayonJoin>(input.get())
+            .finalize()
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_0001_block(b: &mut Bencher) {
+    bench_rayon(b, BLOCK_LEN);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_0001_kib(b: &mut Bencher) {
+    bench_rayon(b, 1 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_0002_kib(b: &mut Bencher) {
+    bench_rayon(b, 2 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_0004_kib(b: &mut Bencher) {
+    bench_rayon(b, 4 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_0008_kib(b: &mut Bencher) {
+    bench_rayon(b, 8 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_0016_kib(b: &mut Bencher) {
+    bench_rayon(b, 16 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_0032_kib(b: &mut Bencher) {
+    bench_rayon(b, 32 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_0064_kib(b: &mut Bencher) {
+    bench_rayon(b, 64 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_0128_kib(b: &mut Bencher) {
+    bench_rayon(b, 128 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_0256_kib(b: &mut Bencher) {
+    bench_rayon(b, 256 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_0512_kib(b: &mut Bencher) {
+    bench_rayon(b, 512 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_1024_kib(b: &mut Bencher) {
+    bench_rayon(b, 1024 * KIB);
+}
