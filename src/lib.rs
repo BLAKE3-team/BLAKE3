@@ -58,7 +58,7 @@ pub mod portable;
 #[doc(hidden)]
 pub mod sse41;
 
-mod traits;
+pub mod traits;
 
 use arrayref::{array_mut_ref, array_ref};
 use arrayvec::{ArrayString, ArrayVec};

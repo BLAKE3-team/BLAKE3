@@ -1,5 +1,9 @@
-//! Implementations for commonly used traits like `digest::Digest` and
-//! `crypto_mac::Mac`.
+//! Implementations of commonly used traits like
+//! [`digest::Digest`](https://crates.io/crates/digest) and
+//! [`crypto_mac::Mac`](https://crates.io/crates/crypto-mac).
+
+pub use crypto_mac;
+pub use digest;
 
 use crate::{Hasher, OutputReader};
 use digest::generic_array::{
