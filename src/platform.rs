@@ -252,6 +252,7 @@ impl Platform {
 
 // Note that AVX-512 is divided into multiple featuresets, and we use two of
 // them, F and VL.
+#[cfg(feature = "c_avx512")]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline(always)]
 pub fn avx512_detected() -> bool {
