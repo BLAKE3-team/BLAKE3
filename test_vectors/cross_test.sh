@@ -19,7 +19,7 @@ mv blake3/test_vectors .
 mv blake3/reference_impl test_vectors
 mv blake3 test_vectors
 cd test_vectors
-sed -i 's|blake3 = { path = "../", features=\["c_avx512"\] }|blake3 = { path = "./blake3" }|' Cargo.toml
+sed -i 's|blake3 = { path = "../" }|blake3 = { path = "./blake3" }|' Cargo.toml
 sed -i 's|reference_impl = { path = "../reference_impl" }|reference_impl = { path = "reference_impl" }|' Cargo.toml
 
 cross test "$@"

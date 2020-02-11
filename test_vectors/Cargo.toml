@@ -3,10 +3,16 @@ name = "test_vectors"
 version = "0.0.0"
 edition = "2018"
 
+[features]
+default = []
+c = ["blake3/c"]
+c_prefer_intrinsics = ["blake3/c_prefer_intrinsics"]
+c_neon = ["blake3/c_neon"]
+
 [dependencies]
 # If you ever change these path dependencies, you'll probably need to update
 # cross_test.sh, or CI will break. I'm sorry >.<
-blake3 = { path = "../", features=["c_avx512"] }
+blake3 = { path = "../" }
 hex = "0.4.0"
 reference_impl = { path = "../reference_impl" }
 serde = { version = "1.0", features = ["derive"] }

@@ -13,6 +13,11 @@ fn is_x86_64() -> bool {
     target_components()[0] == "x86_64"
 }
 
+fn is_x86_32() -> bool {
+    let arch = &target_components()[0];
+    arch == "i386" || arch == "i586" || arch == "i686"
+}
+
 fn is_armv7() -> bool {
     target_components()[0] == "armv7"
 }
@@ -28,6 +33,13 @@ fn is_windows_msvc() -> bool {
         && target_components()[3] == "msvc"
 }
 
+fn is_windows_gnu() -> bool {
+    // Some targets are only two components long, so check in steps.
+    target_components()[1] == "pc"
+        && target_components()[2] == "windows"
+        && target_components()[3] == "gnu"
+}
+
 fn new_build() -> cc::Build {
     let mut build = cc::Build::new();
     if !is_windows_msvc() {
@@ -37,16 +49,16 @@ fn new_build() -> cc::Build {
 }
 
 const WINDOWS_MSVC_ERROR: &str = r#"
-The "c_avx512" feature is enabled, but your version of the MSVC C compiler does
-not support the "/arch:AVX512" flag. If you are building the "b3sum" or
-"bao_bin" crates, you can disable AVX-512 with Cargo's "--no-default-features"
-flag. (Note that this also disables other default features like Rayon-based
+The "c" feature is enabled, but your version of the MSVC C compiler does not
+support the "/arch:AVX512" flag. If you are building the "b3sum" or "bao_bin"
+crates, you can disable AVX-512 with Cargo's "--no-default-features" flag.
+(Note that this also disables other default features like Rayon-based
 multithreading, which you can re-enable with "--features=rayon".) Other crates
 might or might not support this workaround.
 "#;
 
 const GNU_ERROR: &str = r#"
-The "c_avx512" feature is enabled, but your C compiler does not support the
+The "c" feature is enabled, but your C compiler does not support the
 "-mavx512f" flag. If you are building the "b3sum" or "bao_bin" crates, you can
 disable AVX-512 with Cargo's "--no-default-features" flag. (Note that this also
 disables other default features like Rayon-based multithreading, which you can
@@ -69,25 +81,76 @@ fn check_for_avx512_compiler_support(build: &cc::Build) {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // "c_avx512' is a no-op for non-x86_64 targets. It also participates in
-    // dynamic CPU feature detection, so it's generally safe to enable.
-    // However, it probably won't build in some older environments without
-    // AVX-512 support in the C compiler, and it's disabled by default for that
-    // reason.
-    if defined("CARGO_FEATURE_C_AVX512") && is_x86_64() {
-        let mut build = new_build();
-        check_for_avx512_compiler_support(&build);
-        build.file("c/blake3_avx512.c");
-        if is_windows_msvc() {
-            // Note that a lot of versions of MSVC don't support /arch:AVX512,
-            // and they'll discard it with a warning, hopefully leading to a
-            // build error.
-            build.flag("/arch:AVX512");
+    if defined("CARGO_FEATURE_C") {
+        if is_x86_64() && !defined("CARGO_FEATURE_C_PREFER_INTRINSICS") {
+            // On 64-bit, use the assembly implementations, unless the
+            // "c_prefer_intrinsics" feature is enabled.
+            if is_windows_msvc() {
+                let mut build = new_build();
+                build.file("c/blake3-sse41-x86_64-windows-msvc.asm");
+                build.file("c/blake3-avx2-x86_64-windows-msvc.asm");
+                build.file("c/blake3-avx512-x86_64-windows-msvc.asm");
+                build.compile("blake3_asm");
+            } else if is_windows_gnu() {
+                let mut build = new_build();
+                build.file("c/blake3-sse41-x86_64-windows-gnu.S");
+                build.file("c/blake3-avx2-x86_64-windows-gnu.S");
+                build.file("c/blake3-avx512-x86_64-windows-gnu.S");
+                build.compile("blake3_asm");
+            } else {
+                // All non-Windows implementations are assumed to support
+                // Linux-style assembly. These files do contain a small
+                // explicit workaround for macOS also.
+                let mut build = new_build();
+                build.file("c/blake3-sse41-x86_64-unix.S");
+                build.file("c/blake3-avx2-x86_64-unix.S");
+                build.file("c/blake3-avx512-x86_64-unix.S");
+                build.compile("blake3_asm");
+            }
+        } else if is_x86_64() || is_x86_32() {
+            // Assembly implementations are only for 64-bit. On 32-bit, or if
+            // the "c_prefer_intrinsics" feature is enabled, use the
+            // intrinsics-based C implementations. These each need to be
+            // compiled separately, with the corresponding instruction set
+            // extension explicitly enabled in the compiler.
+
+            let mut sse41_build = new_build();
+            sse41_build.file("c/blake3_sse41.c");
+            if is_windows_msvc() {
+                // /arch:SSE2 is the default on x86 and undefined on x86_64:
+                // https://docs.microsoft.com/en-us/cpp/build/reference/arch-x86
+                // It also includes SSE4.1 intrisincs:
+                // https://stackoverflow.com/a/32183222/823869
+            } else {
+                sse41_build.flag("-msse4.1");
+            }
+            sse41_build.compile("blake3_sse41");
+
+            let mut avx2_build = new_build();
+            avx2_build.file("c/blake3_avx2.c");
+            if is_windows_msvc() {
+                avx2_build.flag("/arch:AVX2");
+            } else {
+                avx2_build.flag("-mavx2");
+            }
+            avx2_build.compile("blake3_avx2");
+
+            let mut avx512_build = new_build();
+            check_for_avx512_compiler_support(&avx512_build);
+            avx512_build.file("c/blake3_avx512.c");
+            if is_windows_msvc() {
+                // Note that a lot of versions of MSVC don't support /arch:AVX512,
+                // and they'll discard it with a warning, hopefully leading to a
+                // build error.
+                avx512_build.flag("/arch:AVX512");
+            } else {
+                avx512_build.flag("-mavx512f");
+                avx512_build.flag("-mavx512vl");
+            }
+            avx512_build.compile("blake3_avx512");
         } else {
-            build.flag("-mavx512f");
-            build.flag("-mavx512vl");
+            // Currently no effect for non-x86 platforms.
         }
-        build.compile("blake3_avx512");
     }
 
     if defined("CARGO_FEATURE_C_NEON") {

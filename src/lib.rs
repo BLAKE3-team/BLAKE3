@@ -39,24 +39,32 @@ mod test;
 #[doc(hidden)]
 pub mod guts;
 
-// These modules are pub for benchmarks only. They are not stable.
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[doc(hidden)]
-pub mod avx2;
-#[cfg(feature = "c_avx512")]
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[doc(hidden)]
-pub mod c_avx512;
-#[cfg(feature = "c_neon")]
-#[doc(hidden)]
-pub mod c_neon;
+// The platform module is pub for benchmarks only. It is not stable.
 #[doc(hidden)]
 pub mod platform;
-#[doc(hidden)]
-pub mod portable;
+
+// Platform-specific implementations of the compression function.
+mod portable;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[doc(hidden)]
-pub mod sse41;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "c")] {
+        #[path = "c_sse41.rs"]
+        mod sse41;
+        #[path = "c_avx2.rs"]
+        mod avx2;
+        #[path = "c_avx512.rs"]
+        mod avx512;
+    } else {
+        #[path = "rust_sse41.rs"]
+        mod sse41;
+        #[path = "rust_avx2.rs"]
+        mod avx2;
+        // Stable Rust does not currently support AVX-512.
+    }
+}
+#[cfg(feature = "c_neon")]
+#[path = "c_neon.rs"]
+mod neon;
 
 pub mod traits;
 

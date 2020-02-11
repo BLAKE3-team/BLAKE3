@@ -24,21 +24,29 @@ jobs:
         toolchain: ${{ format('{0}-{1}', matrix.channel, matrix.target.toolchain) }}
         profile: minimal
         override: true
-    # Default tests.
-    - run: cargo test
-    # No-default-features tests.
+    # Default tests plus Rayon.
+    - run: cargo test --features=rayon
+    # no_std tests.
     - run: cargo test --no-default-features
-    # More features tests. Note that "c_avx512" participates in dynamic feature
-    # detection, so it'll be built, but it probably won't run.
-    - run: cargo test --features=c_avx512,rayon
+    # Test the x86 assembly implementations. Use -vv to log compiler commands.
+    - run: cargo test --features=c -vv
+    # Test the C intrinsics implementations. Use -vv to log compiler commands.
+    - run: cargo test --features=c,c_prefer_intrinsics -vv
     # Test release mode. This does more iteratations in test_fuzz_hasher.
     - run: cargo test --release
-    # Test benchmarks. Nightly only.
-    - run: cargo test --benches
-      if: matrix.rust_version == 'nightly'
+    # Test benchmarks. RUSTC_BOOTSTRAP=1 lets this run on non-nightly toolchains.
+    - run: cargo test --benches --features=c
+      env:
+        RUSTC_BOOTSTRAP: 1
     # Test vectors.
     - name: test vectors
       run: cargo test
+      working-directory: ./test_vectors
+    - name: test vectors
+      run: cargo test --features=c
+      working-directory: ./test_vectors
+    - name: test vectors
+      run: cargo test --features=c,c_prefer_intrinsics
       working-directory: ./test_vectors
     # Test b3sum.
     - name: test b3sum

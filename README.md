@@ -33,19 +33,18 @@ with BLAKE3.
 This repository is the official implementation of BLAKE3. It includes:
 
 * The [`blake3`](https://crates.io/crates/blake3) Rust crate, which
-  includes optimized SIMD implementations, with dynamic CPU feature
-  detection on x86. SSE4.1 and AVX2 support are implemented in Rust,
-  while AVX-512 and ARM NEON support are imported from the C
-  implementation and controlled by the `c_avx512` and `c_neon` features.
-  Multi-threading is implemented with
-  [Rayon](https://github.com/rayon-rs/rayon) and controlled by the
-  `rayon` feature. 
+  includes optimized SIMD implementations, with runtime CPU feature
+  detection on x86. SSE4.1 and AVX2 are supported in pure Rust. The `c`
+  feature enables C/assembly implementations and AVX-512 support. The
+  `c_neon` feature enables ARM NEON support. Multi-threading is also
+  supported, and the `rayon` feature provides a
+  [Rayon](https://github.com/rayon-rs/rayon)-based implementation.
 
 * The [`b3sum`](https://crates.io/crates/b3sum) Rust crate, which
   provides a command line interface. You can install it from
   [crates.io](https://crates.io/crates/b3sum) with `cargo install
-  b3sum`. It enables the multi-threading and AVX-512 features of the
-  `blake3` crate by default.
+  b3sum`. It enables the `rayon` and `c` features of the `blake3` crate
+  by default.
 
 * The [C implementation](c), which like the Rust implementation includes
   SIMD code and dynamic CPU feature detection on x86. Unlike the Rust
@@ -79,9 +78,6 @@ hash passwords to store the hashes or if you derive keys from passwords,
 we recommend [Argon2](https://github.com/P-H-C/phc-winner-argon2).*
 
 ## Usage
-
-This repository provides the `b3sum` command line utility and the
-`blake3` Rust crate.
 
 ### The `b3sum` utility
 

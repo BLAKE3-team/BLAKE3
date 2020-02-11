@@ -11,10 +11,21 @@ edition = "2018"
 
 [features]
 default = ["std"]
-# Like SSE4.1 and AVX2, the AVX-512 implementation participates in dynamic CPU
-# feature detection. A binary with "c_avx512" on is still cross-platform. This
-# feature has no effect on non-x86.
-c_avx512 = []
+# The "c" feature includes C and assembly SIMD implementations of the
+# compression function for x86 platforms, called via FFI. (Currently it has no
+# effect on other platforms.) This requires a C toolchain on the build machine.
+# This is necessary for AVX-512 support, which is not yet stable in Rust, and
+# the assembly implementations also perform better than those using Rust/LLVM
+# intrinsics. As with the Rust implementations, these C and assembly
+# implementations participate in runtime CPU feature detection, and the
+# resulting binary is portable.
+c = []
+# Normally x86-64 builds prefer assembly implementations over C intrinsics. The
+# assembly implementations perform better, perform most consistently across
+# compilers, and are much faster to build. However, this feature makes the
+# build use the C intrinsics implementations instead. This is mainly for
+# testing purposes, and most callers will not want to use it.
+c_prefer_intrinsics = []
 # The NEON implementation does not participate in dynamic feature detection,
 # which is currently x86-only. If "c_neon" is on, NEON support is assumed. Note
 # that AArch64 always supports NEON, but support on ARMv7 varies.
