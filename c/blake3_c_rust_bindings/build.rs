@@ -9,17 +9,13 @@ fn target_components() -> Vec<String> {
     target.split("-").map(|s| s.to_string()).collect()
 }
 
-// This is the full current list of x86 targets supported by Rustc. The C
-// dispatch code uses
-//   #if defined(__x86_64__) || defined(__i386__) || defined(_M_IX86) || defined(_M_X64)
-// so this needs to be somewhat broad to match. These bindings are mainly for
-// testing, so it's not the end of the world if this misses some obscure *86
-// platform somehow.
-fn is_x86() -> bool {
+fn is_x86_64() -> bool {
     target_components()[0] == "x86_64"
-        || target_components()[0] == "i386"
-        || target_components()[0] == "i586"
-        || target_components()[0] == "i686"
+}
+
+fn is_x86_32() -> bool {
+    let arch = &target_components()[0];
+    arch == "i386" || arch == "i586" || arch == "i686"
 }
 
 fn is_armv7() -> bool {
@@ -37,6 +33,13 @@ fn is_windows_msvc() -> bool {
         && target_components()[3] == "msvc"
 }
 
+fn is_windows_gnu() -> bool {
+    // Some targets are only two components long, so check in steps.
+    target_components()[1] == "pc"
+        && target_components()[2] == "windows"
+        && target_components()[3] == "gnu"
+}
+
 fn new_build() -> cc::Build {
     let mut build = cc::Build::new();
     if !is_windows_msvc() {
@@ -52,7 +55,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     base_build.file("../blake3_portable.c");
     base_build.compile("blake3_c_base");
 
-    if is_x86() {
+    if is_x86_64() && !defined("CARGO_FEATURE_PREFER_INTRINSICS") {
+        // On 64-bit, use the assembly implementations, unless the
+        // "prefer_intrinsics" feature is enabled.
+        if is_windows_msvc() {
+            let mut build = new_build();
+            build.file("../blake3-sse41-x86_64-windows-msvc.asm");
+            build.file("../blake3-avx2-x86_64-windows-msvc.asm");
+            build.file("../blake3-avx512-x86_64-windows-msvc.asm");
+            build.compile("blake3_asm");
+        } else if is_windows_gnu() {
+            let mut build = new_build();
+            build.file("../blake3-sse41-x86_64-windows-gnu.S");
+            build.file("../blake3-avx2-x86_64-windows-gnu.S");
+            build.file("../blake3-avx512-x86_64-windows-gnu.S");
+            build.compile("blake3_asm");
+        } else {
+            // All non-Windows implementations are assumed to support
+            // Linux-style assembly. These files do contain a small
+            // explicit workaround for macOS also.
+            let mut build = new_build();
+            build.file("../blake3-sse41-x86_64-unix.S");
+            build.file("../blake3-avx2-x86_64-unix.S");
+            build.file("../blake3-avx512-x86_64-unix.S");
+            build.compile("blake3_asm");
+        }
+    } else if is_x86_64() || is_x86_32() {
+        // Assembly implementations are only for 64-bit. On 32-bit, or if
+        // the "prefer_intrinsics" feature is enabled, use the
+        // intrinsics-based C implementations. These each need to be
+        // compiled separately, with the corresponding instruction set
+        // extension explicitly enabled in the compiler.
+
         let mut sse41_build = new_build();
         sse41_build.file("../blake3_sse41.c");
         if is_windows_msvc() {
@@ -63,7 +97,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             sse41_build.flag("-msse4.1");
         }
-        sse41_build.compile("blake3_c_sse41");
+        sse41_build.compile("blake3_sse41");
 
         let mut avx2_build = new_build();
         avx2_build.file("../blake3_avx2.c");
@@ -72,17 +106,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             avx2_build.flag("-mavx2");
         }
-        avx2_build.compile("blake3_c_avx2");
+        avx2_build.compile("blake3_avx2");
 
         let mut avx512_build = new_build();
         avx512_build.file("../blake3_avx512.c");
         if is_windows_msvc() {
+            // Note that a lot of versions of MSVC don't support /arch:AVX512,
+            // and they'll discard it with a warning, hopefully leading to a
+            // build error.
             avx512_build.flag("/arch:AVX512");
         } else {
             avx512_build.flag("-mavx512f");
             avx512_build.flag("-mavx512vl");
         }
-        avx512_build.compile("blake3_c_avx512");
+        avx512_build.compile("blake3_avx512");
     }
 
     // We only build NEON code here if 1) it's requested and 2) the root crate

@@ -42,10 +42,10 @@ jobs:
     - name: test vectors
       run: cargo test
       working-directory: ./test_vectors
-    - name: test vectors
+    - name: test vectors C assembly
       run: cargo test --features=c
       working-directory: ./test_vectors
-    - name: test vectors
+    - name: test vectors C intrinsics
       run: cargo test --features=c,c_prefer_intrinsics
       working-directory: ./test_vectors
     # Test b3sum.
@@ -56,8 +56,11 @@ jobs:
       run: cargo test --no-default-features
       working-directory: ./b3sum
     # Test C code.
-    - name: cargo test C bindings
+    - name: cargo test C bindings assembly
       run: cargo test
+      working-directory: ./c/blake3_c_rust_bindings
+    - name: cargo test C bindings intrinsics
+      run: cargo test --features=prefer_intrinsics
       working-directory: ./c/blake3_c_rust_bindings
     # Reference impl doc test.
     - name: reference impl doc test
