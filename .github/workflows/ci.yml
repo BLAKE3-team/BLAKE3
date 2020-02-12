@@ -100,6 +100,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
+    # Test the intrinsics-based implementations.
     - run: make test
       working-directory: ./c
     - run: make clean && rm blake3_sse41.c
@@ -113,4 +114,19 @@ jobs:
     - run: make clean && rm blake3_avx512.c
       working-directory: ./c
     - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 BLAKE3_NO_AVX512=1 make test
+      working-directory: ./c
+    # Test the assembly implementations.
+    - run: make test_asm
+      working-directory: ./c
+    - run: make clean && rm blake3-sse41-x86_64-unix.S
+      working-directory: ./c
+    - run: BLAKE3_NO_SSE41=1 make test_asm
+      working-directory: ./c
+    - run: make clean && rm blake3-avx2-x86_64-unix.S
+      working-directory: ./c
+    - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 make test_asm
+      working-directory: ./c
+    - run: make clean && rm blake3-avx512-x86_64-unix.S
+      working-directory: ./c
+    - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 BLAKE3_NO_AVX512=1 make test_asm
       working-directory: ./c
