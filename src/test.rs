@@ -154,7 +154,7 @@ pub fn test_hash_many_fn(
     crate::portable::hash_many(
         &parents,
         &TEST_KEY_WORDS,
-        0,
+        counter,
         IncrementCounter::No,
         crate::KEYED_HASH | crate::PARENT,
         0,
@@ -167,7 +167,7 @@ pub fn test_hash_many_fn(
         hash_many_parents_fn(
             &parents[..],
             &TEST_KEY_WORDS,
-            0,
+            counter,
             IncrementCounter::No,
             crate::KEYED_HASH | crate::PARENT,
             0,
