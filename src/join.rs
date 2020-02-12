@@ -45,6 +45,8 @@
 //! [`rayon::join`]: https://docs.rs/rayon/1.3.0/rayon/fn.join.html
 
 /// The trait that abstracts over single-threaded and multi-threaded recursion.
+///
+/// See the [`join` module docs](index.html) for more details.
 pub trait Join {
     fn join<A, B, RA, RB>(oper_a: A, oper_b: B, len_a: usize, len_b: usize) -> (RA, RB)
     where
@@ -58,6 +60,8 @@ pub trait Join {
 /// executed one after the other, on the calling thread. The standalone hashing
 /// functions and the `Hasher::update` method use this implementation
 /// internally.
+///
+/// See the [`join` module docs](index.html) for more details.
 pub enum SerialJoin {}
 
 impl Join for SerialJoin {
@@ -76,6 +80,8 @@ impl Join for SerialJoin {
 /// The Rayon-based implementation of `Join`. The left and right sides are
 /// executed on the Rayon thread pool, potentially in parallel. This
 /// implementation is gated by the `rayon` feature, which is off by default.
+///
+/// See the [`join` module docs](index.html) for more details.
 #[cfg(feature = "rayon")]
 pub enum RayonJoin {}
 

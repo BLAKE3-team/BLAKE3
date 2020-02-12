@@ -1,5 +1,5 @@
-//! The official Rust implementation of the [BLAKE3](https://blake3.io)
-//! cryptographic hash function.
+//! The official Rust implementation of the [BLAKE3] cryptographic hash
+//! function.
 //!
 //! # Examples
 //!
@@ -26,6 +26,22 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! # Cargo Features
+//!
+//! The `c` feature provides optimized assembly implementations and also
+//! AVX-512 support. It is off by default. If activated, a C compiler for the
+//! target platform is required.
+//!
+//! The `rayon` feature provides [Rayon]-based multi-threading, in particular
+//! the [`join::RayonJoin`] type for use with [`Hasher::update_with_join`]. It
+//! is also off by default, but on for [docs.rs].
+//!
+//! [BLAKE3]: https://blake3.io
+//! [Rayon]: https://github.com/rayon-rs/rayon
+//! [`join::RayonJoin`]: join/enum.RayonJoin.html
+//! [`Hasher::update_with_join`]: struct.Hasher.html#method.update_with_join
+//! [docs.rs]: https://docs.rs/
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
