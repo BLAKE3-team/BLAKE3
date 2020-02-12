@@ -9,21 +9,21 @@ ifdef BLAKE3_NO_SSE41
 EXTRAFLAGS += -DBLAKE3_NO_SSE41
 else
 TARGETS += blake3_sse41.o
-ASM_TARGETS += blake3-sse41-x86_64-unix.S
+ASM_TARGETS += blake3_sse41-x86_64-unix.S
 endif
 
 ifdef BLAKE3_NO_AVX2
 EXTRAFLAGS += -DBLAKE3_NO_AVX2
 else
 TARGETS += blake3_avx2.o
-ASM_TARGETS += blake3-avx2-x86_64-unix.S
+ASM_TARGETS += blake3_avx2-x86_64-unix.S
 endif
 
 ifdef BLAKE3_NO_AVX512
 EXTRAFLAGS += -DBLAKE3_NO_AVX512
 else
 TARGETS += blake3_avx512.o
-ASM_TARGETS += blake3-avx512-x86_64-unix.S
+ASM_TARGETS += blake3_avx512-x86_64-unix.S
 endif
 
 ifdef BLAKE3_USE_NEON
