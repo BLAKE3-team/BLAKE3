@@ -769,6 +769,36 @@ fn parent_node_output(
 /// In addition to its inherent methods, this type implements several commonly
 /// used traits from the [`digest`](https://crates.io/crates/digest) and
 /// [`crypto_mac`](https://crates.io/crates/crypto-mac) crates.
+///
+/// **Performance note:** The [`update`] and [`update_with_join`] methods
+/// perform poorly when the caller's input buffer is small. See their method
+/// docs below. A 16 KiB buffer is large enough to leverage all currently
+/// supported SIMD instruction sets.
+///
+/// # Examples
+///
+/// ```
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// // Hash an input incrementally.
+/// let mut hasher = blake3::Hasher::new();
+/// hasher.update(b"foo");
+/// hasher.update(b"bar");
+/// hasher.update(b"baz");
+/// assert_eq!(hasher.finalize(), blake3::hash(b"foobarbaz"));
+///
+/// // Extended output. OutputReader also implements Read and Seek.
+/// # #[cfg(feature = "std")] {
+/// let mut output = [0; 1000];
+/// let mut output_reader = hasher.finalize_xof();
+/// output_reader.fill(&mut output);
+/// assert_eq!(&output[..32], blake3::hash(b"foobarbaz").as_bytes());
+/// # }
+/// # Ok(())
+/// # }
+/// ```
+///
+/// [`update`]: #method.update
+/// [`update_with_join`]: #method.update_with_join
 #[derive(Clone)]
 pub struct Hasher {
     key: CVWords,
