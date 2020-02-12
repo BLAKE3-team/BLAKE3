@@ -469,6 +469,25 @@ fn test_reset() {
     hasher.reset();
     hasher.update(&[42; CHUNK_LEN + 3]);
     assert_eq!(hasher.finalize(), crate::hash(&[42; CHUNK_LEN + 3]));
+
+    let key = &[99; crate::KEY_LEN];
+    let mut keyed_hasher = crate::Hasher::new_keyed(key);
+    keyed_hasher.update(&[42; 3 * CHUNK_LEN + 7]);
+    keyed_hasher.reset();
+    keyed_hasher.update(&[42; CHUNK_LEN + 3]);
+    assert_eq!(
+        keyed_hasher.finalize(),
+        crate::keyed_hash(key, &[42; CHUNK_LEN + 3]),
+    );
+
+    let context = "BLAKE3 2020-02-12 10:20:58 reset test";
+    let mut kdf = crate::Hasher::new_derive_key(context);
+    kdf.update(&[42; 3 * CHUNK_LEN + 7]);
+    kdf.reset();
+    kdf.update(&[42; CHUNK_LEN + 3]);
+    let mut expected = [0; crate::OUT_LEN];
+    crate::derive_key(context, &[42; CHUNK_LEN + 3], &mut expected);
+    assert_eq!(kdf.finalize(), expected);
 }
 
 #[test]
