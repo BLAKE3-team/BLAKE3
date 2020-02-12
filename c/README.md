@@ -54,15 +54,12 @@ int main() {
 }
 ```
 
-If you save the example code above as `example.c`, and you're on x86,
-you can compile a working binary like this:
+If you save the example code above as `example.c`, and you're on x86\_64
+with a Unix-like OS, you can compile a working binary like this:
 
 ```bash
-gcc -c -O3 -msse4.1 blake3_sse41.c -o blake3_sse41.o
-gcc -c -O3 -mavx2 blake3_avx2.c -o blake3_avx2.o
-gcc -c -O3 -mavx512f -mavx512vl blake3_avx512.c -o blake3_avx512.o
-gcc -O3 example.c blake3.c blake3_dispatch.c blake3_portable.c \
-    blake3_avx2.o blake3_avx512.o blake3_sse41.o -o blake3
+gcc -O3 -o example example.c blake3.c blake3_dispatch.c blake3_portable.c \
+    blake3-sse41-x86_64-unix.S blake3-avx2-x86_64-unix.S blake3-avx512-x86_64-unix.S
 ```
 
 ## Building
@@ -71,36 +68,56 @@ The Makefile included in this implementation is for testing. It's
 expected that callers will have their own build systems. This section
 describes the compilation steps that build systems (or folks compiling
 by hand) should take. Note that these steps may change in future
-versions of this repo.
+versions.
 
 ### x86
 
 Dynamic dispatch is enabled by default on x86. The implementation will
 query the CPU at runtime to detect SIMD support, and it will use the
-widest SIMD vectors the CPU supports. Each of the
-instruction-set-specific implementation files needs to be compiled with
-the corresponding instruction set explicitly enabled. Here's an example
-of building a shared library on Linux:
+widest instruction set available. By default, `blake3_dispatch.c`
+expects to be linked with code for four different instruction sets:
+portable C, SSE4.1, AVX2, and AVX-512.
+
+For each of the x86 SIMD instruction sets, two versions are available,
+one in assembly (with three flavors: Unix, Windows MSVC, and Windows
+GNU) and one using C intrinsics. The assembly versions are generally
+preferred: they perform better, they perform more consistently across
+different compilers, and they build more quickly. On the other hand, the
+assembly versions are x86\_64-only, and you need to select the right
+flavor for your target platform.
+
+Here's an example of building a shared library on x86\_64 Linux using
+the assembly implementations:
+
+```bash
+gcc -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c \
+    blake3-sse41-x86_64-unix.S blake3-avx2-x86_64-unix.S blake3-avx512-x86_64-unix.S
+```
+
+When building the intrinsics-based implementations, you need to build
+each implementation separately, with the corresponding instruction set
+explicitly enabled in the compiler. Here's the same shared library using
+the intrinsics-based implementations:
 
 ```bash
 gcc -c -fPIC -O3 -msse4.1 blake3_sse41.c -o blake3_sse41.o
 gcc -c -fPIC -O3 -mavx2 blake3_avx2.c -o blake3_avx2.o
 gcc -c -fPIC -O3 -mavx512f -mavx512vl blake3_avx512.c -o blake3_avx512.o
-gcc -shared -O3 blake3.c blake3_dispatch.c blake3_portable.c \
-    blake3_avx2.o blake3_avx512.o blake3_sse41.o -o libblake3.so
+gcc -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c \
+    blake3_avx2.o blake3_avx512.o blake3_sse41.o
 ```
 
-Note that building `blake3_avx512.c` requires both `-mavx512f` and
+Note above that building `blake3_avx512.c` requires both `-mavx512f` and
 `-mavx512vl` under GCC and Clang, as shown above. Under MSVC, the single
 `/arch:AVX512` flag is sufficient.
 
 If you want to omit SIMD code on x86, you need to explicitly disable
 each instruction set. Here's an example of building a shared library on
-Linux with no SIMD support:
+x86 with only portable code:
 
 ```bash
-gcc -shared -O3 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 \
-    blake3.c blake3_dispatch.c blake3_portable.c -o libblake3.so
+gcc -shared -O3 -o libblake3.so -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 \
+    blake3.c blake3_dispatch.c blake3_portable.c
 ```
 
 ### ARM NEON
@@ -110,8 +127,8 @@ ARM targets support it. To enable it, set `BLAKE3_USE_NEON=1`. Here's an
 example of building a shared library on ARM Linux with NEON support:
 
 ```bash
-gcc -shared -O3 -DBLAKE3_USE_NEON blake3.c blake3_dispatch.c \
-    blake3_portable.c blake3_neon.c -o libblake3.so
+gcc -shared -O3 -o libblake3.so -DBLAKE3_USE_NEON blake3.c blake3_dispatch.c \
+    blake3_portable.c blake3_neon.c
 ```
 
 Note that on some targets (ARMv7 in particular), extra flags may be
@@ -132,22 +149,15 @@ The portable implementation should work on most other architectures. For
 example:
 
 ```bash
-gcc -shared -O3 blake3.c blake3_dispatch.c blake3_portable.c -o libblake3.so
+gcc -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c
 ```
-
-Most multi-platform builds should build `blake3_sse41.c`,
-`blake3_avx2.c`, and `blake3_avx512.c` when targetting x86, and skip
-them for all other platforms. It could be possible to `#ifdef` out the
-contents of those files on non-x86 platforms, but flags like `-msse4.1`
-generally cause errors anyway when they're not supported, so skipping
-these build steps entirely is usually necessary.
 
 ## Differences from the Rust Implementation
 
-The single-threaded Rust and C implementations use the same algorithms
-and have essentially the same performance if you compile with Clang.
-(Both Clang and rustc are LLVM-based.) Note that performance is
-currently better with Clang than with GCC.
+The single-threaded Rust and C implementations use the same algorithms,
+and their performance is the same if you use the assembly
+implementations or if you compile the intrinsics-based implementations
+with Clang. (Both Clang and rustc are LLVM-based.)
 
 The C implementation does not currently support multi-threading. OpenMP
 support or similar might be added in the future.
