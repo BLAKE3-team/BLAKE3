@@ -1,7 +1,7 @@
 # b3sum
 
 ```
-b3sum 0.1.4
+b3sum 0.2.0
 
 USAGE:
     b3sum [FLAGS] [OPTIONS] [file]...
