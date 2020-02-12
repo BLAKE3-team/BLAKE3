@@ -118,15 +118,15 @@ jobs:
     # Test the assembly implementations.
     - run: make test_asm
       working-directory: ./c
-    - run: make clean && rm blake3_sse41-x86_64-unix.S
+    - run: make clean && rm blake3_sse41_x86-64_unix.S
       working-directory: ./c
     - run: BLAKE3_NO_SSE41=1 make test_asm
       working-directory: ./c
-    - run: make clean && rm blake3_avx2-x86_64-unix.S
+    - run: make clean && rm blake3_avx2_x86-64_unix.S
       working-directory: ./c
     - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 make test_asm
       working-directory: ./c
-    - run: make clean && rm blake3_avx512-x86_64-unix.S
+    - run: make clean && rm blake3_avx512_x86-64_unix.S
       working-directory: ./c
     - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 BLAKE3_NO_AVX512=1 make test_asm
       working-directory: ./c

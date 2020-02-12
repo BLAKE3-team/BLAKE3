@@ -87,24 +87,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // "c_prefer_intrinsics" feature is enabled.
             if is_windows_msvc() {
                 let mut build = new_build();
-                build.file("c/blake3_sse41-x86_64-windows-msvc.asm");
-                build.file("c/blake3_avx2-x86_64-windows-msvc.asm");
-                build.file("c/blake3_avx512-x86_64-windows-msvc.asm");
+                build.file("c/blake3_sse41_x86-64_windows_msvc.asm");
+                build.file("c/blake3_avx2_x86-64_windows_msvc.asm");
+                build.file("c/blake3_avx512_x86-64_windows_msvc.asm");
                 build.compile("blake3_asm");
             } else if is_windows_gnu() {
                 let mut build = new_build();
-                build.file("c/blake3_sse41-x86_64-windows-gnu.S");
-                build.file("c/blake3_avx2-x86_64-windows-gnu.S");
-                build.file("c/blake3_avx512-x86_64-windows-gnu.S");
+                build.file("c/blake3_sse41_x86-64_windows_gnu.S");
+                build.file("c/blake3_avx2_x86-64_windows_gnu.S");
+                build.file("c/blake3_avx512_x86-64_windows_gnu.S");
                 build.compile("blake3_asm");
             } else {
                 // All non-Windows implementations are assumed to support
                 // Linux-style assembly. These files do contain a small
                 // explicit workaround for macOS also.
                 let mut build = new_build();
-                build.file("c/blake3_sse41-x86_64-unix.S");
-                build.file("c/blake3_avx2-x86_64-unix.S");
-                build.file("c/blake3_avx512-x86_64-unix.S");
+                build.file("c/blake3_sse41_x86-64_unix.S");
+                build.file("c/blake3_avx2_x86-64_unix.S");
+                build.file("c/blake3_avx512_x86-64_unix.S");
                 build.compile("blake3_asm");
             }
         } else if is_x86_64() || is_x86_32() {

@@ -59,7 +59,7 @@ with a Unix-like OS, you can compile a working binary like this:
 
 ```bash
 gcc -O3 -o example example.c blake3.c blake3_dispatch.c blake3_portable.c \
-    blake3_sse41-x86_64-unix.S blake3_avx2-x86_64-unix.S blake3_avx512-x86_64-unix.S
+    blake3_sse41_x86-64_unix.S blake3_avx2_x86-64_unix.S blake3_avx512_x86-64_unix.S
 ```
 
 ## Building
@@ -91,7 +91,7 @@ the assembly implementations:
 
 ```bash
 gcc -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c \
-    blake3_sse41-x86_64-unix.S blake3_avx2-x86_64-unix.S blake3_avx512-x86_64-unix.S
+    blake3_sse41_x86-64_unix.S blake3_avx2_x86-64_unix.S blake3_avx512_x86-64_unix.S
 ```
 
 When building the intrinsics-based implementations, you need to build
