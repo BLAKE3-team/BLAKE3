@@ -66,7 +66,7 @@ blake3_hash_many_avx512:
         or      eax, ebx
         xor     edx, edx
 .p2align 5
-1:
+9:
         movzx   ebx, byte ptr [rbp+0x48]
         or      ebx, eax
         add     rdx, 64
@@ -1011,7 +1011,7 @@ blake3_hash_many_avx512:
         vpxord  zmm6, zmm6, zmm14
         vpxord  zmm7, zmm7, zmm15
         movzx   eax, byte ptr [rbp+0x38]
-        jne     1b
+        jne     9b
         mov     rbx, qword ptr [rbp+0x50]
         vpunpckldq zmm16, zmm0, zmm1
         vpunpckhdq zmm17, zmm0, zmm1
@@ -2089,7 +2089,7 @@ blake3_hash_many_avx512:
         vpshufd zmm6, zmm6, 0x93
         vpshufd zmm7, zmm7, 0x93
         mov     al, 7
-1:
+9:
         vpaddd  zmm0, zmm0, zmm4
         vpaddd  zmm0, zmm0, zmm1
         vpxord  zmm3, zmm3, zmm0
@@ -2125,7 +2125,7 @@ blake3_hash_many_avx512:
         vpshufd zmm3, zmm3, 0x4E
         vpshufd zmm2, zmm2, 0x93
         dec     al
-        jz      1f
+        jz      9f
         vshufps zmm8, zmm4, zmm5, 214
         vpshufd zmm9, zmm4, 0x0F
         vpshufd zmm4, zmm8, 0x39
@@ -2139,8 +2139,8 @@ blake3_hash_many_avx512:
         vpshufd zmm7, zmm6, 0x1E
         vmovdqa32 zmm5, zmm9
         vmovdqa32 zmm6, zmm8
-        jmp     1b
-1:
+        jmp     9b
+9:
         vpxord  zmm0, zmm0, zmm2
         vpxord  zmm1, zmm1, zmm3
         mov     eax, r13d
@@ -2206,7 +2206,7 @@ blake3_hash_many_avx512:
         vpshufd ymm6, ymm6, 0x93
         vpshufd ymm7, ymm7, 0x93
         mov     al, 7
-1:
+9:
         vpaddd  ymm0, ymm0, ymm4
         vpaddd  ymm0, ymm0, ymm1
         vpxord  ymm3, ymm3, ymm0
@@ -2242,7 +2242,7 @@ blake3_hash_many_avx512:
         vpshufd ymm3, ymm3, 0x4E
         vpshufd ymm2, ymm2, 0x93
         dec     al
-        jz      1f
+        jz      9f
         vshufps ymm8, ymm4, ymm5, 214
         vpshufd ymm9, ymm4, 0x0F
         vpshufd ymm4, ymm8, 0x39
@@ -2256,8 +2256,8 @@ blake3_hash_many_avx512:
         vpshufd ymm7, ymm6, 0x1E
         vmovdqa ymm5, ymm9
         vmovdqa ymm6, ymm8
-        jmp     1b
-1:
+        jmp     9b
+9:
         vpxor   ymm0, ymm0, ymm2
         vpxor   ymm1, ymm1, ymm3
         mov     eax, r13d
@@ -2309,7 +2309,7 @@ blake3_hash_many_avx512:
         vpshufd xmm6, xmm6, 0x93
         vpshufd xmm7, xmm7, 0x93
         mov     al, 7
-1:
+9:
         vpaddd  xmm0, xmm0, xmm4
         vpaddd  xmm0, xmm0, xmm1
         vpxord  xmm3, xmm3, xmm0
@@ -2345,7 +2345,7 @@ blake3_hash_many_avx512:
         vpshufd xmm3, xmm3, 0x4E
         vpshufd xmm2, xmm2, 0x93
         dec     al
-        jz      1f
+        jz      9f
         vshufps xmm8, xmm4, xmm5, 214
         vpshufd xmm9, xmm4, 0x0F
         vpshufd xmm4, xmm8, 0x39
@@ -2359,8 +2359,8 @@ blake3_hash_many_avx512:
         vpshufd xmm7, xmm6, 0x1E
         vmovdqa xmm5, xmm9
         vmovdqa xmm6, xmm8
-        jmp     1b
-1:
+        jmp     9b
+9:
         vpxor   xmm0, xmm0, xmm2
         vpxor   xmm1, xmm1, xmm3
         mov     eax, r13d
@@ -2393,7 +2393,7 @@ blake3_compress_in_place_avx512:
         vpshufd xmm6, xmm6, 0x93
         vpshufd xmm7, xmm7, 0x93
         mov     al, 7
-1:
+9:
         vpaddd  xmm0, xmm0, xmm4
         vpaddd  xmm0, xmm0, xmm1
         vpxord  xmm3, xmm3, xmm0
@@ -2429,7 +2429,7 @@ blake3_compress_in_place_avx512:
         vpshufd xmm3, xmm3, 0x4E
         vpshufd xmm2, xmm2, 0x93
         dec     al
-        jz      1f
+        jz      9f
         vshufps xmm8, xmm4, xmm5, 214
         vpshufd xmm9, xmm4, 0x0F
         vpshufd xmm4, xmm8, 0x39
@@ -2443,8 +2443,8 @@ blake3_compress_in_place_avx512:
         vpshufd xmm7, xmm6, 0x1E
         vmovdqa xmm5, xmm9
         vmovdqa xmm6, xmm8
-        jmp     1b
-1:
+        jmp     9b
+9:
         vpxor   xmm0, xmm0, xmm2
         vpxor   xmm1, xmm1, xmm3
         vmovdqu xmmword ptr [rdi], xmm0
@@ -2475,7 +2475,7 @@ blake3_compress_xof_avx512:
         vpshufd xmm6, xmm6, 0x93
         vpshufd xmm7, xmm7, 0x93
         mov     al, 7
-1:
+9:
         vpaddd  xmm0, xmm0, xmm4
         vpaddd  xmm0, xmm0, xmm1
         vpxord  xmm3, xmm3, xmm0
@@ -2511,7 +2511,7 @@ blake3_compress_xof_avx512:
         vpshufd xmm3, xmm3, 0x4E
         vpshufd xmm2, xmm2, 0x93
         dec     al
-        jz      1f
+        jz      9f
         vshufps xmm8, xmm4, xmm5, 214
         vpshufd xmm9, xmm4, 0x0F
         vpshufd xmm4, xmm8, 0x39
@@ -2525,8 +2525,8 @@ blake3_compress_xof_avx512:
         vpshufd xmm7, xmm6, 0x1E
         vmovdqa xmm5, xmm9
         vmovdqa xmm6, xmm8
-        jmp     1b
-1:
+        jmp     9b
+9:
         vpxor   xmm0, xmm0, xmm2
         vpxor   xmm1, xmm1, xmm3
         vpxor   xmm2, xmm2, [rdi]

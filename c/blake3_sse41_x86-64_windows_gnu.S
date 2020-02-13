@@ -81,7 +81,7 @@ blake3_hash_many_sse41:
         movzx   eax, byte ptr [rbp+0x80]
         or      eax, r13d
         xor     edx, edx
-1:
+9:
         mov     r14d, eax
         or      eax, r12d
         add     rdx, 64
@@ -1391,7 +1391,7 @@ blake3_hash_many_sse41:
         pxor    xmm6, xmm14
         pxor    xmm7, xmm15
         mov     eax, r13d
-        jne     1b
+        jne     9b
         movdqa  xmm9, xmm0
         punpckldq xmm0, xmm1
         punpckhdq xmm9, xmm1
@@ -1522,7 +1522,7 @@ blake3_hash_many_sse41:
         pinsrd  xmm3, eax, 3
         pinsrd  xmm11, eax, 3
         mov     al, 7
-1:
+9:
         paddd   xmm0, xmm4
         paddd   xmm8, xmm12
         movaps  xmmword ptr [rsp+0x20], xmm4
@@ -1622,7 +1622,7 @@ blake3_hash_many_sse41:
         pshufd  xmm2, xmm2, 0x93
         pshufd  xmm10, xmm10, 0x93
         dec     al
-        je      1f
+        je      9f
         movdqa  xmm12, xmmword ptr [rsp+0x20]
         movdqa  xmm5, xmmword ptr [rsp+0x40]
         pshufd  xmm13, xmm12, 0x0F
@@ -1659,8 +1659,8 @@ blake3_hash_many_sse41:
         movdqa  xmm14, xmm5
         movdqa  xmm5, xmmword ptr [rsp+0x20]
         movdqa  xmm6, xmmword ptr [rsp+0x40]
-        jmp     1b
-1:
+        jmp     9b
+9:
         pxor    xmm0, xmm2
         pxor    xmm1, xmm3
         pxor    xmm8, xmm10
@@ -1721,7 +1721,7 @@ blake3_hash_many_sse41:
         shufps  xmm8, xmm7, 221
         pshufd  xmm7, xmm8, 0x93
         mov     al, 7
-1:
+9:
         paddd   xmm0, xmm4
         paddd   xmm0, xmm1
         pxor    xmm3, xmm0
@@ -1769,7 +1769,7 @@ blake3_hash_many_sse41:
         pshufd  xmm3, xmm3, 0x4E
         pshufd  xmm2, xmm2, 0x93
         dec     al
-        jz      1f
+        jz      9f
         movdqa  xmm8, xmm4
         shufps  xmm8, xmm5, 214
         pshufd  xmm9, xmm4, 0x0F
@@ -1786,8 +1786,8 @@ blake3_hash_many_sse41:
         pshufd  xmm7, xmm6, 0x1E
         movdqa  xmm5, xmm9
         movdqa  xmm6, xmm8
-        jmp     1b
-1:
+        jmp     9b
+9:
         pxor    xmm0, xmm2
         pxor    xmm1, xmm3
         mov     eax, r13d
@@ -1831,7 +1831,7 @@ _blake3_compress_in_place_sse41:
         movaps  xmm14, xmmword ptr [ROT8+rip]
         movaps  xmm15, xmmword ptr [ROT16+rip]
         mov     al, 7
-1:
+9:
         paddd   xmm0, xmm4
         paddd   xmm0, xmm1
         pxor    xmm3, xmm0
@@ -1879,7 +1879,7 @@ _blake3_compress_in_place_sse41:
         pshufd  xmm3, xmm3, 0x4E
         pshufd  xmm2, xmm2, 0x93
         dec     al
-        jz      1f
+        jz      9f
         movdqa  xmm8, xmm4
         shufps  xmm8, xmm5, 214
         pshufd  xmm9, xmm4, 0x0F
@@ -1896,8 +1896,8 @@ _blake3_compress_in_place_sse41:
         pshufd  xmm7, xmm6, 0x1E
         movdqa  xmm5, xmm9
         movdqa  xmm6, xmm8
-        jmp     1b
-1:
+        jmp     9b
+9:
         pxor    xmm0, xmm2
         pxor    xmm1, xmm3
         movups  xmmword ptr [rcx], xmm0
@@ -1945,7 +1945,7 @@ blake3_compress_xof_sse41:
         movaps  xmm14, xmmword ptr [ROT8+rip]
         movaps  xmm15, xmmword ptr [ROT16+rip]
         mov     al, 7
-1:
+9:
         paddd   xmm0, xmm4
         paddd   xmm0, xmm1
         pxor    xmm3, xmm0
@@ -1993,7 +1993,7 @@ blake3_compress_xof_sse41:
         pshufd  xmm3, xmm3, 0x4E
         pshufd  xmm2, xmm2, 0x93
         dec     al
-        jz      1f
+        jz      9f
         movdqa  xmm8, xmm4
         shufps  xmm8, xmm5, 214
         pshufd  xmm9, xmm4, 0x0F
@@ -2010,8 +2010,8 @@ blake3_compress_xof_sse41:
         pshufd  xmm7, xmm6, 0x1E
         movdqa  xmm5, xmm9
         movdqa  xmm6, xmm8
-        jmp     1b
-1:
+        jmp     9b
+9:
         movdqu  xmm4, xmmword ptr [rcx]
         movdqu  xmm5, xmmword ptr [rcx+0x10]
         pxor    xmm0, xmm2

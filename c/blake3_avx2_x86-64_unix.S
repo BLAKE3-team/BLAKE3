@@ -63,7 +63,7 @@ blake3_hash_many_avx2:
         or      eax, ebx
         xor     edx, edx
 .p2align  5
-1:
+9:
         movzx   ebx, byte ptr [rbp+0x48]
         or      ebx, eax
         add     rdx, 64
@@ -1231,7 +1231,7 @@ blake3_hash_many_avx2:
         vpxor   ymm6, ymm6, ymm14
         vpxor   ymm7, ymm7, ymm15
         movzx   eax, byte ptr [rbp+0x38]
-        jne     1b
+        jne     9b
         mov     rbx, qword ptr [rbp+0x50]
         vunpcklps ymm8, ymm0, ymm1
         vunpcklps ymm9, ymm2, ymm3
@@ -1374,7 +1374,7 @@ blake3_hash_many_avx2:
         vbroadcasti128 ymm2, xmmword ptr [BLAKE3_IV+rip]
         vmovdqa ymm10, ymm2
         mov     al, 7
-1:
+9:
         vpaddd  ymm0, ymm0, ymm4
         vpaddd  ymm8, ymm8, ymm12
         vmovdqa ymmword ptr [rsp+0x40], ymm4
@@ -1470,7 +1470,7 @@ blake3_hash_many_avx2:
         vpshufd ymm2, ymm2, 0x93
         vpshufd ymm10, ymm10, 0x93
         dec     al
-        je      1f
+        je      9f
         vmovdqa ymm4, ymmword ptr [rsp+0x40]
         vmovdqa ymm5, ymmword ptr [rsp+0x80]
         vshufps ymm12, ymm4, ymm5, 214
@@ -1503,8 +1503,8 @@ blake3_hash_many_avx2:
         vmovdqa ymm14, ymm5
         vmovdqa ymm5, ymmword ptr [rsp+0x40]
         vmovdqa ymm6, ymmword ptr [rsp+0x80]
-        jmp     1b
-1:
+        jmp     9b
+9:
         vpxor   ymm0, ymm0, ymm2
         vpxor   ymm1, ymm1, ymm3
         vpxor   ymm8, ymm8, ymm10
@@ -1577,7 +1577,7 @@ blake3_hash_many_avx2:
         vpshufd ymm6, ymm6, 0x93
         vpshufd ymm7, ymm7, 0x93
         mov     al, 7
-1:
+9:
         vpaddd  ymm0, ymm0, ymm4
         vpaddd  ymm0, ymm0, ymm1
         vpxor   ymm3, ymm3, ymm0
@@ -1621,7 +1621,7 @@ blake3_hash_many_avx2:
         vpshufd ymm3, ymm3, 0x4E
         vpshufd ymm2, ymm2, 0x93
         dec     al
-        jz      1f
+        jz      9f
         vshufps ymm8, ymm4, ymm5, 214
         vpshufd ymm9, ymm4, 0x0F
         vpshufd ymm4, ymm8, 0x39
@@ -1635,8 +1635,8 @@ blake3_hash_many_avx2:
         vpshufd ymm7, ymm6, 0x1E
         vmovdqa ymm5, ymm9
         vmovdqa ymm6, ymm8
-        jmp     1b
-1:
+        jmp     9b
+9:
         vpxor   ymm0, ymm0, ymm2
         vpxor   ymm1, ymm1, ymm3
         mov     eax, r13d
@@ -1693,7 +1693,7 @@ blake3_hash_many_avx2:
         vpshufd xmm6, xmm6, 0x93
         vpshufd xmm7, xmm7, 0x93
         mov     al, 7
-1:
+9:
         vpaddd  xmm0, xmm0, xmm4
         vpaddd  xmm0, xmm0, xmm1
         vpxor   xmm3, xmm3, xmm0
@@ -1737,7 +1737,7 @@ blake3_hash_many_avx2:
         vpshufd xmm3, xmm3, 0x4E
         vpshufd xmm2, xmm2, 0x93
         dec     al
-        jz      1f
+        jz      9f
         vshufps xmm8, xmm4, xmm5, 214
         vpshufd xmm9, xmm4, 0x0F
         vpshufd xmm4, xmm8, 0x39
@@ -1751,8 +1751,8 @@ blake3_hash_many_avx2:
         vpshufd xmm7, xmm6, 0x1E
         vmovdqa xmm5, xmm9
         vmovdqa xmm6, xmm8
-        jmp     1b
-1:
+        jmp     9b
+9:
         vpxor   xmm0, xmm0, xmm2
         vpxor   xmm1, xmm1, xmm3
         mov     eax, r13d
