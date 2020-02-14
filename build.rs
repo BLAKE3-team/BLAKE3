@@ -66,7 +66,8 @@ re-enable with "--features=rayon".) Other crates might or might not support
 this workaround.
 "#;
 
-fn check_for_avx512_compiler_support(build: &cc::Build) {
+fn check_for_avx512_compiler_support() {
+    let build = new_build();
     if is_windows_msvc() {
         if !build.is_flag_supported("/arch:AVX512").unwrap() {
             eprintln!("{}", WINDOWS_MSVC_ERROR.trim());
@@ -82,6 +83,7 @@ fn check_for_avx512_compiler_support(build: &cc::Build) {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if defined("CARGO_FEATURE_C") {
+        check_for_avx512_compiler_support();
         if is_x86_64() && !defined("CARGO_FEATURE_C_PREFER_INTRINSICS") {
             // On 64-bit, use the assembly implementations, unless the
             // "c_prefer_intrinsics" feature is enabled.
@@ -136,7 +138,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             avx2_build.compile("blake3_avx2");
 
             let mut avx512_build = new_build();
-            check_for_avx512_compiler_support(&avx512_build);
             avx512_build.file("c/blake3_avx512.c");
             if is_windows_msvc() {
                 // Note that a lot of versions of MSVC don't support /arch:AVX512,
