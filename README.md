@@ -98,7 +98,7 @@ hashing it, for example as follows:
 
 ```bash
 # Create a 1 GB file.
-head -c 1000000000 /dev/zero > /tmp/bigfile
+truncate -s 1GB /tmp/bigfile
 # Hash it with SHA-256.
 time openssl sha256 /tmp/bigfile
 # Hash it with BLAKE3.
