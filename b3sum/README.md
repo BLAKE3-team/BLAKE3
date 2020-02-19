@@ -1,5 +1,9 @@
 # b3sum
 
+A command line utility for calculating
+[BLAKE3](https://github.com/BLAKE3-team/BLAKE3) hashes, similar to
+Coreutils tools like `b2sum` or `md5sum`.
+
 ```
 b3sum 0.2.1
 
@@ -23,7 +27,27 @@ ARGS:
     <file>...
 ```
 
-# Building
+# Example
+
+Hash the file `foo.txt`:
+
+```bash
+b3sum foo.txt
+```
+
+Time hashing a gigabyte of data, to see how fast it is:
+
+```bash
+# Create a 1 GB file.
+head -c 1000000000 /dev/zero > /tmp/bigfile
+# Hash it with SHA-256.
+time openssl sha256 /tmp/bigfile
+# Hash it with BLAKE3.
+time b3sum /tmp/bigfile
+```
+
+
+# Installation
 
 The standard way to install `b3sum` is:
 
@@ -39,6 +63,8 @@ If you want to install directly from this directory, you can run `cargo
 install --path .`. Or you can just build with `cargo build --release`,
 which puts the binary at `./target/release/b3sum`.
 
-AVX-512 support (via C FFI, with dynamic CPU feature detection) and
-multi-threading (via Rayon) are enabled by default. Note that the
-underlying `blake3` crate does not enable those by default.
+By default, `b3sum` enables the assembly implementations, AVX-512
+support, and multi-threading features of the underlying
+[`blake3`](https://crates.io/crates/blake3) crate. To avoid this (for
+example, if your C compiler does not support AVX-512), you can use
+Cargo's `--no-default-features` flag.
