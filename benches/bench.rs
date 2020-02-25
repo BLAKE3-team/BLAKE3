@@ -475,3 +475,22 @@ fn bench_rayon_0512_kib(b: &mut Bencher) {
 fn bench_rayon_1024_kib(b: &mut Bencher) {
     bench_rayon(b, 1024 * KIB);
 }
+
+// This checks that update() splits up its input in increasing powers of 2, so
+// that it can recover a high degree of parallelism when the number of bytes
+// hashed so far is uneven. The performance of this benchmark should be
+// reasonably close to bench_incremental_0064_kib, within 80% or so. When we
+// had a bug in this logic (https://github.com/BLAKE3-team/BLAKE3/issues/69),
+// performance was less than half.
+#[bench]
+fn bench_two_updates(b: &mut Bencher) {
+    let len = 65536;
+    let mut input = RandomInput::new(b, len);
+    b.iter(|| {
+        let mut hasher = blake3::Hasher::new();
+        let input = input.get();
+        hasher.update(&input[..1]);
+        hasher.update(&input[1..]);
+        hasher.finalize()
+    });
+}

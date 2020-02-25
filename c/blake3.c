@@ -486,16 +486,22 @@ void blake3_hasher_update(blake3_hasher *self, const void *input,
   while (input_len > BLAKE3_CHUNK_LEN) {
     size_t subtree_len = round_down_to_power_of_2(input_len);
     uint64_t count_so_far = self->chunk.chunk_counter * BLAKE3_CHUNK_LEN;
-    // Shrink the subtree_len until *half of it* it evenly divides the count so
-    // far. Why half? Because compress_subtree_to_parent_node will return a
-    // pair of chaining values, each representing half of the input. As long as
-    // those evenly divide the input so far, we're good. We know that
-    // subtree_len itself is a power of 2, so we can use a bitmasking trick
-    // instead of an actual remainder operation. (Note that if the caller
+    // Shrink the subtree_len until it evenly divides the count so far. We know
+    // that subtree_len itself is a power of 2, so we can use a bitmasking
+    // trick instead of an actual remainder operation. (Note that if the caller
     // consistently passes power-of-2 inputs of the same size, as is hopefully
     // typical, this loop condition will always fail, and subtree_len will
     // always be the full length of the input.)
-    while ((((uint64_t)((subtree_len / 2) - 1)) & count_so_far) != 0) {
+    //
+    // An aside: We don't have to shrink subtree_len quite this much. For
+    // example, if count_so_far is 1, we could pass 2 chunks to
+    // compress_subtree_to_parent_node. Since we'll get 2 CVs back, we'll still
+    // get the right answer in the end, and we might get to use 2-way SIMD
+    // parallelism. The problem with this optimization, is that it gets us
+    // stuck always hashing 2 chunks. The total number of chunks will remain
+    // odd, and we'll never graduate to higher degrees of parallelism. See
+    // https://github.com/BLAKE3-team/BLAKE3/issues/69.
+    while ((((uint64_t)(subtree_len - 1)) & count_so_far) != 0) {
       subtree_len /= 2;
     }
     // The shrunken subtree_len might now be 1 chunk long. If so, hash that one
