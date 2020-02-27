@@ -425,8 +425,8 @@ INLINE void hasher_merge_cv_stack(blake3_hasher *self, uint64_t total_len) {
 // compress_subtree_to_parent_node(). That function always returns the top
 // *two* chaining values of the subtree it's compressing. We then do lazy
 // merging with each of them separately, so that the second CV will always
-// remain unmerged. (The compress_subtree_to_parent_node also helps us support
-// extendable output when we're hashing an input all-at-once.)
+// remain unmerged. (That also helps us support extendable output when we're
+// hashing an input all-at-once.)
 INLINE void hasher_push_cv(blake3_hasher *self, uint8_t new_cv[BLAKE3_OUT_LEN],
                            uint64_t chunk_counter) {
   hasher_merge_cv_stack(self, chunk_counter);

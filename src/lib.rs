@@ -921,8 +921,8 @@ impl Hasher {
     // compress_subtree_to_parent_node(). That function always returns the top
     // *two* chaining values of the subtree it's compressing. We then do lazy
     // merging with each of them separately, so that the second CV will always
-    // remain unmerged. (The compress_subtree_to_parent_node also helps us
-    // support extendable output when we're hashing an input all-at-once.)
+    // remain unmerged. (That also helps us support extendable output when
+    // we're hashing an input all-at-once.)
     fn push_cv(&mut self, new_cv: &CVBytes, chunk_counter: u64) {
         self.merge_cv_stack(chunk_counter);
         self.cv_stack.push(*new_cv);
