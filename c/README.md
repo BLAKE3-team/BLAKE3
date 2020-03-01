@@ -28,6 +28,7 @@ prints the result:
 ```c
 #include "blake3.h"
 #include <stdio.h>
+#include <unistd.h>
 
 int main() {
   // Initialize the hasher.
@@ -36,8 +37,8 @@ int main() {
 
   // Read input bytes from stdin.
   unsigned char buf[65536];
-  size_t n;
-  while ((n = fread(buf, 1, 65536, stdin)) > 0) {
+  ssize_t n;
+  while ((n = read(STDIN_FILENO, buf, sizeof(buf))) > 0) {
     blake3_hasher_update(&hasher, buf, n);
   }
 
