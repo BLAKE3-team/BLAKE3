@@ -163,11 +163,29 @@ fn counter_high(counter: u64) -> u32 {
 /// conversion happens implicitly and the constant-time property is
 /// accidentally lost.
 ///
+/// `Hash` provides the [`to_hex`] method for converting to hexadecimal. It
+/// doesn't directly support converting from hexadecimal, but here's an example
+/// of doing that with the [`hex`] crate:
+///
+/// ```
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// use std::convert::TryInto;
+///
+/// let hash_hex = "d74981efa70a0c880b8d8c1985d075dbcbf679b99a5f9914e5aaf96b831a9e24";
+/// let hash_bytes = hex::decode(hash_hex)?;
+/// let hash_array: [u8; blake3::OUT_LEN] = hash_bytes[..].try_into()?;
+/// let hash: blake3::Hash = hash_array.into();
+/// # Ok(())
+/// # }
+/// ```
+///
 /// [`From`]: https://doc.rust-lang.org/std/convert/trait.From.html
 /// [`Into`]: https://doc.rust-lang.org/std/convert/trait.Into.html
 /// [`as_bytes`]: #method.as_bytes
 /// [`Deref`]: https://doc.rust-lang.org/stable/std/ops/trait.Deref.html
 /// [`AsRef`]: https://doc.rust-lang.org/std/convert/trait.AsRef.html
+/// [`to_hex`]: #method.to_hex
+/// [`hex`]: https://crates.io/crates/hex
 #[derive(Clone, Copy, Hash)]
 pub struct Hash([u8; OUT_LEN]);
 
