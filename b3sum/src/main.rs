@@ -24,13 +24,19 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
                 .short("l")
                 .takes_value(true)
                 .value_name("LEN")
-                .help("The number of output bytes, prior to hex encoding (default 32)"),
+                .help(
+                    "The number of output bytes, prior to hex\n\
+                     encoding (default 32)",
+                ),
         )
         .arg(
             Arg::with_name(KEYED_ARG)
                 .long(KEYED_ARG)
                 .requires(FILE_ARG)
-                .help("Uses the keyed mode, with the raw 32-byte key read from stdin"),
+                .help(
+                    "Uses the keyed mode. The secret key is read from standard\n\
+                     input, and it must be exactly 32 raw bytes.",
+                ),
         )
         .arg(
             Arg::with_name(DERIVE_KEY_ARG)
@@ -38,7 +44,10 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
                 .conflicts_with(KEYED_ARG)
                 .takes_value(true)
                 .value_name("CONTEXT")
-                .help("Uses the key derivation mode, with the input as key material"),
+                .help(
+                    "Uses the key derivation mode, with the given\n\
+                     context string. Cannot be used with --keyed.",
+                ),
         )
         .arg(
             Arg::with_name(NO_MMAP_ARG)
@@ -50,11 +59,11 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
                 .long(NO_NAMES_ARG)
                 .help("Omits filenames in the output"),
         )
-        .arg(
-            Arg::with_name(RAW_ARG)
-                .long(RAW_ARG)
-                .help("Writes raw output bytes to stdout, rather than hex. --no-names is implied.\nIn this case, only a single input is allowed"),
-        )
+        .arg(Arg::with_name(RAW_ARG).long(RAW_ARG).help(
+            "Writes raw output bytes to stdout, rather than hex.\n\
+             --no-names is implied. In this case, only a single\n\
+             input is allowed.",
+        ))
         .get_matches()
 }
 
