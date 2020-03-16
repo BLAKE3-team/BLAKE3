@@ -12,16 +12,24 @@ USAGE:
 
 FLAGS:
     -h, --help        Prints help information
-        --keyed       Uses the keyed mode, with the raw 32-byte key read from stdin
+        --keyed       Uses the keyed mode. The secret key is read from standard
+                      input, and it must be exactly 32 raw bytes.
         --no-mmap     Disables memory mapping
         --no-names    Omits filenames in the output
-        --raw         Writes raw output bytes to stdout, rather than hex. --no-names is implied.
-                      In this case, only a single input is allowed
+        --raw         Writes raw output bytes to stdout, rather than hex.
+                      --no-names is implied. In this case, only a single
+                      input is allowed.
     -V, --version     Prints version information
 
 OPTIONS:
-        --derive-key <CONTEXT>    Uses the key derivation mode, with the input as key material
-    -l, --length <LEN>            The number of output bytes, prior to hex encoding (default 32)
+        --derive-key <CONTEXT>    Uses the key derivation mode, with the given
+                                  context string. Cannot be used with --keyed.
+    -l, --length <LEN>            The number of output bytes, prior to hex
+                                  encoding (default 32)
+        --num-threads <NUM>       The maximum number of threads to use. By
+                                  default, this is the number of logical cores.
+                                  If this flag is omitted, or if its value is 0,
+                                  RAYON_NUM_THREADS is also respected.
 
 ARGS:
     <file>...
