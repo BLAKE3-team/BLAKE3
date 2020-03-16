@@ -7,11 +7,12 @@ use std::io;
 use std::io::prelude::*;
 
 const FILE_ARG: &str = "file";
-const LENGTH_ARG: &str = "length";
-const KEYED_ARG: &str = "keyed";
 const DERIVE_KEY_ARG: &str = "derive-key";
+const KEYED_ARG: &str = "keyed";
+const LENGTH_ARG: &str = "length";
 const NO_MMAP_ARG: &str = "no-mmap";
 const NO_NAMES_ARG: &str = "no-names";
+const NUM_THREADS_ARG: &str = "num-threads";
 const RAW_ARG: &str = "raw";
 
 fn clap_parse_argv() -> clap::ArgMatches<'static> {
@@ -27,6 +28,18 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
                 .help(
                     "The number of output bytes, prior to hex\n\
                      encoding (default 32)",
+                ),
+        )
+        .arg(
+            Arg::with_name(NUM_THREADS_ARG)
+                .long(NUM_THREADS_ARG)
+                .takes_value(true)
+                .value_name("NUM")
+                .help(
+                    "The maximum number of threads to use. By\n\
+                     default, this is the number of logical cores.\n\
+                     If this flag is omitted, or if its value is 0,\n\
+                     RAYON_NUM_THREADS is also respected.",
                 ),
         )
         .arg(
@@ -101,7 +114,6 @@ fn hash_reader(base_hasher: &blake3::Hasher, reader: impl Read) -> Result<blake3
     Ok(hasher.finalize_xof())
 }
 
-#[cfg(feature = "memmap")]
 fn maybe_memmap_file(file: &File) -> Result<Option<memmap::Mmap>> {
     let metadata = file.metadata()?;
     let file_size = metadata.len();
@@ -137,18 +149,15 @@ fn maybe_hash_memmap(
     _base_hasher: &blake3::Hasher,
     _file: &File,
 ) -> Result<Option<blake3::OutputReader>> {
-    #[cfg(feature = "memmap")]
-    {
-        if let Some(map) = maybe_memmap_file(_file)? {
-            // Memory mapping worked. Use Rayon-based multi-threading to split
-            // up the whole file across many worker threads.
-            return Ok(Some(
-                _base_hasher
-                    .clone()
-                    .update_with_join::<blake3::join::RayonJoin>(&map)
-                    .finalize_xof(),
-            ));
-        }
+    if let Some(map) = maybe_memmap_file(_file)? {
+        // Memory mapping worked. Use Rayon-based multi-threading to split
+        // up the whole file across many worker threads.
+        return Ok(Some(
+            _base_hasher
+                .clone()
+                .update_with_join::<blake3::join::RayonJoin>(&map)
+                .finalize_xof(),
+        ));
     }
     Ok(None)
 }
@@ -212,11 +221,11 @@ fn read_key_from_stdin() -> Result<[u8; blake3::KEY_LEN]> {
 
 fn main() -> Result<()> {
     let args = clap_parse_argv();
-    let len: u64 = args
-        .value_of(LENGTH_ARG)
-        .unwrap_or("32")
-        .parse()
-        .context("Failed to parse length.")?;
+    let len = if let Some(length) = args.value_of(LENGTH_ARG) {
+        length.parse::<u64>().context("Failed to parse length.")?
+    } else {
+        blake3::OUT_LEN as u64
+    };
     let base_hasher = if args.is_present(KEYED_ARG) {
         blake3::Hasher::new_keyed(&read_key_from_stdin()?)
     } else if let Some(context) = args.value_of(DERIVE_KEY_ARG) {
@@ -227,43 +236,53 @@ fn main() -> Result<()> {
     let mmap_disabled = args.is_present(NO_MMAP_ARG);
     let print_names = !args.is_present(NO_NAMES_ARG);
     let raw_output = args.is_present(RAW_ARG);
-    let mut did_error = false;
+    let mut thread_pool_builder = rayon::ThreadPoolBuilder::new();
+    if let Some(num_threads_str) = args.value_of(NUM_THREADS_ARG) {
+        let num_threads: usize = num_threads_str
+            .parse()
+            .context("Failed to parse num threads.")?;
+        thread_pool_builder = thread_pool_builder.num_threads(num_threads);
+    }
 
-    if let Some(files) = args.values_of_os(FILE_ARG) {
-        if raw_output && files.len() > 1 {
-            bail!("b3sum: Only one filename can be provided when using --raw");
-        }
-        for filepath in files {
-            let filepath_str = filepath.to_string_lossy();
-            match hash_file(&base_hasher, filepath, mmap_disabled) {
-                Ok(output) => {
-                    if raw_output {
-                        write_raw_output(output, len)?;
-                    } else {
-                        write_hex_output(output, len)?;
-                        if print_names {
-                            println!("  {}", filepath_str);
+    let thread_pool = thread_pool_builder.build()?;
+    thread_pool.install(|| {
+        let mut did_error = false;
+        if let Some(files) = args.values_of_os(FILE_ARG) {
+            if raw_output && files.len() > 1 {
+                bail!("b3sum: Only one filename can be provided when using --raw");
+            }
+            for filepath in files {
+                let filepath_str = filepath.to_string_lossy();
+                match hash_file(&base_hasher, filepath, mmap_disabled) {
+                    Ok(output) => {
+                        if raw_output {
+                            write_raw_output(output, len)?;
                         } else {
-                            println!();
+                            write_hex_output(output, len)?;
+                            if print_names {
+                                println!("  {}", filepath_str);
+                            } else {
+                                println!();
+                            }
                         }
                     }
-                }
-                Err(e) => {
-                    did_error = true;
-                    eprintln!("b3sum: {}: {}", filepath_str, e);
+                    Err(e) => {
+                        did_error = true;
+                        eprintln!("b3sum: {}: {}", filepath_str, e);
+                    }
                 }
             }
-        }
-    } else {
-        let stdin = std::io::stdin();
-        let stdin = stdin.lock();
-        let output = hash_reader(&base_hasher, stdin)?;
-        if raw_output {
-            write_raw_output(output, len)?;
         } else {
-            write_hex_output(output, len)?;
-            println!();
+            let stdin = std::io::stdin();
+            let stdin = stdin.lock();
+            let output = hash_reader(&base_hasher, stdin)?;
+            if raw_output {
+                write_raw_output(output, len)?;
+            } else {
+                write_hex_output(output, len)?;
+                println!();
+            }
         }
-    }
-    std::process::exit(if did_error { 1 } else { 0 });
+        std::process::exit(if did_error { 1 } else { 0 });
+    })
 }
