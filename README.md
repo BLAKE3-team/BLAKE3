@@ -162,6 +162,19 @@ blake3::derive_key(API_CONTEXT, input_key, &mut api_key);
 assert!(email_key != api_key);
 ```
 
+### The C implementation
+
+See [`c/README.md`](c/README.md).
+
+### Other implementations
+
+We post links to third-party bindings and implementations via the
+[@BLAKE3team Twitter account](https://twitter.com/BLAKE3team) whenever
+we hear about them. Some highlights include [an optimized Go
+implementation](https://github.com/zeebo/blake3), [Wasm bindings for
+Node.js and browsers](https://github.com/connor4312/blake3), and [binary
+wheels for Python](https://github.com/oconnor663/blake3-py).
+
 ## Contributing
 
 Please see [CONTRIBUTING.md](CONTRIBUTING.md).
