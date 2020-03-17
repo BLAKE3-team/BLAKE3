@@ -472,8 +472,8 @@ void blake3_hasher_update(blake3_hasher *self, const void *input,
 
   // Now the chunk_state is clear, and we have more input. If there's more than
   // a single chunk (so, definitely not the root chunk), hash the largest whole
-  // subtree we can, with the full benefits of SIMD and multi-threading
-  // parallelism. Two restrictions:
+  // subtree we can, with the full benefits of SIMD (and maybe in the future,
+  // multi-threading) parallelism. Two restrictions:
   // - The subtree has to be a power-of-2 number of chunks. Only subtrees along
   //   the right edge can be incomplete, and we don't know where the right edge
   //   is going to be until we get to finalize().

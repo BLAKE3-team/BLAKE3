@@ -168,7 +168,7 @@ See [`c/README.md`](c/README.md).
 
 ### Other implementations
 
-We post links to third-party bindings and implementations via the
+We post links to third-party bindings and implementations on the
 [@BLAKE3team Twitter account](https://twitter.com/BLAKE3team) whenever
 we hear about them. Some highlights include [an optimized Go
 implementation](https://github.com/zeebo/blake3), [Wasm bindings for
