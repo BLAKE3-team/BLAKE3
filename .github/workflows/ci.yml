@@ -71,6 +71,7 @@ jobs:
     name: cross ${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         arch:
           - i686-unknown-linux-musl
