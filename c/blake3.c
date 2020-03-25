@@ -84,23 +84,26 @@ INLINE void output_chaining_value(const output_t *self, uint8_t cv[32]) {
   memcpy(cv, cv_words, 32);
 }
 
-INLINE void output_root_bytes(const output_t *self, uint8_t *out,
+INLINE void output_root_bytes(const output_t *self, uint64_t seek, uint8_t *out,
                               size_t out_len) {
-  uint64_t output_block_counter = 0;
+  uint64_t output_block_counter = seek / 64;
+  size_t offset_within_block = seek % 64;
   uint8_t wide_buf[64];
   while (out_len > 0) {
     blake3_compress_xof(self->input_cv, self->block, self->block_len,
                         output_block_counter, self->flags | ROOT, wide_buf);
+    size_t available_bytes = 64 - offset_within_block;
     size_t memcpy_len;
-    if (out_len > 64) {
-      memcpy_len = 64;
+    if (out_len > available_bytes) {
+      memcpy_len = available_bytes;
     } else {
       memcpy_len = out_len;
     }
-    memcpy(out, wide_buf, memcpy_len);
+    memcpy(out, wide_buf + offset_within_block, memcpy_len);
     out += memcpy_len;
     out_len -= memcpy_len;
     output_block_counter += 1;
+    offset_within_block = 0;
   }
 }
 
@@ -546,6 +549,11 @@ void blake3_hasher_update(blake3_hasher *self, const void *input,
 
 void blake3_hasher_finalize(const blake3_hasher *self, uint8_t *out,
                             size_t out_len) {
+  blake3_hasher_finalize_seek(self, 0, out, out_len);
+}
+
+void blake3_hasher_finalize_seek(const blake3_hasher *self, uint64_t seek,
+                                 uint8_t *out, size_t out_len) {
   // Explicitly checking for zero avoids causing UB by passing a null pointer
   // to memcpy. This comes up in practice with things like:
   //   std::vector<uint8_t> v;
@@ -557,7 +565,7 @@ void blake3_hasher_finalize(const blake3_hasher *self, uint8_t *out,
   // If the subtree stack is empty, then the current chunk is the root.
   if (self->cv_stack_len == 0) {
     output_t output = chunk_state_output(&self->chunk);
-    output_root_bytes(&output, out, out_len);
+    output_root_bytes(&output, seek, out, out_len);
     return;
   }
   // If there are any bytes in the chunk state, finalize that chunk and do a
@@ -585,5 +593,5 @@ void blake3_hasher_finalize(const blake3_hasher *self, uint8_t *out,
     output_chaining_value(&output, &parent_block[32]);
     output = parent_output(parent_block, self->key, self->chunk.flags);
   }
-  output_root_bytes(&output, out, out_len);
+  output_root_bytes(&output, seek, out, out_len);
 }
