@@ -132,9 +132,9 @@ function in a loop, incrementing `seek` by the output length each time.
 
 # Building
 
-This implementation is just C files. It doesn't include a public-facing
-build system. (The `Makefile` in this directory is only for testing.)
-Instead, the intention is that you can include these C and assemly files
+This implementation is just C and assembly files. It doesn't include a
+public-facing build system. (The `Makefile` in this directory is only
+for testing.) Instead, the intention is that you can include these files
 in whatever build system you're already using. This section describes
 the commands your build system should execute, or which you can execute
 by hand. Note that these steps may change in future versions.
