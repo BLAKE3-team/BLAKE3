@@ -29,13 +29,15 @@
 //!
 //! # Cargo Features
 //!
-//! The `c` feature provides optimized assembly implementations and also
-//! AVX-512 support. It is off by default. If activated, a C compiler for the
-//! target platform is required.
-//!
 //! The `rayon` feature provides [Rayon]-based multi-threading, in particular
 //! the [`join::RayonJoin`] type for use with [`Hasher::update_with_join`]. It
-//! is also off by default, but on for [docs.rs].
+//! is disabled by default, but enabled for [docs.rs].
+//!
+//! The `pure` feature disables all FFI to C and assembly implementations,
+//! leaving only the Rust intrinsics implementations for SSE4.1 and AVX2. This
+//! removes the dependency on a C compiler/assembler. Library crates should
+//! generally avoid this feature, so that each binary crate is free make its
+//! own decision about build dependencies.
 //!
 //! [BLAKE3]: https://blake3.io
 //! [Rayon]: https://github.com/rayon-rs/rayon
@@ -63,23 +65,38 @@ pub mod platform;
 mod portable;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 cfg_if::cfg_if! {
-    if #[cfg(feature = "c")] {
-        #[path = "c_sse41.rs"]
-        mod sse41;
-        #[path = "c_avx2.rs"]
-        mod avx2;
-        #[path = "c_avx512.rs"]
-        mod avx512;
-    } else {
+    if #[cfg(feature = "pure")] {
+        // When "pure" is enabled, use only Rust intrinsics. Stable Rust
+        // doesn't currently support AVX-512.
         #[path = "rust_sse41.rs"]
         mod sse41;
         #[path = "rust_avx2.rs"]
         mod avx2;
-        // Stable Rust does not currently support AVX-512.
+    } else if #[cfg(any(target_arch = "x86", feature = "prefer_intrinsics"))] {
+        // When "prefer_intrinsics" is enabled, or on 32-bit x86 (which our
+        // assembly implementations don't support), use Rust intrinsics for
+        // SSE4.1 and AVX2, and use C intrinsics for AVX-512. In this cacse,
+        // build.rs will compile and link c/blake3_avx512.c.
+        #[path = "rust_sse41.rs"]
+        mod sse41;
+        #[path = "rust_avx2.rs"]
+        mod avx2;
+        #[path = "ffi_avx512.rs"]
+        mod avx512;
+    } else {
+        // Otherwise on x86_64, use assembly implementations for everything. In
+        // this case, build.rs will compile and link all the assembly files for
+        // the target platform (Unix, Windows MSVC, or Windows GNU).
+        #[path = "ffi_sse41.rs"]
+        mod sse41;
+        #[path = "ffi_avx2.rs"]
+        mod avx2;
+        #[path = "ffi_avx512.rs"]
+        mod avx512;
     }
 }
-#[cfg(feature = "c_neon")]
-#[path = "c_neon.rs"]
+#[cfg(feature = "neon")]
+#[path = "ffi_neon.rs"]
 mod neon;
 
 pub mod traits;

@@ -69,7 +69,7 @@ fn bench_single_compression_sse41(b: &mut Bencher) {
 }
 
 #[bench]
-#[cfg(feature = "c")]
+#[cfg(not(feature = "pure"))]
 fn bench_single_compression_avx512(b: &mut Bencher) {
     if let Some(platform) = Platform::avx512() {
         bench_single_compression_fn(b, platform);
@@ -119,7 +119,7 @@ fn bench_many_chunks_avx2(b: &mut Bencher) {
 }
 
 #[bench]
-#[cfg(feature = "c")]
+#[cfg(not(feature = "pure"))]
 fn bench_many_chunks_avx512(b: &mut Bencher) {
     if let Some(platform) = Platform::avx512() {
         bench_many_chunks_fn(b, platform);
@@ -127,7 +127,7 @@ fn bench_many_chunks_avx512(b: &mut Bencher) {
 }
 
 #[bench]
-#[cfg(feature = "c_neon")]
+#[cfg(feature = "neon")]
 fn bench_many_chunks_neon(b: &mut Bencher) {
     if let Some(platform) = Platform::neon() {
         bench_many_chunks_fn(b, platform);
@@ -178,7 +178,7 @@ fn bench_many_parents_avx2(b: &mut Bencher) {
 }
 
 #[bench]
-#[cfg(feature = "c")]
+#[cfg(not(feature = "pure"))]
 fn bench_many_parents_avx512(b: &mut Bencher) {
     if let Some(platform) = Platform::avx512() {
         bench_many_parents_fn(b, platform);
@@ -186,7 +186,7 @@ fn bench_many_parents_avx512(b: &mut Bencher) {
 }
 
 #[bench]
-#[cfg(feature = "c_neon")]
+#[cfg(feature = "neon")]
 fn bench_many_parents_neon(b: &mut Bencher) {
     if let Some(platform) = Platform::neon() {
         bench_many_parents_fn(b, platform);

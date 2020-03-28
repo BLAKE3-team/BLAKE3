@@ -30,27 +30,27 @@ jobs:
     - run: cargo test --features=rayon
     # no_std tests.
     - run: cargo test --no-default-features
-    # Test the x86 assembly implementations. Use -vv to log compiler commands.
-    - run: cargo test --features=c -vv
-    # Test the C intrinsics implementations. Use -vv to log compiler commands.
-    - run: cargo test --features=c,c_prefer_intrinsics -vv
+    # Test the intrinsics implementations.
+    - run: cargo test --features=prefer_intrinsics
+    # Test the pure Rust build.
+    - run: cargo test --features=pure
     # Test release mode. This does more iteratations in test_fuzz_hasher.
     - run: cargo test --release
-    - run: cargo test --release --features=c
-    - run: cargo test --release --features=c,c_prefer_intrinsics
+    - run: cargo test --release --features=prefer_intrinsics
+    - run: cargo test --release --features=pure
     # Test benchmarks. RUSTC_BOOTSTRAP=1 lets this run on non-nightly toolchains.
-    - run: cargo test --benches --features=c
+    - run: cargo test --benches
       env:
         RUSTC_BOOTSTRAP: 1
     # Test vectors.
     - name: test vectors
       run: cargo test
       working-directory: ./test_vectors
-    - name: test vectors C assembly
-      run: cargo test --features=c
+    - name: test vectors intrinsics
+      run: cargo test --features=prefer_intrinsics
       working-directory: ./test_vectors
-    - name: test vectors C intrinsics
-      run: cargo test --features=c,c_prefer_intrinsics
+    - name: test vectors pure
+      run: cargo test --features=pure
       working-directory: ./test_vectors
     # Test b3sum.
     - name: test b3sum
@@ -93,7 +93,7 @@ jobs:
     # Test the portable implementation on everything.
     - run: cross test --target ${{ matrix.arch }}
     # Test the NEON implementation on ARM targets.
-    - run: cross test --target ${{ matrix.arch }} --features=c_neon
+    - run: cross test --target ${{ matrix.arch }} --features=neon
       if: startsWith(matrix.arch, 'armv7-') || startsWith(matrix.arch, 'aarch64-')
     # Test vectors. Note that this uses a hacky script due to path dependency limitations.
     - run: ./test_vectors/cross_test.sh --target ${{ matrix.arch }}

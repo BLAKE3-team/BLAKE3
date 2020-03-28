@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     base_build.file("../blake3.c");
     base_build.file("../blake3_dispatch.c");
     base_build.file("../blake3_portable.c");
-    base_build.compile("blake3_c_base");
+    base_build.compile("blake3_base");
 
     if is_x86_64() && !defined("CARGO_FEATURE_PREFER_INTRINSICS") {
         // On 64-bit, use the assembly implementations, unless the
@@ -134,7 +134,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             neon_build.flag("-mfpu=neon-vfpv4");
             neon_build.flag("-mfloat-abi=hard");
         }
-        neon_build.compile("blake3_c_neon");
+        neon_build.compile("blake3_neon");
     }
 
     // The `cc` crate does not automatically emit rerun-if directives for the

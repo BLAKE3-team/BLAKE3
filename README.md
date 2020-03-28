@@ -1,4 +1,4 @@
-# <a href="#"><img src="media/BLAKE3.svg" alt="BLAKE3" height=50></a>
+# <a href="#"><img src="media/BLAKE3.svg" alt="BLAKE3" height=50></a>&ensp;[![Actions Status](https://github.com/BLAKE3-team/BLAKE3/workflows/tests/badge.svg)](https://github.com/BLAKE3-team/BLAKE3/actions)
 
 BLAKE3 is a cryptographic hash function that is:
 
@@ -33,23 +33,19 @@ with BLAKE3.
 This repository is the official implementation of BLAKE3. It includes:
 
 * The [`blake3`](https://crates.io/crates/blake3) Rust crate, which
-  includes optimized SIMD implementations, with runtime CPU feature
-  detection on x86. SSE4.1 and AVX2 are supported in pure Rust. The `c`
-  feature enables C/assembly implementations and AVX-512 support. The
-  `c_neon` feature enables ARM NEON support. Multi-threading is also
-  supported, and the `rayon` feature provides a
-  [Rayon](https://github.com/rayon-rs/rayon)-based implementation.
+  includes optimized SIMD implementations for SSE4.1, AVX2, AVX-512, and
+  NEON, with automatic runtime CPU feature detection on x86. The
+  optional `rayon` feature also enables multi-threading.
 
 * The [`b3sum`](https://crates.io/crates/b3sum) Rust crate, which
-  provides a command line interface. You can install it from
-  [crates.io](https://crates.io/crates/b3sum) with `cargo install
-  b3sum`. It enables the `rayon` and `c` features of the `blake3` crate
-  by default.
+  provides a command line interface. It uses multi-threading by default,
+  making it an order of magnitude faster than e.g. `sha256sum` on
+  typical desktop hardware.
 
 * The [C implementation](c), which like the Rust implementation includes
-  SIMD code and dynamic CPU feature detection on x86. Unlike the Rust
-  implementation, it's not currently multi-threaded. The
-  [README](c/README.md) provides build examples.
+  SIMD code and runtime CPU feature detection on x86. Unlike the Rust
+  implementation, it's not currently multi-threaded. See
+  [`c/README.md`](c/README.md).
 
 * The [reference implementation](reference_impl/reference_impl.rs),
   which is discussed in Section 5.1 of the [BLAKE3
@@ -58,9 +54,6 @@ This repository is the official implementation of BLAKE3. It includes:
   ones above. If you want to see how BLAKE3 works, or you're writing a
   port that doesn't need multi-threading or SIMD optimizations, start
   here.
-
-* [![Actions
-  Status](https://github.com/BLAKE3-team/BLAKE3/workflows/tests/badge.svg)](https://github.com/BLAKE3-team/BLAKE3/actions)
 
 BLAKE3 was designed by:
 
@@ -108,7 +101,9 @@ time b3sum /tmp/bigfile
 ### The `blake3` crate
 
 To use BLAKE3 from Rust code, add a dependency on the `blake3` crate to
-your `Cargo.toml`. Here's an example of hashing some input bytes:
+your `Cargo.toml`. Note that by default, unless the `pure` feature is
+enabled, building `blake3` requires a C compiler. Here's an example of
+hashing some input bytes:
 
 ```rust
 // Hash an input all at once.

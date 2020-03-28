@@ -4,10 +4,9 @@ version = "0.0.0"
 edition = "2018"
 
 [features]
-default = []
-c = ["blake3/c"]
-c_prefer_intrinsics = ["blake3/c_prefer_intrinsics"]
-c_neon = ["blake3/c_neon"]
+neon = ["blake3/neon"]
+prefer_intrinsics = ["blake3/prefer_intrinsics"]
+pure = ["blake3/pure"]
 
 [dependencies]
 # If you ever change these path dependencies, you'll probably need to update

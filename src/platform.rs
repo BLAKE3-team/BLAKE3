@@ -4,13 +4,13 @@ use arrayref::{array_mut_ref, array_ref};
 cfg_if::cfg_if! {
     if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
         cfg_if::cfg_if! {
-            if #[cfg(feature = "c")] {
-                pub const MAX_SIMD_DEGREE: usize = 16;
-            } else {
+            if #[cfg(feature = "pure")] {
                 pub const MAX_SIMD_DEGREE: usize = 8;
+            } else {
+                pub const MAX_SIMD_DEGREE: usize = 16;
             }
         }
-    } else if #[cfg(feature = "c_neon")] {
+    } else if #[cfg(feature = "neon")] {
         pub const MAX_SIMD_DEGREE: usize = 4;
     } else {
         pub const MAX_SIMD_DEGREE: usize = 1;
@@ -24,13 +24,13 @@ cfg_if::cfg_if! {
 cfg_if::cfg_if! {
     if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
         cfg_if::cfg_if! {
-            if #[cfg(feature = "c")] {
-                pub const MAX_SIMD_DEGREE_OR_2: usize = 16;
-            } else {
+            if #[cfg(feature = "pure")] {
                 pub const MAX_SIMD_DEGREE_OR_2: usize = 8;
+            } else {
+                pub const MAX_SIMD_DEGREE_OR_2: usize = 16;
             }
         }
-    } else if #[cfg(feature = "c_neon")] {
+    } else if #[cfg(feature = "neon")] {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 4;
     } else {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 2;
@@ -44,10 +44,10 @@ pub enum Platform {
     SSE41,
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     AVX2,
-    #[cfg(feature = "c")]
+    #[cfg(not(feature = "pure"))]
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     AVX512,
-    #[cfg(feature = "c_neon")]
+    #[cfg(feature = "neon")]
     NEON,
 }
 
@@ -56,7 +56,7 @@ impl Platform {
     pub fn detect() -> Self {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            #[cfg(feature = "c")]
+            #[cfg(not(feature = "pure"))]
             {
                 if avx512_detected() {
                     return Platform::AVX512;
@@ -69,9 +69,9 @@ impl Platform {
                 return Platform::SSE41;
             }
         }
-        // We don't use dynamic feature detection for NEON. If the "c_neon"
+        // We don't use dynamic feature detection for NEON. If the "neon"
         // feature is on, NEON is assumed to be supported.
-        #[cfg(feature = "c_neon")]
+        #[cfg(feature = "neon")]
         {
             return Platform::NEON;
         }
@@ -85,10 +85,10 @@ impl Platform {
             Platform::SSE41 => 4,
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX2 => 8,
-            #[cfg(feature = "c")]
+            #[cfg(not(feature = "pure"))]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => 16,
-            #[cfg(feature = "c_neon")]
+            #[cfg(feature = "neon")]
             Platform::NEON => 4,
         };
         debug_assert!(degree <= MAX_SIMD_DEGREE);
@@ -111,13 +111,13 @@ impl Platform {
                 crate::sse41::compress_in_place(cv, block, block_len, counter, flags)
             },
             // Safe because detect() checked for platform support.
-            #[cfg(feature = "c")]
+            #[cfg(not(feature = "pure"))]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => unsafe {
                 crate::avx512::compress_in_place(cv, block, block_len, counter, flags)
             },
             // No NEON compress_in_place() implementation yet.
-            #[cfg(feature = "c_neon")]
+            #[cfg(feature = "neon")]
             Platform::NEON => portable::compress_in_place(cv, block, block_len, counter, flags),
         }
     }
@@ -138,13 +138,13 @@ impl Platform {
                 crate::sse41::compress_xof(cv, block, block_len, counter, flags)
             },
             // Safe because detect() checked for platform support.
-            #[cfg(feature = "c")]
+            #[cfg(not(feature = "pure"))]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => unsafe {
                 crate::avx512::compress_xof(cv, block, block_len, counter, flags)
             },
             // No NEON compress_xof() implementation yet.
-            #[cfg(feature = "c_neon")]
+            #[cfg(feature = "neon")]
             Platform::NEON => portable::compress_xof(cv, block, block_len, counter, flags),
         }
     }
@@ -210,7 +210,7 @@ impl Platform {
                 )
             },
             // Safe because detect() checked for platform support.
-            #[cfg(feature = "c")]
+            #[cfg(not(feature = "pure"))]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => unsafe {
                 crate::avx512::hash_many(
@@ -224,8 +224,8 @@ impl Platform {
                     out,
                 )
             },
-            // Assumed to be safe if the "c_neon" feature is on.
-            #[cfg(feature = "c_neon")]
+            // Assumed to be safe if the "neon" feature is on.
+            #[cfg(feature = "neon")]
             Platform::NEON => unsafe {
                 crate::neon::hash_many(
                     inputs,
@@ -265,7 +265,7 @@ impl Platform {
         }
     }
 
-    #[cfg(feature = "c")]
+    #[cfg(not(feature = "pure"))]
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     pub fn avx512() -> Option<Self> {
         if avx512_detected() {
@@ -275,17 +275,17 @@ impl Platform {
         }
     }
 
-    #[cfg(feature = "c_neon")]
+    #[cfg(feature = "neon")]
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     pub fn neon() -> Option<Self> {
-        // Assumed to be safe if the "c_neon" feature is on.
+        // Assumed to be safe if the "neon" feature is on.
         Some(Self::NEON)
     }
 }
 
 // Note that AVX-512 is divided into multiple featuresets, and we use two of
 // them, F and VL.
-#[cfg(feature = "c")]
+#[cfg(not(feature = "pure"))]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline(always)]
 pub fn avx512_detected() -> bool {

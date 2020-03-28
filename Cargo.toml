@@ -11,26 +11,42 @@ edition = "2018"
 
 [features]
 default = ["std"]
-# The "c" feature includes C and assembly SIMD implementations of the
-# compression function for x86 platforms, called via FFI. (Currently it has no
-# effect on other platforms.) This requires a C toolchain on the build machine.
-# This is necessary for AVX-512 support, which is not yet stable in Rust, and
-# the assembly implementations also perform better than those using Rust/LLVM
-# intrinsics. As with the Rust implementations, these C and assembly
-# implementations participate in runtime CPU feature detection, and the
-# resulting binary is portable.
-c = []
-# Normally x86-64 builds prefer assembly implementations over C intrinsics. The
-# assembly implementations perform better, perform most consistently across
-# compilers, and are much faster to build. However, this feature makes the
-# build use the C intrinsics implementations instead. This is mainly for
-# testing purposes, and most callers will not want to use it.
-c_prefer_intrinsics = []
+
+# By default on x86_64, this crate uses Samuel Neves' hand-written assembly
+# implementations for SSE4.1, AVX2, and AVX512. (These provide both the best
+# runtime performance, and the fastest build times.) And by default on 32-bit
+# x86, this crate uses Rust intrinsics implementations for SSE4.1 and AVX2, and
+# a C intrinsics implementation for AVX-512. Enabling the "pure" feature
+# disables all FFI to C and assembly implementations, leaving only the Rust
+# intrinsics implementations for SSE4.1 and AVX2. This removes the dependency
+# on a C compiler/assembler, which can be helpful for certain applications.
+# Library crates should generally avoid this feature, so that each binary crate
+# is free make its own decision about build dependencies.
+pure = []
+
+# As described above, on x86_64 this crate use assembly implementations by
+# default. Enabling the "prefer_intrinsics" feature makes this crate use
+# intrinsics implementations on both 32-bit and 64-bit x86. This is mainly for
+# testing, and calling crates should not need it.
+prefer_intrinsics = []
+
 # The NEON implementation does not participate in dynamic feature detection,
-# which is currently x86-only. If "c_neon" is on, NEON support is assumed. Note
-# that AArch64 always supports NEON, but support on ARMv7 varies.
-c_neon = []
+# which is currently x86-only. If "neon" is on, NEON support is assumed. Note
+# that AArch64 always supports NEON, but support on ARMv7 varies. The NEON
+# implementation uses C intrinsics and requires a C compiler.
+neon = []
+
+# This crate uses libstd for std::io trait implementations, and also for
+# runtime CPU feature detection. This feature is enabled by default. If you use
+# --no-default-features, the only way to use the SIMD implementations in this
+# crate is to enable the corresponding instruction sets statically for the
+# entire build, with e.g. RUSTFLAGS="-C target-cpu=native".
 std = ["digest/std"]
+
+# The "rayon" feature (defined below as an optional dependency) enables the
+# join::RayonJoin type, which can be used with Hasher::update_with_join to
+# perform multi-threaded hashing. However, even if this feature is enabled, all
+# other APIs remain single-threaded.
 
 [package.metadata.docs.rs]
 # Document blake3::join::RayonJoin on docs.rs.
@@ -40,13 +56,6 @@ features = ["rayon"]
 arrayref = "0.3.5"
 arrayvec = { version = "0.5.1", default-features = false, features = ["array-sizes-33-128"] }
 constant_time_eq = "0.1.5"
-# A performance note for the "rayon" feature: Multi-threading can have
-# significant overhead for small inputs, particularly on x86 where individual
-# cores are very fast. On the other hand, on slower platforms like ARM,
-# multi-threading can be beneficial for all inputs. There's no one input size
-# threshold that would work well everywhere, and this crate doesn't try to be
-# clever. If you're going to enable the "rayon" feature, you should benchmark
-# it for your specific use case.
 rayon = { version = "1.2.1", optional = true }
 cfg-if = "0.1.10"
 digest = "0.8.1"
