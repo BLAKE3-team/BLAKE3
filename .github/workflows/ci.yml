@@ -25,7 +25,7 @@ jobs:
         profile: minimal
         override: true
     # Print out instruction set support, for debugging.
-    - run: cargo run --bin instruction_set_support
+    - run: cargo run --quiet --bin instruction_set_support
     # Default tests plus Rayon.
     - run: cargo test --features=rayon
     # no_std tests.
