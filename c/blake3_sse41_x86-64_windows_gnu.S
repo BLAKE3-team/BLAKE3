@@ -1800,15 +1800,18 @@ blake3_hash_many_sse41:
 .p2align 6
 blake3_compress_in_place_sse41:
 _blake3_compress_in_place_sse41:
-        sub     rsp, 72
+        sub     rsp, 120
         movdqa  xmmword ptr [rsp], xmm6
         movdqa  xmmword ptr [rsp+0x10], xmm7
         movdqa  xmmword ptr [rsp+0x20], xmm8
         movdqa  xmmword ptr [rsp+0x30], xmm9
+        movdqa  xmmword ptr [rsp+0x40], xmm11
+        movdqa  xmmword ptr [rsp+0x50], xmm14
+        movdqa  xmmword ptr [rsp+0x60], xmm15
         movups  xmm0, xmmword ptr [rcx]
         movups  xmm1, xmmword ptr [rcx+0x10]
         movaps  xmm2, xmmword ptr [BLAKE3_IV+rip]
-        movzx   eax, byte ptr [rsp+0x70]
+        movzx   eax, byte ptr [rsp+0xA0]
         movzx   r8d, r8b
         shl     rax, 32
         add     r8, rax
@@ -1906,24 +1909,30 @@ _blake3_compress_in_place_sse41:
         movdqa  xmm7, xmmword ptr [rsp+0x10]
         movdqa  xmm8, xmmword ptr [rsp+0x20]
         movdqa  xmm9, xmmword ptr [rsp+0x30]
-        add     rsp, 72
+        movdqa  xmm11, xmmword ptr [rsp+0x40]
+        movdqa  xmm14, xmmword ptr [rsp+0x50]
+        movdqa  xmm15, xmmword ptr [rsp+0x60]
+        add     rsp, 120
         ret
 
 
 .p2align 6
 _blake3_compress_xof_sse41:
 blake3_compress_xof_sse41:
-        sub     rsp, 72
+        sub     rsp, 120
         movdqa  xmmword ptr [rsp], xmm6
         movdqa  xmmword ptr [rsp+0x10], xmm7
         movdqa  xmmword ptr [rsp+0x20], xmm8
         movdqa  xmmword ptr [rsp+0x30], xmm9
+        movdqa  xmmword ptr [rsp+0x40], xmm11
+        movdqa  xmmword ptr [rsp+0x50], xmm14
+        movdqa  xmmword ptr [rsp+0x60], xmm15
         movups  xmm0, xmmword ptr [rcx]
         movups  xmm1, xmmword ptr [rcx+0x10]
         movaps  xmm2, xmmword ptr [BLAKE3_IV+rip]
-        movzx   eax, byte ptr [rsp+0x70]
+        movzx   eax, byte ptr [rsp+0xA0]
         movzx   r8d, r8b
-        mov     r10, qword ptr [rsp+0x78]
+        mov     r10, qword ptr [rsp+0xA8]
         shl     rax, 32
         add     r8, rax
         movq    xmm3, r9
@@ -2026,7 +2035,10 @@ blake3_compress_xof_sse41:
         movdqa  xmm7, xmmword ptr [rsp+0x10]
         movdqa  xmm8, xmmword ptr [rsp+0x20]
         movdqa  xmm9, xmmword ptr [rsp+0x30]
-        add     rsp, 72
+        movdqa  xmm11, xmmword ptr [rsp+0x40]
+        movdqa  xmm14, xmmword ptr [rsp+0x50]
+        movdqa  xmm15, xmmword ptr [rsp+0x60]
+        add     rsp, 120
         ret
 
 

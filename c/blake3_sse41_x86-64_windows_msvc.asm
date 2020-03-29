@@ -1802,15 +1802,18 @@ blake3_hash_many_sse41 ENDP
 
 blake3_compress_in_place_sse41 PROC
 _blake3_compress_in_place_sse41 PROC
-        sub     rsp, 72
+        sub     rsp, 120
         movdqa  xmmword ptr [rsp], xmm6
         movdqa  xmmword ptr [rsp+10H], xmm7
         movdqa  xmmword ptr [rsp+20H], xmm8
         movdqa  xmmword ptr [rsp+30H], xmm9
+        movdqa  xmmword ptr [rsp+40H], xmm11
+        movdqa  xmmword ptr [rsp+50H], xmm14
+        movdqa  xmmword ptr [rsp+60H], xmm15
         movups  xmm0, xmmword ptr [rcx]
         movups  xmm1, xmmword ptr [rcx+10H]
         movaps  xmm2, xmmword ptr [BLAKE3_IV]
-        movzx   eax, byte ptr [rsp+70H]
+        movzx   eax, byte ptr [rsp+0A0H]
         movzx   r8d, r8b
         shl     rax, 32
         add     r8, rax
@@ -1908,7 +1911,10 @@ _blake3_compress_in_place_sse41 PROC
         movdqa  xmm7, xmmword ptr [rsp+10H]
         movdqa  xmm8, xmmword ptr [rsp+20H]
         movdqa  xmm9, xmmword ptr [rsp+30H]
-        add     rsp, 72
+        movdqa  xmm11, xmmword ptr [rsp+40H]
+        movdqa  xmm14, xmmword ptr [rsp+50H]
+        movdqa  xmm15, xmmword ptr [rsp+60H]
+        add     rsp, 120
         ret
 _blake3_compress_in_place_sse41 ENDP
 blake3_compress_in_place_sse41 ENDP
@@ -1916,17 +1922,20 @@ blake3_compress_in_place_sse41 ENDP
 ALIGN 16
 blake3_compress_xof_sse41 PROC
 _blake3_compress_xof_sse41 PROC
-        sub     rsp, 72
+        sub     rsp, 120
         movdqa  xmmword ptr [rsp], xmm6
         movdqa  xmmword ptr [rsp+10H], xmm7
         movdqa  xmmword ptr [rsp+20H], xmm8
         movdqa  xmmword ptr [rsp+30H], xmm9
+        movdqa  xmmword ptr [rsp+40H], xmm11
+        movdqa  xmmword ptr [rsp+50H], xmm14
+        movdqa  xmmword ptr [rsp+60H], xmm15
         movups  xmm0, xmmword ptr [rcx]
         movups  xmm1, xmmword ptr [rcx+10H]
         movaps  xmm2, xmmword ptr [BLAKE3_IV]
-        movzx   eax, byte ptr [rsp+70H]
+        movzx   eax, byte ptr [rsp+0A0H]
         movzx   r8d, r8b
-        mov     r10, qword ptr [rsp+78H]
+        mov     r10, qword ptr [rsp+0A8H]
         shl     rax, 32
         add     r8, rax
         movq    xmm3, r9
@@ -2029,7 +2038,10 @@ _blake3_compress_xof_sse41 PROC
         movdqa  xmm7, xmmword ptr [rsp+10H]
         movdqa  xmm8, xmmword ptr [rsp+20H]
         movdqa  xmm9, xmmword ptr [rsp+30H]
-        add     rsp, 72
+        movdqa  xmm11, xmmword ptr [rsp+40H]
+        movdqa  xmm14, xmmword ptr [rsp+50H]
+        movdqa  xmm15, xmmword ptr [rsp+60H]
+        add     rsp, 120
         ret
 _blake3_compress_xof_sse41 ENDP
 blake3_compress_xof_sse41 ENDP
