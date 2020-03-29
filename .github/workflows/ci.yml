@@ -37,6 +37,7 @@ jobs:
     # Test release mode. This does more iteratations in test_fuzz_hasher.
     - run: cargo test --release
     - run: cargo test --release --features=c
+    - run: cargo test --release --features=c,c_prefer_intrinsics
     # Test benchmarks. RUSTC_BOOTSTRAP=1 lets this run on non-nightly toolchains.
     - run: cargo test --benches --features=c
       env:
