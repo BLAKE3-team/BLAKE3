@@ -24,12 +24,6 @@ default = ["std"]
 # is free make its own decision about build dependencies.
 pure = []
 
-# As described above, on x86_64 this crate use assembly implementations by
-# default. Enabling the "prefer_intrinsics" feature makes this crate use
-# intrinsics implementations on both 32-bit and 64-bit x86. This is mainly for
-# testing, and calling crates should not need it.
-prefer_intrinsics = []
-
 # The NEON implementation does not participate in dynamic feature detection,
 # which is currently x86-only. If "neon" is on, NEON support is assumed. Note
 # that AArch64 always supports NEON, but support on ARMv7 varies. The NEON
@@ -47,6 +41,28 @@ std = ["digest/std"]
 # join::RayonJoin type, which can be used with Hasher::update_with_join to
 # perform multi-threaded hashing. However, even if this feature is enabled, all
 # other APIs remain single-threaded.
+
+# ---------- Features below this line are for internal testing only. ----------
+
+# As described above, on x86_64 this crate use assembly implementations by
+# default. Enabling the "prefer_intrinsics" feature makes this crate use
+# intrinsics implementations on both 32-bit and 64-bit x86.
+prefer_intrinsics = []
+
+# Disable individual instruction sets. CI testing uses these flags to simulate
+# different levels of hardware SIMD support. Note that code for the
+# corresponding instruction set is still compiled; only detection is disabled.
+#
+# As noted above, these flags are *for testing only* and are not stable. It's
+# possible that some users might find that their particular use case performs
+# better if e.g. AVX-512 is disabled, because of issues like CPU downlocking.
+# If that comes up, and if disabling the instruction set here at the feature
+# level turns out to be the right approach, then we can design a stable
+# feature. Until then, we reserve the right to break these features in a patch
+# release.
+no_sse41 = []
+no_avx2 = []
+no_avx512 = []
 
 [package.metadata.docs.rs]
 # Document blake3::join::RayonJoin on docs.rs.

@@ -30,14 +30,41 @@ jobs:
     - run: cargo test --features=rayon
     # no_std tests.
     - run: cargo test --no-default-features
-    # Test the intrinsics implementations.
+
+    # A matrix of different test settings:
+    # - debug vs release
+    # - assembly vs Rust+C intrinsics vs pure Rust intrinsics
+    # - different levels of SIMD support
+    #
+    # Full SIMD support.
+    - run: cargo test --features=
     - run: cargo test --features=prefer_intrinsics
-    # Test the pure Rust build.
     - run: cargo test --features=pure
-    # Test release mode. This does more iteratations in test_fuzz_hasher.
-    - run: cargo test --release
-    - run: cargo test --release --features=prefer_intrinsics
-    - run: cargo test --release --features=pure
+    - run: cargo test --features= --release
+    - run: cargo test --features=prefer_intrinsics --release
+    - run: cargo test --features=pure --release
+    # No AVX-512.
+    - run: cargo test --features=no_avx512
+    - run: cargo test --features=no_avx512,prefer_intrinsics
+    - run: cargo test --features=no_avx512,pure
+    - run: cargo test --features=no_avx512 --release
+    - run: cargo test --features=no_avx512,prefer_intrinsics --release
+    - run: cargo test --features=no_avx512,pure --release
+    # No AVX2.
+    - run: cargo test --features=no_avx512,no_avx2
+    - run: cargo test --features=no_avx512,no_avx2,prefer_intrinsics
+    - run: cargo test --features=no_avx512,no_avx2,pure
+    - run: cargo test --features=no_avx512,no_avx2 --release
+    - run: cargo test --features=no_avx512,no_avx2,prefer_intrinsics --release
+    - run: cargo test --features=no_avx512,no_avx2,pure --release
+    # No SSE4.1
+    - run: cargo test --features=no_avx512,no_avx2,no_sse41
+    - run: cargo test --features=no_avx512,no_avx2,no_sse41,prefer_intrinsics
+    - run: cargo test --features=no_avx512,no_avx2,no_sse41,pure
+    - run: cargo test --features=no_avx512,no_avx2,no_sse41 --release
+    - run: cargo test --features=no_avx512,no_avx2,no_sse41,prefer_intrinsics --release
+    - run: cargo test --features=no_avx512,no_avx2,no_sse41,pure --release
+
     # Test benchmarks. RUSTC_BOOTSTRAP=1 lets this run on non-nightly toolchains.
     - run: cargo test --benches
       env:

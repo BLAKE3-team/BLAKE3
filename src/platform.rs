@@ -289,6 +289,10 @@ impl Platform {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline(always)]
 pub fn avx512_detected() -> bool {
+    // A testing-only short-circuit.
+    if cfg!(feature = "no_avx512") {
+        return false;
+    }
     // Static check, e.g. for building with target-cpu=native.
     #[cfg(all(target_feature = "avx512f", target_feature = "avx512vl"))]
     {
@@ -307,6 +311,10 @@ pub fn avx512_detected() -> bool {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline(always)]
 pub fn avx2_detected() -> bool {
+    // A testing-only short-circuit.
+    if cfg!(feature = "no_avx2") {
+        return false;
+    }
     // Static check, e.g. for building with target-cpu=native.
     #[cfg(target_feature = "avx2")]
     {
@@ -325,6 +333,10 @@ pub fn avx2_detected() -> bool {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline(always)]
 pub fn sse41_detected() -> bool {
+    // A testing-only short-circuit.
+    if cfg!(feature = "no_sse41") {
+        return false;
+    }
     // Static check, e.g. for building with target-cpu=native.
     #[cfg(target_feature = "sse4.1")]
     {

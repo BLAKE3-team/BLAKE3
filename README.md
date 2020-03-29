@@ -1,4 +1,4 @@
-# <a href="#"><img src="media/BLAKE3.svg" alt="BLAKE3" height=50></a>&ensp;[![Actions Status](https://github.com/BLAKE3-team/BLAKE3/workflows/tests/badge.svg)](https://github.com/BLAKE3-team/BLAKE3/actions)
+# <a href="https://github.com/BLAKE3-team/BLAKE3/actions"><img align="right" alt="CI status" src="https://github.com/BLAKE3-team/BLAKE3/workflows/tests/badge.svg"></a> <a href="#"><img src="media/BLAKE3.svg" alt="BLAKE3" height=50></a>
 
 BLAKE3 is a cryptographic hash function that is:
 
