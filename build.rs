@@ -148,6 +148,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 avx512_build.flag("-mavx512f");
                 avx512_build.flag("-mavx512vl");
             }
+            if is_windows_gnu() {
+                // Workaround for https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65782.
+                avx512_build.flag("-fno-asynchronous-unwind-tables");
+            }
             avx512_build.compile("blake3_avx512");
         } else {
             // Currently no effect for non-x86 platforms.
