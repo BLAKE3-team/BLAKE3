@@ -1,4 +1,4 @@
-# <a href="https://github.com/BLAKE3-team/BLAKE3/actions"><img align="right" alt="CI status" src="https://github.com/BLAKE3-team/BLAKE3/workflows/tests/badge.svg"></a> <a href="#"><img src="media/BLAKE3.svg" alt="BLAKE3" height=50></a>
+# <a href="#"><img src="media/BLAKE3.svg" alt="BLAKE3" height=50></a>
 
 BLAKE3 is a cryptographic hash function that is:
 
@@ -54,6 +54,8 @@ This repository is the official implementation of BLAKE3. It includes:
   ones above. If you want to see how BLAKE3 works, or you're writing a
   port that doesn't need multi-threading or SIMD optimizations, start
   here.
+
+* [![Actions Status](https://github.com/BLAKE3-team/BLAKE3/workflows/tests/badge.svg)](https://github.com/BLAKE3-team/BLAKE3/actions)
 
 BLAKE3 was designed by:
 
