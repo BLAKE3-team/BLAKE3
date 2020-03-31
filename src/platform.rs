@@ -4,10 +4,10 @@ use arrayref::{array_mut_ref, array_ref};
 cfg_if::cfg_if! {
     if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
         cfg_if::cfg_if! {
-            if #[cfg(feature = "pure")] {
-                pub const MAX_SIMD_DEGREE: usize = 8;
-            } else {
+            if #[cfg(blake3_avx512_ffi)] {
                 pub const MAX_SIMD_DEGREE: usize = 16;
+            } else {
+                pub const MAX_SIMD_DEGREE: usize = 8;
             }
         }
     } else if #[cfg(feature = "neon")] {
@@ -24,10 +24,10 @@ cfg_if::cfg_if! {
 cfg_if::cfg_if! {
     if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
         cfg_if::cfg_if! {
-            if #[cfg(feature = "pure")] {
-                pub const MAX_SIMD_DEGREE_OR_2: usize = 8;
-            } else {
+            if #[cfg(blake3_avx512_ffi)] {
                 pub const MAX_SIMD_DEGREE_OR_2: usize = 16;
+            } else {
+                pub const MAX_SIMD_DEGREE_OR_2: usize = 8;
             }
         }
     } else if #[cfg(feature = "neon")] {
@@ -44,7 +44,7 @@ pub enum Platform {
     SSE41,
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     AVX2,
-    #[cfg(not(feature = "pure"))]
+    #[cfg(blake3_avx512_ffi)]
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     AVX512,
     #[cfg(feature = "neon")]
@@ -56,7 +56,7 @@ impl Platform {
     pub fn detect() -> Self {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            #[cfg(not(feature = "pure"))]
+            #[cfg(blake3_avx512_ffi)]
             {
                 if avx512_detected() {
                     return Platform::AVX512;
@@ -85,7 +85,7 @@ impl Platform {
             Platform::SSE41 => 4,
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX2 => 8,
-            #[cfg(not(feature = "pure"))]
+            #[cfg(blake3_avx512_ffi)]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => 16,
             #[cfg(feature = "neon")]
@@ -111,7 +111,7 @@ impl Platform {
                 crate::sse41::compress_in_place(cv, block, block_len, counter, flags)
             },
             // Safe because detect() checked for platform support.
-            #[cfg(not(feature = "pure"))]
+            #[cfg(blake3_avx512_ffi)]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => unsafe {
                 crate::avx512::compress_in_place(cv, block, block_len, counter, flags)
@@ -138,7 +138,7 @@ impl Platform {
                 crate::sse41::compress_xof(cv, block, block_len, counter, flags)
             },
             // Safe because detect() checked for platform support.
-            #[cfg(not(feature = "pure"))]
+            #[cfg(blake3_avx512_ffi)]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => unsafe {
                 crate::avx512::compress_xof(cv, block, block_len, counter, flags)
@@ -210,7 +210,7 @@ impl Platform {
                 )
             },
             // Safe because detect() checked for platform support.
-            #[cfg(not(feature = "pure"))]
+            #[cfg(blake3_avx512_ffi)]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => unsafe {
                 crate::avx512::hash_many(
@@ -265,7 +265,7 @@ impl Platform {
         }
     }
 
-    #[cfg(not(feature = "pure"))]
+    #[cfg(blake3_avx512_ffi)]
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     pub fn avx512() -> Option<Self> {
         if avx512_detected() {
@@ -285,7 +285,7 @@ impl Platform {
 
 // Note that AVX-512 is divided into multiple featuresets, and we use two of
 // them, F and VL.
-#[cfg(not(feature = "pure"))]
+#[cfg(blake3_avx512_ffi)]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline(always)]
 pub fn avx512_detected() -> bool {

@@ -1,7 +1,33 @@
 use std::env;
 
 fn defined(var: &str) -> bool {
+    println!("cargo:rerun-if-env-changed={}", var);
     env::var_os(var).is_some()
+}
+
+fn is_pure() -> bool {
+    defined("CARGO_FEATURE_PURE")
+}
+
+fn should_prefer_intrinsics() -> bool {
+    defined("CARGO_FEATURE_PREFER_INTRINSICS")
+}
+
+fn is_neon() -> bool {
+    defined("CARGO_FEATURE_NEON")
+}
+
+fn is_ci() -> bool {
+    defined("BLAKE3_CI")
+}
+
+fn warn(warning: &str) {
+    assert!(!warning.contains("\n"));
+    println!("cargo:warning={}", warning);
+    if is_ci() {
+        println!("cargo:warning=Warnings in CI are treated as errors. Build failed.");
+        std::process::exit(1);
+    }
 }
 
 fn target_components() -> Vec<String> {
@@ -48,89 +74,122 @@ fn new_build() -> cc::Build {
     build
 }
 
-const WINDOWS_MSVC_ERROR: &str = r#"
-Your version of the MSVC C compiler does not support the "/arch:AVX512" flag.
-If you're building the "b3sum" or "bao_bin" crates, you can disable AVX-512
-with "--features=pure". Other crates might or might not support this
-workaround.
-"#;
-
-const GNU_ERROR: &str = r#"
-Your C compiler does not support the "-mavx512f" flag. If you are building the
-"b3sum" or "bao_bin" crates, you can disable AVX-512 with "--features=pure".
-Other crates might or might not support this workaround.
-"#;
-
-fn check_for_avx512_compiler_support() {
+fn c_compiler_exists_and_supports_avx512() -> bool {
     let build = new_build();
-    if is_windows_msvc() {
-        if !build.is_flag_supported("/arch:AVX512").unwrap() {
-            eprintln!("{}", WINDOWS_MSVC_ERROR.trim());
-            std::process::exit(1);
-        }
+    let flags_checked;
+    let support_result: Result<bool, _> = if is_windows_msvc() {
+        flags_checked = "/arch:AVX512";
+        build.is_flag_supported("/arch:AVX512")
     } else {
-        if !build.is_flag_supported("-mavx512f").unwrap() {
-            eprintln!("{}", GNU_ERROR.trim());
-            std::process::exit(1);
+        // Check for both of the flags we use. If -mavx512f works, then -mavx512vl
+        // will probably always work too, but we might as well be thorough.
+        flags_checked = "-mavx512f and -mavx512vl";
+        match build.is_flag_supported("-mavx512f") {
+            Ok(true) => build.is_flag_supported("-mavx512vl"),
+            false_or_error => false_or_error,
+        }
+    };
+    match support_result {
+        Ok(true) => true,
+        Ok(false) => {
+            warn(&format!(
+                "The C compiler {:?} does not support {}.",
+                build.get_compiler().path(),
+                flags_checked,
+            ));
+            false
+        }
+        Err(e) => {
+            println!("{:?}", e);
+            warn(&format!(
+                "No C compiler {:?} detected.",
+                build.get_compiler().path()
+            ));
+            false
         }
     }
 }
 
+fn build_x86_pure() {
+    // A pure Rust build, so nothing to compile here. Enable the Rust SSE4.1
+    // and AVX2 intrinsics builds. Do not enable AVX-512 in general.
+    println!("cargo:rustc-cfg=blake3_sse41_rust");
+    println!("cargo:rustc-cfg=blake3_avx2_rust");
+}
+
+fn build_x86_intrinsics() {
+    // Enable the Rust SSE4.1 and AVX2 intrinsics builds, and also the C
+    // AVX-512 intrinsics build. This is required on 32-bit x86 targets, since
+    // the assembly implementations don't support those.
+    assert!(c_compiler_exists_and_supports_avx512());
+    assert!(!is_pure());
+    println!("cargo:rustc-cfg=blake3_sse41_rust");
+    println!("cargo:rustc-cfg=blake3_avx2_rust");
+    println!("cargo:rustc-cfg=blake3_avx512_ffi");
+    let mut build = new_build();
+    build.file("c/blake3_avx512.c");
+    if is_windows_msvc() {
+        build.flag("/arch:AVX512");
+    } else {
+        build.flag("-mavx512f");
+        build.flag("-mavx512vl");
+    }
+    if is_windows_gnu() {
+        // Workaround for https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65782.
+        build.flag("-fno-asynchronous-unwind-tables");
+    }
+    build.compile("blake3_ffi");
+}
+
+fn build_x86_asm() {
+    // Enable the assembly builds for SSE4.1, AVX2, and AVX-512. This is the
+    // preferred build configuration by default, but it only supports x86_64.
+    assert!(is_x86_64());
+    assert!(c_compiler_exists_and_supports_avx512());
+    assert!(!is_pure());
+    assert!(!should_prefer_intrinsics());
+    println!("cargo:rustc-cfg=blake3_sse41_ffi");
+    println!("cargo:rustc-cfg=blake3_avx2_ffi");
+    println!("cargo:rustc-cfg=blake3_avx512_ffi");
+    let mut build = new_build();
+    if is_windows_msvc() {
+        build.file("c/blake3_sse41_x86-64_windows_msvc.asm");
+        build.file("c/blake3_avx2_x86-64_windows_msvc.asm");
+        build.file("c/blake3_avx512_x86-64_windows_msvc.asm");
+    } else if is_windows_gnu() {
+        build.file("c/blake3_sse41_x86-64_windows_gnu.S");
+        build.file("c/blake3_avx2_x86-64_windows_gnu.S");
+        build.file("c/blake3_avx512_x86-64_windows_gnu.S");
+    } else {
+        // All non-Windows implementations are assumed to support
+        // Linux-style assembly. These files do contain a small
+        // explicit workaround for macOS also.
+        build.file("c/blake3_sse41_x86-64_unix.S");
+        build.file("c/blake3_avx2_x86-64_unix.S");
+        build.file("c/blake3_avx512_x86-64_unix.S");
+    }
+    build.compile("blake3_ffi");
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    if defined("CARGO_FEATURE_PURE") && defined("CARGO_FEATURE_NEON") {
+    if is_pure() && is_neon() {
         panic!("It doesn't make sense to enable both \"pure\" and \"neon\".");
     }
 
-    if (is_x86_64() || is_x86_32()) && !defined("CARGO_FEATURE_PURE") {
-        check_for_avx512_compiler_support();
-        if is_x86_64() && !defined("CARGO_FEATURE_PREFER_INTRINSICS") {
-            // On 64-bit, use the assembly implementations, unless the
-            // "prefer_intrinsics" feature is enabled.
-            if is_windows_msvc() {
-                let mut build = new_build();
-                build.file("c/blake3_sse41_x86-64_windows_msvc.asm");
-                build.file("c/blake3_avx2_x86-64_windows_msvc.asm");
-                build.file("c/blake3_avx512_x86-64_windows_msvc.asm");
-                build.compile("blake3_asm");
-            } else if is_windows_gnu() {
-                let mut build = new_build();
-                build.file("c/blake3_sse41_x86-64_windows_gnu.S");
-                build.file("c/blake3_avx2_x86-64_windows_gnu.S");
-                build.file("c/blake3_avx512_x86-64_windows_gnu.S");
-                build.compile("blake3_asm");
-            } else {
-                // All non-Windows implementations are assumed to support
-                // Linux-style assembly. These files do contain a small
-                // explicit workaround for macOS also.
-                let mut build = new_build();
-                build.file("c/blake3_sse41_x86-64_unix.S");
-                build.file("c/blake3_avx2_x86-64_unix.S");
-                build.file("c/blake3_avx512_x86-64_unix.S");
-                build.compile("blake3_asm");
-            }
+    if is_x86_64() || is_x86_32() {
+        if is_pure() {
+            build_x86_pure();
+        } else if !c_compiler_exists_and_supports_avx512() {
+            warn("Falling back to the pure Rust implementation, with reduced performance.");
+            build_x86_pure();
+        } else if is_x86_32() || should_prefer_intrinsics() {
+            build_x86_intrinsics();
         } else {
-            // Assembly implementations are only for x86_64. On 32-bit x86, or
-            // if the "prefer_intrinsics" feature is enabled, use the Rust
-            // intrinsics implementations for SSE4.1 and AVX2, and the C
-            // intrinsics implementation for AVX-512. (Stable Rust does not yet
-            // support AVX-512.)
-            let mut avx512_build = new_build();
-            avx512_build.file("c/blake3_avx512.c");
-            if is_windows_msvc() {
-                avx512_build.flag("/arch:AVX512");
-            } else {
-                avx512_build.flag("-mavx512f");
-                avx512_build.flag("-mavx512vl");
-            }
-            if is_windows_gnu() {
-                // Workaround for https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65782.
-                avx512_build.flag("-fno-asynchronous-unwind-tables");
-            }
-            avx512_build.compile("blake3_avx512");
+            build_x86_asm();
         }
     }
 
-    if defined("CARGO_FEATURE_NEON") {
+    if is_neon() {
         let mut build = new_build();
         // Note that blake3_neon.c normally depends on the blake3_portable.c
         // for the single-instance compression function, but we expose

@@ -3,6 +3,7 @@ name: tests
 on: [push, pull_request]
 
 env:
+  BLAKE3_CI: "1"
   RUSTFLAGS: "-D warnings"
 
 jobs:

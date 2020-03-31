@@ -33,17 +33,25 @@
 //! the [`join::RayonJoin`] type for use with [`Hasher::update_with_join`]. It
 //! is disabled by default, but enabled for [docs.rs].
 //!
-//! The `pure` feature disables all FFI to C and assembly implementations,
-//! leaving only the Rust intrinsics implementations for SSE4.1 and AVX2. This
-//! removes the dependency on a C compiler/assembler. Library crates should
-//! generally avoid this feature, so that each binary crate is free make its
-//! own decision about build dependencies.
+//! The `neon` feature enables ARM NEON support. Currently there is no runtime
+//! CPU feature detection for NEON, so you must only enable this feature for
+//! targets that are known to have NEON support. In particular, some ARMv7
+//! targets support NEON, and some don't.
+//!
+//! The `std` feature (enabled by default) is required for implementations of
+//! the [`Write`] and [`Seek`] traits, and also for runtime CPU feature
+//! detection. If this feature is disabled, the only way to use the SIMD
+//! implementations in this crate is to enable the corresponding instruction
+//! sets statically for the entire build, with e.g. `RUSTFLAGS="-C
+//! target-cpu=native"`. The resulting binary will not be portable to machines.
 //!
 //! [BLAKE3]: https://blake3.io
 //! [Rayon]: https://github.com/rayon-rs/rayon
 //! [`join::RayonJoin`]: join/enum.RayonJoin.html
 //! [`Hasher::update_with_join`]: struct.Hasher.html#method.update_with_join
 //! [docs.rs]: https://docs.rs/
+//! [`Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
+//! [`Seek`]: https://doc.rust-lang.org/std/io/trait.Seek.html
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -61,43 +69,27 @@ pub mod guts;
 #[doc(hidden)]
 pub mod platform;
 
-// Platform-specific implementations of the compression function.
-mod portable;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-cfg_if::cfg_if! {
-    if #[cfg(feature = "pure")] {
-        // When "pure" is enabled, use only Rust intrinsics. Stable Rust
-        // doesn't currently support AVX-512.
-        #[path = "rust_sse41.rs"]
-        mod sse41;
-        #[path = "rust_avx2.rs"]
-        mod avx2;
-    } else if #[cfg(any(target_arch = "x86", feature = "prefer_intrinsics"))] {
-        // When "prefer_intrinsics" is enabled, or on 32-bit x86 (which our
-        // assembly implementations don't support), use Rust intrinsics for
-        // SSE4.1 and AVX2, and use C intrinsics for AVX-512. In this cacse,
-        // build.rs will compile and link c/blake3_avx512.c.
-        #[path = "rust_sse41.rs"]
-        mod sse41;
-        #[path = "rust_avx2.rs"]
-        mod avx2;
-        #[path = "ffi_avx512.rs"]
-        mod avx512;
-    } else {
-        // Otherwise on x86_64, use assembly implementations for everything. In
-        // this case, build.rs will compile and link all the assembly files for
-        // the target platform (Unix, Windows MSVC, or Windows GNU).
-        #[path = "ffi_sse41.rs"]
-        mod sse41;
-        #[path = "ffi_avx2.rs"]
-        mod avx2;
-        #[path = "ffi_avx512.rs"]
-        mod avx512;
-    }
-}
+// Platform-specific implementations of the compression function. These
+// BLAKE3-specific cfg flags are set in build.rs.
+#[cfg(blake3_avx2_rust)]
+#[path = "rust_avx2.rs"]
+mod avx2;
+#[cfg(blake3_avx2_ffi)]
+#[path = "ffi_avx2.rs"]
+mod avx2;
+#[cfg(blake3_avx512_ffi)]
+#[path = "ffi_avx512.rs"]
+mod avx512;
 #[cfg(feature = "neon")]
 #[path = "ffi_neon.rs"]
 mod neon;
+mod portable;
+#[cfg(blake3_sse41_rust)]
+#[path = "rust_sse41.rs"]
+mod sse41;
+#[cfg(blake3_sse41_ffi)]
+#[path = "ffi_sse41.rs"]
+mod sse41;
 
 pub mod traits;
 

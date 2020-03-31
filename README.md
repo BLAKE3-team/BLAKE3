@@ -103,9 +103,7 @@ time b3sum /tmp/bigfile
 ### The `blake3` crate
 
 To use BLAKE3 from Rust code, add a dependency on the `blake3` crate to
-your `Cargo.toml`. Note that by default, unless the `pure` feature is
-enabled, building `blake3` requires a C compiler. Here's an example of
-hashing some input bytes:
+your `Cargo.toml`. Here's an example of hashing some input bytes:
 
 ```rust
 // Hash an input all at once.

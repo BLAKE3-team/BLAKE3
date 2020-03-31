@@ -12,18 +12,6 @@ edition = "2018"
 [features]
 default = ["std"]
 
-# By default on x86_64, this crate uses Samuel Neves' hand-written assembly
-# implementations for SSE4.1, AVX2, and AVX512. (These provide both the best
-# runtime performance, and the fastest build times.) And by default on 32-bit
-# x86, this crate uses Rust intrinsics implementations for SSE4.1 and AVX2, and
-# a C intrinsics implementation for AVX-512. Enabling the "pure" feature
-# disables all FFI to C and assembly implementations, leaving only the Rust
-# intrinsics implementations for SSE4.1 and AVX2. This removes the dependency
-# on a C compiler/assembler, which can be helpful for certain applications.
-# Library crates should generally avoid this feature, so that each binary crate
-# is free make its own decision about build dependencies.
-pure = []
-
 # The NEON implementation does not participate in dynamic feature detection,
 # which is currently x86-only. If "neon" is on, NEON support is assumed. Note
 # that AArch64 always supports NEON, but support on ARMv7 varies. The NEON
@@ -44,9 +32,22 @@ std = ["digest/std"]
 
 # ---------- Features below this line are for internal testing only. ----------
 
+# By default on x86_64, this crate uses Samuel Neves' hand-written assembly
+# implementations for SSE4.1, AVX2, and AVX512. (These provide both the best
+# runtime performance, and the fastest build times.) And by default on 32-bit
+# x86, this crate uses Rust intrinsics implementations for SSE4.1 and AVX2, and
+# a C intrinsics implementation for AVX-512. In both cases, if a C compiler is
+# not detected, or if AVX-512 support is missing from the detected compiler,
+# build.rs automatically falls back to a pure Rust build. This feature forces
+# that fallback, for testing purposes. (Note that in CI testing, we set the
+# BLAKE3_CI environment variable, which instructs build.rs to error out rather
+# than doing an automatic fallback.)
+pure = []
+
 # As described above, on x86_64 this crate use assembly implementations by
 # default. Enabling the "prefer_intrinsics" feature makes this crate use
-# intrinsics implementations on both 32-bit and 64-bit x86.
+# intrinsics implementations on both 32-bit and 64-bit x86, again for testing
+# purposes.
 prefer_intrinsics = []
 
 # Disable individual instruction sets. CI testing uses these flags to simulate
