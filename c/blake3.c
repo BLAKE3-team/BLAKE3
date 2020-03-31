@@ -259,10 +259,11 @@ INLINE size_t compress_parents_parallel(const uint8_t *child_chaining_values,
 // Why not just have the caller split the input on the first update(), instead
 // of implementing this special rule? Because we don't want to limit SIMD or
 // multi-threading parallelism for that update().
-size_t blake3_compress_subtree_wide(const uint8_t *input, size_t input_len,
-                                    const uint32_t key[8],
-                                    uint64_t chunk_counter, uint8_t flags,
-                                    uint8_t *out) {
+static size_t blake3_compress_subtree_wide(const uint8_t *input,
+                                           size_t input_len,
+                                           const uint32_t key[8],
+                                           uint64_t chunk_counter,
+                                           uint8_t flags, uint8_t *out) {
   // Note that the single chunk case does *not* bump the SIMD degree up to 2
   // when it is 1. If this implementation adds multi-threading in the future,
   // this gives us the option of multi-threading even the 2-chunk case, which

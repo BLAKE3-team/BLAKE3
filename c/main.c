@@ -18,7 +18,7 @@
 #define KEYED_HASH_MODE 1
 #define DERIVE_KEY_MODE 2
 
-void hex_char_value(uint8_t c, uint8_t *value, bool *valid) {
+static void hex_char_value(uint8_t c, uint8_t *value, bool *valid) {
   if ('0' <= c && c <= '9') {
     *value = c - '0';
     *valid = true;
@@ -30,7 +30,7 @@ void hex_char_value(uint8_t c, uint8_t *value, bool *valid) {
   }
 }
 
-int parse_key(char *hex_key, uint8_t out[BLAKE3_KEY_LEN]) {
+static int parse_key(char *hex_key, uint8_t out[BLAKE3_KEY_LEN]) {
   size_t hex_len = strlen(hex_key);
   if (hex_len != 64) {
     fprintf(stderr, "Expected a 64-char hexadecimal key, got %zu chars.\n",
