@@ -1,6 +1,11 @@
 name: tests
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - "*"
+    # not on tags
+  pull_request:
 
 env:
   BLAKE3_CI: "1"
