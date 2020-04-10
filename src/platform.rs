@@ -276,7 +276,6 @@ impl Platform {
     }
 
     #[cfg(feature = "neon")]
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     pub fn neon() -> Option<Self> {
         // Assumed to be safe if the "neon" feature is on.
         Some(Self::NEON)
