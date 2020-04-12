@@ -1,0 +1,109 @@
+#version 450
+
+layout(local_size_x = 128) in;
+
+layout(binding = 0) readonly restrict buffer Input {
+    uvec4 in_buf[];
+};
+layout(binding = 1) writeonly restrict buffer Output {
+    uvec4 out_buf[];
+};
+layout(binding = 2) readonly restrict uniform Control {
+    uvec4 k[2];
+    uvec2 t;
+    uint d;
+};
+
+const uvec4 IV = { 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a };
+
+#define CHUNK_START (1 << 0)
+#define CHUNK_END (1 << 1)
+#define PARENT (1 << 2)
+
+#define ROR(v, n) ((v) = (((v) >> (n)) ^ ((v) << (32 - (n)))))
+
+void g(inout restrict uvec4 a, inout restrict uvec4 b,
+       inout restrict uvec4 c, inout restrict uvec4 d,
+       const restrict uvec4 m0, const restrict uvec4 m1) {
+    a += b; a += m0;
+    d ^= a; ROR(d, 16);
+    c += d;
+    b ^= c; ROR(b, 12);
+    a += b; a += m1;
+    d ^= a; ROR(d, 8);
+    c += d;
+    b ^= c; ROR(b, 7);
+}
+
+void round(inout restrict uvec4 va, inout restrict uvec4 vb,
+           inout restrict uvec4 vc, inout restrict uvec4 vd,
+           const restrict uvec4[4] m) {
+    g(va, vb, vc, vd, m[0], m[1]);
+    g(va, vb.yzwx, vc.zwxy, vd.wxyz, m[2], m[3]);
+}
+
+uvec4[4] permute(const restrict uvec4[4] m) {
+    return uvec4[](
+        uvec4(m[0].y, m[1].yw, m[0].z),
+        uvec4(m[0].w, m[2].y, m[0].x, m[3].z),
+        uvec4(m[1].x, m[2].z, m[3].xw),
+        uvec4(m[3].y, m[1].z, m[2].wx));
+}
+
+uvec4[4] load(const restrict uvec4 ma, const restrict uvec4 mb,
+              const restrict uvec4 mc, const restrict uvec4 md) {
+    return uvec4[](
+        uvec4(ma.xz, mb.xz), uvec4(ma.yw, mb.yw),
+        uvec4(mc.xz, md.xz), uvec4(mc.yw, md.yw));
+}
+
+void compress(inout restrict uvec4 ha, inout restrict uvec4 hb,
+              const restrict uvec4 tbd, restrict uvec4[4] m) {
+    uvec4 va = ha;
+    uvec4 vb = hb;
+    uvec4 vc = IV;
+    uvec4 vd = tbd;
+
+    round(va, vb, vc, vd, m);
+    m = permute(m);
+    round(va, vb, vc, vd, m);
+    m = permute(m);
+    round(va, vb, vc, vd, m);
+    m = permute(m);
+    round(va, vb, vc, vd, m);
+    m = permute(m);
+    round(va, vb, vc, vd, m);
+    m = permute(m);
+    round(va, vb, vc, vd, m);
+    m = permute(m);
+    round(va, vb, vc, vd, m);
+
+    ha = va ^ vc;
+    hb = vb ^ vd;
+}
+
+#define LOAD(m, o) (load((m)[(o)], (m)[(o) + 1], (m)[(o) + 2], (m)[(o) + 3]))
+
+#define FLAG(block) ((block) == 0 ? d | CHUNK_START : \
+                     (block) == 15 ? d | CHUNK_END : d)
+
+void main() {
+    uvec4 ha = k[0];
+    uvec4 hb = k[1];
+
+    if ((d & PARENT) != 0) {
+        uint offset = gl_GlobalInvocationID.x * 4;
+        compress(ha, hb, uvec4(0, 0, 64, d), LOAD(in_buf, offset));
+    } else {
+        for (uint block = 0; block < 16; block++) {
+            uint offset = gl_GlobalInvocationID.x * 64 + block * 4;
+            compress(ha, hb,
+                     uvec4(t.x + gl_GlobalInvocationID.x, t.y, 64, FLAG(block)),
+                     LOAD(in_buf, offset));
+        }
+    }
+
+    uint offset = gl_GlobalInvocationID.x * 2;
+    out_buf[offset] = ha;
+    out_buf[offset + 1] = hb;
+}

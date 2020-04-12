@@ -6,11 +6,41 @@ use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 
+#[cfg(feature = "vulkan")]
+mod gpu;
+
+#[cfg(feature = "vulkan")]
+mod vulkan;
+
+#[cfg(not(feature = "vulkan"))]
+mod gpu {
+    use super::*;
+
+    pub struct Gpu;
+
+    impl Gpu {
+        #[inline]
+        pub fn new() -> Self {
+            Gpu
+        }
+
+        #[inline]
+        pub fn maybe_hash(
+            &mut self,
+            _base_hasher: &blake3::gpu::GpuHasher,
+            _file: &File,
+        ) -> Result<Option<blake3::OutputReader>> {
+            Ok(None)
+        }
+    }
+}
+
 const FILE_ARG: &str = "file";
 const DERIVE_KEY_ARG: &str = "derive-key";
 const KEYED_ARG: &str = "keyed";
 const LENGTH_ARG: &str = "length";
 const NO_MMAP_ARG: &str = "no-mmap";
+const VULKAN_ARG: &str = "vulkan";
 const NO_NAMES_ARG: &str = "no-names";
 const NUM_THREADS_ARG: &str = "num-threads";
 const RAW_ARG: &str = "raw";
@@ -66,6 +96,11 @@ fn clap_parse_argv() -> clap::ArgMatches<'static> {
             Arg::with_name(NO_MMAP_ARG)
                 .long(NO_MMAP_ARG)
                 .help("Disables memory mapping"),
+        )
+        .arg(
+            Arg::with_name(VULKAN_ARG)
+                .long(VULKAN_ARG)
+                .help("Uses Vulkan for large files"),
         )
         .arg(
             Arg::with_name(NO_NAMES_ARG)
@@ -186,11 +221,17 @@ fn write_raw_output(output: blake3::OutputReader, len: u64) -> Result<()> {
 
 // Errors from this function get handled by the file loop and printed per-file.
 fn hash_file(
-    base_hasher: &blake3::Hasher,
+    base_hasher: &blake3::gpu::GpuHasher,
     filepath: &std::ffi::OsStr,
     mmap_disabled: bool,
+    gpu: Option<&mut gpu::Gpu>,
 ) -> Result<blake3::OutputReader> {
     let file = File::open(filepath)?;
+    if let Some(gpu) = gpu {
+        if let Some(output) = gpu.maybe_hash(&base_hasher, &file)? {
+            return Ok(output); // the GPU path
+        }
+    }
     if !mmap_disabled {
         if let Some(output) = maybe_hash_memmap(&base_hasher, &file)? {
             return Ok(output); // the fast path
@@ -227,13 +268,14 @@ fn main() -> Result<()> {
         blake3::OUT_LEN as u64
     };
     let base_hasher = if args.is_present(KEYED_ARG) {
-        blake3::Hasher::new_keyed(&read_key_from_stdin()?)
+        blake3::gpu::GpuHasher::new_keyed(&read_key_from_stdin()?)
     } else if let Some(context) = args.value_of(DERIVE_KEY_ARG) {
-        blake3::Hasher::new_derive_key(context)
+        blake3::gpu::GpuHasher::new_derive_key(context)
     } else {
-        blake3::Hasher::new()
+        blake3::gpu::GpuHasher::new()
     };
     let mmap_disabled = args.is_present(NO_MMAP_ARG);
+    let vulkan_enabled = args.is_present(VULKAN_ARG);
     let print_names = !args.is_present(NO_NAMES_ARG);
     let raw_output = args.is_present(RAW_ARG);
     let mut thread_pool_builder = rayon::ThreadPoolBuilder::new();
@@ -244,6 +286,11 @@ fn main() -> Result<()> {
         thread_pool_builder = thread_pool_builder.num_threads(num_threads);
     }
 
+    let mut gpu = if vulkan_enabled {
+        Some(gpu::Gpu::new())
+    } else {
+        None
+    };
     let thread_pool = thread_pool_builder.build()?;
     thread_pool.install(|| {
         let mut did_error = false;
@@ -253,7 +300,7 @@ fn main() -> Result<()> {
             }
             for filepath in files {
                 let filepath_str = filepath.to_string_lossy();
-                match hash_file(&base_hasher, filepath, mmap_disabled) {
+                match hash_file(&base_hasher, filepath, mmap_disabled, gpu.as_mut()) {
                     Ok(output) => {
                         if raw_output {
                             write_raw_output(output, len)?;
