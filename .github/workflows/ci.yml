@@ -33,8 +33,14 @@ jobs:
         toolchain: ${{ format('{0}-{1}', matrix.channel, matrix.target.toolchain) }}
         profile: minimal
         override: true
+    # Print the compiler version, for debugging.
+    - name: print compiler version
+      run: cargo run --quiet
+      working-directory: ./tools/compiler_version
     # Print out instruction set support, for debugging.
-    - run: cargo run --quiet --bin instruction_set_support
+    - name: print instruction set support
+      run: cargo run --quiet
+      working-directory: ./tools/instruction_set_support
     # Default tests plus Rayon.
     - run: cargo test --features=rayon
     # no_std tests.
