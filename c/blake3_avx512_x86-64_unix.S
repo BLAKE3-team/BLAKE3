@@ -82,15 +82,15 @@ blake3_hash_many_avx512:
         mov     r14, qword ptr [rdi+0x50]
         mov     r15, qword ptr [rdi+0x58]
         vmovdqu32 ymm16, ymmword ptr [rdx+r8-0x2*0x20]
-        vinserti32x8 zmm16, zmm16, ymmword ptr [rdx+r12-0x2*0x20], 0x01
+        vinserti64x4 zmm16, zmm16, ymmword ptr [rdx+r12-0x2*0x20], 0x01
         vmovdqu32 ymm17, ymmword ptr [rdx+r9-0x2*0x20]
-        vinserti32x8 zmm17, zmm17, ymmword ptr [rdx+r13-0x2*0x20], 0x01
+        vinserti64x4 zmm17, zmm17, ymmword ptr [rdx+r13-0x2*0x20], 0x01
         vpunpcklqdq zmm8, zmm16, zmm17
         vpunpckhqdq zmm9, zmm16, zmm17
         vmovdqu32 ymm18, ymmword ptr [rdx+r10-0x2*0x20]
-        vinserti32x8 zmm18, zmm18, ymmword ptr [rdx+r14-0x2*0x20], 0x01
+        vinserti64x4 zmm18, zmm18, ymmword ptr [rdx+r14-0x2*0x20], 0x01
         vmovdqu32 ymm19, ymmword ptr [rdx+r11-0x2*0x20]
-        vinserti32x8 zmm19, zmm19, ymmword ptr [rdx+r15-0x2*0x20], 0x01
+        vinserti64x4 zmm19, zmm19, ymmword ptr [rdx+r15-0x2*0x20], 0x01
         vpunpcklqdq zmm10, zmm18, zmm19
         vpunpckhqdq zmm11, zmm18, zmm19
         mov     r8, qword ptr [rdi+0x20]
@@ -102,15 +102,15 @@ blake3_hash_many_avx512:
         mov     r14, qword ptr [rdi+0x70]
         mov     r15, qword ptr [rdi+0x78]
         vmovdqu32 ymm16, ymmword ptr [rdx+r8-0x2*0x20]
-        vinserti32x8 zmm16, zmm16, ymmword ptr [rdx+r12-0x2*0x20], 0x01
+        vinserti64x4 zmm16, zmm16, ymmword ptr [rdx+r12-0x2*0x20], 0x01
         vmovdqu32 ymm17, ymmword ptr [rdx+r9-0x2*0x20]
-        vinserti32x8 zmm17, zmm17, ymmword ptr [rdx+r13-0x2*0x20], 0x01
+        vinserti64x4 zmm17, zmm17, ymmword ptr [rdx+r13-0x2*0x20], 0x01
         vpunpcklqdq zmm12, zmm16, zmm17
         vpunpckhqdq zmm13, zmm16, zmm17
         vmovdqu32 ymm18, ymmword ptr [rdx+r10-0x2*0x20]
-        vinserti32x8 zmm18, zmm18, ymmword ptr [rdx+r14-0x2*0x20], 0x01
+        vinserti64x4 zmm18, zmm18, ymmword ptr [rdx+r14-0x2*0x20], 0x01
         vmovdqu32 ymm19, ymmword ptr [rdx+r11-0x2*0x20]
-        vinserti32x8 zmm19, zmm19, ymmword ptr [rdx+r15-0x2*0x20], 0x01
+        vinserti64x4 zmm19, zmm19, ymmword ptr [rdx+r15-0x2*0x20], 0x01
         vpunpcklqdq zmm14, zmm18, zmm19
         vpunpckhqdq zmm15, zmm18, zmm19
         vmovdqa32 zmm27, zmmword ptr [INDEX0+rip]
@@ -144,15 +144,15 @@ blake3_hash_many_avx512:
         mov     r14, qword ptr [rdi+0x50]
         mov     r15, qword ptr [rdi+0x58]
         vmovdqu32 ymm24, ymmword ptr [r8+rdx-0x1*0x20]
-        vinserti32x8 zmm24, zmm24, ymmword ptr [r12+rdx-0x1*0x20], 0x01
+        vinserti64x4 zmm24, zmm24, ymmword ptr [r12+rdx-0x1*0x20], 0x01
         vmovdqu32 ymm25, ymmword ptr [r9+rdx-0x1*0x20]
-        vinserti32x8 zmm25, zmm25, ymmword ptr [r13+rdx-0x1*0x20], 0x01
+        vinserti64x4 zmm25, zmm25, ymmword ptr [r13+rdx-0x1*0x20], 0x01
         vpunpcklqdq zmm8, zmm24, zmm25
         vpunpckhqdq zmm9, zmm24, zmm25
         vmovdqu32 ymm24, ymmword ptr [r10+rdx-0x1*0x20]
-        vinserti32x8 zmm24, zmm24, ymmword ptr [r14+rdx-0x1*0x20], 0x01
+        vinserti64x4 zmm24, zmm24, ymmword ptr [r14+rdx-0x1*0x20], 0x01
         vmovdqu32 ymm25, ymmword ptr [r11+rdx-0x1*0x20]
-        vinserti32x8 zmm25, zmm25, ymmword ptr [r15+rdx-0x1*0x20], 0x01
+        vinserti64x4 zmm25, zmm25, ymmword ptr [r15+rdx-0x1*0x20], 0x01
         vpunpcklqdq zmm10, zmm24, zmm25
         vpunpckhqdq zmm11, zmm24, zmm25
         prefetcht0 [r8+rdx+0x80]
@@ -172,15 +172,15 @@ blake3_hash_many_avx512:
         mov     r14, qword ptr [rdi+0x70]
         mov     r15, qword ptr [rdi+0x78]
         vmovdqu32 ymm24, ymmword ptr [r8+rdx-0x1*0x20]
-        vinserti32x8 zmm24, zmm24, ymmword ptr [r12+rdx-0x1*0x20], 0x01
+        vinserti64x4 zmm24, zmm24, ymmword ptr [r12+rdx-0x1*0x20], 0x01
         vmovdqu32 ymm25, ymmword ptr [r9+rdx-0x1*0x20]
-        vinserti32x8 zmm25, zmm25, ymmword ptr [r13+rdx-0x1*0x20], 0x01
+        vinserti64x4 zmm25, zmm25, ymmword ptr [r13+rdx-0x1*0x20], 0x01
         vpunpcklqdq zmm12, zmm24, zmm25
         vpunpckhqdq zmm13, zmm24, zmm25
         vmovdqu32 ymm24, ymmword ptr [r10+rdx-0x1*0x20]
-        vinserti32x8 zmm24, zmm24, ymmword ptr [r14+rdx-0x1*0x20], 0x01
+        vinserti64x4 zmm24, zmm24, ymmword ptr [r14+rdx-0x1*0x20], 0x01
         vmovdqu32 ymm25, ymmword ptr [r11+rdx-0x1*0x20]
-        vinserti32x8 zmm25, zmm25, ymmword ptr [r15+rdx-0x1*0x20], 0x01
+        vinserti64x4 zmm25, zmm25, ymmword ptr [r15+rdx-0x1*0x20], 0x01
         vpunpcklqdq zmm14, zmm24, zmm25
         vpunpckhqdq zmm15, zmm24, zmm25
         prefetcht0 [r8+rdx+0x80]
@@ -2039,7 +2039,7 @@ blake3_hash_many_avx512:
         vpermq  ymm14, ymm14, 0xDC
         vpermq  ymm15, ymm15, 0xDC
         vpbroadcastd zmm12, dword ptr [BLAKE3_BLOCK_LEN+rip]
-        vinserti32x8 zmm13, zmm14, ymm15, 0x01
+        vinserti64x4 zmm13, zmm14, ymm15, 0x01
         mov     eax, 17476
         kmovw   k2, eax
         vpblendmd zmm13 {k2}, zmm13, zmm12
