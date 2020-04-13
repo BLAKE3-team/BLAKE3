@@ -74,7 +74,15 @@ fn new_build() -> cc::Build {
     build
 }
 
-fn c_compiler_exists_and_supports_avx512() -> bool {
+#[derive(PartialEq)]
+enum CCompilerSupport {
+    NoCompiler,
+    NoAVX512,
+    YesAVX512,
+}
+use CCompilerSupport::*;
+
+fn c_compiler_support() -> CCompilerSupport {
     let build = new_build();
     let flags_checked;
     let support_result: Result<bool, _> = if is_windows_msvc() {
@@ -90,14 +98,14 @@ fn c_compiler_exists_and_supports_avx512() -> bool {
         }
     };
     match support_result {
-        Ok(true) => true,
+        Ok(true) => YesAVX512,
         Ok(false) => {
             warn(&format!(
                 "The C compiler {:?} does not support {}.",
                 build.get_compiler().path(),
                 flags_checked,
             ));
-            false
+            NoAVX512
         }
         Err(e) => {
             println!("{:?}", e);
@@ -105,26 +113,44 @@ fn c_compiler_exists_and_supports_avx512() -> bool {
                 "No C compiler {:?} detected.",
                 build.get_compiler().path()
             ));
-            false
+            NoCompiler
         }
     }
 }
 
-fn build_x86_pure() {
-    // A pure Rust build, so nothing to compile here. Enable the Rust SSE4.1
-    // and AVX2 intrinsics builds. Do not enable AVX-512 in general.
+fn build_sse41_avx2_rust_intrinsics() {
+    // No C code to compile here. Set the cfg flags that enable the Rust SSE4.1
+    // and AVX2 intrinsics modules. The regular Cargo build will compile them.
     println!("cargo:rustc-cfg=blake3_sse41_rust");
     println!("cargo:rustc-cfg=blake3_avx2_rust");
 }
 
-fn build_x86_intrinsics() {
-    // Enable the Rust SSE4.1 and AVX2 intrinsics builds, and also the C
-    // AVX-512 intrinsics build. This is required on 32-bit x86 targets, since
-    // the assembly implementations don't support those.
-    assert!(c_compiler_exists_and_supports_avx512());
-    assert!(!is_pure());
-    println!("cargo:rustc-cfg=blake3_sse41_rust");
-    println!("cargo:rustc-cfg=blake3_avx2_rust");
+fn build_sse41_avx2_assembly() {
+    // Build the assembly implementations for SSE4.1 and AVX2. This is
+    // preferred, but it only supports x86_64.
+    assert!(is_x86_64());
+    println!("cargo:rustc-cfg=blake3_sse41_ffi");
+    println!("cargo:rustc-cfg=blake3_avx2_ffi");
+    let mut build = new_build();
+    if is_windows_msvc() {
+        build.file("c/blake3_sse41_x86-64_windows_msvc.asm");
+        build.file("c/blake3_avx2_x86-64_windows_msvc.asm");
+    } else if is_windows_gnu() {
+        build.file("c/blake3_sse41_x86-64_windows_gnu.S");
+        build.file("c/blake3_avx2_x86-64_windows_gnu.S");
+    } else {
+        // All non-Windows implementations are assumed to support
+        // Linux-style assembly. These files do contain a small
+        // explicit workaround for macOS also.
+        build.file("c/blake3_sse41_x86-64_unix.S");
+        build.file("c/blake3_avx2_x86-64_unix.S");
+    }
+    build.compile("blake3_sse41_avx2_assembly");
+}
+
+fn build_avx512_c_intrinsics() {
+    // This is required on 32-bit x86 targets, since the assembly
+    // implementation doesn't support support those.
     println!("cargo:rustc-cfg=blake3_avx512_ffi");
     let mut build = new_build();
     build.file("c/blake3_avx512.c");
@@ -138,37 +164,47 @@ fn build_x86_intrinsics() {
         // Workaround for https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65782.
         build.flag("-fno-asynchronous-unwind-tables");
     }
-    build.compile("blake3_ffi");
+    build.compile("blake3_avx512_intrinsics");
 }
 
-fn build_x86_asm() {
-    // Enable the assembly builds for SSE4.1, AVX2, and AVX-512. This is the
-    // preferred build configuration by default, but it only supports x86_64.
+fn build_avx512_assembly() {
+    // Build the assembly implementation for AVX-512. This is preferred, but it
+    // only supports x86_64.
     assert!(is_x86_64());
-    assert!(c_compiler_exists_and_supports_avx512());
-    assert!(!is_pure());
-    assert!(!should_prefer_intrinsics());
-    println!("cargo:rustc-cfg=blake3_sse41_ffi");
-    println!("cargo:rustc-cfg=blake3_avx2_ffi");
     println!("cargo:rustc-cfg=blake3_avx512_ffi");
     let mut build = new_build();
     if is_windows_msvc() {
-        build.file("c/blake3_sse41_x86-64_windows_msvc.asm");
-        build.file("c/blake3_avx2_x86-64_windows_msvc.asm");
         build.file("c/blake3_avx512_x86-64_windows_msvc.asm");
-    } else if is_windows_gnu() {
-        build.file("c/blake3_sse41_x86-64_windows_gnu.S");
-        build.file("c/blake3_avx2_x86-64_windows_gnu.S");
-        build.file("c/blake3_avx512_x86-64_windows_gnu.S");
     } else {
-        // All non-Windows implementations are assumed to support
-        // Linux-style assembly. These files do contain a small
-        // explicit workaround for macOS also.
-        build.file("c/blake3_sse41_x86-64_unix.S");
-        build.file("c/blake3_avx2_x86-64_unix.S");
-        build.file("c/blake3_avx512_x86-64_unix.S");
+        if is_windows_gnu() {
+            build.file("c/blake3_avx512_x86-64_windows_gnu.S");
+        } else {
+            // All non-Windows implementations are assumed to support Linux-style
+            // assembly. These files do contain a small explicit workaround for
+            // macOS also.
+            build.file("c/blake3_avx512_x86-64_unix.S");
+        }
+        // Older versions of Clang require these flags, even for assembly. See
+        // https://github.com/BLAKE3-team/BLAKE3/issues/79.
+        build.flag("-mavx512f");
+        build.flag("-mavx512vl");
     }
-    build.compile("blake3_ffi");
+    build.compile("blake3_avx512_assembly");
+}
+
+fn build_neon_c_intrinsics() {
+    let mut build = new_build();
+    // Note that blake3_neon.c normally depends on the blake3_portable.c
+    // for the single-instance compression function, but we expose
+    // portable.rs over FFI instead. See ffi_neon.rs.
+    build.file("c/blake3_neon.c");
+    // ARMv7 platforms that support NEON generally need the following
+    // flags. AArch64 supports NEON by default and does not support -mpfu.
+    if is_armv7() {
+        build.flag("-mfpu=neon-vfpv4");
+        build.flag("-mfloat-abi=hard");
+    }
+    build.compile("blake3_neon");
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -177,31 +213,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if is_x86_64() || is_x86_32() {
-        if is_pure() {
-            build_x86_pure();
-        } else if !c_compiler_exists_and_supports_avx512() {
-            warn("Falling back to the pure Rust implementation, with reduced performance.");
-            build_x86_pure();
-        } else if is_x86_32() || should_prefer_intrinsics() {
-            build_x86_intrinsics();
+        let support = c_compiler_support();
+        if is_x86_32() || should_prefer_intrinsics() || is_pure() || support == NoCompiler {
+            build_sse41_avx2_rust_intrinsics();
         } else {
-            build_x86_asm();
+            // We assume that all C compilers can assemble SSE4.1 and AVX2. We
+            // don't explicitly check for support.
+            build_sse41_avx2_assembly();
+        }
+
+        if is_pure() || support == NoCompiler || support == NoAVX512 {
+            // The binary will not include any AVX-512 code.
+        } else if is_x86_32() || should_prefer_intrinsics() {
+            build_avx512_c_intrinsics();
+        } else {
+            build_avx512_assembly();
         }
     }
 
     if is_neon() {
-        let mut build = new_build();
-        // Note that blake3_neon.c normally depends on the blake3_portable.c
-        // for the single-instance compression function, but we expose
-        // portable.rs over FFI instead. See ffi_neon.rs.
-        build.file("c/blake3_neon.c");
-        // ARMv7 platforms that support NEON generally need the following
-        // flags. AArch64 supports NEON by default and does not support -mpfu.
-        if is_armv7() {
-            build.flag("-mfpu=neon-vfpv4");
-            build.flag("-mfloat-abi=hard");
-        }
-        build.compile("blake3_neon");
+        build_neon_c_intrinsics();
     }
 
     // The `cc` crate doesn't automatically emit rerun-if directives for the
