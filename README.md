@@ -76,11 +76,14 @@ we recommend [Argon2](https://github.com/P-H-C/phc-winner-argon2).*
 
 ### The `b3sum` utility
 
-The `b3sum` utility allows you to process files and data from standard
-input using BLAKE3 in any of its three modes.
-To use `b3sum` on the command line, [install Rust and
+The `b3sum` command line utility prints the BLAKE3 hashes of files or of
+standard input. Prebuilt binaries are available for Linux, Windows, and
+macOS (requiring the [unidentified developer
+workaround](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified-developer-mh40616/mac))
+on the [releases page](https://github.com/BLAKE3-team/BLAKE3/releases).
+If you've [installed Rust and
 Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html),
-and then run:
+you can also build `b3sum` yourself with:
 
 ```bash
 cargo install b3sum
@@ -89,7 +92,7 @@ cargo install b3sum
 If `rustup` didn't configure your `PATH` for you, you might need to go
 looking for the installed binary in e.g. `~/.cargo/bin`. You can test
 out how fast BLAKE3 is on your machine by creating a big file and
-hashing it, for example as follows:
+hashing it, for example:
 
 ```bash
 # Create a 1 GB file.
