@@ -10,6 +10,7 @@ on:
 env:
   BLAKE3_CI: "1"
   RUSTFLAGS: "-D warnings"
+  RUST_BACKTRACE: "1"
 
 jobs:
   cargo_tests:

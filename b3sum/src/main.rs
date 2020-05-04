@@ -1,7 +1,9 @@
 use anyhow::{bail, Context, Result};
 use clap::{App, Arg};
+use std::borrow::Cow;
 use std::cmp;
 use std::convert::TryInto;
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -219,6 +221,38 @@ fn read_key_from_stdin() -> Result<[u8; blake3::KEY_LEN]> {
     }
 }
 
+struct FilepathString {
+    filepath_string: String,
+    was_lossy: bool,
+    has_escapes: bool,
+}
+
+// returns (string, did_escape)
+fn filepath_to_string(filepath_osstr: &OsStr) -> FilepathString {
+    let unicode_cow = filepath_osstr.to_string_lossy();
+    let was_lossy = matches!(unicode_cow, Cow::Owned(_));
+    let mut filepath_string = unicode_cow.to_string();
+    // If we're on Windows, normalize backslashes to forward slashes. This
+    // avoids a lot of ugly escaping in the common case, and it makes
+    // checkfiles created on Windows more likely to be portable to Unix. It
+    // also allows us to set a blanket "no backslashes allowed in checkfiles on
+    // Windows" rule, rather than allowing a Unix backslash to potentially get
+    // interpreted as a directory separator on Windows.
+    if cfg!(windows) {
+        filepath_string = filepath_string.replace('\\', "/");
+    }
+    let mut has_escapes = false;
+    if filepath_string.contains('\\') || filepath_string.contains('\n') {
+        filepath_string = filepath_string.replace('\\', "\\\\").replace('\n', "\\n");
+        has_escapes = true;
+    }
+    FilepathString {
+        filepath_string,
+        was_lossy,
+        has_escapes,
+    }
+}
+
 fn main() -> Result<()> {
     let args = clap_parse_argv();
     let len = if let Some(length) = args.value_of(LENGTH_ARG) {
@@ -251,16 +285,30 @@ fn main() -> Result<()> {
             if raw_output && files.len() > 1 {
                 bail!("b3sum: Only one filename can be provided when using --raw");
             }
-            for filepath in files {
-                let filepath_str = filepath.to_string_lossy();
-                match hash_file(&base_hasher, filepath, mmap_disabled) {
+            for filepath_osstr in files {
+                let FilepathString {
+                    filepath_string,
+                    was_lossy,
+                    has_escapes,
+                } = filepath_to_string(filepath_osstr);
+                if was_lossy && !raw_output {
+                    // The conversion was lossy. Print a warning. In addition
+                    // to being a warning, this prevents the output from being
+                    // successfully parsed by --check. Thus it goes to stdout
+                    // rather than stderr.
+                    println!("b3sum: warning: filepath contains invalid Unicode");
+                }
+                match hash_file(&base_hasher, filepath_osstr, mmap_disabled) {
                     Ok(output) => {
                         if raw_output {
                             write_raw_output(output, len)?;
                         } else {
+                            if has_escapes {
+                                print!("\\");
+                            }
                             write_hex_output(output, len)?;
                             if print_names {
-                                println!("  {}", filepath_str);
+                                println!("  {}", filepath_string);
                             } else {
                                 println!();
                             }
@@ -268,7 +316,7 @@ fn main() -> Result<()> {
                     }
                     Err(e) => {
                         did_error = true;
-                        eprintln!("b3sum: {}: {}", filepath_str, e);
+                        eprintln!("b3sum: {}: {}", filepath_string, e);
                     }
                 }
             }
