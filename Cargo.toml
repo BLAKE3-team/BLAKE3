@@ -86,4 +86,4 @@ rand_chacha = "0.2.1"
 reference_impl = { path = "./reference_impl" }
 
 [build-dependencies]
-cc = "1.0.48"
+cc = "1.0.4"
