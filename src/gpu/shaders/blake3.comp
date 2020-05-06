@@ -16,10 +16,6 @@ layout(binding = 2) readonly restrict uniform Control {
 
 const uvec4 IV = { 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a };
 
-#define CHUNK_START (1 << 0)
-#define CHUNK_END (1 << 1)
-#define PARENT (1 << 2)
-
 #define ROR(v, n) ((v) = (((v) >> (n)) ^ ((v) << (32 - (n)))))
 
 void g(inout restrict uvec4 a, inout restrict uvec4 b,
@@ -84,24 +80,27 @@ void compress(inout restrict uvec4 ha, inout restrict uvec4 hb,
 
 #define LOAD(m, o) (load((m)[(o)], (m)[(o) + 1], (m)[(o) + 2], (m)[(o) + 3]))
 
-#define FLAG(block) ((block) == 0 ? d | CHUNK_START : \
-                     (block) == 15 ? d | CHUNK_END : d)
+#define FLAG(block) ((0x80000001u >> ((block) * 2)) & 0x3)
 
 void main() {
     uvec4 ha = k[0];
     uvec4 hb = k[1];
 
-    if ((d & PARENT) != 0) {
+#if defined(CHUNK)
+    for (uint block = 0; block < 16; block++) {
+        uint offset = gl_GlobalInvocationID.x * 64 + block * 4;
+        compress(ha, hb,
+                 uvec4(t.x + gl_GlobalInvocationID.x, t.y, 64, d | FLAG(block)),
+                 LOAD(in_buf, offset));
+    }
+#elif defined(PARENT)
+    {
         uint offset = gl_GlobalInvocationID.x * 4;
         compress(ha, hb, uvec4(0, 0, 64, d), LOAD(in_buf, offset));
-    } else {
-        for (uint block = 0; block < 16; block++) {
-            uint offset = gl_GlobalInvocationID.x * 64 + block * 4;
-            compress(ha, hb,
-                     uvec4(t.x + gl_GlobalInvocationID.x, t.y, 64, FLAG(block)),
-                     LOAD(in_buf, offset));
-        }
     }
+#else
+#error Unknown shader mode
+#endif
 
     uint offset = gl_GlobalInvocationID.x * 2;
     out_buf[offset] = ha;

@@ -27,10 +27,19 @@ pub mod blake3 {
 
     impl Shader {
         #[inline]
-        pub fn load(device: Arc<Device>) -> Result<Shader, OomError> {
+        pub fn load_chunk(device: Arc<Device>) -> Result<Shader, OomError> {
             unsafe {
                 Ok(Shader {
-                    shader: ShaderModule::new(device, shaders::blake3::shader())?,
+                    shader: ShaderModule::new(device, shaders::blake3::chunk_shader())?,
+                })
+            }
+        }
+
+        #[inline]
+        pub fn load_parent(device: Arc<Device>) -> Result<Shader, OomError> {
+            unsafe {
+                Ok(Shader {
+                    shader: ShaderModule::new(device, shaders::blake3::parent_shader())?,
                 })
             }
         }

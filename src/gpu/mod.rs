@@ -277,72 +277,101 @@ impl GpuHasher {
         self
     }
 
-    // CPU simulation of the BLAKE3 shader.
+    // CPU simulation of the BLAKE3 chunk shader.
     //
     // This can be used to test the real shader.
     //
     // Note: unlike the real shader, this simulation always uses little-endian
     // inputs and outputs.
     #[doc(hidden)]
-    pub fn simulate_blake3_shader<J: Join>(
+    pub fn simulate_chunk_shader<J: Join>(
         &self,
         count: usize,
         input: &[u8],
         output: &mut [u8],
         control: &GpuControl,
     ) {
-        let input_len = if control.is_parent() {
-            BLOCK_LEN
-        } else {
-            CHUNK_LEN
-        };
-        assert_eq!(input.len(), count * input_len, "invalid input size");
+        assert!(!control.is_parent(), "invalid shader control");
+
+        assert_eq!(input.len(), count * CHUNK_LEN, "invalid input size");
         assert_eq!(output.len(), count * OUT_LEN, "invalid output size");
 
         if count > self.chunk_state.platform.simd_degree() {
             let mid = count / 2;
-            let (left_in, right_in) = input.split_at(mid * input_len);
+            let (left_in, right_in) = input.split_at(mid * CHUNK_LEN);
             let (left_out, right_out) = output.split_at_mut(mid * OUT_LEN);
             let control_r = control.plus_chunks(mid as u64);
 
             J::join(
-                || self.simulate_blake3_shader::<J>(mid, left_in, left_out, control),
-                || self.simulate_blake3_shader::<J>(count - mid, right_in, right_out, &control_r),
+                || self.simulate_chunk_shader::<J>(mid, left_in, left_out, control),
+                || self.simulate_chunk_shader::<J>(count - mid, right_in, right_out, &control_r),
                 left_in.len(),
                 right_in.len(),
             );
         } else if count > 0 {
-            if control.is_parent() {
-                let mut parents = ArrayVec::<[&[u8; BLOCK_LEN]; MAX_SIMD_DEGREE]>::new();
-                for parent in input.chunks_exact(BLOCK_LEN) {
-                    parents.push(array_ref!(parent, 0, BLOCK_LEN));
-                }
-                self.chunk_state.platform.hash_many(
-                    &parents,
-                    control.key(),
-                    0,
-                    IncrementCounter::No,
-                    control.flags(),
-                    0,
-                    0,
-                    output,
-                );
-            } else {
-                let mut chunks = ArrayVec::<[&[u8; CHUNK_LEN]; MAX_SIMD_DEGREE]>::new();
-                for chunk in input.chunks_exact(CHUNK_LEN) {
-                    chunks.push(array_ref!(chunk, 0, CHUNK_LEN));
-                }
-                self.chunk_state.platform.hash_many(
-                    &chunks,
-                    control.key(),
-                    control.chunk_counter(),
-                    IncrementCounter::Yes,
-                    control.flags(),
-                    CHUNK_START,
-                    CHUNK_END,
-                    output,
-                );
+            let mut chunks = ArrayVec::<[&[u8; CHUNK_LEN]; MAX_SIMD_DEGREE]>::new();
+            for chunk in input.chunks_exact(CHUNK_LEN) {
+                chunks.push(array_ref!(chunk, 0, CHUNK_LEN));
             }
+            self.chunk_state.platform.hash_many(
+                &chunks,
+                control.key(),
+                control.chunk_counter(),
+                IncrementCounter::Yes,
+                control.flags(),
+                CHUNK_START,
+                CHUNK_END,
+                output,
+            );
+        }
+    }
+
+    // CPU simulation of the BLAKE3 parent shader.
+    //
+    // This can be used to test the real shader.
+    //
+    // Note: unlike the real shader, this simulation always uses little-endian
+    // inputs and outputs.
+    #[doc(hidden)]
+    pub fn simulate_parent_shader<J: Join>(
+        &self,
+        count: usize,
+        input: &[u8],
+        output: &mut [u8],
+        control: &GpuControl,
+    ) {
+        assert!(control.is_parent(), "invalid shader control");
+
+        assert_eq!(input.len(), count * BLOCK_LEN, "invalid input size");
+        assert_eq!(output.len(), count * OUT_LEN, "invalid output size");
+
+        if count > self.chunk_state.platform.simd_degree() {
+            let mid = count / 2;
+            let (left_in, right_in) = input.split_at(mid * BLOCK_LEN);
+            let (left_out, right_out) = output.split_at_mut(mid * OUT_LEN);
+            let control_r = control.plus_chunks(mid as u64);
+
+            J::join(
+                || self.simulate_parent_shader::<J>(mid, left_in, left_out, control),
+                || self.simulate_parent_shader::<J>(count - mid, right_in, right_out, &control_r),
+                left_in.len(),
+                right_in.len(),
+            );
+        } else if count > 0 {
+            let mut parents = ArrayVec::<[&[u8; BLOCK_LEN]; MAX_SIMD_DEGREE]>::new();
+            for parent in input.chunks_exact(BLOCK_LEN) {
+                parents.push(array_ref!(parent, 0, BLOCK_LEN));
+            }
+            self.chunk_state.platform.hash_many(
+                &parents,
+                control.key(),
+                0,
+                IncrementCounter::No,
+                control.flags(),
+                0,
+                0,
+                output,
+            );
         }
     }
 
@@ -403,9 +432,14 @@ impl From<GpuHasher> for Hasher {
 pub mod shaders {
     /// Shader module for one level of the BLAKE3 tree.
     pub mod blake3 {
-        /// Returns the SPIR-V code for the shader module.
-        pub fn shader() -> &'static [u8] {
-            include_bytes!("shaders/blake3.spv")
+        /// Returns the SPIR-V code for the chunk shader module.
+        pub fn chunk_shader() -> &'static [u8] {
+            include_bytes!("shaders/blake3-chunk.spv")
+        }
+
+        /// Returns the SPIR-V code for the parent shader module.
+        pub fn parent_shader() -> &'static [u8] {
+            include_bytes!("shaders/blake3-parent.spv")
         }
 
         /// The local workgroup size.
@@ -480,7 +514,7 @@ mod tests {
         let mut hasher = GpuHasher::new();
         let mut buffer = vec![0; OUT_LEN * 128];
 
-        hasher.simulate_blake3_shader::<Join>(128, &input, &mut buffer, &hasher.gpu_control(0));
+        hasher.simulate_chunk_shader::<Join>(128, &input, &mut buffer, &hasher.gpu_control(0));
         hasher.update_from_gpu::<Join>(128, &buffer);
 
         assert_eq!(hasher.finalize(), expected);
@@ -496,7 +530,7 @@ mod tests {
         let mut hasher = GpuHasher::new();
         let mut buffer = vec![0; OUT_LEN * 128];
 
-        hasher.simulate_blake3_shader::<Join>(
+        hasher.simulate_chunk_shader::<Join>(
             128,
             &input[..len],
             &mut buffer,
@@ -504,7 +538,7 @@ mod tests {
         );
         hasher.update_from_gpu::<Join>(128, &buffer);
 
-        hasher.simulate_blake3_shader::<Join>(
+        hasher.simulate_chunk_shader::<Join>(
             128,
             &input[len..],
             &mut buffer,
@@ -526,13 +560,8 @@ mod tests {
         let mut buffer1 = vec![0; 2 * OUT_LEN * 128];
         let mut buffer2 = vec![0; OUT_LEN * 128];
 
-        hasher.simulate_blake3_shader::<Join>(
-            2 * 128,
-            &input,
-            &mut buffer1,
-            &hasher.gpu_control(0),
-        );
-        hasher.simulate_blake3_shader::<Join>(
+        hasher.simulate_chunk_shader::<Join>(2 * 128, &input, &mut buffer1, &hasher.gpu_control(0));
+        hasher.simulate_parent_shader::<Join>(
             128,
             &buffer1,
             &mut buffer2,
@@ -554,13 +583,13 @@ mod tests {
         let mut buffer1 = vec![0; 2 * OUT_LEN * 128];
         let mut buffer2 = vec![0; OUT_LEN * 128];
 
-        hasher.simulate_blake3_shader::<Join>(
+        hasher.simulate_chunk_shader::<Join>(
             2 * 128,
             &input[..len],
             &mut buffer1,
             &hasher.gpu_control(0),
         );
-        hasher.simulate_blake3_shader::<Join>(
+        hasher.simulate_parent_shader::<Join>(
             128,
             &buffer1,
             &mut buffer2,
@@ -568,13 +597,13 @@ mod tests {
         );
         hasher.update_from_gpu::<Join>(2 * 128, &buffer2);
 
-        hasher.simulate_blake3_shader::<Join>(
+        hasher.simulate_chunk_shader::<Join>(
             2 * 128,
             &input[len..],
             &mut buffer1,
             &hasher.gpu_control(2 * 128),
         );
-        hasher.simulate_blake3_shader::<Join>(
+        hasher.simulate_parent_shader::<Join>(
             128,
             &buffer1,
             &mut buffer2,

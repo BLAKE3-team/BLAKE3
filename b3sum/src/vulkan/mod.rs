@@ -241,21 +241,33 @@ fn gpu_tasks(
 }
 
 struct GpuPipelines {
-    blake3: Arc<ComputePipeline<PipelineLayout<shaders::blake3::Layout>>>,
+    blake3_chunk: Arc<ComputePipeline<PipelineLayout<shaders::blake3::Layout>>>,
+    blake3_parent: Arc<ComputePipeline<PipelineLayout<shaders::blake3::Layout>>>,
 
     #[cfg(any(test, target_endian = "big"))]
     endian: Arc<ComputePipeline<PipelineLayout<shaders::endian::Layout>>>,
 }
 
 fn gpu_init_pipelines(device: &Arc<Device>) -> Result<GpuPipelines> {
-    let blake3_shader = shaders::blake3::Shader::load(device.clone())?;
-    let blake3_pipeline =
-        ComputePipeline::new(device.clone(), &blake3_shader.main_entry_point(), &())?;
-    let blake3 = Arc::new(blake3_pipeline);
+    let blake3_chunk_shader = shaders::blake3::Shader::load_chunk(device.clone())?;
+    let blake3_chunk_pipeline =
+        ComputePipeline::new(device.clone(), &blake3_chunk_shader.main_entry_point(), &())?;
+    let blake3_chunk = Arc::new(blake3_chunk_pipeline);
+
+    let blake3_parent_shader = shaders::blake3::Shader::load_parent(device.clone())?;
+    let blake3_parent_pipeline = ComputePipeline::new(
+        device.clone(),
+        &blake3_parent_shader.main_entry_point(),
+        &(),
+    )?;
+    let blake3_parent = Arc::new(blake3_parent_pipeline);
 
     #[cfg(all(not(test), target_endian = "little"))]
     {
-        Ok(GpuPipelines { blake3 })
+        Ok(GpuPipelines {
+            blake3_chunk,
+            blake3_parent,
+        })
     }
 
     #[cfg(any(test, target_endian = "big"))]
@@ -265,7 +277,11 @@ fn gpu_init_pipelines(device: &Arc<Device>) -> Result<GpuPipelines> {
             ComputePipeline::new(device.clone(), &endian_shader.main_entry_point(), &())?;
         let endian = Arc::new(endian_pipeline);
 
-        Ok(GpuPipelines { blake3, endian })
+        Ok(GpuPipelines {
+            blake3_chunk,
+            blake3_parent,
+            endian,
+        })
     }
 }
 
@@ -435,7 +451,7 @@ fn gpu_init_command_buffers(
         for (i, step) in steps.iter().enumerate() {
             match *step {
                 GpuStep::Blake3Chunk(group_count) => {
-                    let pipeline = &pipelines.blake3;
+                    let pipeline = &pipelines.blake3_chunk;
                     let layout = pipeline.descriptor_set_layout(0).unwrap();
                     let descriptor_set = PersistentDescriptorSet::start(layout.clone())
                         .add_buffer(buffers.task_buffers[task][i].clone())?
@@ -451,7 +467,7 @@ fn gpu_init_command_buffers(
                 }
 
                 GpuStep::Blake3Parent(group_count) => {
-                    let pipeline = &pipelines.blake3;
+                    let pipeline = &pipelines.blake3_parent;
                     let layout = pipeline.descriptor_set_layout(0).unwrap();
                     let descriptor_set = PersistentDescriptorSet::start(layout.clone())
                         .add_buffer(buffers.task_buffers[task][i].clone())?
@@ -658,7 +674,7 @@ mod tests {
         tasks[0].submit(&queues[0])?;
 
         let mut expected = vec![0; little_steps[0].output_buffer_size()];
-        hasher.simulate_blake3_shader::<RayonJoin>(
+        hasher.simulate_chunk_shader::<RayonJoin>(
             little_steps[0].invocation_count(),
             &data,
             &mut expected,
@@ -703,7 +719,7 @@ mod tests {
         tasks[0].submit(&queues[0])?;
 
         let mut expected = vec![0; little_steps[0].output_buffer_size()];
-        hasher.simulate_blake3_shader::<RayonJoin>(
+        hasher.simulate_parent_shader::<RayonJoin>(
             little_steps[0].invocation_count(),
             &data,
             &mut expected,
