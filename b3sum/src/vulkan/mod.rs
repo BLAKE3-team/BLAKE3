@@ -2,9 +2,9 @@ use anyhow::{Context, Result};
 use blake3::gpu::GpuControl;
 use blake3::{BLOCK_LEN, CHUNK_LEN, OUT_LEN};
 use std::iter;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use vulkano::app_info_from_cargo_toml;
-use vulkano::buffer::cpu_access::{ReadLock, WriteLock};
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer, DeviceLocalBuffer, TypedBufferAccess};
 use vulkano::command_buffer::submit::SubmitCommandBufferBuilder;
 use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, CommandBuffer};
@@ -37,17 +37,17 @@ pub struct GpuTask {
 
 impl GpuTask {
     // Safety: this buffer might be uninitialized.
-    pub unsafe fn read_input_buffer(&self) -> Result<ReadLock<[u8]>> {
+    pub unsafe fn read_input_buffer<'a>(&'a self) -> Result<impl Deref<Target = [u8]> + 'a> {
         Ok(self.input_buffer.read()?)
     }
 
     // Safety: this buffer might be uninitialized.
-    pub unsafe fn write_input_buffer(&self) -> Result<WriteLock<[u8]>> {
+    pub unsafe fn write_input_buffer<'a>(&'a self) -> Result<impl DerefMut<Target = [u8]> + 'a> {
         Ok(self.input_buffer.write()?)
     }
 
     // Safety: this buffer might be uninitialized.
-    pub unsafe fn read_output_buffer(&self) -> Result<ReadLock<[u8]>> {
+    pub unsafe fn read_output_buffer<'a>(&'a self) -> Result<impl Deref<Target = [u8]> + 'a> {
         Ok(self.output_buffer.read()?)
     }
 
