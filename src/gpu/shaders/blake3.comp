@@ -78,7 +78,22 @@ void compress(inout restrict uvec4 ha, inout restrict uvec4 hb,
     hb = vb ^ vd;
 }
 
+#ifdef ENDIAN
+
+uvec4 swap(const restrict uvec4 m) {
+    return (m >> 24) | ((m >> 8) & 0xFF00) | ((m & 0xFF00) << 8) | (m << 24);
+}
+
+uvec4[4] load_be(const restrict uvec4 ma, const restrict uvec4 mb,
+                 const restrict uvec4 mc, const restrict uvec4 md) {
+    return load(swap(ma), swap(mb), swap(mc), swap(md));
+}
+
+#define LOAD(m, o) (load_be((m)[(o)], (m)[(o) + 1], (m)[(o) + 2], (m)[(o) + 3]))
+#else
 #define LOAD(m, o) (load((m)[(o)], (m)[(o) + 1], (m)[(o) + 2], (m)[(o) + 3]))
+#endif
+
 
 #define FLAG(block) ((0x80000001u >> ((block) * 2)) & 0x3)
 

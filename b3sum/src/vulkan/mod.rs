@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use blake3::gpu::GpuControl;
 use blake3::{BLOCK_LEN, CHUNK_LEN, OUT_LEN};
 use std::iter;
-use std::ops::{Deref, DerefMut};
+use std::ops::DerefMut;
 use std::sync::Arc;
 use vulkano::app_info_from_cargo_toml;
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer, DeviceLocalBuffer, TypedBufferAccess};
@@ -37,18 +37,13 @@ pub struct GpuTask {
 
 impl GpuTask {
     // Safety: this buffer might be uninitialized.
-    pub unsafe fn read_input_buffer<'a>(&'a self) -> Result<impl Deref<Target = [u8]> + 'a> {
-        Ok(self.input_buffer.read()?)
-    }
-
-    // Safety: this buffer might be uninitialized.
-    pub unsafe fn write_input_buffer<'a>(&'a self) -> Result<impl DerefMut<Target = [u8]> + 'a> {
+    pub unsafe fn lock_input_buffer<'a>(&'a self) -> Result<impl DerefMut<Target = [u8]> + 'a> {
         Ok(self.input_buffer.write()?)
     }
 
     // Safety: this buffer might be uninitialized.
-    pub unsafe fn read_output_buffer<'a>(&'a self) -> Result<impl Deref<Target = [u8]> + 'a> {
-        Ok(self.output_buffer.read()?)
+    pub unsafe fn lock_output_buffer<'a>(&'a self) -> Result<impl DerefMut<Target = [u8]> + 'a> {
+        Ok(self.output_buffer.write()?)
     }
 
     pub fn write_chunk_control(&self, control: &GpuControl) -> Result<()> {
@@ -243,9 +238,6 @@ fn gpu_tasks(
 struct GpuPipelines {
     blake3_chunk: Arc<ComputePipeline<PipelineLayout<shaders::blake3::Layout>>>,
     blake3_parent: Arc<ComputePipeline<PipelineLayout<shaders::blake3::Layout>>>,
-
-    #[cfg(any(test, target_endian = "big"))]
-    endian: Arc<ComputePipeline<PipelineLayout<shaders::endian::Layout>>>,
 }
 
 fn gpu_init_pipelines(device: &Arc<Device>) -> Result<GpuPipelines> {
@@ -262,27 +254,10 @@ fn gpu_init_pipelines(device: &Arc<Device>) -> Result<GpuPipelines> {
     )?;
     let blake3_parent = Arc::new(blake3_parent_pipeline);
 
-    #[cfg(all(not(test), target_endian = "little"))]
-    {
-        Ok(GpuPipelines {
-            blake3_chunk,
-            blake3_parent,
-        })
-    }
-
-    #[cfg(any(test, target_endian = "big"))]
-    {
-        let endian_shader = shaders::endian::Shader::load(device.clone())?;
-        let endian_pipeline =
-            ComputePipeline::new(device.clone(), &endian_shader.main_entry_point(), &())?;
-        let endian = Arc::new(endian_pipeline);
-
-        Ok(GpuPipelines {
-            blake3_chunk,
-            blake3_parent,
-            endian,
-        })
-    }
+    Ok(GpuPipelines {
+        blake3_chunk,
+        blake3_parent,
+    })
 }
 
 struct GpuBuffers {
@@ -481,22 +456,6 @@ fn gpu_init_command_buffers(
                         (),
                     )?;
                 }
-
-                #[cfg(any(test, target_endian = "big"))]
-                GpuStep::Endian(group_count) => {
-                    let pipeline = &pipelines.endian;
-                    let layout = pipeline.descriptor_set_layout(0).unwrap();
-                    let descriptor_set = PersistentDescriptorSet::start(layout.clone())
-                        .add_buffer(buffers.task_buffers[task][i].clone())?
-                        .add_buffer(buffers.task_buffers[task][i + 1].clone())?
-                        .build()?;
-                    builder = builder.dispatch(
-                        [group_count, 1, 1],
-                        pipeline.clone(),
-                        descriptor_set,
-                        (),
-                    )?;
-                }
             }
         }
 
@@ -510,9 +469,6 @@ fn gpu_init_command_buffers(
 pub enum GpuStep {
     Blake3Chunk(u32),
     Blake3Parent(u32),
-
-    #[cfg(any(test, target_endian = "big"))]
-    Endian(u32),
 }
 
 impl GpuStep {
@@ -520,9 +476,6 @@ impl GpuStep {
     pub fn group_count(&self) -> u32 {
         match *self {
             Self::Blake3Chunk(group_count) | Self::Blake3Parent(group_count) => group_count,
-
-            #[cfg(any(test, target_endian = "big"))]
-            Self::Endian(group_count) => group_count,
         }
     }
 
@@ -532,9 +485,6 @@ impl GpuStep {
             Self::Blake3Chunk(_) | Self::Blake3Parent(_) => {
                 blake3::gpu::shaders::blake3::WORKGROUP_SIZE
             }
-
-            #[cfg(any(test, target_endian = "big"))]
-            Self::Endian(_) => blake3::gpu::shaders::endian::WORKGROUP_SIZE,
         }
     }
 
@@ -548,9 +498,6 @@ impl GpuStep {
         match *self {
             Self::Blake3Chunk(_) => CHUNK_LEN,
             Self::Blake3Parent(_) => BLOCK_LEN,
-
-            #[cfg(any(test, target_endian = "big"))]
-            Self::Endian(_) => blake3::gpu::shaders::endian::INVOCATION_BUFFER_SIZE,
         }
     }
 
@@ -558,9 +505,6 @@ impl GpuStep {
     pub fn invocation_output_size(&self) -> usize {
         match *self {
             Self::Blake3Chunk(_) | Self::Blake3Parent(_) => OUT_LEN,
-
-            #[cfg(any(test, target_endian = "big"))]
-            Self::Endian(_) => blake3::gpu::shaders::endian::INVOCATION_BUFFER_SIZE,
         }
     }
 
@@ -600,90 +544,35 @@ mod tests {
     }
 
     #[test]
-    fn endian_shader_roundtrip() -> Result<()> {
-        let steps = &[GpuStep::Endian(512), GpuStep::Endian(512)];
-        let (queues, mut tasks) = gpu_init(1, steps)?.expect("No GPU found");
-
-        let data = selftest_seq(steps[0].input_buffer_size());
-        unsafe {
-            tasks[0].write_input_buffer()?.copy_from_slice(&data);
-        }
-        tasks[0].submit(&queues[0])?;
-
-        tasks[0].wait()?;
-        unsafe {
-            assert_eq!(&*tasks[0].read_output_buffer()?, &*data);
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn simulate_endian_shader() -> Result<()> {
-        let steps = &[GpuStep::Endian(512)];
-        let (queues, mut tasks) = gpu_init(1, steps)?.expect("No GPU found");
-
-        let data = selftest_seq(steps[0].input_buffer_size());
-        unsafe {
-            tasks[0].write_input_buffer()?.copy_from_slice(&data);
-        }
-        tasks[0].submit(&queues[0])?;
-
-        let mut expected = vec![0; steps[0].output_buffer_size()];
-        GpuHasher::simulate_endian_shader::<RayonJoin>(
-            steps[0].invocation_count(),
-            &data,
-            &mut expected,
-        );
-
-        tasks[0].wait()?;
-        unsafe {
-            assert_eq!(&*tasks[0].read_output_buffer()?, &*expected);
-        }
-
-        Ok(())
-    }
-
-    #[test]
     fn simulate_blake3_chunk_shader() -> Result<()> {
-        // Unlike the real shader, the simulation always uses little-endian,
-        // so swap the input and output on big-endian to match.
-        let little_steps = [GpuStep::Blake3Chunk(8)];
-        let big_steps = [
-            GpuStep::Endian(512),
-            GpuStep::Blake3Chunk(8),
-            GpuStep::Endian(16),
-        ];
-        let steps = if cfg!(target_endian = "big") {
-            &big_steps[..]
-        } else {
-            &little_steps[..]
-        };
-        let (queues, mut tasks) = gpu_init(1, steps)?.expect("No GPU found");
+        let steps = [GpuStep::Blake3Chunk(8)];
+        let (queues, mut tasks) = gpu_init(1, &steps)?.expect("No GPU found");
 
         let hasher = GpuHasher::new();
         let chunk_control = hasher.gpu_control(0);
         let parent_control = hasher.gpu_control_parent();
 
-        let data = selftest_seq(little_steps[0].input_buffer_size());
+        let data = selftest_seq(steps[0].input_buffer_size());
         unsafe {
-            tasks[0].write_input_buffer()?.copy_from_slice(&data);
+            let mut buf = tasks[0].lock_input_buffer()?;
+            buf.copy_from_slice(&data);
         }
         tasks[0].write_chunk_control(&chunk_control)?;
         tasks[0].write_parent_control(&parent_control)?;
         tasks[0].submit(&queues[0])?;
 
-        let mut expected = vec![0; little_steps[0].output_buffer_size()];
+        let mut expected = vec![0; steps[0].output_buffer_size()];
         hasher.simulate_chunk_shader::<RayonJoin>(
-            little_steps[0].invocation_count(),
+            steps[0].invocation_count(),
             &data,
             &mut expected,
             &chunk_control,
         );
+        GpuHasher::swap_endian::<RayonJoin>(&mut expected);
 
         tasks[0].wait()?;
         unsafe {
-            assert_eq!(&*tasks[0].read_output_buffer()?, &*expected);
+            assert_eq!(&*tasks[0].lock_output_buffer()?, &*expected);
         }
 
         Ok(())
@@ -691,44 +580,35 @@ mod tests {
 
     #[test]
     fn simulate_blake3_parent_shader() -> Result<()> {
-        // Unlike the real shader, the simulation always uses little-endian,
-        // so swap the input and output on big-endian to match.
-        let little_steps = [GpuStep::Blake3Parent(128)];
-        let big_steps = [
-            GpuStep::Endian(512),
-            GpuStep::Blake3Parent(128),
-            GpuStep::Endian(256),
-        ];
-        let steps = if cfg!(target_endian = "big") {
-            &big_steps[..]
-        } else {
-            &little_steps[..]
-        };
-        let (queues, mut tasks) = gpu_init(1, steps)?.expect("No GPU found");
+        let steps = [GpuStep::Blake3Parent(128)];
+        let (queues, mut tasks) = gpu_init(1, &steps)?.expect("No GPU found");
 
         let hasher = GpuHasher::new();
         let chunk_control = hasher.gpu_control(0);
         let parent_control = hasher.gpu_control_parent();
 
-        let data = selftest_seq(little_steps[0].input_buffer_size());
+        let data = selftest_seq(steps[0].input_buffer_size());
         unsafe {
-            tasks[0].write_input_buffer()?.copy_from_slice(&data);
+            let mut buf = tasks[0].lock_input_buffer()?;
+            buf.copy_from_slice(&data);
+            GpuHasher::swap_endian::<RayonJoin>(&mut buf);
         }
         tasks[0].write_chunk_control(&chunk_control)?;
         tasks[0].write_parent_control(&parent_control)?;
         tasks[0].submit(&queues[0])?;
 
-        let mut expected = vec![0; little_steps[0].output_buffer_size()];
+        let mut expected = vec![0; steps[0].output_buffer_size()];
         hasher.simulate_parent_shader::<RayonJoin>(
-            little_steps[0].invocation_count(),
+            steps[0].invocation_count(),
             &data,
             &mut expected,
             &parent_control,
         );
+        GpuHasher::swap_endian::<RayonJoin>(&mut expected);
 
         tasks[0].wait()?;
         unsafe {
-            assert_eq!(&*tasks[0].read_output_buffer()?, &*expected);
+            assert_eq!(&*tasks[0].lock_output_buffer()?, &*expected);
         }
 
         Ok(())

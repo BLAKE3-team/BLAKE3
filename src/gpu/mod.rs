@@ -238,10 +238,13 @@ impl GpuHasher {
     /// same as the chunk counter in the [`GpuControl`] passed to the shader,
     /// otherwise it will lead to a wrong hash output.
     ///
+    /// Note: on a big-endian host, this method will swap the endianness of the
+    /// shader output in-place.
+    ///
     /// [`update`]: #method.update
     /// [`update_with_join`]: #method.update_with_join
     /// [`GpuControl`]: struct.GpuControl.html
-    pub fn update_from_gpu<J: Join>(&mut self, chunk_count: u64, parents: &[u8]) -> &mut Self {
+    pub fn update_from_gpu<J: Join>(&mut self, chunk_count: u64, parents: &mut [u8]) -> &mut Self {
         assert_eq!(self.chunk_state.len(), 0, "leftover buffered bytes");
         let chunk_counter = self.chunk_state.chunk_counter;
 
@@ -259,8 +262,13 @@ impl GpuHasher {
         // And compress_parents_to_parent_node needs at least 2 blocks.
         assert!(parent_count > 2, "invalid parent count");
 
+        // The shader inputs and outputs are 32-bit words, which are in native byte order.
+        // The chunk shader byte swaps its input, but neither shader byte swaps its output.
+        // Since the rest of the code assumes little endian, byte swap the buffer here.
+        Self::swap_endian::<J>(parents);
+
         let cv_pair = compress_parents_to_parent_node::<J>(
-            &parents,
+            parents,
             &self.key,
             self.chunk_state.flags,
             self.chunk_state.platform,
@@ -375,33 +383,35 @@ impl GpuHasher {
         }
     }
 
-    // CPU simulation of the endian swap shader.
-    //
-    // This can be used to test the real shader.
     #[doc(hidden)]
-    pub fn simulate_endian_shader<J: Join>(count: usize, input: &[u8], output: &mut [u8]) {
-        assert_eq!(input.len(), count * 16, "invalid input size");
-        assert_eq!(output.len(), input.len(), "invalid output size");
+    #[cfg(target_endian = "big")]
+    pub fn swap_endian<J: Join>(buffer: &mut [u8]) {
+        debug_assert!(buffer.len().is_power_of_two(), "invalid buffer size");
+        debug_assert_eq!(buffer.len() % OUT_LEN, 0, "invalid buffer size");
 
-        if count > 1 {
-            let mid = count / 2;
-            let (left_in, right_in) = input.split_at(mid * 16);
-            let (left_out, right_out) = output.split_at_mut(mid * 16);
+        if buffer.len() > OUT_LEN {
+            let (left, right) = buffer.split_at_mut(buffer.len() / 2);
+            let left_len = left.len();
+            let right_len = right.len();
 
             J::join(
-                || Self::simulate_endian_shader::<J>(mid, left_in, left_out),
-                || Self::simulate_endian_shader::<J>(count - mid, right_in, right_out),
-                left_in.len(),
-                right_in.len(),
+                || Self::swap_endian::<J>(left),
+                || Self::swap_endian::<J>(right),
+                left_len,
+                right_len,
             );
-        } else if count > 0 {
-            for (input, output) in input.chunks_exact(4).zip(output.chunks_exact_mut(4)) {
-                output[0] = input[3];
-                output[1] = input[2];
-                output[2] = input[1];
-                output[3] = input[0];
+        } else {
+            for buf in buffer.chunks_exact_mut(4) {
+                buf.swap(0, 3);
+                buf.swap(1, 2);
             }
         }
+    }
+
+    #[doc(hidden)]
+    #[inline(always)]
+    #[cfg(target_endian = "little")]
+    pub fn swap_endian<J: Join>(_buffer: &mut [u8]) {
     }
 }
 
@@ -433,8 +443,15 @@ pub mod shaders {
     /// Shader module for one level of the BLAKE3 tree.
     pub mod blake3 {
         /// Returns the SPIR-V code for the chunk shader module.
+        #[cfg(target_endian = "big")]
         pub fn chunk_shader() -> &'static [u8] {
-            include_bytes!("shaders/blake3-chunk.spv")
+            include_bytes!("shaders/blake3-chunk-be.spv")
+        }
+
+        /// Returns the SPIR-V code for the chunk shader module.
+        #[cfg(target_endian = "little")]
+        pub fn chunk_shader() -> &'static [u8] {
+            include_bytes!("shaders/blake3-chunk-le.spv")
         }
 
         /// Returns the SPIR-V code for the parent shader module.
@@ -454,25 +471,6 @@ pub mod shaders {
 
         /// The size of the control uniform.
         pub const CONTROL_UNIFORM_SIZE: usize = 11 * 4;
-    }
-
-    /// Shader module for endian swap of the GPU input or output.
-    pub mod endian {
-        /// Returns the SPIR-V code for the shader module.
-        pub fn shader() -> &'static [u8] {
-            include_bytes!("shaders/endian.spv")
-        }
-
-        /// The local workgroup size.
-        pub const WORKGROUP_SIZE: u32 = 128;
-
-        /// The descriptor binding for the input buffer.
-        pub const INPUT_BUFFER_BINDING: u32 = 0;
-        /// The descriptor binding for the output buffer.
-        pub const OUTPUT_BUFFER_BINDING: u32 = 1;
-
-        /// The size of the buffers for each workgroup invocation.
-        pub const INVOCATION_BUFFER_SIZE: usize = 4 * 4;
     }
 }
 
@@ -515,7 +513,8 @@ mod tests {
         let mut buffer = vec![0; OUT_LEN * 128];
 
         hasher.simulate_chunk_shader::<Join>(128, &input, &mut buffer, &hasher.gpu_control(0));
-        hasher.update_from_gpu::<Join>(128, &buffer);
+        GpuHasher::swap_endian::<Join>(&mut buffer);
+        hasher.update_from_gpu::<Join>(128, &mut buffer);
 
         assert_eq!(hasher.finalize(), expected);
     }
@@ -536,7 +535,8 @@ mod tests {
             &mut buffer,
             &hasher.gpu_control(0),
         );
-        hasher.update_from_gpu::<Join>(128, &buffer);
+        GpuHasher::swap_endian::<Join>(&mut buffer);
+        hasher.update_from_gpu::<Join>(128, &mut buffer);
 
         hasher.simulate_chunk_shader::<Join>(
             128,
@@ -544,7 +544,8 @@ mod tests {
             &mut buffer,
             &hasher.gpu_control(128),
         );
-        hasher.update_from_gpu::<Join>(128, &buffer);
+        GpuHasher::swap_endian::<Join>(&mut buffer);
+        hasher.update_from_gpu::<Join>(128, &mut buffer);
 
         assert_eq!(hasher.finalize(), expected);
     }
@@ -567,7 +568,8 @@ mod tests {
             &mut buffer2,
             &hasher.gpu_control_parent(),
         );
-        hasher.update_from_gpu::<Join>(2 * 128, &buffer2);
+        GpuHasher::swap_endian::<Join>(&mut buffer2);
+        hasher.update_from_gpu::<Join>(2 * 128, &mut buffer2);
 
         assert_eq!(hasher.finalize(), expected);
     }
@@ -595,7 +597,8 @@ mod tests {
             &mut buffer2,
             &hasher.gpu_control_parent(),
         );
-        hasher.update_from_gpu::<Join>(2 * 128, &buffer2);
+        GpuHasher::swap_endian::<Join>(&mut buffer2);
+        hasher.update_from_gpu::<Join>(2 * 128, &mut buffer2);
 
         hasher.simulate_chunk_shader::<Join>(
             2 * 128,
@@ -609,7 +612,8 @@ mod tests {
             &mut buffer2,
             &hasher.gpu_control_parent(),
         );
-        hasher.update_from_gpu::<Join>(2 * 128, &buffer2);
+        GpuHasher::swap_endian::<Join>(&mut buffer2);
+        hasher.update_from_gpu::<Join>(2 * 128, &mut buffer2);
 
         assert_eq!(hasher.finalize(), expected);
     }

@@ -13,7 +13,6 @@ use super::vulkan::{gpu_init, GpuStep, GpuTask, Queue};
 const BUFFER_SIZE: usize = 32 * 1024 * 1024;
 const TASKS: usize = 3;
 
-#[cfg(target_endian = "little")]
 const STEPS: &[GpuStep] = &[
     GpuStep::Blake3Chunk(256),
     GpuStep::Blake3Parent(128),
@@ -24,21 +23,6 @@ const STEPS: &[GpuStep] = &[
     GpuStep::Blake3Parent(4),
     GpuStep::Blake3Parent(2),
     GpuStep::Blake3Parent(1),
-];
-
-#[cfg(target_endian = "big")]
-const STEPS: &[GpuStep] = &[
-    GpuStep::Endian(16384),
-    GpuStep::Blake3Chunk(256),
-    GpuStep::Blake3Parent(128),
-    GpuStep::Blake3Parent(64),
-    GpuStep::Blake3Parent(32),
-    GpuStep::Blake3Parent(16),
-    GpuStep::Blake3Parent(8),
-    GpuStep::Blake3Parent(4),
-    GpuStep::Blake3Parent(2),
-    GpuStep::Blake3Parent(1),
-    GpuStep::Endian(2),
 ];
 
 pub struct Gpu {
@@ -153,15 +137,15 @@ impl GpuState {
                     GpuTaskState::Full(mut task) => {
                         task.wait()?;
                         {
-                            let buffer = unsafe { task.read_output_buffer()? };
-                            hasher.update_from_gpu::<RayonJoin>(chunk_count, &buffer);
+                            let mut buffer = unsafe { task.lock_output_buffer()? };
+                            hasher.update_from_gpu::<RayonJoin>(chunk_count, &mut buffer);
                         }
                         task
                     }
                     GpuTaskState::Tail(task, size) => {
                         debug_assert!(tasks.is_empty() && pending.is_empty() && tail);
                         {
-                            let buffer = unsafe { task.read_input_buffer()? };
+                            let buffer = unsafe { task.lock_input_buffer()? };
                             hasher.update_with_join::<RayonJoin>(&buffer[..size]);
                         }
                         task
@@ -176,7 +160,7 @@ impl GpuState {
                 chunk_counter += chunk_count;
 
                 let size = {
-                    let mut buffer = unsafe { task.write_input_buffer()? };
+                    let mut buffer = unsafe { task.lock_input_buffer()? };
                     debug_assert_eq!(buffer.len(), BUFFER_SIZE);
                     read_all(file, &mut buffer)?
                 };
