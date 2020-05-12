@@ -1,6 +1,5 @@
 use anyhow::{bail, Context, Result};
 use clap::{App, Arg};
-use std::borrow::Cow;
 use std::cmp;
 use std::convert::TryInto;
 use std::ffi::OsStr;
@@ -223,14 +222,12 @@ fn read_key_from_stdin() -> Result<[u8; blake3::KEY_LEN]> {
 
 struct FilepathString {
     filepath_string: String,
-    was_lossy: bool,
     has_escapes: bool,
 }
 
 // returns (string, did_escape)
 fn filepath_to_string(filepath_osstr: &OsStr) -> FilepathString {
     let unicode_cow = filepath_osstr.to_string_lossy();
-    let was_lossy = matches!(unicode_cow, Cow::Owned(_));
     let mut filepath_string = unicode_cow.to_string();
     // If we're on Windows, normalize backslashes to forward slashes. This
     // avoids a lot of ugly escaping in the common case, and it makes
@@ -248,7 +245,6 @@ fn filepath_to_string(filepath_osstr: &OsStr) -> FilepathString {
     }
     FilepathString {
         filepath_string,
-        was_lossy,
         has_escapes,
     }
 }
@@ -288,16 +284,8 @@ fn main() -> Result<()> {
             for filepath_osstr in files {
                 let FilepathString {
                     filepath_string,
-                    was_lossy,
                     has_escapes,
                 } = filepath_to_string(filepath_osstr);
-                if was_lossy && !raw_output {
-                    // The conversion was lossy. Print a warning. In addition
-                    // to being a warning, this prevents the output from being
-                    // successfully parsed by --check. Thus it goes to stdout
-                    // rather than stderr.
-                    println!("b3sum: warning: filepath contains invalid Unicode");
-                }
                 match hash_file(&base_hasher, filepath_osstr, mmap_disabled) {
                     Ok(output) => {
                         if raw_output {

@@ -161,11 +161,11 @@ fn test_newline_and_backslash_escaping_on_unix() {
     let output = cmd(b3sum_exe(), &names).dir(dir.path()).read().unwrap();
     let expected = format!(
         "\
-{0}  abcdef\n\
-\\{0}  abc\\ndef\n\
-\\{0}  abc\\\\def\n\
-{0}  abc\rdef\n\
-\\{0}  abc\r\\ndef\n\
+{0}  abcdef
+\\{0}  abc\\ndef
+\\{0}  abc\\\\def
+{0}  abc\rdef
+\\{0}  abc\r\\ndef
 {0}  subdir/foo",
         empty_hash,
     );
@@ -200,8 +200,8 @@ fn test_slash_normalization_on_windows() {
     let output = cmd(b3sum_exe(), &names).dir(dir.path()).read().unwrap();
     let expected = format!(
         "\
-{0}  abcdef\n\
-{0}  subdir/foo\n\
+{0}  abcdef
+{0}  subdir/foo
 {0}  subdir/bar",
         empty_hash,
     );
@@ -243,8 +243,7 @@ fn test_invalid_unicode_on_unix() {
     let output = cmd(b3sum_exe(), &names).dir(dir.path()).read().unwrap();
     let expected = format!(
         "\
-{0}  abcdef\n\
-b3sum: warning: filepath contains invalid Unicode
+{0}  abcdef
 {0}  abc�def",
         empty_hash,
     );
@@ -288,8 +287,7 @@ fn test_invalid_unicode_on_windows() {
     let output = cmd(b3sum_exe(), &names).dir(dir.path()).read().unwrap();
     let expected = format!(
         "\
-{0}  abcdef\n\
-b3sum: warning: filepath contains invalid Unicode
+{0}  abcdef
 {0}  abc�def",
         empty_hash,
     );
