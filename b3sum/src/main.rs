@@ -1,11 +1,16 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use clap::{App, Arg};
+use std::borrow::Cow;
 use std::cmp;
 use std::convert::TryInto;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
+use std::path::Path;
+
+#[cfg(test)]
+mod unit_tests;
 
 const FILE_ARG: &str = "file";
 const DERIVE_KEY_ARG: &str = "derive-key";
@@ -247,6 +252,112 @@ fn filepath_to_string(filepath_osstr: &OsStr) -> FilepathString {
         filepath_string,
         has_escapes,
     }
+}
+
+fn hex_half_byte(c: char) -> Result<u8> {
+    // The hex characters in the hash must be lowercase for now, though we
+    // could support uppercase too if we wanted to.
+    if '0' <= c && c <= '9' {
+        return Ok(c as u8 - '0' as u8);
+    }
+    if 'a' <= c && c <= 'f' {
+        return Ok(c as u8 - 'a' as u8 + 10);
+    }
+    bail!("b3sum: Invalid hex");
+}
+
+// The `check` command is a security tool. That means it's much better for a
+// check to fail more often than it should (a false negative), than for a check
+// to ever succeed when it shouldn't (a false positive). By forbidding certain
+// characters in checked filepaths, we avoid a class of false positives where
+// two different filepaths can get confused with each other.
+fn check_for_invalid_characters(path: &str) -> Result<()> {
+    // Null characters in paths should never happen, but they can result in a
+    // path getting silently truncated on Unix.
+    if path.contains('\0') {
+        bail!("b3sum: Null character in path");
+    }
+    // Because we convert invalid UTF-8 sequences in paths to the Unicode
+    // replacement character, multiple different invalid paths can map to the
+    // same UTF-8 string.
+    if path.contains('�') {
+        bail!("b3sum: Unicode replacement character in path");
+    }
+    // We normalize all Windows backslashes to forward slashes in our output,
+    // so the only natural way to get a backslash in a checkfile on Windows is
+    // to construct it on Unix and copy it over. (Or of course you could just
+    // doctor it by hand.) To avoid confusing this with a directory separator,
+    // we forbid backslashes entirely on Windows. Note that this check comes
+    // after unescaping has been done.
+    if cfg!(windows) && path.contains('\\') {
+        bail!("b3sum: Backslash in path");
+    }
+    Ok(())
+}
+
+fn unescape(mut path: &str) -> Result<String> {
+    let mut unescaped = String::with_capacity(2 * path.len());
+    while let Some(i) = path.find('\\') {
+        ensure!(i < path.len() - 1, "b3sum: Invalid backslash escape");
+        unescaped.push_str(&path[..i]);
+        match path[i + 1..].chars().next().unwrap() {
+            // Anything other than a recognized escape sequence is an error.
+            'n' => unescaped.push_str("\n"),
+            '\\' => unescaped.push_str("\\"),
+            _ => bail!("b3sum: Invalid backslash escape"),
+        }
+        path = &path[i + 2..];
+    }
+    unescaped.push_str(path);
+    Ok(unescaped)
+}
+
+fn parse_check_line(mut line: &str) -> Result<(blake3::Hash, Cow<str>)> {
+    // Trim off the trailing newline, if any.
+    line = line.trim_end_matches('\n');
+    // If there's a backslash at the front of the line, that means we need to
+    // unescape the path below. This matches the behavior of e.g. md5sum.
+    let first = if let Some(c) = line.chars().next() {
+        c
+    } else {
+        bail!("b3sum: Empty line");
+    };
+    let mut escaped = false;
+    if first == '\\' {
+        escaped = true;
+        line = &line[1..];
+    }
+    // The front of the line must be a hash of the usual length, followed by
+    // two spaces. The hex characters in the hash must be lowercase for now,
+    // though we could support uppercase too if we wanted to.
+    let hash_hex_len = 2 * blake3::OUT_LEN;
+    let num_spaces = 2;
+    let prefix_len = hash_hex_len + num_spaces;
+    ensure!(line.len() > prefix_len, "b3sum: Short line");
+    ensure!(
+        line.chars().take(prefix_len).all(|c| c.is_ascii()),
+        "b3sum: Non-ASCII prefix"
+    );
+    ensure!(&line[hash_hex_len..][..2] == "  ", "b3sum: Invalid space");
+    // Decode the hash hex.
+    let mut hash_bytes = [0; blake3::OUT_LEN];
+    let mut hex_chars = line[..hash_hex_len].chars();
+    for byte in &mut hash_bytes {
+        let high_char = hex_chars.next().unwrap();
+        let low_char = hex_chars.next().unwrap();
+        *byte = 16 * hex_half_byte(high_char)? + hex_half_byte(low_char)?;
+    }
+    let hash: blake3::Hash = hash_bytes.into();
+    let path_str = &line[prefix_len..];
+    let path_cow: Cow<str> = if escaped {
+        // If we detected a backslash at the start of the line earlier, now we
+        // need to unescape backslashes and newlines.
+        Cow::Owned(unescape(path_str)?)
+    } else {
+        Cow::Borrowed(path_str)
+    };
+    check_for_invalid_characters(&path_cow)?;
+    Ok((hash, path_cow))
 }
 
 fn main() -> Result<()> {
