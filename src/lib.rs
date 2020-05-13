@@ -95,6 +95,8 @@ pub mod traits;
 
 pub mod join;
 
+pub mod gpu;
+
 use arrayref::{array_mut_ref, array_ref};
 use arrayvec::{ArrayString, ArrayVec};
 use core::cmp;

@@ -12,6 +12,7 @@ edition = "2018"
 neon = ["blake3/neon"]
 prefer_intrinsics = ["blake3/prefer_intrinsics"]
 pure = ["blake3/pure"]
+vulkan = ["vulkano"]
 
 [dependencies]
 anyhow = "1.0.25"
@@ -20,6 +21,7 @@ clap = { version = "2.33.0", default-features = false }
 hex = "0.4.0"
 memmap = "0.7.0"
 rayon = "1.2.1"
+vulkano = { version = "0.18.0", optional = true }
 
 [dev-dependencies]
 assert_cmd = "0.12.0"
