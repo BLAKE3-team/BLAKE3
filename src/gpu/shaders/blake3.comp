@@ -94,8 +94,11 @@ uvec4[4] load_be(const restrict uvec4 ma, const restrict uvec4 mb,
 #define LOAD(m, o) (load((m)[(o)], (m)[(o) + 1], (m)[(o) + 2], (m)[(o) + 3]))
 #endif
 
-
+#if defined(CHUNK)
 #define FLAG(block) ((0x80000001u >> ((block) * 2)) & 0x3)
+#elif defined(PARENT)
+#define FLAG (1 << 2)
+#endif
 
 void main() {
     uvec4 ha = k[0];
@@ -111,7 +114,7 @@ void main() {
 #elif defined(PARENT)
     {
         uint offset = gl_GlobalInvocationID.x * 4;
-        compress(ha, hb, uvec4(0, 0, 64, d), LOAD(in_buf, offset));
+        compress(ha, hb, uvec4(0, 0, 64, d | FLAG), LOAD(in_buf, offset));
     }
 #else
 #error Unknown shader mode

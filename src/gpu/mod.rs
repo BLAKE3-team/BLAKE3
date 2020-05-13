@@ -54,11 +54,6 @@ impl GpuControl {
         self.d as u8
     }
 
-    #[inline]
-    fn is_parent(&self) -> bool {
-        (self.flags() & PARENT) != 0
-    }
-
     /// Returns the bytes to be copied to the control uniform in the GPU.
     ///
     /// The contents of the returned slice are opaque and should be interpreted
@@ -211,14 +206,10 @@ impl GpuHasher {
         }
     }
 
-    /// Obtain the [`GpuControl`](struct.GpuControl.html) to hash full chunks starting with `chunk_counter`.
+    /// Obtain the [`GpuControl`](struct.GpuControl.html) to hash full chunks starting with `chunk_counter`
+    /// or parent nodes.
     pub fn gpu_control(&self, chunk_counter: u64) -> GpuControl {
         GpuControl::new(&self.key, chunk_counter, self.chunk_state.flags)
-    }
-
-    /// Obtain the [`GpuControl`](struct.GpuControl.html) to hash parent nodes.
-    pub fn gpu_control_parent(&self) -> GpuControl {
-        GpuControl::new(&self.key, 0, self.chunk_state.flags | PARENT)
     }
 
     /// GPU-accelerated version of [`update_with_join`].
@@ -299,8 +290,6 @@ impl GpuHasher {
         output: &mut [u8],
         control: &GpuControl,
     ) {
-        assert!(!control.is_parent(), "invalid shader control");
-
         assert_eq!(input.len(), count * CHUNK_LEN, "invalid input size");
         assert_eq!(output.len(), count * OUT_LEN, "invalid output size");
 
@@ -348,8 +337,6 @@ impl GpuHasher {
         output: &mut [u8],
         control: &GpuControl,
     ) {
-        assert!(control.is_parent(), "invalid shader control");
-
         assert_eq!(input.len(), count * BLOCK_LEN, "invalid input size");
         assert_eq!(output.len(), count * OUT_LEN, "invalid output size");
 
@@ -375,7 +362,7 @@ impl GpuHasher {
                 control.key(),
                 0,
                 IncrementCounter::No,
-                control.flags(),
+                control.flags() | PARENT,
                 0,
                 0,
                 output,
@@ -411,8 +398,7 @@ impl GpuHasher {
     #[doc(hidden)]
     #[inline(always)]
     #[cfg(target_endian = "little")]
-    pub fn swap_endian<J: Join>(_buffer: &mut [u8]) {
-    }
+    pub fn swap_endian<J: Join>(_buffer: &mut [u8]) {}
 }
 
 impl Deref for GpuHasher {
@@ -562,12 +548,7 @@ mod tests {
         let mut buffer2 = vec![0; OUT_LEN * 128];
 
         hasher.simulate_chunk_shader::<Join>(2 * 128, &input, &mut buffer1, &hasher.gpu_control(0));
-        hasher.simulate_parent_shader::<Join>(
-            128,
-            &buffer1,
-            &mut buffer2,
-            &hasher.gpu_control_parent(),
-        );
+        hasher.simulate_parent_shader::<Join>(128, &buffer1, &mut buffer2, &hasher.gpu_control(0));
         GpuHasher::swap_endian::<Join>(&mut buffer2);
         hasher.update_from_gpu::<Join>(2 * 128, &mut buffer2);
 
@@ -591,12 +572,7 @@ mod tests {
             &mut buffer1,
             &hasher.gpu_control(0),
         );
-        hasher.simulate_parent_shader::<Join>(
-            128,
-            &buffer1,
-            &mut buffer2,
-            &hasher.gpu_control_parent(),
-        );
+        hasher.simulate_parent_shader::<Join>(128, &buffer1, &mut buffer2, &hasher.gpu_control(0));
         GpuHasher::swap_endian::<Join>(&mut buffer2);
         hasher.update_from_gpu::<Join>(2 * 128, &mut buffer2);
 
@@ -610,7 +586,7 @@ mod tests {
             128,
             &buffer1,
             &mut buffer2,
-            &hasher.gpu_control_parent(),
+            &hasher.gpu_control(2 * 128),
         );
         GpuHasher::swap_endian::<Join>(&mut buffer2);
         hasher.update_from_gpu::<Join>(2 * 128, &mut buffer2);

@@ -89,6 +89,7 @@ impl<'a> Deref for GpuTaskRef<'a> {
 }
 
 impl<'a> DerefMut for GpuTaskRef<'a> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -119,10 +120,6 @@ impl GpuState {
 
         let queues = &self.queues;
         let mut next_queue = 0;
-
-        for task in &self.tasks {
-            task.write_parent_control(&hasher.gpu_control_parent())?
-        }
 
         let mut tasks: VecDeque<_> = self.tasks.iter_mut().map(GpuTaskRef).collect();
         let mut pending = VecDeque::with_capacity(tasks.len());
@@ -156,7 +153,7 @@ impl GpuState {
             };
 
             if !tail {
-                task.write_chunk_control(&hasher.gpu_control(chunk_counter))?;
+                task.write_control(&hasher.gpu_control(chunk_counter))?;
                 chunk_counter += chunk_count;
 
                 let size = {

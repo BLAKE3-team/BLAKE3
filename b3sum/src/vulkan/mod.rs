@@ -30,9 +30,7 @@ pub struct GpuTask {
 
     input_buffer: Arc<CpuAccessibleBuffer<[u8]>>,
     output_buffer: Arc<CpuAccessibleBuffer<[u8]>>,
-
-    chunk_control: Arc<CpuAccessibleBuffer<[u8]>>,
-    parent_control: Arc<CpuAccessibleBuffer<[u8]>>,
+    control_buffer: Arc<CpuAccessibleBuffer<[u8]>>,
 }
 
 impl GpuTask {
@@ -46,15 +44,8 @@ impl GpuTask {
         Ok(self.output_buffer.write()?)
     }
 
-    pub fn write_chunk_control(&self, control: &GpuControl) -> Result<()> {
-        self.chunk_control
-            .write()?
-            .copy_from_slice(control.as_bytes());
-        Ok(())
-    }
-
-    pub fn write_parent_control(&self, control: &GpuControl) -> Result<()> {
-        self.parent_control
+    pub fn write_control(&self, control: &GpuControl) -> Result<()> {
+        self.control_buffer
             .write()?
             .copy_from_slice(control.as_bytes());
         Ok(())
@@ -207,18 +198,14 @@ fn gpu_tasks(
 
     let mut input_buffers = buffers.input_buffers.into_iter();
     let mut output_buffers = buffers.output_buffers.into_iter();
-
-    let mut chunk_control_buffers = buffers.control_buffers_chunk_staging.into_iter();
-    let mut parent_control_buffers = buffers.control_buffers_parent_staging.into_iter();
+    let mut control_buffers = buffers.control_buffers_staging.into_iter();
 
     for command_buffer in command_buffers {
         let fence = Fence::alloc(device.clone())?;
 
         let input_buffer = input_buffers.next().unwrap();
         let output_buffer = output_buffers.next().unwrap();
-
-        let chunk_control = chunk_control_buffers.next().unwrap();
-        let parent_control = parent_control_buffers.next().unwrap();
+        let control_buffer = control_buffers.next().unwrap();
 
         tasks.push(GpuTask {
             locked: false,
@@ -227,8 +214,7 @@ fn gpu_tasks(
             fence,
             input_buffer,
             output_buffer,
-            chunk_control,
-            parent_control,
+            control_buffer,
         });
     }
 
@@ -266,11 +252,8 @@ struct GpuBuffers {
 
     task_buffers: Vec<Vec<Arc<dyn TypedBufferAccess<Content = [u8]> + Send + Sync>>>,
 
-    control_buffers_chunk: Vec<Arc<DeviceLocalBuffer<[u8]>>>,
-    control_buffers_parent: Vec<Arc<DeviceLocalBuffer<[u8]>>>,
-
-    control_buffers_chunk_staging: Vec<Arc<CpuAccessibleBuffer<[u8]>>>,
-    control_buffers_parent_staging: Vec<Arc<CpuAccessibleBuffer<[u8]>>>,
+    control_buffers: Vec<Arc<DeviceLocalBuffer<[u8]>>>,
+    control_buffers_staging: Vec<Arc<CpuAccessibleBuffer<[u8]>>>,
 }
 
 fn gpu_init_buffers(device: &Arc<Device>, tasks: usize, steps: &[GpuStep]) -> Result<GpuBuffers> {
@@ -320,17 +303,11 @@ fn gpu_init_buffers(device: &Arc<Device>, tasks: usize, steps: &[GpuStep]) -> Re
 
     let uniform_size = blake3::gpu::shaders::blake3::CONTROL_UNIFORM_SIZE;
 
-    let control_buffers_chunk = (0..tasks)
-        .map(|_| create_device_uniform_buffer(device.clone(), uniform_size))
-        .collect::<Result<_>>()?;
-    let control_buffers_parent = (0..tasks)
+    let control_buffers = (0..tasks)
         .map(|_| create_device_uniform_buffer(device.clone(), uniform_size))
         .collect::<Result<_>>()?;
 
-    let control_buffers_chunk_staging = (0..tasks)
-        .map(|_| create_transfer_source_buffer(device.clone(), uniform_size))
-        .collect::<Result<_>>()?;
-    let control_buffers_parent_staging = (0..tasks)
+    let control_buffers_staging = (0..tasks)
         .map(|_| create_transfer_source_buffer(device.clone(), uniform_size))
         .collect::<Result<_>>()?;
 
@@ -338,10 +315,8 @@ fn gpu_init_buffers(device: &Arc<Device>, tasks: usize, steps: &[GpuStep]) -> Re
         input_buffers,
         output_buffers,
         task_buffers,
-        control_buffers_chunk,
-        control_buffers_parent,
-        control_buffers_chunk_staging,
-        control_buffers_parent_staging,
+        control_buffers,
+        control_buffers_staging,
     })
 }
 
@@ -415,12 +390,8 @@ fn gpu_init_command_buffers(
         let mut builder = AutoCommandBufferBuilder::new(device.clone(), queue_family)?;
 
         builder = builder.copy_buffer(
-            buffers.control_buffers_chunk_staging[task].clone(),
-            buffers.control_buffers_chunk[task].clone(),
-        )?;
-        builder = builder.copy_buffer(
-            buffers.control_buffers_parent_staging[task].clone(),
-            buffers.control_buffers_parent[task].clone(),
+            buffers.control_buffers_staging[task].clone(),
+            buffers.control_buffers[task].clone(),
         )?;
 
         for (i, step) in steps.iter().enumerate() {
@@ -431,7 +402,7 @@ fn gpu_init_command_buffers(
                     let descriptor_set = PersistentDescriptorSet::start(layout.clone())
                         .add_buffer(buffers.task_buffers[task][i].clone())?
                         .add_buffer(buffers.task_buffers[task][i + 1].clone())?
-                        .add_buffer(buffers.control_buffers_chunk[task].clone())?
+                        .add_buffer(buffers.control_buffers[task].clone())?
                         .build()?;
                     builder = builder.dispatch(
                         [group_count, 1, 1],
@@ -447,7 +418,7 @@ fn gpu_init_command_buffers(
                     let descriptor_set = PersistentDescriptorSet::start(layout.clone())
                         .add_buffer(buffers.task_buffers[task][i].clone())?
                         .add_buffer(buffers.task_buffers[task][i + 1].clone())?
-                        .add_buffer(buffers.control_buffers_parent[task].clone())?
+                        .add_buffer(buffers.control_buffers[task].clone())?
                         .build()?;
                     builder = builder.dispatch(
                         [group_count, 1, 1],
@@ -549,16 +520,14 @@ mod tests {
         let (queues, mut tasks) = gpu_init(1, &steps)?.expect("No GPU found");
 
         let hasher = GpuHasher::new();
-        let chunk_control = hasher.gpu_control(0);
-        let parent_control = hasher.gpu_control_parent();
+        let control = hasher.gpu_control(0);
 
         let data = selftest_seq(steps[0].input_buffer_size());
         unsafe {
             let mut buf = tasks[0].lock_input_buffer()?;
             buf.copy_from_slice(&data);
         }
-        tasks[0].write_chunk_control(&chunk_control)?;
-        tasks[0].write_parent_control(&parent_control)?;
+        tasks[0].write_control(&control)?;
         tasks[0].submit(&queues[0])?;
 
         let mut expected = vec![0; steps[0].output_buffer_size()];
@@ -566,7 +535,7 @@ mod tests {
             steps[0].invocation_count(),
             &data,
             &mut expected,
-            &chunk_control,
+            &control,
         );
         GpuHasher::swap_endian::<RayonJoin>(&mut expected);
 
@@ -584,8 +553,7 @@ mod tests {
         let (queues, mut tasks) = gpu_init(1, &steps)?.expect("No GPU found");
 
         let hasher = GpuHasher::new();
-        let chunk_control = hasher.gpu_control(0);
-        let parent_control = hasher.gpu_control_parent();
+        let control = hasher.gpu_control(1234);
 
         let data = selftest_seq(steps[0].input_buffer_size());
         unsafe {
@@ -593,8 +561,7 @@ mod tests {
             buf.copy_from_slice(&data);
             GpuHasher::swap_endian::<RayonJoin>(&mut buf);
         }
-        tasks[0].write_chunk_control(&chunk_control)?;
-        tasks[0].write_parent_control(&parent_control)?;
+        tasks[0].write_control(&control)?;
         tasks[0].submit(&queues[0])?;
 
         let mut expected = vec![0; steps[0].output_buffer_size()];
@@ -602,7 +569,7 @@ mod tests {
             steps[0].invocation_count(),
             &data,
             &mut expected,
-            &parent_control,
+            &control,
         );
         GpuHasher::swap_endian::<RayonJoin>(&mut expected);
 
