@@ -1,12 +1,27 @@
-fn main() {
-    // Set in build.rs.
-    let compiler_path = env!("COMPILER_PATH");
+use std::process::Command;
 
-    let mut compiler_command = std::process::Command::new(compiler_path);
+fn main() {
+    // Print the rustc version.
+    Command::new(env!("CARGO"))
+        .args(&["rustc", "--quiet", "--", "--version"])
+        .status()
+        .unwrap();
+    println!();
+
+    // Print the Cargo version.
+    Command::new(env!("CARGO"))
+        .args(&["--version"])
+        .status()
+        .unwrap();
+    println!();
+
+    // Print the C compiler version. This relies on C compiler detection done
+    // in build.rs, which sets the COMPILER_PATH variable.
+    let compiler_path = env!("COMPILER_PATH");
+    let mut compiler_command = Command::new(compiler_path);
     // Use the --version flag on everything other than MSVC.
     if !cfg!(target_env = "msvc") {
         compiler_command.arg("--version");
     }
-    // Run the compiler to print its version. Ignore the exit status.
     let _ = compiler_command.status().unwrap();
 }
