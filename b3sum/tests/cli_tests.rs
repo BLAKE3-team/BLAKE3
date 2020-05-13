@@ -10,7 +10,7 @@ pub fn b3sum_exe() -> PathBuf {
 
 #[test]
 fn test_hash_one() {
-    let expected = blake3::hash(b"foo").to_hex();
+    let expected = format!("{}  -", blake3::hash(b"foo").to_hex());
     let output = cmd!(b3sum_exe()).stdin_bytes("foo").read().unwrap();
     assert_eq!(&*expected, output);
 }
@@ -62,7 +62,7 @@ fn test_hash_length() {
         .update(b"foo")
         .finalize_xof()
         .fill(&mut buf);
-    let expected = hex::encode(&buf[..]);
+    let expected = format!("{}  -", hex::encode(&buf[..]));
     let output = cmd!(b3sum_exe(), "--length=100")
         .stdin_bytes("foo")
         .read()
@@ -300,4 +300,149 @@ fn test_invalid_unicode_on_windows() {
     println!("{}", expected);
     println!();
     assert_eq!(expected, output);
+}
+
+#[test]
+fn test_check() {
+    // Make a directory full of files, and make sure the b3sum output in that
+    // directory is what we expect.
+    let a_hash = blake3::hash(b"a").to_hex();
+    let b_hash = blake3::hash(b"b").to_hex();
+    let cd_hash = blake3::hash(b"cd").to_hex();
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("a"), b"a").unwrap();
+    fs::write(dir.path().join("b"), b"b").unwrap();
+    fs::create_dir(dir.path().join("c")).unwrap();
+    fs::write(dir.path().join("c/d"), b"cd").unwrap();
+    let output = cmd!(b3sum_exe(), "a", "b", "c/d")
+        .dir(dir.path())
+        .stdout_capture()
+        .stderr_capture()
+        .run()
+        .unwrap();
+    let stdout = std::str::from_utf8(&output.stdout).unwrap();
+    let stderr = std::str::from_utf8(&output.stderr).unwrap();
+    let expected_checkfile = format!(
+        "{}  a\n\
+         {}  b\n\
+         {}  c/d\n",
+        a_hash, b_hash, cd_hash,
+    );
+    assert_eq!(expected_checkfile, stdout);
+    assert_eq!("", stderr);
+
+    // Now use the output we just validated as a checkfile, passed to stdin.
+    let output = cmd!(b3sum_exe(), "--check")
+        .stdin_bytes(expected_checkfile.as_bytes())
+        .dir(dir.path())
+        .stdout_capture()
+        .stderr_capture()
+        .run()
+        .unwrap();
+    let stdout = std::str::from_utf8(&output.stdout).unwrap();
+    let stderr = std::str::from_utf8(&output.stderr).unwrap();
+    let expected_check_output = "\
+         a: OK\n\
+         b: OK\n\
+         c/d: OK\n";
+    assert_eq!(expected_check_output, stdout);
+    assert_eq!("", stderr);
+
+    // Now pass the same checkfile twice on the command line just for fun.
+    let checkfile_path = dir.path().join("checkfile");
+    fs::write(&checkfile_path, &expected_checkfile).unwrap();
+    let output = cmd!(b3sum_exe(), "--check", &checkfile_path, &checkfile_path)
+        .dir(dir.path())
+        .stdout_capture()
+        .stderr_capture()
+        .run()
+        .unwrap();
+    let stdout = std::str::from_utf8(&output.stdout).unwrap();
+    let stderr = std::str::from_utf8(&output.stderr).unwrap();
+    let mut double_check_output = String::new();
+    double_check_output.push_str(&expected_check_output);
+    double_check_output.push_str(&expected_check_output);
+    assert_eq!(double_check_output, stdout);
+    assert_eq!("", stderr);
+
+    // Finally, corrupt one of the files and check again.
+    fs::write(dir.path().join("b"), b"CORRUPTION").unwrap();
+    let output = cmd!(b3sum_exe(), "--check", &checkfile_path)
+        .dir(dir.path())
+        .stdout_capture()
+        .stderr_capture()
+        .unchecked()
+        .run()
+        .unwrap();
+    let stdout = std::str::from_utf8(&output.stdout).unwrap();
+    let stderr = std::str::from_utf8(&output.stderr).unwrap();
+    let expected_check_failure = "\
+        a: OK\n\
+        b: FAILED\n\
+        c/d: OK\n";
+    assert!(!output.status.success());
+    assert_eq!(expected_check_failure, stdout);
+    assert_eq!("", stderr);
+}
+
+#[test]
+fn test_check_invalid_characters() {
+    // Check that a null character in the path fails.
+    let output = cmd!(b3sum_exe(), "--check")
+        .stdin_bytes("0000000000000000000000000000000000000000000000000000000000000000  \0")
+        .stdout_capture()
+        .stderr_capture()
+        .unchecked()
+        .run()
+        .unwrap();
+    let stdout = std::str::from_utf8(&output.stdout).unwrap();
+    let stderr = std::str::from_utf8(&output.stderr).unwrap();
+    assert!(!output.status.success());
+    assert_eq!("", stdout);
+    assert_eq!("Error: Null character in path\n", stderr);
+
+    // Check that a Unicode replacement character in the path fails.
+    let output = cmd!(b3sum_exe(), "--check")
+        .stdin_bytes("0000000000000000000000000000000000000000000000000000000000000000  �")
+        .stdout_capture()
+        .stderr_capture()
+        .unchecked()
+        .run()
+        .unwrap();
+    let stdout = std::str::from_utf8(&output.stdout).unwrap();
+    let stderr = std::str::from_utf8(&output.stderr).unwrap();
+    assert!(!output.status.success());
+    assert_eq!("", stdout);
+    assert_eq!("Error: Unicode replacement character in path\n", stderr);
+
+    // Check that an invalid escape sequence in the path fails.
+    let output = cmd!(b3sum_exe(), "--check")
+        .stdin_bytes("\\0000000000000000000000000000000000000000000000000000000000000000  \\a")
+        .stdout_capture()
+        .stderr_capture()
+        .unchecked()
+        .run()
+        .unwrap();
+    let stdout = std::str::from_utf8(&output.stdout).unwrap();
+    let stderr = std::str::from_utf8(&output.stderr).unwrap();
+    assert!(!output.status.success());
+    assert_eq!("", stdout);
+    assert_eq!("Error: Invalid backslash escape\n", stderr);
+
+    // Windows also forbids literal backslashes. Check for that if and only if
+    // we're on Windows.
+    if cfg!(windows) {
+        let output = cmd!(b3sum_exe(), "--check")
+            .stdin_bytes("0000000000000000000000000000000000000000000000000000000000000000  \\")
+            .stdout_capture()
+            .stderr_capture()
+            .unchecked()
+            .run()
+            .unwrap();
+        let stdout = std::str::from_utf8(&output.stdout).unwrap();
+        let stderr = std::str::from_utf8(&output.stderr).unwrap();
+        assert!(!output.status.success());
+        assert_eq!("", stdout);
+        assert_eq!("Error: Backslash in path\n", stderr);
+    }
 }
