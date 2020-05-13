@@ -5,7 +5,7 @@ use std::io::prelude::*;
 use std::path::PathBuf;
 
 pub fn b3sum_exe() -> PathBuf {
-    assert_cmd::cargo::cargo_bin("b3sum")
+    env!("CARGO_BIN_EXE_b3sum").into()
 }
 
 #[test]
