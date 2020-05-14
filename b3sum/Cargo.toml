@@ -16,7 +16,7 @@ pure = ["blake3/pure"]
 [dependencies]
 anyhow = "1.0.25"
 blake3 = { version = "0.3", path = "..", features = ["rayon"] }
-clap = { version = "2.33.0", default-features = false }
+clap = "2.33.1"
 hex = "0.4.0"
 memmap = "0.7.0"
 rayon = "1.2.1"
