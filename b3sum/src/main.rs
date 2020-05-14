@@ -76,11 +76,10 @@ impl Args {
                          context string. Cannot be used with --keyed.",
                     ),
             )
-            .arg(
-                Arg::with_name(NO_MMAP_ARG)
-                    .long(NO_MMAP_ARG)
-                    .help("Disables memory mapping"),
-            )
+            .arg(Arg::with_name(NO_MMAP_ARG).long(NO_MMAP_ARG).help(
+                "Disables memory mapping. Currently this also disables\n\
+                 multithreading.",
+            ))
             .arg(
                 Arg::with_name(NO_NAMES_ARG)
                     .long(NO_NAMES_ARG)
