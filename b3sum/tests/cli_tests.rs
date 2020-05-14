@@ -365,7 +365,7 @@ fn test_check() {
     assert_eq!(double_check_output, stdout);
     assert_eq!("", stderr);
 
-    // Finally, corrupt one of the files and check again.
+    // Corrupt one of the files and check again.
     fs::write(dir.path().join("b"), b"CORRUPTION").unwrap();
     let output = cmd!(b3sum_exe(), "--check", &checkfile_path)
         .dir(dir.path())
@@ -380,6 +380,28 @@ fn test_check() {
         a: OK\n\
         b: FAILED\n\
         c/d: OK\n";
+    assert!(!output.status.success());
+    assert_eq!(expected_check_failure, stdout);
+    assert_eq!("", stderr);
+
+    // Delete one of the files and check again.
+    fs::remove_file(dir.path().join("b")).unwrap();
+    let open_file_error = fs::File::open(dir.path().join("b")).unwrap_err();
+    let output = cmd!(b3sum_exe(), "--check", &checkfile_path)
+        .dir(dir.path())
+        .stdout_capture()
+        .stderr_capture()
+        .unchecked()
+        .run()
+        .unwrap();
+    let stdout = std::str::from_utf8(&output.stdout).unwrap();
+    let stderr = std::str::from_utf8(&output.stderr).unwrap();
+    let expected_check_failure = format!(
+        "a: OK\n\
+         b: FAILED ({})\n\
+         c/d: OK\n",
+        open_file_error,
+    );
     assert!(!output.status.success());
     assert_eq!(expected_check_failure, stdout);
     assert_eq!("", stderr);
@@ -399,7 +421,7 @@ fn test_check_invalid_characters() {
     let stderr = std::str::from_utf8(&output.stderr).unwrap();
     assert!(!output.status.success());
     assert_eq!("", stdout);
-    assert_eq!("Error: Null character in path\n", stderr);
+    assert_eq!("b3sum: Null character in path\n", stderr);
 
     // Check that a Unicode replacement character in the path fails.
     let output = cmd!(b3sum_exe(), "--check")
@@ -413,7 +435,7 @@ fn test_check_invalid_characters() {
     let stderr = std::str::from_utf8(&output.stderr).unwrap();
     assert!(!output.status.success());
     assert_eq!("", stdout);
-    assert_eq!("Error: Unicode replacement character in path\n", stderr);
+    assert_eq!("b3sum: Unicode replacement character in path\n", stderr);
 
     // Check that an invalid escape sequence in the path fails.
     let output = cmd!(b3sum_exe(), "--check")
@@ -427,7 +449,7 @@ fn test_check_invalid_characters() {
     let stderr = std::str::from_utf8(&output.stderr).unwrap();
     assert!(!output.status.success());
     assert_eq!("", stdout);
-    assert_eq!("Error: Invalid backslash escape\n", stderr);
+    assert_eq!("b3sum: Invalid backslash escape\n", stderr);
 
     // Windows also forbids literal backslashes. Check for that if and only if
     // we're on Windows.
@@ -443,6 +465,6 @@ fn test_check_invalid_characters() {
         let stderr = std::str::from_utf8(&output.stderr).unwrap();
         assert!(!output.status.success());
         assert_eq!("", stdout);
-        assert_eq!("Error: Backslash in path\n", stderr);
+        assert_eq!("b3sum: Backslash in path\n", stderr);
     }
 }

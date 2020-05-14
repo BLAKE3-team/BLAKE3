@@ -501,6 +501,51 @@ fn hash_one_input(path: &Path, args: &Args) -> Result<()> {
     Ok(())
 }
 
+// Returns true for success. Having a boolean return value here, instead of
+// passing down the some_file_failed reference, makes it less likely that we
+// might forget to set it in some error condition.
+fn check_one_line(line: &str, args: &Args) -> bool {
+    let parse_result = parse_check_line(&line);
+    let ParsedCheckLine {
+        file_string,
+        is_escaped,
+        file_path,
+        expected_hash,
+    } = match parse_result {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            eprintln!("{}: {}", NAME, e);
+            return false;
+        }
+    };
+    if is_escaped {
+        print!("\\");
+    }
+    print!("{}: ", file_string);
+    let hash_result: Result<blake3::Hash> = Input::open(&file_path, args)
+        .and_then(|mut input| input.hash(args))
+        .map(|mut hash_output| {
+            let mut found_hash_bytes = [0; blake3::OUT_LEN];
+            hash_output.fill(&mut found_hash_bytes);
+            found_hash_bytes.into()
+        });
+    let found_hash = match hash_result {
+        Ok(hash) => hash,
+        Err(e) => {
+            println!("FAILED ({})", e);
+            return false;
+        }
+    };
+    // This is a constant-time comparison.
+    if expected_hash == found_hash {
+        println!("OK");
+        true
+    } else {
+        println!("FAILED");
+        false
+    }
+}
+
 fn check_one_checkfile(path: &Path, args: &Args, some_file_failed: &mut bool) -> Result<()> {
     let checkfile_input = Input::open(path, args)?;
     let mut bufreader = io::BufReader::new(checkfile_input);
@@ -511,27 +556,11 @@ fn check_one_checkfile(path: &Path, args: &Args, some_file_failed: &mut bool) ->
         if n == 0 {
             return Ok(());
         }
-        let ParsedCheckLine {
-            file_string,
-            is_escaped,
-            file_path,
-            expected_hash,
-        } = parse_check_line(&line)?;
-        let mut hash_input = Input::open(&file_path, args)?;
-        let mut found_hash_bytes = [0; blake3::OUT_LEN];
-        let mut hash_output = hash_input.hash(args)?;
-        hash_output.fill(&mut found_hash_bytes);
-        let found_hash: blake3::Hash = found_hash_bytes.into();
-        if is_escaped {
-            print!("\\");
-        }
-        print!("{}: ", file_string);
-        // This is a constant-time comparison.
-        if expected_hash == found_hash {
-            println!("OK");
-        } else {
+        // check_one_line() prints errors and turns them into a success=false
+        // return, so it doesn't return a Result.
+        let success = check_one_line(&line, args);
+        if !success {
             *some_file_failed = true;
-            println!("FAILED");
         }
     }
 }
@@ -548,8 +577,11 @@ fn main() -> Result<()> {
         // Note that file_args automatically includes `-` if nothing is given.
         for path in &args.file_args {
             if args.check() {
-                // Errors encountered in checking (that is, any failure other
-                // than "bad checksum") bring down the whole process.
+                // A hash mismatch or a failure to read a hashed file will be
+                // printed in the checkfile loop, and will not propagate here.
+                // This is similar to the explicit error handling we do in the
+                // hashing case immediately below. In these cases,
+                // some_file_failed will be set to false.
                 check_one_checkfile(path, &args, &mut some_file_failed)?;
             } else {
                 // Errors encountered in hashing are tolerated and printed to
