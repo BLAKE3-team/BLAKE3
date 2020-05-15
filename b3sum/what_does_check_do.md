@@ -105,11 +105,11 @@ work as expected. Great!
 But...what did we mean above when we said *usually* UTF-8 and *usually* UTF-16?
 It turns out that not every possible sequence of bytes is valid UTF-8, and not
 every possible sequence of 16-bit wide chars is valid UTF-16. For example, the
-byte 0xff (255) can never appear in any UTF-8 string. If we ask Python to
+byte 0xFF (255) can never appear in any UTF-8 string. If we ask Python to
 decode it, it yells at us:
 
 ```python
->>> b"\xff".decode("UTF-8")
+>>> b"\xFF".decode("UTF-8")
 UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte
 ```
 
@@ -117,7 +117,7 @@ However, tragically, we *can* create a file with that byte in its name (on
 Linux at least, though not usually on macOS):
 
 ```python
->>> open(b"\xff", "w")
+>>> open(b"def\xFFghi", "w")
 ```
 
 So some filepaths aren't representable in Unicode at all. Our plan to "convert
@@ -125,8 +125,8 @@ platform-specific bytes into some consistent Unicode encoding" isn't going to
 work for everything. What does `b3sum` do with the file above?
 
 ```bash
-$ b3sum *
-af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262  �
+$ b3sum def*
+af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262  def�ghi
 ```
 
 That � in there is a "Unicode replacement character". When we run into
