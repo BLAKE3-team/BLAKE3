@@ -55,6 +55,11 @@ This repository is the official implementation of BLAKE3. It includes:
   port that doesn't need multi-threading or SIMD optimizations, start
   here.
 
+* A [set of test
+  vectors](https://github.com/BLAKE3-team/BLAKE3/blob/master/test_vectors/test_vectors.json)
+  that covers extended outputs, all three modes, and a variety of input
+  lengths.
+
 * [![Actions Status](https://github.com/BLAKE3-team/BLAKE3/workflows/tests/badge.svg)](https://github.com/BLAKE3-team/BLAKE3/actions)
 
 BLAKE3 was designed by:
