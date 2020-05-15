@@ -63,7 +63,7 @@ this:
 >>> open("abc\ndef", "w")
 ```
 
-Here's what we hash that file with `b3sum`:
+Here's what happens when we hash that file with `b3sum`:
 
 ```bash
 $ b3sum abc*
