@@ -27,6 +27,7 @@ INLINE __m128i set4(uint32_t a, uint32_t b, uint32_t c, uint32_t d) {
   return _mm_setr_epi32((int32_t)a, (int32_t)b, (int32_t)c, (int32_t)d);
 }
 
+TARGET_SSE41
 INLINE __m128i rot16(__m128i x) {
   return _mm_shuffle_epi8(
       x, _mm_set_epi8(13, 12, 15, 14, 9, 8, 11, 10, 5, 4, 7, 6, 1, 0, 3, 2));
@@ -36,6 +37,7 @@ INLINE __m128i rot12(__m128i x) {
   return xorv(_mm_srli_epi32(x, 12), _mm_slli_epi32(x, 32 - 12));
 }
 
+TARGET_SSE41
 INLINE __m128i rot8(__m128i x) {
   return _mm_shuffle_epi8(
       x, _mm_set_epi8(12, 15, 14, 13, 8, 11, 10, 9, 4, 7, 6, 5, 0, 3, 2, 1));
@@ -45,6 +47,7 @@ INLINE __m128i rot7(__m128i x) {
   return xorv(_mm_srli_epi32(x, 7), _mm_slli_epi32(x, 32 - 7));
 }
 
+TARGET_SSE41
 INLINE void g1(__m128i *row0, __m128i *row1, __m128i *row2, __m128i *row3,
                __m128i m) {
   *row0 = addv(addv(*row0, m), *row1);
@@ -55,6 +58,7 @@ INLINE void g1(__m128i *row0, __m128i *row1, __m128i *row2, __m128i *row3,
   *row1 = rot12(*row1);
 }
 
+TARGET_SSE41
 INLINE void g2(__m128i *row0, __m128i *row1, __m128i *row2, __m128i *row3,
                __m128i m) {
   *row0 = addv(addv(*row0, m), *row1);
@@ -80,6 +84,7 @@ INLINE void undiagonalize(__m128i *row0, __m128i *row2, __m128i *row3) {
   *row2 = _mm_shuffle_epi32(*row2, _MM_SHUFFLE(2, 1, 0, 3));
 }
 
+TARGET_SSE41
 INLINE void compress_pre(__m128i rows[4], const uint32_t cv[8],
                          const uint8_t block[BLAKE3_BLOCK_LEN],
                          uint8_t block_len, uint64_t counter, uint8_t flags) {
@@ -251,6 +256,7 @@ INLINE void compress_pre(__m128i rows[4], const uint32_t cv[8],
   undiagonalize(&rows[0], &rows[2], &rows[3]);
 }
 
+TARGET_SSE41
 void blake3_compress_in_place_sse41(uint32_t cv[8],
                                     const uint8_t block[BLAKE3_BLOCK_LEN],
                                     uint8_t block_len, uint64_t counter,
@@ -261,6 +267,7 @@ void blake3_compress_in_place_sse41(uint32_t cv[8],
   storeu(xorv(rows[1], rows[3]), (uint8_t *)&cv[4]);
 }
 
+TARGET_SSE41
 void blake3_compress_xof_sse41(const uint32_t cv[8],
                                const uint8_t block[BLAKE3_BLOCK_LEN],
                                uint8_t block_len, uint64_t counter,
@@ -273,6 +280,7 @@ void blake3_compress_xof_sse41(const uint32_t cv[8],
   storeu(xorv(rows[3], loadu((uint8_t *)&cv[4])), &out[48]);
 }
 
+TARGET_SSE41
 INLINE void round_fn(__m128i v[16], __m128i m[16], size_t r) {
   v[0] = addv(v[0], m[(size_t)MSG_SCHEDULE[r][0]]);
   v[1] = addv(v[1], m[(size_t)MSG_SCHEDULE[r][2]]);
@@ -443,13 +451,14 @@ INLINE void load_counters(uint64_t counter, bool increment_counter,
   const __m128i add0 = _mm_set_epi32(3, 2, 1, 0);
   const __m128i add1 = _mm_and_si128(mask, add0);
   __m128i l = _mm_add_epi32(_mm_set1_epi32(counter), add1);
-  __m128i carry = _mm_cmpgt_epi32(_mm_xor_si128(add1, _mm_set1_epi32(0x80000000)), 
+  __m128i carry = _mm_cmpgt_epi32(_mm_xor_si128(add1, _mm_set1_epi32(0x80000000)),
                                   _mm_xor_si128(   l, _mm_set1_epi32(0x80000000)));
   __m128i h = _mm_sub_epi32(_mm_set1_epi32(counter >> 32), carry);
   *out_lo = l;
   *out_hi = h;
 }
 
+TARGET_SSE41
 void blake3_hash4_sse41(const uint8_t *const *inputs, size_t blocks,
                         const uint32_t key[8], uint64_t counter,
                         bool increment_counter, uint8_t flags,

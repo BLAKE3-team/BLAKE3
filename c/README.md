@@ -163,24 +163,16 @@ gcc -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c \
     blake3_sse41_x86-64_unix.S blake3_avx2_x86-64_unix.S blake3_avx512_x86-64_unix.S
 ```
 
-When building the intrinsics-based implementations, you need to build
-each implementation separately, with the corresponding instruction set
-explicitly enabled in the compiler. Here's the same shared library using
-the intrinsics-based implementations:
+Here's the same shared library using the intrinsics-based implementations:
 
 ```bash
-gcc -c -fPIC -O3 -msse4.1 blake3_sse41.c -o blake3_sse41.o
-gcc -c -fPIC -O3 -mavx2 blake3_avx2.c -o blake3_avx2.o
-gcc -c -fPIC -O3 -mavx512f -mavx512vl blake3_avx512.c -o blake3_avx512.o
 gcc -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c \
-    blake3_avx2.o blake3_avx512.o blake3_sse41.o
+    blake3_avx2.c blake3_avx512.c blake3_sse41.c
 ```
 
-Note above that building `blake3_avx512.c` requires both `-mavx512f` and
-`-mavx512vl` under GCC and Clang, as shown above. Under MSVC, the single
-`/arch:AVX512` flag is sufficient. The MSVC equivalent of `-mavx2` is
-`/arch:AVX2`. MSVC enables SSE4.1 by defaut, and it doesn't have a
-corresponding flag.
+When building the intrinsics-based implementations under MSVC, you need to
+build `blake3_avx2.c` and `blake3_avx512.c` separately first, specifying the
+`/arch:AVX2` and `/arch:AVX512` compiler flags respectively.
 
 If you want to omit SIMD code on x86, you need to explicitly disable
 each instruction set. Here's an example of building a shared library on

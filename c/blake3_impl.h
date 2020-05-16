@@ -28,7 +28,7 @@ enum blake3_flags {
 #define INLINE static inline __attribute__((always_inline))
 #endif
 
-#if defined(__x86_64__) || defined(_M_X64) 
+#if defined(__x86_64__) || defined(_M_X64)
 #define IS_X86
 #define IS_X86_64
 #endif
@@ -51,6 +51,18 @@ enum blake3_flags {
 #define MAX_SIMD_DEGREE 4
 #else
 #define MAX_SIMD_DEGREE 1
+#endif
+
+// On GCC and Clang we can enable intrinsics per function, rather than
+// requiring their respective -mavx2, -mavx512vl, etc. compiler flags.
+#if defined(__GNUC__) || defined(__clang__)
+#  define TARGET_AVX2 __attribute__((target("avx2")))
+#  define TARGET_AVX512 __attribute__((target("avx512vl,avx512f")))
+#  define TARGET_SSE41 __attribute__((target("sse4.1")))
+#else
+#  define TARGET_AVX2    // On MSVC, use the compiler flag /arch:AVX2
+#  define TARGET_AVX512  // On MSVC, use the compiler flag /argc:AVX512
+#  define TARGET_SSE41   // On MSVC, this is always enabled.
 #endif
 
 // There are some places where we want a static size that's equal to the
@@ -117,7 +129,7 @@ INLINE unsigned int popcnt(uint64_t x) {
 }
 
 // Largest power of two less than or equal to x. As a special case, returns 1
-// when x is 0. 
+// when x is 0.
 INLINE uint64_t round_down_to_power_of_2(uint64_t x) {
   return 1ULL << highest_one(x | 1);
 }
@@ -230,6 +242,5 @@ void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
                            uint8_t flags, uint8_t flags_start,
                            uint8_t flags_end, uint8_t *out);
 #endif
-
 
 #endif /* BLAKE3_IMPL_H */

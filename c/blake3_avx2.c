@@ -4,41 +4,51 @@
 
 #define DEGREE 8
 
+TARGET_AVX2
 INLINE __m256i loadu(const uint8_t src[32]) {
   return _mm256_loadu_si256((const __m256i *)src);
 }
 
+TARGET_AVX2
 INLINE void storeu(__m256i src, uint8_t dest[16]) {
   _mm256_storeu_si256((__m256i *)dest, src);
 }
 
+TARGET_AVX2
 INLINE __m256i addv(__m256i a, __m256i b) { return _mm256_add_epi32(a, b); }
 
 // Note that clang-format doesn't like the name "xor" for some reason.
+TARGET_AVX2
 INLINE __m256i xorv(__m256i a, __m256i b) { return _mm256_xor_si256(a, b); }
 
+TARGET_AVX2
 INLINE __m256i set1(uint32_t x) { return _mm256_set1_epi32((int32_t)x); }
 
+TARGET_AVX2
 INLINE __m256i rot16(__m256i x) {
   return _mm256_shuffle_epi8(
       x, _mm256_set_epi8(13, 12, 15, 14, 9, 8, 11, 10, 5, 4, 7, 6, 1, 0, 3, 2,
                          13, 12, 15, 14, 9, 8, 11, 10, 5, 4, 7, 6, 1, 0, 3, 2));
 }
 
+TARGET_AVX2
 INLINE __m256i rot12(__m256i x) {
   return _mm256_or_si256(_mm256_srli_epi32(x, 12), _mm256_slli_epi32(x, 32 - 12));
 }
 
+TARGET_AVX2
 INLINE __m256i rot8(__m256i x) {
   return _mm256_shuffle_epi8(
       x, _mm256_set_epi8(12, 15, 14, 13, 8, 11, 10, 9, 4, 7, 6, 5, 0, 3, 2, 1,
                          12, 15, 14, 13, 8, 11, 10, 9, 4, 7, 6, 5, 0, 3, 2, 1));
 }
 
+TARGET_AVX2
 INLINE __m256i rot7(__m256i x) {
   return _mm256_or_si256(_mm256_srli_epi32(x, 7), _mm256_slli_epi32(x, 32 - 7));
 }
 
+TARGET_AVX2
 INLINE void round_fn(__m256i v[16], __m256i m[16], size_t r) {
   v[0] = addv(v[0], m[(size_t)MSG_SCHEDULE[r][0]]);
   v[1] = addv(v[1], m[(size_t)MSG_SCHEDULE[r][2]]);
@@ -155,6 +165,7 @@ INLINE void round_fn(__m256i v[16], __m256i m[16], size_t r) {
   v[4] = rot7(v[4]);
 }
 
+TARGET_AVX2
 INLINE void transpose_vecs(__m256i vecs[DEGREE]) {
   // Interleave 32-bit lanes. The low unpack is lanes 00/11/44/55, and the high
   // is 22/33/66/77.
@@ -189,6 +200,7 @@ INLINE void transpose_vecs(__m256i vecs[DEGREE]) {
   vecs[7] = _mm256_permute2x128_si256(abcd_37, efgh_37, 0x31);
 }
 
+TARGET_AVX2
 INLINE void transpose_msg_vecs(const uint8_t *const *inputs,
                                size_t block_offset, __m256i out[16]) {
   out[0] = loadu(&inputs[0][block_offset + 0 * sizeof(__m256i)]);
@@ -214,19 +226,21 @@ INLINE void transpose_msg_vecs(const uint8_t *const *inputs,
   transpose_vecs(&out[8]);
 }
 
+TARGET_AVX2
 INLINE void load_counters(uint64_t counter, bool increment_counter,
                           __m256i *out_lo, __m256i *out_hi) {
   const __m256i mask = _mm256_set1_epi32(-(int32_t)increment_counter);
   const __m256i add0 = _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0);
   const __m256i add1 = _mm256_and_si256(mask, add0);
   __m256i l = _mm256_add_epi32(_mm256_set1_epi32(counter), add1);
-  __m256i carry = _mm256_cmpgt_epi32(_mm256_xor_si256(add1, _mm256_set1_epi32(0x80000000)), 
+  __m256i carry = _mm256_cmpgt_epi32(_mm256_xor_si256(add1, _mm256_set1_epi32(0x80000000)),
                                      _mm256_xor_si256(   l, _mm256_set1_epi32(0x80000000)));
   __m256i h = _mm256_sub_epi32(_mm256_set1_epi32(counter >> 32), carry);
   *out_lo = l;
   *out_hi = h;
 }
 
+TARGET_AVX2
 void blake3_hash8_avx2(const uint8_t *const *inputs, size_t blocks,
                        const uint32_t key[8], uint64_t counter,
                        bool increment_counter, uint8_t flags,
