@@ -55,19 +55,19 @@ and very similar output for failure.
 
 Since the checkfile format (the regular output format of `b3sum`) is
 newline-separated text, we need to worry about what happens when a filepath
-contains a newline, or worse. Suppose we create a file named `abc[newline]def`
-(7 characters). One way to create such a file is with a Python one-liner like
+contains a newline, or worse. Suppose we create a file named `x[newline]x`
+(3 characters). One way to create such a file is with a Python one-liner like
 this:
 
 ```python
->>> open("abc\ndef", "w")
+>>> open("x\nx", "w")
 ```
 
 Here's what happens when we hash that file with `b3sum`:
 
 ```bash
-$ b3sum abc*
-\af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262  abc\ndef
+$ b3sum x*
+\af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262  x\nx
 ```
 
 Notice two things. First, `b3sum` puts a single `\` character at the front of
@@ -117,7 +117,7 @@ However, tragically, we *can* create a file with that byte in its name (on
 Linux at least, though not usually on macOS):
 
 ```python
->>> open(b"def\xFFghi", "w")
+>>> open(b"y\xFFy", "w")
 ```
 
 So some filepaths aren't representable in Unicode at all. Our plan to "convert
@@ -125,8 +125,8 @@ platform-specific bytes into some consistent Unicode encoding" isn't going to
 work for everything. What does `b3sum` do with the file above?
 
 ```bash
-$ b3sum def*
-af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262  def�ghi
+$ b3sum y*
+af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262  y�y
 ```
 
 That � in there is a "Unicode replacement character". When we run into
@@ -137,19 +137,21 @@ see a replacement character. Together with a few more details covered in the
 next section, this gives us an important set of properties:
 
 1. Any file can be hashed locally.
-2. Any file with a valid Unicode name can be checked.
-3. Checkfiles are always valid UTF-8.
-4. Checkfiles are portable between Unix and Windows.
+2. Any file with a valid Unicode name not containing the � character can be
+   checked.
+3. Checking ambiguous or unrepresentable filepaths always fails.
+4. Checkfiles are always valid UTF-8.
+5. Checkfiles are portable between Unix and Windows.
 
 ## Formal Rules
 
 1. When hashing, filepaths are represented in a platform-specific encoding,
-   which can accommodate any filepath on the current platform. (In Rust, this
-   is `OsStr`/`OsString`.)
+   which can accommodate any filepath on the current platform. In Rust, this is
+   `OsStr`/`OsString`.
 2. In output, filepaths are first converted to UTF-8. Any non-Unicode segments
-   are replaced with Unicode replacement characters. (In Rust, this is
-   `OsStr::to_string_lossy`.)
-3. Then, if a filepath contains a backslash (U+005C) or a newline (U+000A),
+   are replaced with Unicode replacement characters (U+FFFD). In Rust, this is
+   `OsStr::to_string_lossy`.
+3. Then, if a filepath contains any backslashes (U+005C) or newlines (U+000A),
    these characters are escaped as `\\` and `\n` respectively.
 4. Finally, any output line containing an escape sequence is prefixed with a
    single backslash.
