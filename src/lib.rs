@@ -99,6 +99,7 @@ use arrayref::{array_mut_ref, array_ref};
 use arrayvec::{ArrayString, ArrayVec};
 use core::cmp;
 use core::fmt;
+use core::hash;
 use join::{Join, SerialJoin};
 use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
 
@@ -1198,6 +1199,21 @@ impl Hasher {
     /// [`OutputReader`]: struct.OutputReader.html
     pub fn finalize_xof(&self) -> OutputReader {
         OutputReader::new(self.final_output())
+    }
+}
+
+impl hash::Hasher for Hasher {
+    fn finish(&self) -> u64 {
+        let mut bytes = [0; 8];
+
+        self.finalize_xof().fill(&mut bytes);
+
+        u64::from_le_bytes(bytes)
+    }
+
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        self.update(bytes);
     }
 }
 
