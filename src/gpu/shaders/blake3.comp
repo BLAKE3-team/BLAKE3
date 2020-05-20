@@ -8,7 +8,7 @@ layout(binding = 0) readonly restrict buffer Input {
 layout(binding = 1) writeonly restrict buffer Output {
     uvec4 out_buf[];
 };
-layout(binding = 2) readonly restrict uniform Control {
+layout(push_constant) readonly restrict uniform Control {
     uvec4 k[2];
     uvec2 t;
     uint d;

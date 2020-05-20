@@ -446,14 +446,12 @@ pub mod shaders {
         }
 
         /// The local workgroup size.
-        pub const WORKGROUP_SIZE: u32 = 128;
+        pub const WORKGROUP_SIZE: usize = 128;
 
         /// The descriptor binding for the input buffer.
         pub const INPUT_BUFFER_BINDING: u32 = 0;
         /// The descriptor binding for the output buffer.
         pub const OUTPUT_BUFFER_BINDING: u32 = 1;
-        /// The descriptor binding for the control uniform.
-        pub const CONTROL_UNIFORM_BINDING: u32 = 2;
 
         /// The size of the control uniform.
         pub const CONTROL_UNIFORM_SIZE: usize = 11 * 4;

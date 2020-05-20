@@ -5,29 +5,15 @@ use blake3::{OutputReader, CHUNK_LEN};
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{self, ErrorKind, Read};
-use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
 
-use super::vulkan::{gpu_init, GpuStep, GpuTask, Queue};
+use super::vulkan::{GpuInstance, GpuTask};
 
 const BUFFER_SIZE: usize = 32 * 1024 * 1024;
 const TASKS: usize = 3;
 
-const STEPS: &[GpuStep] = &[
-    GpuStep::Blake3Chunk(256),
-    GpuStep::Blake3Parent(128),
-    GpuStep::Blake3Parent(64),
-    GpuStep::Blake3Parent(32),
-    GpuStep::Blake3Parent(16),
-    GpuStep::Blake3Parent(8),
-    GpuStep::Blake3Parent(4),
-    GpuStep::Blake3Parent(2),
-    GpuStep::Blake3Parent(1),
-];
-
 pub struct Gpu {
     disabled: bool,
-    inner: Option<GpuState>,
+    instance: Option<GpuInstance>,
 }
 
 impl Gpu {
@@ -35,7 +21,7 @@ impl Gpu {
     pub fn new() -> Self {
         Gpu {
             disabled: false,
-            inner: None,
+            instance: None,
         }
     }
 
@@ -57,13 +43,16 @@ impl Gpu {
         } else if file_size < 4 * BUFFER_SIZE as u64 {
             // Too small to be worth the overhead.
             None
-        } else if let Some(state) = &mut self.inner {
+        } else if let Some(ref mut instance) = &mut self.instance {
             // Device already initialized.
-            Some(state.hash(base_hasher, file)?)
-        } else if let Some((queues, tasks)) = gpu_init(TASKS, STEPS)? {
+            Some(hash(instance, base_hasher, file)?)
+        } else if let Some(instance) = GpuInstance::new(TASKS, BUFFER_SIZE)? {
             // Device not yet initialized.
-            let state = GpuState::new(queues, tasks);
-            Some(self.inner.get_or_insert(state).hash(base_hasher, file)?)
+            Some(hash(
+                self.instance.get_or_insert(instance),
+                base_hasher,
+                file,
+            )?)
         } else {
             // No GPU found.
             self.disabled = true;
@@ -72,115 +61,64 @@ impl Gpu {
     }
 }
 
-struct GpuState {
-    queues: Vec<Arc<Queue>>,
-    tasks: Vec<GpuTask>,
-}
+fn hash<R: Read>(
+    instance: &mut GpuInstance,
+    base_hasher: &GpuHasher,
+    mut file: R,
+) -> Result<OutputReader> {
+    let mut hasher = base_hasher.clone();
+    let mut chunk_counter = 0;
 
-struct GpuTaskRef<'a>(&'a mut GpuTask);
+    let buffer_size = instance.input_buffer_size();
+    let mut tasks = instance.tasks();
+    let mut tasks: VecDeque<&mut GpuTask> = tasks.iter_mut().collect();
+    let mut pending: VecDeque<(&mut GpuTask, usize)> = VecDeque::with_capacity(tasks.len());
 
-impl<'a> Deref for GpuTaskRef<'a> {
-    type Target = GpuTask;
+    let chunk_count = (buffer_size / CHUNK_LEN) as u64;
 
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<'a> DerefMut for GpuTaskRef<'a> {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl<'a> Drop for GpuTaskRef<'a> {
-    fn drop(&mut self) {
-        // An early exit due to an error might leave the GPU task running or
-        // locked, reset it to prepare for the next file.
-        self.reset().expect("Unable to reset GPU task state")
-    }
-}
-
-enum GpuTaskState<'a> {
-    Full(GpuTaskRef<'a>),
-    Tail(GpuTaskRef<'a>, usize),
-}
-
-impl GpuState {
-    #[inline]
-    pub fn new(queues: Vec<Arc<Queue>>, tasks: Vec<GpuTask>) -> Self {
-        GpuState { queues, tasks }
-    }
-
-    pub fn hash(&mut self, base_hasher: &GpuHasher, file: &File) -> Result<OutputReader> {
-        let mut hasher = base_hasher.clone();
-        let mut chunk_counter = 0;
-
-        let queues = &self.queues;
-        let mut next_queue = 0;
-
-        let mut tasks: VecDeque<_> = self.tasks.iter_mut().map(GpuTaskRef).collect();
-        let mut pending = VecDeque::with_capacity(tasks.len());
-
-        let chunk_count = (BUFFER_SIZE / CHUNK_LEN) as u64;
-        let mut tail = false;
-        loop {
-            let mut task = if let Some(task) = tasks.pop_front() {
-                task
-            } else if let Some(state) = pending.pop_front() {
-                match state {
-                    GpuTaskState::Full(mut task) => {
-                        task.wait()?;
-                        {
-                            let mut buffer = unsafe { task.lock_output_buffer()? };
-                            hasher.update_from_gpu::<RayonJoin>(chunk_count, &mut buffer);
-                        }
-                        task
-                    }
-                    GpuTaskState::Tail(task, size) => {
-                        debug_assert!(tasks.is_empty() && pending.is_empty() && tail);
-                        {
-                            let buffer = unsafe { task.lock_input_buffer()? };
-                            hasher.update_with_join::<RayonJoin>(&buffer[..size]);
-                        }
-                        task
-                    }
-                }
+    let mut tail = false;
+    loop {
+        let (task, mut tail_size, wait_result) = if let Some(task) = tasks.pop_front() {
+            (task, 0, Default::default())
+        } else if let Some((task, size)) = pending.pop_front() {
+            if task.is_pending() {
+                let result = task.wait()?;
+                (task, size, result)
             } else {
-                break;
-            };
+                (task, size, Default::default())
+            }
+        } else {
+            break;
+        };
 
-            if !tail {
-                task.write_control(&hasher.gpu_control(chunk_counter))?;
-                chunk_counter += chunk_count;
+        if !tail {
+            let size = read_all(&mut file, task.input_buffer())?;
 
-                let size = {
-                    let mut buffer = unsafe { task.lock_input_buffer()? };
-                    debug_assert_eq!(buffer.len(), BUFFER_SIZE);
-                    read_all(file, &mut buffer)?
-                };
-
-                if size < BUFFER_SIZE {
-                    tail = true;
-                    tasks.clear();
-
-                    if size > 0 {
-                        pending.push_back(GpuTaskState::Tail(task, size));
-                    }
-                } else {
-                    let queue = &queues[next_queue];
-                    next_queue = (next_queue + 1) % queues.len();
-
-                    task.submit(queue)?;
-                    pending.push_back(GpuTaskState::Full(task));
-                }
+            if size < buffer_size {
+                tail = true;
+                tail_size = size;
+                tasks.clear();
             }
         }
 
-        Ok(hasher.finalize_xof())
+        if !tail || wait_result.has_more {
+            task.submit(&hasher.gpu_control(chunk_counter), !tail)?;
+            chunk_counter += chunk_count;
+        }
+
+        if wait_result.has_output {
+            hasher.update_from_gpu::<RayonJoin>(chunk_count, task.output_buffer());
+        } else if pending.is_empty() && !wait_result.has_more && tail_size > 0 {
+            hasher.update_with_join::<RayonJoin>(&task.input_buffer()[..tail_size]);
+            tail_size = 0;
+        }
+
+        if !tail || wait_result.has_more || tail_size > 0 {
+            pending.push_back((task, tail_size));
+        }
     }
+
+    Ok(hasher.finalize_xof())
 }
 
 fn read_all<R: Read>(mut reader: R, mut buf: &mut [u8]) -> io::Result<usize> {
@@ -197,4 +135,62 @@ fn read_all<R: Read>(mut reader: R, mut buf: &mut [u8]) -> io::Result<usize> {
         }
     }
     Ok(len - buf.len())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use blake3::gpu::{shaders, GpuHasher};
+    use blake3::join::RayonJoin;
+    use blake3::OUT_LEN;
+
+    // Should be big enough for at least 3 steps.
+    const TEST_BUFFER_SIZE: usize = 4 * shaders::blake3::WORKGROUP_SIZE * CHUNK_LEN;
+
+    fn selftest_seq(len: usize) -> Vec<u8> {
+        let seed = len as u32;
+        let mut out = Vec::with_capacity(len);
+
+        let mut a = seed.wrapping_mul(0xDEAD4BAD);
+        let mut b = 1;
+
+        for _ in 0..len {
+            let t = a.wrapping_add(b);
+            a = b;
+            b = t;
+            out.push((t >> 24) as u8);
+        }
+
+        out
+    }
+
+    #[test]
+    fn task_sequence() -> Result<()> {
+        let mut instance = GpuInstance::new(3, TEST_BUFFER_SIZE)?.expect("No GPU found");
+
+        let mut test = |data: &[u8]| -> Result<()> {
+            let mut hasher = GpuHasher::new();
+
+            let mut output = hash(&mut instance, &hasher, data)?;
+            let mut hash = [0; OUT_LEN];
+            output.fill(&mut hash);
+
+            hasher.update_with_join::<RayonJoin>(&data);
+            let expected = hasher.finalize();
+
+            assert_eq!(&hash, expected.as_bytes());
+            Ok(())
+        };
+
+        let data = selftest_seq(16 * TEST_BUFFER_SIZE + 16 + 1);
+        for count in 0..=16 {
+            // No partial buffers
+            test(&data[..count * TEST_BUFFER_SIZE])?;
+
+            // Partial buffer at the end
+            test(&data[..count * TEST_BUFFER_SIZE + count + 1])?;
+        }
+        Ok(())
+    }
 }
