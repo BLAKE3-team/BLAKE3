@@ -4,7 +4,6 @@ use blake3::join::RayonJoin;
 use blake3::{OutputReader, CHUNK_LEN};
 use std::collections::VecDeque;
 use std::fs::File;
-use std::io::{self, ErrorKind, Read};
 
 use super::vulkan::{GpuInstance, GpuTask};
 
@@ -40,18 +39,23 @@ impl Gpu {
         Ok(if !metadata.is_file() {
             // Not a real file.
             None
+        } else if file_size > isize::max_value() as u64 {
+            // Too long to safely map.
+            // https://github.com/danburkert/memmap-rs/issues/69
+            None
         } else if file_size < 4 * BUFFER_SIZE as u64 {
             // Too small to be worth the overhead.
             None
         } else if let Some(ref mut instance) = &mut self.instance {
             // Device already initialized.
-            Some(hash(instance, base_hasher, file)?)
+            Some(hash_file(instance, base_hasher, file, file_size)?)
         } else if let Some(instance) = GpuInstance::new(TASKS, BUFFER_SIZE)? {
             // Device not yet initialized.
-            Some(hash(
+            Some(hash_file(
                 self.instance.get_or_insert(instance),
                 base_hasher,
                 file,
+                file_size,
             )?)
         } else {
             // No GPU found.
@@ -61,10 +65,24 @@ impl Gpu {
     }
 }
 
-fn hash<R: Read>(
+fn hash_file(
     instance: &mut GpuInstance,
     base_hasher: &GpuHasher,
-    mut file: R,
+    file: &File,
+    file_size: u64,
+) -> Result<OutputReader> {
+    let map = unsafe {
+        memmap::MmapOptions::new()
+            .len(file_size as usize)
+            .map(&file)?
+    };
+    hash(instance, base_hasher, &map)
+}
+
+fn hash(
+    instance: &mut GpuInstance,
+    base_hasher: &GpuHasher,
+    mut data: &[u8],
 ) -> Result<OutputReader> {
     let mut hasher = base_hasher.clone();
     let mut chunk_counter = 0;
@@ -72,69 +90,45 @@ fn hash<R: Read>(
     let buffer_size = instance.input_buffer_size();
     let mut tasks = instance.tasks();
     let mut tasks: VecDeque<&mut GpuTask> = tasks.iter_mut().collect();
-    let mut pending: VecDeque<(&mut GpuTask, usize)> = VecDeque::with_capacity(tasks.len());
 
     let chunk_count = (buffer_size / CHUNK_LEN) as u64;
 
-    let mut tail = false;
-    loop {
-        let (task, mut tail_size, wait_result) = if let Some(task) = tasks.pop_front() {
-            (task, 0, Default::default())
-        } else if let Some((task, size)) = pending.pop_front() {
-            if task.is_pending() {
-                let result = task.wait()?;
-                (task, size, result)
-            } else {
-                (task, size, Default::default())
-            }
+    let mut tail = None;
+    while let Some(task) = tasks.pop_front() {
+        let wait_result = if task.is_pending() {
+            task.wait()?
         } else {
-            break;
+            Default::default()
         };
 
-        if !tail {
-            let size = read_all(&mut file, task.input_buffer())?;
-
-            if size < buffer_size {
-                tail = true;
-                tail_size = size;
-                tasks.clear();
+        if tail.is_none() {
+            if data.len() < buffer_size {
+                tail = Some(data);
+            } else {
+                task.input_buffer().copy_from_slice(&data[..buffer_size]);
+                data = &data[buffer_size..];
             }
         }
 
-        if !tail || wait_result.has_more {
-            task.submit(&hasher.gpu_control(chunk_counter), !tail)?;
+        if tail.is_none() || wait_result.has_more {
+            task.submit(&hasher.gpu_control(chunk_counter), tail.is_none())?;
             chunk_counter += chunk_count;
         }
 
         if wait_result.has_output {
             hasher.update_from_gpu::<RayonJoin>(chunk_count, task.output_buffer());
-        } else if pending.is_empty() && !wait_result.has_more && tail_size > 0 {
-            hasher.update_with_join::<RayonJoin>(&task.input_buffer()[..tail_size]);
-            tail_size = 0;
         }
 
-        if !tail || wait_result.has_more || tail_size > 0 {
-            pending.push_back((task, tail_size));
+        if tail.is_none() || wait_result.has_more {
+            tasks.push_back(task);
         }
+    }
+
+    if let Some(data) = tail {
+        hasher.update_with_join::<RayonJoin>(data);
     }
 
     Ok(hasher.finalize_xof())
-}
-
-fn read_all<R: Read>(mut reader: R, mut buf: &mut [u8]) -> io::Result<usize> {
-    let len = buf.len();
-    while !buf.is_empty() {
-        match reader.read(buf) {
-            Ok(0) => break,
-            Ok(n) => {
-                let tmp = buf;
-                buf = &mut tmp[n..];
-            }
-            Err(ref e) if e.kind() == ErrorKind::Interrupted => {}
-            Err(e) => return Err(e),
-        }
-    }
-    Ok(len - buf.len())
 }
 
 #[cfg(test)]
