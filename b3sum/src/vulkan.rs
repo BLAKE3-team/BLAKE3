@@ -701,13 +701,14 @@ impl GpuInstance {
                 })
                 .map(|(index, _)| index as u32)
         };
-        let host_visible_index = |size, memory_type_bits| {
+
+        let host_visible_index = |size, memory_type_bits, prefer_flag| {
             memory_type_index(
                 size,
                 memory_type_bits,
                 vk::MemoryPropertyFlags::HOST_VISIBLE
                     | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::HOST_CACHED,
+                    | prefer_flag,
             )
             .or_else(|| {
                 memory_type_index(
@@ -747,6 +748,7 @@ impl GpuInstance {
             let memory_type_index = host_visible_index(
                 memory_requirements.size,
                 memory_requirements.memory_type_bits,
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
             )?;
 
             let memory = allocate_memory(memory_requirements.size, memory_type_index)?;
@@ -840,7 +842,8 @@ impl GpuInstance {
             let (mut size, alignment_mask, memory_type_bits) =
                 allocation_requirements(&requirements);
 
-            let memory_type_index = host_visible_index(size, memory_type_bits)?;
+            let memory_type_index =
+                host_visible_index(size, memory_type_bits, vk::MemoryPropertyFlags::HOST_CACHED)?;
             let memory = Guard::new(allocate_memory(size, memory_type_index)?, destroy);
 
             let mapped = unsafe {
