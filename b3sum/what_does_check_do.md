@@ -99,7 +99,7 @@ A more portable approach is to convert platform-specific bytes into some
 consistent Unicode encoding. (In practice this is going to be UTF-8, but in
 theory it could be anything.) Then when `--check` needs to open a file, we
 convert the Unicode representation back into platform-specific bytes. This
-makes important common case like `abc`, and in fact even `abc[newline]def`,
+makes important common cases like `abc`, and in fact even `abc[newline]def`,
 work as expected. Great!
 
 But...what did we mean above when we said *usually* UTF-8 and *usually* UTF-16?
