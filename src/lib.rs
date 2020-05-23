@@ -43,7 +43,8 @@
 //! detection. If this feature is disabled, the only way to use the SIMD
 //! implementations in this crate is to enable the corresponding instruction
 //! sets statically for the entire build, with e.g. `RUSTFLAGS="-C
-//! target-cpu=native"`. The resulting binary will not be portable to machines.
+//! target-cpu=native"`. The resulting binary will not be portable to other
+//! machines.
 //!
 //! [BLAKE3]: https://blake3.io
 //! [Rayon]: https://github.com/rayon-rs/rayon
