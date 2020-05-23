@@ -21,6 +21,7 @@ const NO_NAMES_ARG: &str = "no-names";
 const NUM_THREADS_ARG: &str = "num-threads";
 const RAW_ARG: &str = "raw";
 const CHECK_ARG: &str = "check";
+const QUIET_ARG: &str = "quiet";
 
 struct Args {
     inner: clap::ArgMatches<'static>,
@@ -32,7 +33,10 @@ impl Args {
     fn parse() -> Result<Self> {
         let inner = App::new("b3sum")
             .version(env!("CARGO_PKG_VERSION"))
-            .arg(Arg::with_name(FILE_ARG).multiple(true))
+            .arg(Arg::with_name(FILE_ARG).multiple(true).help(
+                "Files to hash, or checkfiles to check. When no file is given, \n\
+                 or when - is given, read standard input.",
+            ))
             .arg(
                 Arg::with_name(LENGTH_ARG)
                     .long(LENGTH_ARG)
@@ -101,6 +105,15 @@ impl Args {
                     .conflicts_with(NO_NAMES_ARG)
                     .help("Reads BLAKE3 sums from the [file]s and checks them"),
             )
+            .arg(
+                Arg::with_name(QUIET_ARG)
+                    .long(QUIET_ARG)
+                    .requires(CHECK_ARG)
+                    .help(
+                        "Skips printing OK for each successfully verified file.\n\
+                         Must be used with --check.",
+                    ),
+            )
             .get_matches();
         let file_args = if let Some(iter) = inner.values_of_os(FILE_ARG) {
             iter.map(|s| s.into()).collect()
@@ -164,6 +177,10 @@ impl Args {
 
     fn keyed(&self) -> bool {
         self.inner.is_present(KEYED_ARG)
+    }
+
+    fn quiet(&self) -> bool {
+        self.inner.is_present(QUIET_ARG)
     }
 }
 
@@ -517,10 +534,11 @@ fn check_one_line(line: &str, args: &Args) -> bool {
             return false;
         }
     };
-    if is_escaped {
-        print!("\\");
-    }
-    print!("{}: ", file_string);
+    let file_string = if is_escaped {
+        "\\".to_string() + &file_string
+    } else {
+        file_string
+    };
     let hash_result: Result<blake3::Hash> = Input::open(&file_path, args)
         .and_then(|mut input| input.hash(args))
         .map(|mut hash_output| {
@@ -528,19 +546,21 @@ fn check_one_line(line: &str, args: &Args) -> bool {
             hash_output.fill(&mut found_hash_bytes);
             found_hash_bytes.into()
         });
-    let found_hash = match hash_result {
+    let found_hash: blake3::Hash = match hash_result {
         Ok(hash) => hash,
         Err(e) => {
-            println!("FAILED ({})", e);
+            println!("{}: FAILED ({})", file_string, e);
             return false;
         }
     };
     // This is a constant-time comparison.
     if expected_hash == found_hash {
-        println!("OK");
+        if !args.quiet() {
+            println!("{}: OK", file_string);
+        }
         true
     } else {
-        println!("FAILED");
+        println!("{}: FAILED", file_string);
         false
     }
 }

@@ -405,6 +405,21 @@ fn test_check() {
     assert!(!output.status.success());
     assert_eq!(expected_check_failure, stdout);
     assert_eq!("", stderr);
+
+    // Confirm that --quiet suppresses the OKs but not the FAILEDs.
+    let output = cmd!(b3sum_exe(), "--check", "--quiet", &checkfile_path)
+        .dir(dir.path())
+        .stdout_capture()
+        .stderr_capture()
+        .unchecked()
+        .run()
+        .unwrap();
+    let stdout = std::str::from_utf8(&output.stdout).unwrap();
+    let stderr = std::str::from_utf8(&output.stderr).unwrap();
+    let expected_check_failure = format!("b: FAILED ({})\n", open_file_error);
+    assert!(!output.status.success());
+    assert_eq!(expected_check_failure, stdout);
+    assert_eq!("", stderr);
 }
 
 #[test]
