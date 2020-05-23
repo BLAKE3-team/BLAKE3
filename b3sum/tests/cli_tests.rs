@@ -496,6 +496,15 @@ fn test_globbing() {
 
     let foo_hash = blake3::hash(b"foo");
     let bar_hash = blake3::hash(b"bar");
+    // NOTE: This assumes that the glob will be expanded in alphabetical order,
+    //       to "file1 file2" rather than "file2 file1". So far, this seems to
+    //       be true (guaranteed?) of Unix shell behavior, and true in practice
+    //       with the `wild` crate on Windows. It's possible that this could
+    //       start failing in the future, though, or on some unknown platform.
+    //       If that ever happens, we'll need to relax this test somehow,
+    //       probably by just testing for both possible outputs. I'm not
+    //       handling that case in advance, though, because I'd prefer to hear
+    //       about it if it comes up.
     let expected = format!("{}  file1\n{}  file2", foo_hash.to_hex(), bar_hash.to_hex());
 
     let star_command = format!("{} *", b3sum_exe().to_str().unwrap());
