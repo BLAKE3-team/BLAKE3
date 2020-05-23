@@ -34,7 +34,7 @@ impl Args {
         let inner = App::new("b3sum")
             .version(env!("CARGO_PKG_VERSION"))
             .arg(Arg::with_name(FILE_ARG).multiple(true).help(
-                "Files to hash, or checkfiles to check. When no file is given, \n\
+                "Files to hash, or checkfiles to check. When no file is given,\n\
                  or when - is given, read standard input.",
             ))
             .arg(
