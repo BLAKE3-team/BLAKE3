@@ -5,7 +5,7 @@ A command line utility for calculating
 Coreutils tools like `b2sum` or `md5sum`.
 
 ```
-b3sum 0.3.3
+b3sum 0.3.4
 
 USAGE:
     b3sum [FLAGS] [OPTIONS] [file]...
@@ -18,6 +18,8 @@ FLAGS:
         --no-mmap     Disables memory mapping. Currently this also disables
                       multithreading.
         --no-names    Omits filenames in the output
+        --quiet       Skips printing OK for each successfully verified file.
+                      Must be used with --check.
         --raw         Writes raw output bytes to stdout, rather than hex.
                       --no-names is implied. In this case, only a single
                       input is allowed.
@@ -34,7 +36,8 @@ OPTIONS:
                                   RAYON_NUM_THREADS is also respected.
 
 ARGS:
-    <file>...
+    <file>...    Files to hash, or checkfiles to check. When no file is given,
+                 or when - is given, read standard input.
 ```
 
 See also [this document about how the `--check` flag
