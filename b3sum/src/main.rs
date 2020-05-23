@@ -114,7 +114,9 @@ impl Args {
                          Must be used with --check.",
                     ),
             )
-            .get_matches();
+            // wild::args_os() is equivalent to std::env::args_os() on Unix,
+            // but on Windows it adds support for globbing.
+            .get_matches_from(wild::args_os());
         let file_args = if let Some(iter) = inner.values_of_os(FILE_ARG) {
             iter.map(|s| s.into()).collect()
         } else {

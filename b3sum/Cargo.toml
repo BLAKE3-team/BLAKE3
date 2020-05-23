@@ -20,6 +20,7 @@ clap = "2.33.1"
 hex = "0.4.0"
 memmap = "0.7.0"
 rayon = "1.2.1"
+wild = "2.0.3"
 
 [dev-dependencies]
 duct = "0.13.3"

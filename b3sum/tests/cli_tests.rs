@@ -483,3 +483,30 @@ fn test_check_invalid_characters() {
         assert_eq!("b3sum: Backslash in path\n", stderr);
     }
 }
+
+#[test]
+fn test_globbing() {
+    // On Unix, globbing is provided by the shell. On Windows, globbing is
+    // provided by us, using the `wild` crate.
+    let dir = tempfile::tempdir().unwrap();
+    let file1 = dir.path().join("file1");
+    fs::write(&file1, b"foo").unwrap();
+    let file2 = dir.path().join("file2");
+    fs::write(&file2, b"bar").unwrap();
+
+    let foo_hash = blake3::hash(b"foo");
+    let bar_hash = blake3::hash(b"bar");
+    let expected = format!("{}  file1\n{}  file2", foo_hash.to_hex(), bar_hash.to_hex());
+
+    let star_command = format!("{} *", b3sum_exe().to_str().unwrap());
+    let (exe, c_flag) = if cfg!(windows) {
+        ("cmd.exe", "/C")
+    } else {
+        ("/bin/sh", "-c")
+    };
+    let output = cmd!(exe, c_flag, star_command)
+        .dir(dir.path())
+        .read()
+        .unwrap();
+    assert_eq!(expected, output);
+}
