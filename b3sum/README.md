@@ -65,7 +65,13 @@ time b3sum /tmp/bigfile
 
 # Installation
 
-The standard way to install `b3sum` is:
+Prebuilt binaries are available for Linux, Windows, and macOS (requiring
+the [unidentified developer
+workaround](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified-developer-mh40616/mac))
+on the [releases page](https://github.com/BLAKE3-team/BLAKE3/releases).
+If you've [installed Rust and
+Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html),
+you can also build `b3sum` yourself with:
 
 ```
 cargo install b3sum
