@@ -31,7 +31,7 @@ struct Args {
 
 impl Args {
     fn parse() -> Result<Self> {
-        let inner = App::new("b3sum")
+        let inner = App::new(NAME)
             .version(env!("CARGO_PKG_VERSION"))
             .arg(Arg::with_name(FILE_ARG).multiple(true).help(
                 "Files to hash, or checkfiles to check. When no file is given,\n\
