@@ -12,7 +12,7 @@ mod unit_tests;
 
 const NAME: &str = "b3sum";
 
-const FILE_ARG: &str = "file";
+const FILE_ARG: &str = "FILE";
 const DERIVE_KEY_ARG: &str = "derive-key";
 const KEYED_ARG: &str = "keyed";
 const LENGTH_ARG: &str = "length";
