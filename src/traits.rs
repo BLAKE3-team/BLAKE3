@@ -15,9 +15,9 @@ impl digest::BlockInput for Hasher {
     type BlockSize = U64;
 }
 
-impl digest::Input for Hasher {
+impl digest::Update for Hasher {
     #[inline]
-    fn input<B: AsRef<[u8]>>(&mut self, data: B) {
+    fn update(&mut self, data: impl AsRef<[u8]>) {
         self.update(data.as_ref());
     }
 }
@@ -33,8 +33,18 @@ impl digest::FixedOutput for Hasher {
     type OutputSize = U32;
 
     #[inline]
-    fn fixed_result(self) -> GenericArray<u8, Self::OutputSize> {
-        GenericArray::clone_from_slice(self.finalize().as_bytes())
+    fn finalize_into(self, out: &mut GenericArray<u8, Self::OutputSize>) {
+        let bytes = self.finalize();
+        let mut bytes: &[u8] = bytes.as_bytes();
+        std::io::copy(&mut bytes, &mut out.as_mut_slice()).expect("failed to copy data");
+    }
+
+    fn finalize_into_reset(&mut self, out: &mut GenericArray<u8, Self::OutputSize>) {
+        let bytes = self.finalize();
+        let mut bytes: &[u8] = bytes.as_bytes();
+        std::io::copy(&mut bytes, &mut out.as_mut_slice()).expect("failed to copy data");
+
+        self.reset();
     }
 }
 
@@ -42,8 +52,14 @@ impl digest::ExtendableOutput for Hasher {
     type Reader = OutputReader;
 
     #[inline]
-    fn xof_result(self) -> Self::Reader {
-        self.finalize_xof()
+    fn finalize_xof(self) -> Self::Reader {
+        Hasher::finalize_xof(&self)
+    }
+
+    fn finalize_xof_reset(&mut self) -> Self::Reader {
+        let reader = Hasher::finalize_xof(self);
+        self.reset();
+        reader
     }
 }
 
@@ -54,18 +70,21 @@ impl digest::XofReader for OutputReader {
     }
 }
 
-impl crypto_mac::Mac for Hasher {
-    type OutputSize = U32;
+impl crypto_mac::NewMac for Hasher {
     type KeySize = U32;
 
     #[inline]
-    fn new(key: &GenericArray<u8, Self::KeySize>) -> Self {
+    fn new(key: &crypto_mac::Key<Self>) -> Self {
         let key_bytes: [u8; 32] = (*key).into();
         Hasher::new_keyed(&key_bytes)
     }
+}
+
+impl crypto_mac::Mac for Hasher {
+    type OutputSize = U32;
 
     #[inline]
-    fn input(&mut self, data: &[u8]) {
+    fn update(&mut self, data: &[u8]) {
         self.update(data);
     }
 
@@ -75,8 +94,8 @@ impl crypto_mac::Mac for Hasher {
     }
 
     #[inline]
-    fn result(self) -> crypto_mac::MacResult<Self::OutputSize> {
-        crypto_mac::MacResult::new((*self.finalize().as_bytes()).into())
+    fn finalize(self) -> crypto_mac::Output<Self> {
+        crypto_mac::Output::new(digest::Digest::finalize(self))
     }
 }
 
@@ -96,15 +115,15 @@ mod test {
 
         // Trait implementations.
         let mut hasher2: crate::Hasher = digest::Digest::new();
-        digest::Digest::input(&mut hasher2, b"xxx");
+        digest::Digest::update(&mut hasher2, b"xxx");
         digest::Digest::reset(&mut hasher2);
-        digest::Digest::input(&mut hasher2, b"foo");
-        digest::Digest::input(&mut hasher2, b"bar");
-        digest::Digest::input(&mut hasher2, b"baz");
-        let out2 = digest::Digest::result(hasher2.clone());
+        digest::Digest::update(&mut hasher2, b"foo");
+        digest::Digest::update(&mut hasher2, b"bar");
+        digest::Digest::update(&mut hasher2, b"baz");
+        let out2 = digest::Digest::finalize(hasher2.clone());
         let mut xof2 = [0; 301];
         digest::XofReader::read(
-            &mut digest::ExtendableOutput::xof_result(hasher2),
+            &mut digest::ExtendableOutput::finalize_xof(hasher2),
             &mut xof2,
         );
         assert_eq!(out1.as_bytes(), &out2[..]);
@@ -123,13 +142,13 @@ mod test {
 
         // Trait implementation.
         let generic_key = (*key).into();
-        let mut hasher2: crate::Hasher = crypto_mac::Mac::new(&generic_key);
-        crypto_mac::Mac::input(&mut hasher2, b"xxx");
+        let mut hasher2: crate::Hasher = crypto_mac::NewMac::new(&generic_key);
+        crypto_mac::Mac::update(&mut hasher2, b"xxx");
         crypto_mac::Mac::reset(&mut hasher2);
-        crypto_mac::Mac::input(&mut hasher2, b"foo");
-        crypto_mac::Mac::input(&mut hasher2, b"bar");
-        crypto_mac::Mac::input(&mut hasher2, b"baz");
-        let out2 = crypto_mac::Mac::result(hasher2);
-        assert_eq!(out1.as_bytes(), out2.code().as_slice());
+        crypto_mac::Mac::update(&mut hasher2, b"foo");
+        crypto_mac::Mac::update(&mut hasher2, b"bar");
+        crypto_mac::Mac::update(&mut hasher2, b"baz");
+        let out2 = crypto_mac::Mac::finalize(hasher2);
+        assert_eq!(out1.as_bytes(), out2.into_bytes().as_slice());
     }
 }
