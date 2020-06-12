@@ -35,14 +35,12 @@ impl digest::FixedOutput for Hasher {
     #[inline]
     fn finalize_into(self, out: &mut GenericArray<u8, Self::OutputSize>) {
         let bytes = self.finalize();
-        let mut bytes: &[u8] = bytes.as_bytes();
-        std::io::copy(&mut bytes, &mut out.as_mut_slice()).expect("failed to copy data");
+        out.as_mut_slice().clone_from_slice(bytes.as_bytes());
     }
 
     fn finalize_into_reset(&mut self, out: &mut GenericArray<u8, Self::OutputSize>) {
         let bytes = self.finalize();
-        let mut bytes: &[u8] = bytes.as_bytes();
-        std::io::copy(&mut bytes, &mut out.as_mut_slice()).expect("failed to copy data");
+        out.as_mut_slice().clone_from_slice(bytes.as_bytes());
 
         self.reset();
     }
