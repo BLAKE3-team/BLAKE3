@@ -105,7 +105,7 @@ fn hash(
             if data.len() < buffer_size {
                 tail = Some(data);
             } else {
-                task.input_buffer().copy_from_slice(&data[..buffer_size]);
+                stream(task.input_buffer(), &data[..buffer_size]);
                 data = &data[buffer_size..];
             }
         }
@@ -129,6 +129,147 @@ fn hash(
     }
 
     Ok(hasher.finalize_xof())
+}
+
+#[cfg(target_arch = "x86")]
+#[target_feature(enable = "sse2")]
+unsafe fn stream_sse2(output: &mut [u8], input: &[u8]) {
+    use std::arch::x86::*;
+
+    assert_eq!(output.len(), input.len());
+    assert_eq!(output.len() % (16 * 8), 0);
+
+    let count = output.len() / 16;
+    let input = input.as_ptr() as *const __m128i;
+    let output = output.as_mut_ptr() as *mut __m128i;
+
+    _mm_prefetch(input.wrapping_add(0) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(4) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(8) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(12) as *const _, _MM_HINT_NTA);
+
+    _mm_prefetch(input.wrapping_add(16) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(20) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(24) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(28) as *const _, _MM_HINT_NTA);
+
+    _mm_prefetch(input.wrapping_add(32) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(36) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(40) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(44) as *const _, _MM_HINT_NTA);
+
+    _mm_prefetch(input.wrapping_add(48) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(52) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(56) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(60) as *const _, _MM_HINT_NTA);
+
+    for i in (0..count).step_by(8) {
+        let xmm0 = _mm_load_si128(input.add(i));
+        let xmm1 = _mm_load_si128(input.add(i + 1));
+        let xmm2 = _mm_load_si128(input.add(i + 2));
+        let xmm3 = _mm_load_si128(input.add(i + 3));
+        let xmm4 = _mm_load_si128(input.add(i + 4));
+        let xmm5 = _mm_load_si128(input.add(i + 5));
+        let xmm6 = _mm_load_si128(input.add(i + 6));
+        let xmm7 = _mm_load_si128(input.add(i + 7));
+
+        _mm_prefetch(input.wrapping_add(i + 64) as *const _, _MM_HINT_NTA);
+        _mm_prefetch(input.wrapping_add(i + 68) as *const _, _MM_HINT_NTA);
+
+        _mm_stream_si128(output.add(i), xmm0);
+        _mm_stream_si128(output.add(i + 1), xmm1);
+        _mm_stream_si128(output.add(i + 2), xmm2);
+        _mm_stream_si128(output.add(i + 3), xmm3);
+        _mm_stream_si128(output.add(i + 4), xmm4);
+        _mm_stream_si128(output.add(i + 5), xmm5);
+        _mm_stream_si128(output.add(i + 6), xmm6);
+        _mm_stream_si128(output.add(i + 7), xmm7);
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "sse2")]
+unsafe fn stream_sse2(output: &mut [u8], input: &[u8]) {
+    use std::arch::x86_64::*;
+
+    assert_eq!(output.len(), input.len());
+    assert_eq!(output.len() % (16 * 16), 0);
+
+    let count = output.len() / 16;
+    let input = input.as_ptr() as *const __m128i;
+    let output = output.as_mut_ptr() as *mut __m128i;
+
+    _mm_prefetch(input.wrapping_add(0) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(4) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(8) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(12) as *const _, _MM_HINT_NTA);
+
+    _mm_prefetch(input.wrapping_add(16) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(20) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(24) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(28) as *const _, _MM_HINT_NTA);
+
+    _mm_prefetch(input.wrapping_add(32) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(36) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(40) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(44) as *const _, _MM_HINT_NTA);
+
+    _mm_prefetch(input.wrapping_add(48) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(52) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(56) as *const _, _MM_HINT_NTA);
+    _mm_prefetch(input.wrapping_add(60) as *const _, _MM_HINT_NTA);
+
+    for i in (0..count).step_by(16) {
+        let xmm0 = _mm_load_si128(input.add(i));
+        let xmm1 = _mm_load_si128(input.add(i + 1));
+        let xmm2 = _mm_load_si128(input.add(i + 2));
+        let xmm3 = _mm_load_si128(input.add(i + 3));
+        let xmm4 = _mm_load_si128(input.add(i + 4));
+        let xmm5 = _mm_load_si128(input.add(i + 5));
+        let xmm6 = _mm_load_si128(input.add(i + 6));
+        let xmm7 = _mm_load_si128(input.add(i + 7));
+        let xmm8 = _mm_load_si128(input.add(i + 8));
+        let xmm9 = _mm_load_si128(input.add(i + 9));
+        let xmm10 = _mm_load_si128(input.add(i + 10));
+        let xmm11 = _mm_load_si128(input.add(i + 11));
+        let xmm12 = _mm_load_si128(input.add(i + 12));
+        let xmm13 = _mm_load_si128(input.add(i + 13));
+        let xmm14 = _mm_load_si128(input.add(i + 14));
+        let xmm15 = _mm_load_si128(input.add(i + 15));
+
+        _mm_prefetch(input.wrapping_add(i + 64) as *const _, _MM_HINT_NTA);
+        _mm_prefetch(input.wrapping_add(i + 68) as *const _, _MM_HINT_NTA);
+        _mm_prefetch(input.wrapping_add(i + 72) as *const _, _MM_HINT_NTA);
+        _mm_prefetch(input.wrapping_add(i + 76) as *const _, _MM_HINT_NTA);
+
+        _mm_stream_si128(output.add(i), xmm0);
+        _mm_stream_si128(output.add(i + 1), xmm1);
+        _mm_stream_si128(output.add(i + 2), xmm2);
+        _mm_stream_si128(output.add(i + 3), xmm3);
+        _mm_stream_si128(output.add(i + 4), xmm4);
+        _mm_stream_si128(output.add(i + 5), xmm5);
+        _mm_stream_si128(output.add(i + 6), xmm6);
+        _mm_stream_si128(output.add(i + 7), xmm7);
+        _mm_stream_si128(output.add(i + 8), xmm8);
+        _mm_stream_si128(output.add(i + 9), xmm9);
+        _mm_stream_si128(output.add(i + 10), xmm10);
+        _mm_stream_si128(output.add(i + 11), xmm11);
+        _mm_stream_si128(output.add(i + 12), xmm12);
+        _mm_stream_si128(output.add(i + 13), xmm13);
+        _mm_stream_si128(output.add(i + 14), xmm14);
+        _mm_stream_si128(output.add(i + 15), xmm15);
+    }
+}
+
+fn stream(output: &mut [u8], input: &[u8]) {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    unsafe {
+        if is_x86_feature_detected!("sse2") {
+            return stream_sse2(output, input);
+        }
+    }
+
+    output.copy_from_slice(input)
 }
 
 #[cfg(test)]
