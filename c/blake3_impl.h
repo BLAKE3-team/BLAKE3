@@ -38,6 +38,16 @@ enum blake3_flags {
 #define IS_X86_32
 #endif
 
+#if (defined(__arm__) && defined(__ARM_EABI__) && defined(__ARM_PCS_VFP)) || defined(_M_ARM)
+#define IS_ARM
+#define IS_ARMHF
+#endif
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+#define IS_ARM
+#define IS_ARM64
+#endif
+
 #if defined(IS_X86)
 #if defined(_MSC_VER)
 #include <intrin.h>
@@ -47,7 +57,7 @@ enum blake3_flags {
 
 #if defined(IS_X86)
 #define MAX_SIMD_DEGREE 16
-#elif defined(BLAKE3_USE_NEON)
+#elif defined(IS_ARM)
 #define MAX_SIMD_DEGREE 4
 #else
 #define MAX_SIMD_DEGREE 1
@@ -62,6 +72,9 @@ enum cpu_feature {
   AVX2 = 1 << 4,
   AVX512F = 1 << 5,
   AVX512VL = 1 << 6,
+#endif
+#if defined(IS_ARM)
+  NEON = 1 << 0,
 #endif
   /* ... */
   UNDEFINED = 1 << 30
@@ -237,12 +250,14 @@ void blake3_hash_many_avx512(const uint8_t *const *inputs, size_t num_inputs,
 #endif
 #endif
 
-#if defined(BLAKE3_USE_NEON)
+#if defined(IS_ARM)
+#if !defined(BLAKE3_NO_NEON)
 void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
                            size_t blocks, const uint32_t key[8],
                            uint64_t counter, bool increment_counter,
                            uint8_t flags, uint8_t flags_start,
                            uint8_t flags_end, uint8_t *out);
+#endif
 #endif
 
 

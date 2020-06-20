@@ -33,11 +33,6 @@
 //! the [`join::RayonJoin`] type for use with [`Hasher::update_with_join`]. It
 //! is disabled by default, but enabled for [docs.rs].
 //!
-//! The `neon` feature enables ARM NEON support. Currently there is no runtime
-//! CPU feature detection for NEON, so you must only enable this feature for
-//! targets that are known to have NEON support. In particular, some ARMv7
-//! targets support NEON, and some don't.
-//!
 //! The `std` feature (enabled by default) is required for implementations of
 //! the [`Write`] and [`Seek`] traits, and also for runtime CPU feature
 //! detection. If this feature is disabled, the only way to use the SIMD
@@ -81,7 +76,7 @@ mod avx2;
 #[cfg(blake3_avx512_ffi)]
 #[path = "ffi_avx512.rs"]
 mod avx512;
-#[cfg(feature = "neon")]
+#[cfg(blake3_neon_ffi)]
 #[path = "ffi_neon.rs"]
 mod neon;
 mod portable;

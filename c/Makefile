@@ -5,6 +5,9 @@ TARGETS=
 ASM_TARGETS=
 EXTRAFLAGS=
 
+uname_m=$(shell uname -m)
+
+ifeq (,$(filter-out i386 i686 x86_64,$(uname_m)))
 ifdef BLAKE3_NO_SSE41
 EXTRAFLAGS += -DBLAKE3_NO_SSE41
 else
@@ -25,10 +28,15 @@ else
 TARGETS += blake3_avx512.o
 ASM_TARGETS += blake3_avx512_x86-64_unix.S
 endif
+endif
 
-ifdef BLAKE3_USE_NEON
-EXTRAFLAGS += -DBLAKE3_USE_NEON
+ifeq (,$(filter-out arm aarch64 armv7l armv8l,$(uname_m)))
+ifdef BLAKE3_NO_NEON
+EXTRAFLAGS += -DBLAKE3_NO_NEON
+else
 TARGETS += blake3_neon.o
+ASM_TARGETS += blake3_neon.o
+endif
 endif
 
 all: blake3.c blake3_dispatch.c blake3_portable.c main.c $(TARGETS)

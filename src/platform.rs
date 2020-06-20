@@ -10,7 +10,7 @@ cfg_if::cfg_if! {
                 pub const MAX_SIMD_DEGREE: usize = 8;
             }
         }
-    } else if #[cfg(feature = "neon")] {
+    } else if #[cfg(any(target_arch = "arm", target_arch = "aarch64"))] {
         pub const MAX_SIMD_DEGREE: usize = 4;
     } else {
         pub const MAX_SIMD_DEGREE: usize = 1;
@@ -30,7 +30,7 @@ cfg_if::cfg_if! {
                 pub const MAX_SIMD_DEGREE_OR_2: usize = 8;
             }
         }
-    } else if #[cfg(feature = "neon")] {
+    } else if #[cfg(any(target_arch = "arm", target_arch = "aarch64"))] {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 4;
     } else {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 2;
@@ -47,7 +47,7 @@ pub enum Platform {
     #[cfg(blake3_avx512_ffi)]
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     AVX512,
-    #[cfg(feature = "neon")]
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
     NEON,
 }
 
@@ -69,11 +69,11 @@ impl Platform {
                 return Platform::SSE41;
             }
         }
-        // We don't use dynamic feature detection for NEON. If the "neon"
-        // feature is on, NEON is assumed to be supported.
-        #[cfg(feature = "neon")]
+        #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
         {
-            return Platform::NEON;
+            if neon_detected() {
+                return Platform::NEON;
+            }
         }
         Platform::Portable
     }
@@ -88,7 +88,7 @@ impl Platform {
             #[cfg(blake3_avx512_ffi)]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => 16,
-            #[cfg(feature = "neon")]
+            #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
             Platform::NEON => 4,
         };
         debug_assert!(degree <= MAX_SIMD_DEGREE);
@@ -117,7 +117,7 @@ impl Platform {
                 crate::avx512::compress_in_place(cv, block, block_len, counter, flags)
             },
             // No NEON compress_in_place() implementation yet.
-            #[cfg(feature = "neon")]
+            #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
             Platform::NEON => portable::compress_in_place(cv, block, block_len, counter, flags),
         }
     }
@@ -144,7 +144,7 @@ impl Platform {
                 crate::avx512::compress_xof(cv, block, block_len, counter, flags)
             },
             // No NEON compress_xof() implementation yet.
-            #[cfg(feature = "neon")]
+            #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
             Platform::NEON => portable::compress_xof(cv, block, block_len, counter, flags),
         }
     }
@@ -224,8 +224,8 @@ impl Platform {
                     out,
                 )
             },
-            // Assumed to be safe if the "neon" feature is on.
-            #[cfg(feature = "neon")]
+            // Safe because detect() checked for platform support.
+            #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
             Platform::NEON => unsafe {
                 crate::neon::hash_many(
                     inputs,
@@ -275,10 +275,13 @@ impl Platform {
         }
     }
 
-    #[cfg(feature = "neon")]
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
     pub fn neon() -> Option<Self> {
-        // Assumed to be safe if the "neon" feature is on.
-        Some(Self::NEON)
+        if neon_detected() {
+            Some(Self::NEON)
+        } else {
+            None
+        }
     }
 }
 
@@ -346,6 +349,41 @@ pub fn sse41_detected() -> bool {
     {
         if is_x86_feature_detected!("sse4.1") {
             return true;
+        }
+    }
+    false
+}
+
+#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+#[allow(unreachable_code)]
+#[inline(always)]
+pub fn neon_detected() -> bool {
+    // A testing-only short-circuit.
+    if cfg!(feature = "no_neon") {
+        return false;
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        return true
+    }
+    // Static check, e.g. for building with target-cpu=native.
+    // ... but rust does not provide this
+    //#[cfg(target_feature = "armv7-a+simd")]
+    //{
+    //    return true;
+    //}
+    // Dynamic check
+    #[cfg(all(unix, target_arch = "arm"))]
+    {
+    // https://doc.rust-lang.org/beta/std/macro.is_arm_feature_detected.html
+    // should work, and should be available and should be using
+    // getauxval, yet it's not available. So use libc ffi bindings to
+    // get to getauxval ourselves.
+    // #define HWCAP_ARM_VFP 64
+    // #define HWCAP_ARM_NEON 4096
+    //
+        unsafe {
+            return (libc::getauxval(libc::AT_HWCAP) & (64 | 4096)) != 0
         }
     }
     false

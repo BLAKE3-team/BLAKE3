@@ -22,6 +22,11 @@ fn is_armv7() -> bool {
     target_components()[0] == "armv7"
 }
 
+// for armv6 and lower, only portable implementation is used
+fn is_arm() -> bool {
+    is_armv7() || target_components()[0] == "aarch64"
+}
+
 // Windows targets may be using the MSVC toolchain or the GNU toolchain. The
 // right compiler flags to use depend on the toolchain. (And we don't want to
 // use flag_if_supported, because we don't want features to be silently
@@ -122,10 +127,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         avx512_build.compile("blake3_avx512");
     }
 
-    // We only build NEON code here if 1) it's requested and 2) the root crate
-    // is not already building it. The only time this will really happen is if
-    // you build this crate by hand with the "neon" feature for some reason.
-    if defined("CARGO_FEATURE_NEON") {
+    if is_arm() {
         let mut neon_build = new_build();
         neon_build.file("../blake3_neon.c");
         // ARMv7 platforms that support NEON generally need the following

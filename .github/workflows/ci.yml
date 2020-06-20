@@ -135,9 +135,6 @@ jobs:
     - run: cargo install cross
     # Test the portable implementation on everything.
     - run: cross test --target ${{ matrix.arch }}
-    # Test the NEON implementation on ARM targets.
-    - run: cross test --target ${{ matrix.arch }} --features=neon
-      if: startsWith(matrix.arch, 'armv7-') || startsWith(matrix.arch, 'aarch64-')
     # Test vectors. Note that this uses a hacky script due to path dependency limitations.
     - run: ./test_vectors/cross_test.sh --target ${{ matrix.arch }}
 

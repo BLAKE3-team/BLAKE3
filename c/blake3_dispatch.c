@@ -14,6 +14,11 @@
 #endif
 #endif
 
+#if defined(IS_ARMHF) && defined(__linux__)
+#include <sys/auxv.h>
+#include <asm/hwcap.h>
+#endif
+
 #if defined(IS_X86)
 static uint64_t xgetbv() {
 #if defined(_MSC_VER)
@@ -73,11 +78,11 @@ static
   if (g_cpu_features != UNDEFINED) {
     return g_cpu_features;
   } else {
+    enum cpu_feature features = 0;
 #if defined(IS_X86)
     uint32_t regs[4] = {0};
     uint32_t *eax = &regs[0], *ebx = &regs[1], *ecx = &regs[2], *edx = &regs[3];
     (void)edx;
-    enum cpu_feature features = 0;
     cpuid(regs, 0);
     const int max_id = *eax;
     cpuid(regs, 1);
@@ -110,12 +115,29 @@ static
         }
       }
     }
+#elif defined(IS_ARM)
+#if defined(IS_ARM64)
+    features |= NEON;
+#endif
+#if defined(IS_ARMHF)
+    //ARM32 is harder, technically one can use softfp with NEON on
+    //armv6, but it has performance penalty, thus ignoring NEON on
+    //armel for now. Also ignoring running such armel binaries on
+    //arm64 kernel. GLIBC has a handy getauxval() api, that offers to
+    //query ELF hwcaps, and thus one can figure out if NEON is
+    //available on armhf (when running on armhf or arm64 kernels)
+    //
+    // TODO how to detect this on Windows
+#if defined(__linux__)
+    long hwcaps= getauxval(AT_HWCAP);
+    if(hwcaps & HWCAP_ARM_NEON)
+      if (hwcaps & HWCAP_ARM_VFPv4)
+        features |= NEON;
+#endif
+#endif
+#endif
     g_cpu_features = features;
     return features;
-#else
-    /* How to detect NEON? */
-    return 0;
-#endif
   }
 }
 
@@ -167,8 +189,8 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
                       size_t blocks, const uint32_t key[8], uint64_t counter,
                       bool increment_counter, uint8_t flags,
                       uint8_t flags_start, uint8_t flags_end, uint8_t *out) {
-#if defined(IS_X86)
   const enum cpu_feature features = get_cpu_features();
+#if defined(IS_X86)
 #if !defined(BLAKE3_NO_AVX512)
   if ((features & (AVX512F|AVX512VL)) == (AVX512F|AVX512VL)) {
     blake3_hash_many_avx512(inputs, num_inputs, blocks, key, counter,
@@ -195,10 +217,12 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
 #endif
 #endif
 
-#if defined(BLAKE3_USE_NEON)
-  blake3_hash_many_neon(inputs, num_inputs, blocks, key, counter,
-                        increment_counter, flags, flags_start, flags_end, out);
-  return;
+#if defined(IS_ARM) && !defined(BLAKE3_NO_NEON)
+  if (features & NEON) {
+    blake3_hash_many_neon(inputs, num_inputs, blocks, key, counter,
+                          increment_counter, flags, flags_start, flags_end, out);
+    return;
+  }
 #endif
 
   blake3_hash_many_portable(inputs, num_inputs, blocks, key, counter,
@@ -208,8 +232,8 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
 
 // The dynamically detected SIMD degree of the current platform.
 size_t blake3_simd_degree(void) {
-#if defined(IS_X86)
   const enum cpu_feature features = get_cpu_features();
+#if defined(IS_X86)
 #if !defined(BLAKE3_NO_AVX512)
   if ((features & (AVX512F|AVX512VL)) == (AVX512F|AVX512VL)) {
     return 16;
@@ -226,8 +250,10 @@ size_t blake3_simd_degree(void) {
   }
 #endif
 #endif
-#if defined(BLAKE3_USE_NEON)
-  return 4;
+#if defined(IS_ARM) && !defined(BLAKE3_NO_NEON)
+  if (features & NEON) {
+    return 4;
+  }
 #endif
   return 1;
 }
