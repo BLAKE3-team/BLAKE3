@@ -5,6 +5,12 @@ TARGETS=
 ASM_TARGETS=
 EXTRAFLAGS=
 
+ifeq (ifunc,$(BLAKE3_DISPATCH))
+DISPATCH=blake3_dispatch_ifunc.c
+else
+DISPATCH=blake3_dispatch.c
+endif
+
 ifdef BLAKE3_NO_SSE41
 EXTRAFLAGS += -DBLAKE3_NO_SSE41
 else
@@ -31,7 +37,7 @@ EXTRAFLAGS += -DBLAKE3_USE_NEON
 TARGETS += blake3_neon.o
 endif
 
-all: blake3.c blake3_dispatch.c blake3_portable.c main.c $(TARGETS)
+all: blake3.c $(DISPATCH) blake3_portable.c main.c $(TARGETS)
 	$(CC) $(CFLAGS) $(EXTRAFLAGS) $^ -o $(NAME)
 
 blake3_sse41.o: blake3_sse41.c
@@ -50,7 +56,7 @@ test: CFLAGS += -DBLAKE3_TESTING -fsanitize=address,undefined
 test: all
 	./test.py
 
-asm: blake3.c blake3_dispatch.c blake3_portable.c main.c $(ASM_TARGETS)
+asm: blake3.c $(DISPATCH) blake3_portable.c main.c $(ASM_TARGETS)
 	$(CC) $(CFLAGS) $(EXTRAFLAGS) $^ -o $(NAME)
 
 test_asm: CFLAGS += -DBLAKE3_TESTING -fsanitize=address,undefined

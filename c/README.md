@@ -214,6 +214,15 @@ in call to always_inline ‘vaddq_u32’: target specific option mismatch
 ...then you may need to add something like `-mfpu=neon-vfpv4
 -mfloat-abi=hard`.
 
+## Linux ifunc dispatcher
+
+Instead of the regular/portable dispatcher, on Linux one can use ifunc
+dispatcher. With ifunc based dispatcher the best versions of the
+functions are resolved at startup time and used throughout the
+execution. Simply use `blake3_dispatch_ifunc.c` instead of
+`blake_dispatch.c`. Or specify `BLAKE3_DISPATCH=ifunc` to the `make`
+command.
+
 ## Other Platforms
 
 The portable implementation should work on most other architectures. For
