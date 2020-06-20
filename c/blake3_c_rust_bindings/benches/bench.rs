@@ -82,6 +82,7 @@ fn bench_single_compression_sse41(b: &mut Bencher) {
 }
 
 #[bench]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn bench_single_compression_avx512(b: &mut Bencher) {
     if !blake3_c_rust_bindings::avx512_detected() {
         return;
@@ -161,6 +162,7 @@ fn bench_many_chunks_avx2(b: &mut Bencher) {
 }
 
 #[bench]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn bench_many_chunks_avx512(b: &mut Bencher) {
     if !blake3_c_rust_bindings::avx512_detected() {
         return;
@@ -240,6 +242,7 @@ fn bench_many_parents_avx2(b: &mut Bencher) {
 }
 
 #[bench]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn bench_many_parents_avx512(b: &mut Bencher) {
     if !blake3_c_rust_bindings::avx512_detected() {
         return;
