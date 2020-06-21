@@ -53,6 +53,20 @@ enum blake3_flags {
 #define MAX_SIMD_DEGREE 1
 #endif
 
+enum cpu_feature {
+#if defined(IS_X86)
+  SSE2 = 1 << 0,
+  SSSE3 = 1 << 1,
+  SSE41 = 1 << 2,
+  AVX = 1 << 3,
+  AVX2 = 1 << 4,
+  AVX512F = 1 << 5,
+  AVX512VL = 1 << 6,
+#endif
+  /* ... */
+  UNDEFINED = 1 << 30
+};
+
 // There are some places where we want a static size that's equal to the
 // MAX_SIMD_DEGREE, but also at least 2.
 #define MAX_SIMD_DEGREE_OR_2 (MAX_SIMD_DEGREE > 2 ? MAX_SIMD_DEGREE : 2)
