@@ -612,7 +612,7 @@ fn main() -> Result<()> {
                 let result = hash_one_input(path, &args);
                 if let Err(e) = result {
                     some_file_failed = true;
-                    eprintln!("{}: {}", NAME, e);
+                    eprintln!("{}: {}: {}", NAME, path.to_string_lossy(), e);
                 }
             }
         }

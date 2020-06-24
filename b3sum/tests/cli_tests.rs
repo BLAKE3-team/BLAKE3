@@ -56,6 +56,37 @@ fn test_hash_many() {
 }
 
 #[test]
+fn test_missing_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let file1 = dir.path().join("file1");
+    fs::write(&file1, b"foo").unwrap();
+    let file2 = dir.path().join("file2");
+    fs::write(&file2, b"bar").unwrap();
+
+    let output = cmd!(b3sum_exe(), "file1", "missing_file", "file2")
+        .dir(dir.path())
+        .stdout_capture()
+        .stderr_capture()
+        .unchecked()
+        .run()
+        .unwrap();
+    assert!(!output.status.success());
+
+    let foo_hash = blake3::hash(b"foo");
+    let bar_hash = blake3::hash(b"bar");
+    let expected_stdout = format!(
+        "{}  file1\n{}  file2\n",
+        foo_hash.to_hex(),
+        bar_hash.to_hex(),
+    );
+    assert_eq!(expected_stdout.as_bytes(), &output.stdout[..]);
+
+    let bing_error = fs::File::open(dir.path().join("missing_file")).unwrap_err();
+    let expected_stderr = format!("b3sum: missing_file: {}\n", bing_error.to_string());
+    assert_eq!(expected_stderr.as_bytes(), &output.stderr[..]);
+}
+
+#[test]
 fn test_hash_length() {
     let mut buf = [0; 100];
     blake3::Hasher::new()
