@@ -1,5 +1,10 @@
-.intel_syntax noprefix
+#if defined(__ELF__) && defined(__CET__) && __has_include(<cet.h>)
+#include <cet.h>
+#else
+#define _CET_ENDBR
+#endif
 
+.intel_syntax noprefix
 .global _blake3_hash_many_avx512
 .global blake3_hash_many_avx512
 .global blake3_compress_in_place_avx512
@@ -15,6 +20,7 @@
 .p2align  6
 _blake3_hash_many_avx512:
 blake3_hash_many_avx512:
+        _CET_ENDBR
         push    r15
         push    r14
         push    r13
@@ -2372,6 +2378,7 @@ blake3_hash_many_avx512:
 .p2align 6
 _blake3_compress_in_place_avx512:
 blake3_compress_in_place_avx512:
+        _CET_ENDBR
         vmovdqu xmm0, xmmword ptr [rdi]
         vmovdqu xmm1, xmmword ptr [rdi+0x10]
         movzx   eax, r8b
@@ -2454,6 +2461,7 @@ blake3_compress_in_place_avx512:
 .p2align 6
 _blake3_compress_xof_avx512:
 blake3_compress_xof_avx512:
+        _CET_ENDBR
         vmovdqu xmm0, xmmword ptr [rdi]
         vmovdqu xmm1, xmmword ptr [rdi+0x10]
         movzx   eax, r8b
