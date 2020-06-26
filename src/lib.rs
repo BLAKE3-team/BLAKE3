@@ -660,7 +660,7 @@ fn compress_subtree_to_parent_node<J: Join>(
     platform: Platform,
 ) -> [u8; BLOCK_LEN] {
     debug_assert!(input.len() > CHUNK_LEN);
-    let mut cv_array = [0; 2 * MAX_SIMD_DEGREE_OR_2 * OUT_LEN];
+    let mut cv_array = [0; MAX_SIMD_DEGREE_OR_2 * OUT_LEN];
     let mut num_cvs =
         compress_subtree_wide::<J>(input, &key, chunk_counter, flags, platform, &mut cv_array);
     debug_assert!(num_cvs >= 2);
