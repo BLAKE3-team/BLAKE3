@@ -1,3 +1,9 @@
+#if defined(__ELF__) && defined(__CET__) && __has_include(<cet.h>)
+#include <cet.h>
+#else
+#define _CET_ENDBR
+#endif
+
 .intel_syntax noprefix
 .global _blake3_hash_many_avx2
 .global blake3_hash_many_avx2
@@ -9,6 +15,7 @@
         .p2align  6
 _blake3_hash_many_avx2:
 blake3_hash_many_avx2:
+        _CET_ENDBR
         push    r15
         push    r14
         push    r13
