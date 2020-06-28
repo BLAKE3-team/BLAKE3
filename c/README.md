@@ -191,14 +191,17 @@ gcc -shared -O3 -o libblake3.so -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_A
     blake3.c blake3_dispatch.c blake3_portable.c
 ```
 
-## ARM NEON
+## ARM NEON / ASIMD
 
-The NEON implementation is not enabled by default on ARM, since not all
-ARM targets support it. To enable it, set `BLAKE3_USE_NEON=1`. Here's an
-example of building a shared library on ARM Linux with NEON support:
+The NEON implementation is enabled by default on ARMv8 (AArch64/arm64,
+and actually called ASIMD), on ARMv7 (armhf) runtime detection is
+performed as NEON is optional hardware feature, and not enabled on
+ARMv6 and lower (armel). To omit NEON support, set
+`BLAKE3_NO_NEON=1`. Here's an example of building a shared library on
+ARM Linux without NEON support:
 
 ```bash
-gcc -shared -O3 -o libblake3.so -DBLAKE3_USE_NEON blake3.c blake3_dispatch.c \
+gcc -shared -O3 -o libblake3.so -DBLAKE3_NO_NEON blake3.c blake3_dispatch.c \
     blake3_portable.c blake3_neon.c
 ```
 

@@ -312,8 +312,11 @@ fn test_hash_many_avx512() {
 }
 
 #[test]
-#[cfg(feature = "neon")]
+#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 fn test_hash_many_neon() {
+    if !crate::neon_detected() {
+        return;
+    }
     test_hash_many_fn(crate::ffi::neon::blake3_hash_many_neon);
 }
 

@@ -30,6 +30,41 @@ pub fn avx512_detected() -> bool {
     is_x86_feature_detected!("avx512f") && is_x86_feature_detected!("avx512vl")
 }
 
+#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+#[allow(unreachable_code)]
+#[inline(always)]
+pub fn neon_detected() -> bool {
+    // A testing-only short-circuit.
+    if cfg!(feature = "no_neon") {
+        return false;
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        return true
+    }
+    // Static check, e.g. for building with target-cpu=native.
+    // ... but rust does not provide this
+    //#[cfg(target_feature = "armv7-a+simd")]
+    //{
+    //    return true;
+    //}
+    // Dynamic check
+    #[cfg(all(unix, target_arch = "arm"))]
+    {
+    // https://doc.rust-lang.org/beta/std/macro.is_arm_feature_detected.html
+    // should work, and should be available and should be using
+    // getauxval, yet it's not available. So use libc ffi bindings to
+    // get to getauxval ourselves.
+    // #define HWCAP_ARM_NEON   4096
+    // #define HWCAP_ARM_VFPv4 65536
+    //
+        unsafe {
+            return (libc::getauxval(libc::AT_HWCAP) & (4096 | 65536)) != 0
+        }
+    }
+    false
+}
+
 #[derive(Clone)]
 pub struct Hasher(ffi::blake3_hasher);
 
@@ -227,7 +262,7 @@ pub mod ffi {
         }
     }
 
-    #[cfg(feature = "neon")]
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
     pub mod neon {
         extern "C" {
             // NEON low level functions

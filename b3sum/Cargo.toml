@@ -9,7 +9,6 @@ readme = "README.md"
 edition = "2018"
 
 [features]
-neon = ["blake3/neon"]
 prefer_intrinsics = ["blake3/prefer_intrinsics"]
 pure = ["blake3/pure"]
 

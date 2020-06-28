@@ -12,12 +12,6 @@ edition = "2018"
 [features]
 default = ["std"]
 
-# The NEON implementation does not participate in dynamic feature detection,
-# which is currently x86-only. If "neon" is on, NEON support is assumed. Note
-# that AArch64 always supports NEON, but support on ARMv7 varies. The NEON
-# implementation uses C intrinsics and requires a C compiler.
-neon = []
-
 # This crate uses libstd for std::io trait implementations, and also for
 # runtime CPU feature detection. This feature is enabled by default. If you use
 # --no-default-features, the only way to use the SIMD implementations in this
@@ -77,6 +71,8 @@ rayon = { version = "1.2.1", optional = true }
 cfg-if = "0.1.10"
 digest = "0.9.0"
 crypto-mac = "0.8.0"
+[target.'cfg(all(unix, target_arch = "arm"))'.dependencies]
+libc = "0.2"
 
 [dev-dependencies]
 hex = "0.4.2"

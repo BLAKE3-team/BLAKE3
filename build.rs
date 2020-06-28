@@ -13,10 +13,6 @@ fn should_prefer_intrinsics() -> bool {
     defined("CARGO_FEATURE_PREFER_INTRINSICS")
 }
 
-fn is_neon() -> bool {
-    defined("CARGO_FEATURE_NEON")
-}
-
 fn is_ci() -> bool {
     defined("BLAKE3_CI")
 }
@@ -48,6 +44,10 @@ fn is_armv7() -> bool {
     target_components()[0] == "armv7"
 }
 
+// for armv6 and lower, only portable implementation is used
+fn is_arm() -> bool {
+    is_armv7() || target_components()[0] == "aarch64"
+}
 // Windows targets may be using the MSVC toolchain or the GNU toolchain. The
 // right compiler flags to use depend on the toolchain. (And we don't want to
 // use flag_if_supported, because we don't want features to be silently
@@ -193,6 +193,8 @@ fn build_avx512_assembly() {
 }
 
 fn build_neon_c_intrinsics() {
+    assert!(is_arm());
+    println!("cargo:rustc-cfg=blake3_neon_ffi");
     let mut build = new_build();
     // Note that blake3_neon.c normally depends on the blake3_portable.c
     // for the single-instance compression function, but we expose
@@ -208,10 +210,6 @@ fn build_neon_c_intrinsics() {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    if is_pure() && is_neon() {
-        panic!("It doesn't make sense to enable both \"pure\" and \"neon\".");
-    }
-
     if is_x86_64() || is_x86_32() {
         let support = c_compiler_support();
         if is_x86_32() || should_prefer_intrinsics() || is_pure() || support == NoCompiler {
@@ -231,7 +229,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    if is_neon() {
+    if is_arm() {
         build_neon_c_intrinsics();
     }
 

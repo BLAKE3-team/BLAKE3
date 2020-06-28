@@ -13,9 +13,6 @@ edition = "2018"
 # By default the x86-64 build uses assembly implementations. This feature makes
 # the build use the C intrinsics implementations instead.
 prefer_intrinsics = []
-# Activate NEON bindings. We don't currently do any CPU feature detection for
-# this. If this Cargo feature is on, the NEON gets used.
-neon = []
 
 [dev-dependencies]
 arrayref = "0.3.5"
@@ -27,3 +24,6 @@ reference_impl = { path = "../../reference_impl" }
 
 [build-dependencies]
 cc = "1.0.48"
+
+[target.'cfg(all(unix, target_arch = "arm"))'.dependencies]
+libc = "0.2"

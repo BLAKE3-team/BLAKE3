@@ -54,19 +54,6 @@ static int parse_key(char *hex_key, uint8_t out[BLAKE3_KEY_LEN]) {
   return 0;
 }
 
-/* A little repetition here */
-enum cpu_feature {
-  SSE2 = 1 << 0,
-  SSSE3 = 1 << 1,
-  SSE41 = 1 << 2,
-  AVX = 1 << 3,
-  AVX2 = 1 << 4,
-  AVX512F = 1 << 5,
-  AVX512VL = 1 << 6,
-  /* ... */
-  UNDEFINED = 1 << 30
-};
-
 extern enum cpu_feature g_cpu_features;
 enum cpu_feature get_cpu_features();
 
