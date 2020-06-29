@@ -30,20 +30,19 @@ pub const TEST_CASES: &[usize] = &[
     100 * CHUNK_LEN, // subtrees larger than MAX_SIMD_DEGREE chunks
 ];
 
+pub const TEST_KEY: &[u8; blake3::KEY_LEN] = b"whats the Elvish word for friend";
 pub const TEST_CONTEXT: &str = "BLAKE3 2019-12-27 16:29:52 test vectors context";
 
 const COMMENT: &str = r#"
 Each test is an input length and three outputs, one for each of the hash,
 keyed_hash, and derive_key modes. The input in each case is filled with a
-251-byte-long repeating pattern: 0, 1, 2, ..., 249, 250, 0, 1, ... The key used
-with keyed_hash is the 32-byte ASCII string given in the 'key' field below. For
-derive_key, the test input is used as the input key, and the context string is
-'BLAKE3 2019-12-27 16:29:52 test vectors context'. (As good practice for
-following the security requirements of derive_key, test runners should make
-that context string a hardcoded constant, and we do not provided it in
-machine-readable form.) Outputs are encoded as hexadecimal. Each case is an
-extended output, and implementations should also check that the first 32 bytes
-match their default-length output.
+repeating sequence of 251 bytes: 0, 1, 2, ..., 249, 250, 0, 1, ..., and so on.
+The key used with keyed_hash is the 32-byte ASCII string "whats the Elvish word
+for friend", also given in the `key` field below. The context string used with
+derive_key is the ASCII string "BLAKE3 2019-12-27 16:29:52 test vectors
+context", also given in the `context_string` field below. Outputs are encoded
+as hexadecimal. Each case is an extended output, and implementations should
+also check that the first 32 bytes match their default-length output.
 "#;
 
 // Paint the input with a repeating byte pattern. We use a cycle length of 251,
@@ -60,6 +59,7 @@ pub fn paint_test_input(buf: &mut [u8]) {
 pub struct Cases {
     pub _comment: String,
     pub key: String,
+    pub context_string: String,
     pub cases: Vec<Case>,
 }
 
@@ -72,8 +72,6 @@ pub struct Case {
 }
 
 pub fn generate_json() -> String {
-    const TEST_KEY: &[u8; blake3::KEY_LEN] = b"whats the Elvish word for friend";
-
     let mut cases = Vec::new();
     for &input_len in TEST_CASES {
         let mut input = vec![0; input_len];
@@ -108,6 +106,7 @@ pub fn generate_json() -> String {
     let mut json = serde_json::to_string_pretty(&Cases {
         _comment: COMMENT.trim().replace("\n", " "),
         key: std::str::from_utf8(TEST_KEY).unwrap().to_string(),
+        context_string: TEST_CONTEXT.to_string(),
         cases,
     })
     .unwrap();
