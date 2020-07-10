@@ -5,10 +5,10 @@ A command line utility for calculating
 Coreutils tools like `b2sum` or `md5sum`.
 
 ```
-b3sum 0.3.4
+b3sum 0.3.5
 
 USAGE:
-    b3sum [FLAGS] [OPTIONS] [file]...
+    b3sum [FLAGS] [OPTIONS] [FILE]...
 
 FLAGS:
     -c, --check       Reads BLAKE3 sums from the [file]s and checks them
@@ -36,7 +36,7 @@ OPTIONS:
                                   RAYON_NUM_THREADS is also respected.
 
 ARGS:
-    <file>...    Files to hash, or checkfiles to check. When no file is given,
+    <FILE>...    Files to hash, or checkfiles to check. When no file is given,
                  or when - is given, read standard input.
 ```
 
