@@ -230,5 +230,5 @@ and their performance is the same if you use the assembly
 implementations or if you compile the intrinsics-based implementations
 with Clang. (Both Clang and rustc are LLVM-based.)
 
-The C implementation doesn't currently support multi-threading. OpenMP
-support or similar might be added in the future.
+The C implementation doesn't currently include any multithreading
+optimizations. OpenMP support or similar might be added in the future.
