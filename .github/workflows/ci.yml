@@ -149,32 +149,32 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     # Test the intrinsics-based implementations.
-    - run: make test
+    - run: make -f Makefile.testing test
       working-directory: ./c
-    - run: make clean && rm blake3_sse41.c
+    - run: make -f Makefile.testing clean && rm blake3_sse41.c
       working-directory: ./c
-    - run: BLAKE3_NO_SSE41=1 make test
+    - run: BLAKE3_NO_SSE41=1 make -f Makefile.testing test
       working-directory: ./c
-    - run: make clean && rm blake3_avx2.c
+    - run: make -f Makefile.testing clean && rm blake3_avx2.c
       working-directory: ./c
-    - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 make test
+    - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 make -f Makefile.testing test
       working-directory: ./c
-    - run: make clean && rm blake3_avx512.c
+    - run: make -f Makefile.testing clean && rm blake3_avx512.c
       working-directory: ./c
-    - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 BLAKE3_NO_AVX512=1 make test
+    - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 BLAKE3_NO_AVX512=1 make -f Makefile.testing test
       working-directory: ./c
     # Test the assembly implementations.
-    - run: make test_asm
+    - run: make -f Makefile.testing test_asm
       working-directory: ./c
-    - run: make clean && rm blake3_sse41_x86-64_unix.S
+    - run: make -f Makefile.testing clean && rm blake3_sse41_x86-64_unix.S
       working-directory: ./c
-    - run: BLAKE3_NO_SSE41=1 make test_asm
+    - run: BLAKE3_NO_SSE41=1 make -f Makefile.testing test_asm
       working-directory: ./c
-    - run: make clean && rm blake3_avx2_x86-64_unix.S
+    - run: make -f Makefile.testing clean && rm blake3_avx2_x86-64_unix.S
       working-directory: ./c
-    - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 make test_asm
+    - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 make -f Makefile.testing test_asm
       working-directory: ./c
-    - run: make clean && rm blake3_avx512_x86-64_unix.S
+    - run: make -f Makefile.testing clean && rm blake3_avx512_x86-64_unix.S
       working-directory: ./c
-    - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 BLAKE3_NO_AVX512=1 make test_asm
+    - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 BLAKE3_NO_AVX512=1 make -f Makefile.testing test_asm
       working-directory: ./c

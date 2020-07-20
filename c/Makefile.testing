@@ -1,3 +1,6 @@
+# This Makefile is only for testing. C callers should follow the instructions
+# in ./README.md to incorporate these C files into their existing build.
+
 NAME=blake3
 CC=gcc
 CFLAGS=-O3 -Wall -Wextra -std=c11 -pedantic
