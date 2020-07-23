@@ -1266,6 +1266,17 @@ impl std::io::Write for Hasher {
     }
 }
 
+#[cfg(feature = "std")]
+impl std::hash::Hasher for Hasher {
+    fn write(&mut self, bytes: &[u8]) {
+        self.update(bytes);
+    }
+
+    fn finish(&self) -> u64 {
+        self.finalize().into()
+    }
+}
+
 /// An incremental reader for extended output, returned by
 /// [`Hasher::finalize_xof`](struct.Hasher.html#method.finalize_xof).
 #[derive(Clone)]
