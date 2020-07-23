@@ -239,6 +239,37 @@ impl From<Hash> for [u8; OUT_LEN] {
     }
 }
 
+/// Transforming `Hash` into `u64` will increase the number of
+/// collisions as `u64` can represent fewer values than `[u8;
+/// OUT_LEN]`.
+///
+/// Bytes from `Hash` are extracted by chunks of 8, and then added to
+/// `0u64` with a modular addition.
+#[cfg(feature = "std")]
+impl From<Hash> for u64 {
+    #[inline]
+    fn from(hash: Hash) -> Self {
+        use std::convert::TryInto;
+        use std::u64;
+
+        let bytes: [u8; OUT_LEN] = hash.into();
+
+        (0..(OUT_LEN / 8))
+            .into_iter()
+            .map(|i| (i * 8, (i + 1) * 8))
+            .fold(0u64, |accumulator, (x, y)| {
+                assert_eq!(y - x, 8);
+
+                accumulator.wrapping_add(u64::from_be_bytes(
+                    (&bytes[x..y])
+                        .try_into()
+                        // SAFETY: OK, because `y - x = 8` and `wrapping_add` expects a `[u8; 8]`.
+                        .expect("failed to convert `&[u8]` into `[u8; 8]`"),
+                ))
+            })
+    }
+}
+
 /// This implementation is constant-time.
 impl PartialEq for Hash {
     #[inline]
