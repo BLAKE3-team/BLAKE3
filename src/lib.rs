@@ -245,12 +245,10 @@ impl From<Hash> for [u8; OUT_LEN] {
 ///
 /// Bytes from `Hash` are extracted by chunks of 8, and then added to
 /// `0u64` with a modular addition.
-#[cfg(feature = "std")]
 impl From<Hash> for u64 {
     #[inline]
     fn from(hash: Hash) -> Self {
-        use std::convert::TryInto;
-        use std::u64;
+        use core::convert::TryInto;
 
         let bytes: [u8; OUT_LEN] = hash.into();
 
@@ -1266,8 +1264,7 @@ impl std::io::Write for Hasher {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::hash::Hasher for Hasher {
+impl core::hash::Hasher for Hasher {
     fn write(&mut self, bytes: &[u8]) {
         self.update(bytes);
     }
