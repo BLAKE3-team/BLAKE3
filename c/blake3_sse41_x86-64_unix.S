@@ -1,6 +1,10 @@
-#if defined(__ELF__) && defined(__CET__) && __has_include(<cet.h>)
+#if defined(__ELF__) && defined(__CET__) && defined(__has_include)
+#if __has_include(<cet.h>)
 #include <cet.h>
-#else
+#endif
+#endif
+
+#if !defined(_CET_ENDBR)
 #define _CET_ENDBR
 #endif
 
