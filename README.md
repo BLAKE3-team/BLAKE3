@@ -63,6 +63,8 @@ This repository is the official implementation of BLAKE3. It includes:
 
 * [![Actions Status](https://github.com/BLAKE3-team/BLAKE3/workflows/tests/badge.svg)](https://github.com/BLAKE3-team/BLAKE3/actions)
 
+* [![TrustInSoft CI](https://ci.trust-in-soft.com/projects/BLAKE3-team/BLAKE3.svg?branch=master)](https://ci.trust-in-soft.com/projects/BLAKE3-team/BLAKE3)
+
 BLAKE3 was designed by:
 
 * [@oconnor663 ](https://github.com/oconnor663) (Jack O'Connor)
