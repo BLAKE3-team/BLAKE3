@@ -131,10 +131,8 @@ let mut output_reader = hasher.finalize_xof();
 output_reader.fill(&mut output);
 assert_eq!(&output[..32], hash1.as_bytes());
 
-// Extract hash as hex str
-let hash1_hex = &hash1.to_hex()[..];
-assert_eq!("c09afee0c9f361fb61e5ff28a7739893de766fb470c5fa82b4e5e31de27fbad4", hash1_hex);
-
+// Print a hash as hex.
+println!("{}", hash1.to_hex());
 ```
 
 Besides `hash`, BLAKE3 provides two other modes, `keyed_hash` and
