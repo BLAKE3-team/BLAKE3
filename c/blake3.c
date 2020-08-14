@@ -89,21 +89,23 @@ INLINE void output_root_bytes(const output_t *self, uint64_t seek, uint8_t *out,
   uint64_t output_block_counter = seek / 64;
   size_t offset_within_block = seek % 64;
   uint8_t wide_buf[64];
-  while (out_len > 0) {
-    blake3_compress_xof(self->input_cv, self->block, self->block_len,
-                        output_block_counter, self->flags | ROOT, wide_buf);
-    size_t available_bytes = 64 - offset_within_block;
-    size_t memcpy_len;
-    if (out_len > available_bytes) {
-      memcpy_len = available_bytes;
-    } else {
-      memcpy_len = out_len;
-    }
-    memcpy(out, wide_buf + offset_within_block, memcpy_len);
-    out += memcpy_len;
-    out_len -= memcpy_len;
+  if(offset_within_block) {
+    blake3_compress_xof(self->input_cv, self->block, self->block_len, output_block_counter, self->flags | ROOT, wide_buf);
+    const size_t available_bytes = 64 - offset_within_block;
+    const size_t bytes = out_len > available_bytes ? available_bytes : out_len;
+    memcpy(out, wide_buf + offset_within_block, bytes);
+    out += bytes;
+    out_len -= bytes;
     output_block_counter += 1;
-    offset_within_block = 0;
+  }
+  if(out_len / 64)
+    blake3_xof_many(self->input_cv, self->block, self->block_len, output_block_counter, self->flags | ROOT, out, out_len / 64);
+  output_block_counter += out_len / 64;
+  out += out_len & -64;
+  out_len -= out_len & -64;
+  if(out_len) {
+    blake3_compress_xof(self->input_cv, self->block, self->block_len, output_block_counter, self->flags | ROOT, wide_buf);
+    memcpy(out, wide_buf, out_len);
   }
 }
 

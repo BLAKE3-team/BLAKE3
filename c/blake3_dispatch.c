@@ -175,6 +175,23 @@ void blake3_compress_xof(const uint32_t cv[8],
   blake3_compress_xof_portable(cv, block, block_len, counter, flags, out);
 }
 
+
+void blake3_xof_many(const uint32_t cv[8],
+                     const uint8_t block[BLAKE3_BLOCK_LEN],
+                     uint8_t block_len, uint64_t counter, uint8_t flags,
+                     uint8_t out[64], size_t outblocks) {
+#if defined(IS_X86)
+  const enum cpu_feature features = get_cpu_features();
+#if !defined(BLAKE3_NO_AVX512)
+  if (features & AVX512VL) {
+    blake3_xof_many_avx512(cv, block, block_len, counter, flags, out, outblocks);
+    return;
+  }
+#endif
+#endif
+  blake3_xof_many_portable(cv, block, block_len, counter, flags, out, outblocks);
+}
+
 void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
                       size_t blocks, const uint32_t key[8], uint64_t counter,
                       bool increment_counter, uint8_t flags,
