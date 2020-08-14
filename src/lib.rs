@@ -23,6 +23,9 @@
 //! output_reader.fill(&mut output);
 //! assert_eq!(&output[..32], hash1.as_bytes());
 //! # }
+//!
+//! // Print a hash as hex.
+//! println!("{}", hash1.to_hex());
 //! # Ok(())
 //! # }
 //! ```
