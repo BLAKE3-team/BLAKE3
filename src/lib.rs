@@ -94,6 +94,12 @@ mod sse41;
 #[cfg(blake3_sse41_ffi)]
 #[path = "ffi_sse41.rs"]
 mod sse41;
+#[cfg(blake3_sse2_rust)]
+#[path = "rust_sse2.rs"]
+mod sse2;
+#[cfg(blake3_sse2_ffi)]
+#[path = "ffi_sse2.rs"]
+mod sse2;
 
 pub mod traits;
 

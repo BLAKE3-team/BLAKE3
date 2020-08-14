@@ -61,6 +61,7 @@ prefer_intrinsics = []
 # level turns out to be the right approach, then we can design a stable
 # feature. Until then, we reserve the right to break these features in a patch
 # release.
+no_sse2 = []
 no_sse41 = []
 no_avx2 = []
 no_avx512 = []
