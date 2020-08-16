@@ -1694,10 +1694,18 @@ blake3_hash_many_sse2:
         movdqa  xmm2, xmmword ptr [rsp+0x120]
         movdqu  xmm3, xmmword ptr [rsp+0x118]
         movdqu  xmm4, xmmword ptr [rsp+0x128]
-        blendvps xmm1, xmm3, xmm0
-        blendvps xmm2, xmm4, xmm0
-        movdqa  xmmword ptr [rsp+0x110], xmm1
-        movdqa  xmmword ptr [rsp+0x120], xmm2
+        movdqa  xmm5, xmm0
+        movdqa  xmm6, xmm0
+        pandn   xmm5, xmm1
+        pand    xmm3, xmm6
+        por     xmm3, xmm5
+        movdqa  xmm5, xmm0
+        movdqa  xmm6, xmm0
+        pandn   xmm5, xmm2
+        pand    xmm4, xmm6
+        por     xmm4, xmm5
+        movdqa  xmmword ptr [rsp+0x110], xmm3
+        movdqa  xmmword ptr [rsp+0x120], xmm4
         add     rdi, 16
         add     rbx, 64
         sub     rsi, 2
