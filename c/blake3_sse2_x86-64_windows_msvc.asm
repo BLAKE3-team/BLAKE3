@@ -1472,12 +1472,24 @@ final3blocks:
         movaps  xmm8, xmm0
         movaps  xmm9, xmm1
         movd    xmm13, dword ptr [rsp+110H]
-        pinsrd  xmm13, dword ptr [rsp+120H], 1
-        pinsrd  xmm13, dword ptr [BLAKE3_BLOCK_LEN], 2
+        mov     eax, dword ptr [rsp+120H]
+        sar     eax, 16
+        pinsrw  xmm13, word ptr [rsp+120H], 2
+        pinsrw  xmm13, eax, 3
+        mov     eax, dword ptr [BLAKE3_BLOCK_LEN]
+        sar     eax, 16
+        pinsrw  xmm13, word ptr [BLAKE3_BLOCK_LEN], 4
+        pinsrw  xmm13, eax, 5
         movaps  xmmword ptr [rsp], xmm13
         movd    xmm14, dword ptr [rsp+114H]
-        pinsrd  xmm14, dword ptr [rsp+124H], 1
-        pinsrd  xmm14, dword ptr [BLAKE3_BLOCK_LEN], 2
+        mov     eax, dword ptr [BLAKE3_BLOCK_LEN]
+        sar     eax, 16
+        pinsrw  xmm14, word ptr [rsp+124H], 2
+        pinsrw  xmm14, eax, 3
+        mov     eax, dword ptr [BLAKE3_BLOCK_LEN]
+        sar     eax, 16
+        pinsrw  xmm14, word ptr [BLAKE3_BLOCK_LEN], 4
+        pinsrw  xmm14, eax, 5
         movaps  xmmword ptr [rsp+10H], xmm14
         mov     r8, qword ptr [rdi]
         mov     r9, qword ptr [rdi+8H]
@@ -1520,8 +1532,12 @@ innerloop2:
         pshufd  xmm15, xmm11, 93H
         movaps  xmm3, xmmword ptr [rsp]
         movaps  xmm11, xmmword ptr [rsp+10H]
-        pinsrd  xmm3, eax, 3
-        pinsrd  xmm11, eax, 3
+        mov     r14d, eax
+        sar     r14d, 16
+        pinsrw  xmm3, eax, 6
+        pinsrw  xmm3, r14d, 7
+        pinsrw  xmm11, eax, 6
+        pinsrw  xmm11, r14d, 7
         mov     al, 7
 roundloop2:
         paddd   xmm0, xmm4
@@ -1727,8 +1743,14 @@ final1block:
         movups  xmm0, xmmword ptr [rcx]
         movups  xmm1, xmmword ptr [rcx+10H]
         movd    xmm13, dword ptr [rsp+110H]
-        pinsrd  xmm13, dword ptr [rsp+120H], 1
-        pinsrd  xmm13, dword ptr [BLAKE3_BLOCK_LEN], 2
+        mov     eax, dword ptr [rsp+120H]
+        sar     eax, 16
+        pinsrw  xmm13, word ptr [rsp+120H], 2
+        pinsrw  xmm13, eax, 3
+        mov     eax, dword ptr [BLAKE3_BLOCK_LEN]
+        sar     eax, 16
+        pinsrw  xmm13, word ptr [BLAKE3_BLOCK_LEN], 4
+        pinsrw  xmm13, eax, 5
         movaps  xmm14, xmmword ptr [ROT8]
         movaps  xmm15, xmmword ptr [ROT16]
         mov     r8, qword ptr [rdi]
@@ -1743,7 +1765,10 @@ innerloop1:
         cmovne  eax, r14d
         movaps  xmm2, xmmword ptr [BLAKE3_IV]
         movaps  xmm3, xmm13
-        pinsrd  xmm3, eax, 3
+        mov     r14d, eax
+        sar     r14d, 16
+        pinsrw  xmm3, eax, 6
+        pinsrw  xmm3, r14d, 7
         movups  xmm4, xmmword ptr [r8+rdx-40H]
         movups  xmm5, xmmword ptr [r8+rdx-30H]
         movaps  xmm8, xmm4

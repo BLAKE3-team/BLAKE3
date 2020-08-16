@@ -1471,12 +1471,24 @@ blake3_hash_many_sse2:
         movaps  xmm8, xmm0
         movaps  xmm9, xmm1
         movd    xmm13, dword ptr [rsp+0x110]
-        pinsrd  xmm13, dword ptr [rsp+0x120], 1
-        pinsrd  xmm13, dword ptr [BLAKE3_BLOCK_LEN+rip], 2
+        mov     eax, dword ptr [rsp+0x120]
+        sar     eax, 16
+        pinsrw  xmm13, word ptr [rsp+0x120], 2
+        pinsrw  xmm13, eax, 3
+        mov     eax, dword ptr [BLAKE3_BLOCK_LEN+rip]
+        sar     eax, 16
+        pinsrw  xmm13, word ptr [BLAKE3_BLOCK_LEN+rip], 4
+        pinsrw  xmm13, eax, 5
         movaps  xmmword ptr [rsp], xmm13
         movd    xmm14, dword ptr [rsp+0x114]
-        pinsrd  xmm14, dword ptr [rsp+0x124], 1
-        pinsrd  xmm14, dword ptr [BLAKE3_BLOCK_LEN+rip], 2
+        mov     eax, dword ptr [BLAKE3_BLOCK_LEN+rip]
+        sar     eax, 16
+        pinsrw  xmm14, word ptr [rsp+0x124], 2
+        pinsrw  xmm14, eax, 3
+        mov     eax, dword ptr [BLAKE3_BLOCK_LEN+rip]
+        sar     eax, 16
+        pinsrw  xmm14, word ptr [BLAKE3_BLOCK_LEN+rip], 4
+        pinsrw  xmm14, eax, 5
         movaps  xmmword ptr [rsp+0x10], xmm14
         mov     r8, qword ptr [rdi]
         mov     r9, qword ptr [rdi+0x8]
@@ -1519,8 +1531,12 @@ blake3_hash_many_sse2:
         pshufd  xmm15, xmm11, 0x93
         movaps  xmm3, xmmword ptr [rsp]
         movaps  xmm11, xmmword ptr [rsp+0x10]
-        pinsrd  xmm3, eax, 3
-        pinsrd  xmm11, eax, 3
+        mov     r14d, eax
+        sar     r14d, 16
+        pinsrw  xmm3, eax, 6
+        pinsrw  xmm3, r14d, 7
+        pinsrw  xmm11, eax, 6
+        pinsrw  xmm11, r14d, 7
         mov     al, 7
 9:
         paddd   xmm0, xmm4
@@ -1726,8 +1742,14 @@ blake3_hash_many_sse2:
         movups  xmm0, xmmword ptr [rcx]
         movups  xmm1, xmmword ptr [rcx+0x10]
         movd    xmm13, dword ptr [rsp+0x110]
-        pinsrd  xmm13, dword ptr [rsp+0x120], 1
-        pinsrd  xmm13, dword ptr [BLAKE3_BLOCK_LEN+rip], 2
+        mov     eax, dword ptr [rsp+0x120]
+        sar     eax, 16
+        pinsrw  xmm13, word ptr [rsp+0x120], 2
+        pinsrw  xmm13, eax, 3
+        mov     eax, dword ptr [BLAKE3_BLOCK_LEN+rip]
+        sar     eax, 16
+        pinsrw  xmm13, word ptr [BLAKE3_BLOCK_LEN+rip], 4
+        pinsrw  xmm13, eax, 5
         movaps  xmm14, xmmword ptr [ROT8+rip]
         movaps  xmm15, xmmword ptr [ROT16+rip]
         mov     r8, qword ptr [rdi]
@@ -1742,7 +1764,10 @@ blake3_hash_many_sse2:
         cmovne  eax, r14d
         movaps  xmm2, xmmword ptr [BLAKE3_IV+rip]
         movaps  xmm3, xmm13
-        pinsrd  xmm3, eax, 3
+        mov     r14d, eax
+        sar     r14d, 16
+        pinsrw  xmm3, eax, 6
+        pinsrw  xmm3, r14d, 7
         movups  xmm4, xmmword ptr [r8+rdx-0x40]
         movups  xmm5, xmmword ptr [r8+rdx-0x30]
         movaps  xmm8, xmm4
