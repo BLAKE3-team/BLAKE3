@@ -187,8 +187,9 @@ Please see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Intellectual property
 
-The Rust code is copyright Jack O'Connor, 2019-2020. 
-The C code is copyright Samuel Neves and Jack O'Connor, 2019-2020.
+The Rust code is copyright Jack O'Connor, 2019-2020. The C code is
+copyright Samuel Neves and Jack O'Connor, 2019-2020. The assembly code
+is copyright Samuel Neves, 2019-2020.
 
 This work is released into the public domain with CC0 1.0.
 Alternatively, it is licensed under the Apache License 2.0.
