@@ -192,11 +192,14 @@ blake3_hash_many_sse2:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
-        pshufb  xmm12, xmm8
-        pshufb  xmm13, xmm8
-        pshufb  xmm14, xmm8
-        pshufb  xmm15, xmm8
+        pshuflw xmm12, xmm12, 0xB1
+        pshufhw xmm12, xmm12, 0xB1
+        pshuflw xmm13, xmm13, 0xB1
+        pshufhw xmm13, xmm13, 0xB1
+        pshuflw xmm14, xmm14, 0xB1
+        pshufhw xmm14, xmm14, 0xB1
+        pshuflw xmm15, xmm15, 0xB1
+        pshufhw xmm15, xmm15, 0xB1
         movdqa  xmm8, xmmword ptr [BLAKE3_IV_0+rip]
         paddd   xmm8, xmm12
         paddd   xmm9, xmm13
@@ -278,11 +281,14 @@ blake3_hash_many_sse2:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
-        pshufb  xmm15, xmm8
-        pshufb  xmm12, xmm8
-        pshufb  xmm13, xmm8
-        pshufb  xmm14, xmm8
+        pshuflw xmm15, xmm15, 0xB1
+        pshufhw xmm15, xmm15, 0xB1
+        pshuflw xmm12, xmm12, 0xB1
+        pshufhw xmm12, xmm12, 0xB1
+        pshuflw xmm13, xmm13, 0xB1
+        pshufhw xmm13, xmm13, 0xB1
+        pshuflw xmm14, xmm14, 0xB1
+        pshufhw xmm14, xmm14, 0xB1
         paddd   xmm10, xmm15
         paddd   xmm11, xmm12
         movdqa  xmm8, xmmword ptr [rsp+0x100]
@@ -364,11 +370,14 @@ blake3_hash_many_sse2:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
-        pshufb  xmm12, xmm8
-        pshufb  xmm13, xmm8
-        pshufb  xmm14, xmm8
-        pshufb  xmm15, xmm8
+        pshuflw xmm12, xmm12, 0xB1
+        pshufhw xmm12, xmm12, 0xB1
+        pshuflw xmm13, xmm13, 0xB1
+        pshufhw xmm13, xmm13, 0xB1
+        pshuflw xmm14, xmm14, 0xB1
+        pshufhw xmm14, xmm14, 0xB1
+        pshuflw xmm15, xmm15, 0xB1
+        pshufhw xmm15, xmm15, 0xB1
         movdqa  xmm8, xmmword ptr [rsp+0x100]
         paddd   xmm8, xmm12
         paddd   xmm9, xmm13
@@ -450,11 +459,14 @@ blake3_hash_many_sse2:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
-        pshufb  xmm15, xmm8
-        pshufb  xmm12, xmm8
-        pshufb  xmm13, xmm8
-        pshufb  xmm14, xmm8
+        pshuflw xmm15, xmm15, 0xB1
+        pshufhw xmm15, xmm15, 0xB1
+        pshuflw xmm12, xmm12, 0xB1
+        pshufhw xmm12, xmm12, 0xB1
+        pshuflw xmm13, xmm13, 0xB1
+        pshufhw xmm13, xmm13, 0xB1
+        pshuflw xmm14, xmm14, 0xB1
+        pshufhw xmm14, xmm14, 0xB1
         paddd   xmm10, xmm15
         paddd   xmm11, xmm12
         movdqa  xmm8, xmmword ptr [rsp+0x100]
@@ -536,11 +548,14 @@ blake3_hash_many_sse2:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
-        pshufb  xmm12, xmm8
-        pshufb  xmm13, xmm8
-        pshufb  xmm14, xmm8
-        pshufb  xmm15, xmm8
+        pshuflw xmm12, xmm12, 0xB1
+        pshufhw xmm12, xmm12, 0xB1
+        pshuflw xmm13, xmm13, 0xB1
+        pshufhw xmm13, xmm13, 0xB1
+        pshuflw xmm14, xmm14, 0xB1
+        pshufhw xmm14, xmm14, 0xB1
+        pshuflw xmm15, xmm15, 0xB1
+        pshufhw xmm15, xmm15, 0xB1
         movdqa  xmm8, xmmword ptr [rsp+0x100]
         paddd   xmm8, xmm12
         paddd   xmm9, xmm13
@@ -622,11 +637,14 @@ blake3_hash_many_sse2:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
-        pshufb  xmm15, xmm8
-        pshufb  xmm12, xmm8
-        pshufb  xmm13, xmm8
-        pshufb  xmm14, xmm8
+        pshuflw xmm15, xmm15, 0xB1
+        pshufhw xmm15, xmm15, 0xB1
+        pshuflw xmm12, xmm12, 0xB1
+        pshufhw xmm12, xmm12, 0xB1
+        pshuflw xmm13, xmm13, 0xB1
+        pshufhw xmm13, xmm13, 0xB1
+        pshuflw xmm14, xmm14, 0xB1
+        pshufhw xmm14, xmm14, 0xB1
         paddd   xmm10, xmm15
         paddd   xmm11, xmm12
         movdqa  xmm8, xmmword ptr [rsp+0x100]
@@ -708,11 +726,14 @@ blake3_hash_many_sse2:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
-        pshufb  xmm12, xmm8
-        pshufb  xmm13, xmm8
-        pshufb  xmm14, xmm8
-        pshufb  xmm15, xmm8
+        pshuflw xmm12, xmm12, 0xB1
+        pshufhw xmm12, xmm12, 0xB1
+        pshuflw xmm13, xmm13, 0xB1
+        pshufhw xmm13, xmm13, 0xB1
+        pshuflw xmm14, xmm14, 0xB1
+        pshufhw xmm14, xmm14, 0xB1
+        pshuflw xmm15, xmm15, 0xB1
+        pshufhw xmm15, xmm15, 0xB1
         movdqa  xmm8, xmmword ptr [rsp+0x100]
         paddd   xmm8, xmm12
         paddd   xmm9, xmm13
@@ -794,11 +815,14 @@ blake3_hash_many_sse2:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
-        pshufb  xmm15, xmm8
-        pshufb  xmm12, xmm8
-        pshufb  xmm13, xmm8
-        pshufb  xmm14, xmm8
+        pshuflw xmm15, xmm15, 0xB1
+        pshufhw xmm15, xmm15, 0xB1
+        pshuflw xmm12, xmm12, 0xB1
+        pshufhw xmm12, xmm12, 0xB1
+        pshuflw xmm13, xmm13, 0xB1
+        pshufhw xmm13, xmm13, 0xB1
+        pshuflw xmm14, xmm14, 0xB1
+        pshufhw xmm14, xmm14, 0xB1
         paddd   xmm10, xmm15
         paddd   xmm11, xmm12
         movdqa  xmm8, xmmword ptr [rsp+0x100]
@@ -880,11 +904,14 @@ blake3_hash_many_sse2:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
-        pshufb  xmm12, xmm8
-        pshufb  xmm13, xmm8
-        pshufb  xmm14, xmm8
-        pshufb  xmm15, xmm8
+        pshuflw xmm12, xmm12, 0xB1
+        pshufhw xmm12, xmm12, 0xB1
+        pshuflw xmm13, xmm13, 0xB1
+        pshufhw xmm13, xmm13, 0xB1
+        pshuflw xmm14, xmm14, 0xB1
+        pshufhw xmm14, xmm14, 0xB1
+        pshuflw xmm15, xmm15, 0xB1
+        pshufhw xmm15, xmm15, 0xB1
         movdqa  xmm8, xmmword ptr [rsp+0x100]
         paddd   xmm8, xmm12
         paddd   xmm9, xmm13
@@ -966,11 +993,14 @@ blake3_hash_many_sse2:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
-        pshufb  xmm15, xmm8
-        pshufb  xmm12, xmm8
-        pshufb  xmm13, xmm8
-        pshufb  xmm14, xmm8
+        pshuflw xmm15, xmm15, 0xB1
+        pshufhw xmm15, xmm15, 0xB1
+        pshuflw xmm12, xmm12, 0xB1
+        pshufhw xmm12, xmm12, 0xB1
+        pshuflw xmm13, xmm13, 0xB1
+        pshufhw xmm13, xmm13, 0xB1
+        pshuflw xmm14, xmm14, 0xB1
+        pshufhw xmm14, xmm14, 0xB1
         paddd   xmm10, xmm15
         paddd   xmm11, xmm12
         movdqa  xmm8, xmmword ptr [rsp+0x100]
@@ -1052,11 +1082,14 @@ blake3_hash_many_sse2:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
-        pshufb  xmm12, xmm8
-        pshufb  xmm13, xmm8
-        pshufb  xmm14, xmm8
-        pshufb  xmm15, xmm8
+        pshuflw xmm12, xmm12, 0xB1
+        pshufhw xmm12, xmm12, 0xB1
+        pshuflw xmm13, xmm13, 0xB1
+        pshufhw xmm13, xmm13, 0xB1
+        pshuflw xmm14, xmm14, 0xB1
+        pshufhw xmm14, xmm14, 0xB1
+        pshuflw xmm15, xmm15, 0xB1
+        pshufhw xmm15, xmm15, 0xB1
         movdqa  xmm8, xmmword ptr [rsp+0x100]
         paddd   xmm8, xmm12
         paddd   xmm9, xmm13
@@ -1138,11 +1171,14 @@ blake3_hash_many_sse2:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
-        pshufb  xmm15, xmm8
-        pshufb  xmm12, xmm8
-        pshufb  xmm13, xmm8
-        pshufb  xmm14, xmm8
+        pshuflw xmm15, xmm15, 0xB1
+        pshufhw xmm15, xmm15, 0xB1
+        pshuflw xmm12, xmm12, 0xB1
+        pshufhw xmm12, xmm12, 0xB1
+        pshuflw xmm13, xmm13, 0xB1
+        pshufhw xmm13, xmm13, 0xB1
+        pshuflw xmm14, xmm14, 0xB1
+        pshufhw xmm14, xmm14, 0xB1
         paddd   xmm10, xmm15
         paddd   xmm11, xmm12
         movdqa  xmm8, xmmword ptr [rsp+0x100]
@@ -1224,11 +1260,14 @@ blake3_hash_many_sse2:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
-        pshufb  xmm12, xmm8
-        pshufb  xmm13, xmm8
-        pshufb  xmm14, xmm8
-        pshufb  xmm15, xmm8
+        pshuflw xmm12, xmm12, 0xB1
+        pshufhw xmm12, xmm12, 0xB1
+        pshuflw xmm13, xmm13, 0xB1
+        pshufhw xmm13, xmm13, 0xB1
+        pshuflw xmm14, xmm14, 0xB1
+        pshufhw xmm14, xmm14, 0xB1
+        pshuflw xmm15, xmm15, 0xB1
+        pshufhw xmm15, xmm15, 0xB1
         movdqa  xmm8, xmmword ptr [rsp+0x100]
         paddd   xmm8, xmm12
         paddd   xmm9, xmm13
@@ -1310,11 +1349,14 @@ blake3_hash_many_sse2:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
-        pshufb  xmm15, xmm8
-        pshufb  xmm12, xmm8
-        pshufb  xmm13, xmm8
-        pshufb  xmm14, xmm8
+        pshuflw xmm15, xmm15, 0xB1
+        pshufhw xmm15, xmm15, 0xB1
+        pshuflw xmm12, xmm12, 0xB1
+        pshufhw xmm12, xmm12, 0xB1
+        pshuflw xmm13, xmm13, 0xB1
+        pshufhw xmm13, xmm13, 0xB1
+        pshuflw xmm14, xmm14, 0xB1
+        pshufhw xmm14, xmm14, 0xB1
         paddd   xmm10, xmm15
         paddd   xmm11, xmm12
         movdqa  xmm8, xmmword ptr [rsp+0x100]
@@ -1536,9 +1578,10 @@ blake3_hash_many_sse2:
         paddd   xmm8, xmm9
         pxor    xmm3, xmm0
         pxor    xmm11, xmm8
-        movaps  xmm12, xmmword ptr [ROT16+rip]
-        pshufb  xmm3, xmm12
-        pshufb  xmm11, xmm12
+        pshuflw xmm3, xmm3, 0xB1
+        pshufhw xmm3, xmm3, 0xB1
+        pshuflw xmm11, xmm11, 0xB1
+        pshufhw xmm11, xmm11, 0xB1
         paddd   xmm2, xmm3
         paddd   xmm10, xmm11
         pxor    xmm1, xmm2
@@ -1586,8 +1629,10 @@ blake3_hash_many_sse2:
         paddd   xmm8, xmm9
         pxor    xmm3, xmm0
         pxor    xmm11, xmm8
-        pshufb  xmm3, xmm12
-        pshufb  xmm11, xmm12
+        pshuflw xmm3, xmm3, 0xB1
+        pshufhw xmm3, xmm3, 0xB1
+        pshuflw xmm11, xmm11, 0xB1
+        pshufhw xmm11, xmm11, 0xB1
         paddd   xmm2, xmm3
         paddd   xmm10, xmm11
         pxor    xmm1, xmm2
@@ -1740,7 +1785,6 @@ blake3_hash_many_sse2:
         pinsrw  xmm13, word ptr [BLAKE3_BLOCK_LEN+rip], 4
         pinsrw  xmm13, eax, 5
         movaps  xmm14, xmmword ptr [ROT8+rip]
-        movaps  xmm15, xmmword ptr [ROT16+rip]
         mov     r8, qword ptr [rdi]
         movzx   eax, byte ptr [rbp+0x40]
         or      eax, r13d
@@ -1775,7 +1819,8 @@ blake3_hash_many_sse2:
         paddd   xmm0, xmm4
         paddd   xmm0, xmm1
         pxor    xmm3, xmm0
-        pshufb  xmm3, xmm15
+        pshuflw xmm3, xmm3, 0xB1
+        pshufhw xmm3, xmm3, 0xB1
         paddd   xmm2, xmm3
         pxor    xmm1, xmm2
         movdqa  xmm11, xmm1
@@ -1798,7 +1843,8 @@ blake3_hash_many_sse2:
         paddd   xmm0, xmm6
         paddd   xmm0, xmm1
         pxor    xmm3, xmm0
-        pshufb  xmm3, xmm15
+        pshuflw xmm3, xmm3, 0xB1
+        pshufhw xmm3, xmm3, 0xB1
         paddd   xmm2, xmm3
         pxor    xmm1, xmm2
         movdqa  xmm11, xmm1
@@ -1883,13 +1929,13 @@ _blake3_compress_in_place_sse2:
         shufps  xmm8, xmm7, 221
         pshufd  xmm7, xmm8, 0x93
         movaps  xmm14, xmmword ptr [ROT8+rip]
-        movaps  xmm15, xmmword ptr [ROT16+rip]
         mov     al, 7
 9:
         paddd   xmm0, xmm4
         paddd   xmm0, xmm1
         pxor    xmm3, xmm0
-        pshufb  xmm3, xmm15
+        pshuflw xmm3, xmm3, 0xB1
+        pshufhw xmm3, xmm3, 0xB1
         paddd   xmm2, xmm3
         pxor    xmm1, xmm2
         movdqa  xmm11, xmm1
@@ -1912,7 +1958,8 @@ _blake3_compress_in_place_sse2:
         paddd   xmm0, xmm6
         paddd   xmm0, xmm1
         pxor    xmm3, xmm0
-        pshufb  xmm3, xmm15
+        pshuflw xmm3, xmm3, 0xB1
+        pshufhw xmm3, xmm3, 0xB1
         paddd   xmm2, xmm3
         pxor    xmm1, xmm2
         movdqa  xmm11, xmm1
@@ -1996,13 +2043,13 @@ _blake3_compress_xof_sse2:
         shufps  xmm8, xmm7, 221
         pshufd  xmm7, xmm8, 0x93
         movaps  xmm14, xmmword ptr [ROT8+rip]
-        movaps  xmm15, xmmword ptr [ROT16+rip]
         mov     al, 7
 9:
         paddd   xmm0, xmm4
         paddd   xmm0, xmm1
         pxor    xmm3, xmm0
-        pshufb  xmm3, xmm15
+        pshuflw xmm3, xmm3, 0xB1
+        pshufhw xmm3, xmm3, 0xB1
         paddd   xmm2, xmm3
         pxor    xmm1, xmm2
         movdqa  xmm11, xmm1
@@ -2025,7 +2072,8 @@ _blake3_compress_xof_sse2:
         paddd   xmm0, xmm6
         paddd   xmm0, xmm1
         pxor    xmm3, xmm0
-        pshufb  xmm3, xmm15
+        pshuflw xmm3, xmm3, 0xB1
+        pshufhw xmm3, xmm3, 0xB1
         paddd   xmm2, xmm3
         pxor    xmm1, xmm2
         movdqa  xmm11, xmm1
@@ -2097,8 +2145,6 @@ _blake3_compress_xof_sse2:
 BLAKE3_IV:
         .long  0x6A09E667, 0xBB67AE85
         .long  0x3C6EF372, 0xA54FF53A
-ROT16:
-        .byte  2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13
 ROT8:
         .byte  1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 12
 ADD0:	
