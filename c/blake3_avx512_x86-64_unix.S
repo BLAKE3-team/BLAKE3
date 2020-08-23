@@ -1,3 +1,7 @@
+#if defined(__ELF__) && defined(__linux__)
+.section .note.GNU-stack,"",%progbits
+#endif
+
 #if defined(__ELF__) && defined(__CET__) && defined(__has_include)
 #if __has_include(<cet.h>)
 #include <cet.h>
