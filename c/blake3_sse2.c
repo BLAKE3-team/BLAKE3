@@ -28,8 +28,7 @@ INLINE __m128i set4(uint32_t a, uint32_t b, uint32_t c, uint32_t d) {
 }
 
 INLINE __m128i rot16(__m128i x) {
-  return _mm_shuffle_epi8(
-      x, _mm_set_epi8(13, 12, 15, 14, 9, 8, 11, 10, 5, 4, 7, 6, 1, 0, 3, 2));
+  return _mm_shufflehi_epi16(_mm_shufflelo_epi16(x, 0xB1), 0xB1);
 }
 
 INLINE __m128i rot12(__m128i x) {
