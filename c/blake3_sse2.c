@@ -36,8 +36,7 @@ INLINE __m128i rot12(__m128i x) {
 }
 
 INLINE __m128i rot8(__m128i x) {
-  return _mm_shuffle_epi8(
-      x, _mm_set_epi8(12, 15, 14, 13, 8, 11, 10, 9, 4, 7, 6, 5, 0, 3, 2, 1));
+  return xorv(_mm_srli_epi32(x, 8), _mm_slli_epi32(x, 32 - 8));
 }
 
 INLINE __m128i rot7(__m128i x) {
