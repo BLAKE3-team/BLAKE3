@@ -80,6 +80,13 @@ INLINE void undiagonalize(__m128i *row0, __m128i *row2, __m128i *row3) {
   *row2 = _mm_shuffle_epi32(*row2, _MM_SHUFFLE(2, 1, 0, 3));
 }
 
+INLINE __m128i blend_epi16(__m128i a, __m128i b, const int imm8) {
+    __m128i mask = _mm_set1_epi16(imm8);
+    mask = _mm_mullo_epi16(mask, set4(0x40008000, 0x10002000, 0x04000800, 0x01000200));
+    mask = _mm_srai_epi16(mask, 15);
+    return _mm_or_si128(_mm_and_si128(mask, b), _mm_andnot_si128(mask, a));
+}
+
 INLINE void compress_pre(__m128i rows[4], const uint32_t cv[8],
                          const uint8_t block[BLAKE3_BLOCK_LEN],
                          uint8_t block_len, uint64_t counter, uint8_t flags) {
@@ -122,11 +129,11 @@ INLINE void compress_pre(__m128i rows[4], const uint32_t cv[8],
   g1(&rows[0], &rows[1], &rows[2], &rows[3], t0);
   t1 = _mm_shuffle_ps2(m2, m3, _MM_SHUFFLE(3, 3, 2, 2));
   tt = _mm_shuffle_epi32(m0, _MM_SHUFFLE(0, 0, 3, 3));
-  t1 = _mm_blend_epi16(tt, t1, 0xCC);
+  t1 = blend_epi16(tt, t1, 0xCC);
   g2(&rows[0], &rows[1], &rows[2], &rows[3], t1);
   diagonalize(&rows[0], &rows[2], &rows[3]);
   t2 = _mm_unpacklo_epi64(m3, m1);
-  tt = _mm_blend_epi16(t2, m2, 0xC0);
+  tt = blend_epi16(t2, m2, 0xC0);
   t2 = _mm_shuffle_epi32(tt, _MM_SHUFFLE(1, 3, 2, 0));
   g1(&rows[0], &rows[1], &rows[2], &rows[3], t2);
   t3 = _mm_unpackhi_epi32(m1, m3);
@@ -145,11 +152,11 @@ INLINE void compress_pre(__m128i rows[4], const uint32_t cv[8],
   g1(&rows[0], &rows[1], &rows[2], &rows[3], t0);
   t1 = _mm_shuffle_ps2(m2, m3, _MM_SHUFFLE(3, 3, 2, 2));
   tt = _mm_shuffle_epi32(m0, _MM_SHUFFLE(0, 0, 3, 3));
-  t1 = _mm_blend_epi16(tt, t1, 0xCC);
+  t1 = blend_epi16(tt, t1, 0xCC);
   g2(&rows[0], &rows[1], &rows[2], &rows[3], t1);
   diagonalize(&rows[0], &rows[2], &rows[3]);
   t2 = _mm_unpacklo_epi64(m3, m1);
-  tt = _mm_blend_epi16(t2, m2, 0xC0);
+  tt = blend_epi16(t2, m2, 0xC0);
   t2 = _mm_shuffle_epi32(tt, _MM_SHUFFLE(1, 3, 2, 0));
   g1(&rows[0], &rows[1], &rows[2], &rows[3], t2);
   t3 = _mm_unpackhi_epi32(m1, m3);
@@ -168,11 +175,11 @@ INLINE void compress_pre(__m128i rows[4], const uint32_t cv[8],
   g1(&rows[0], &rows[1], &rows[2], &rows[3], t0);
   t1 = _mm_shuffle_ps2(m2, m3, _MM_SHUFFLE(3, 3, 2, 2));
   tt = _mm_shuffle_epi32(m0, _MM_SHUFFLE(0, 0, 3, 3));
-  t1 = _mm_blend_epi16(tt, t1, 0xCC);
+  t1 = blend_epi16(tt, t1, 0xCC);
   g2(&rows[0], &rows[1], &rows[2], &rows[3], t1);
   diagonalize(&rows[0], &rows[2], &rows[3]);
   t2 = _mm_unpacklo_epi64(m3, m1);
-  tt = _mm_blend_epi16(t2, m2, 0xC0);
+  tt = blend_epi16(t2, m2, 0xC0);
   t2 = _mm_shuffle_epi32(tt, _MM_SHUFFLE(1, 3, 2, 0));
   g1(&rows[0], &rows[1], &rows[2], &rows[3], t2);
   t3 = _mm_unpackhi_epi32(m1, m3);
@@ -191,11 +198,11 @@ INLINE void compress_pre(__m128i rows[4], const uint32_t cv[8],
   g1(&rows[0], &rows[1], &rows[2], &rows[3], t0);
   t1 = _mm_shuffle_ps2(m2, m3, _MM_SHUFFLE(3, 3, 2, 2));
   tt = _mm_shuffle_epi32(m0, _MM_SHUFFLE(0, 0, 3, 3));
-  t1 = _mm_blend_epi16(tt, t1, 0xCC);
+  t1 = blend_epi16(tt, t1, 0xCC);
   g2(&rows[0], &rows[1], &rows[2], &rows[3], t1);
   diagonalize(&rows[0], &rows[2], &rows[3]);
   t2 = _mm_unpacklo_epi64(m3, m1);
-  tt = _mm_blend_epi16(t2, m2, 0xC0);
+  tt = blend_epi16(t2, m2, 0xC0);
   t2 = _mm_shuffle_epi32(tt, _MM_SHUFFLE(1, 3, 2, 0));
   g1(&rows[0], &rows[1], &rows[2], &rows[3], t2);
   t3 = _mm_unpackhi_epi32(m1, m3);
@@ -214,11 +221,11 @@ INLINE void compress_pre(__m128i rows[4], const uint32_t cv[8],
   g1(&rows[0], &rows[1], &rows[2], &rows[3], t0);
   t1 = _mm_shuffle_ps2(m2, m3, _MM_SHUFFLE(3, 3, 2, 2));
   tt = _mm_shuffle_epi32(m0, _MM_SHUFFLE(0, 0, 3, 3));
-  t1 = _mm_blend_epi16(tt, t1, 0xCC);
+  t1 = blend_epi16(tt, t1, 0xCC);
   g2(&rows[0], &rows[1], &rows[2], &rows[3], t1);
   diagonalize(&rows[0], &rows[2], &rows[3]);
   t2 = _mm_unpacklo_epi64(m3, m1);
-  tt = _mm_blend_epi16(t2, m2, 0xC0);
+  tt = blend_epi16(t2, m2, 0xC0);
   t2 = _mm_shuffle_epi32(tt, _MM_SHUFFLE(1, 3, 2, 0));
   g1(&rows[0], &rows[1], &rows[2], &rows[3], t2);
   t3 = _mm_unpackhi_epi32(m1, m3);
@@ -237,11 +244,11 @@ INLINE void compress_pre(__m128i rows[4], const uint32_t cv[8],
   g1(&rows[0], &rows[1], &rows[2], &rows[3], t0);
   t1 = _mm_shuffle_ps2(m2, m3, _MM_SHUFFLE(3, 3, 2, 2));
   tt = _mm_shuffle_epi32(m0, _MM_SHUFFLE(0, 0, 3, 3));
-  t1 = _mm_blend_epi16(tt, t1, 0xCC);
+  t1 = blend_epi16(tt, t1, 0xCC);
   g2(&rows[0], &rows[1], &rows[2], &rows[3], t1);
   diagonalize(&rows[0], &rows[2], &rows[3]);
   t2 = _mm_unpacklo_epi64(m3, m1);
-  tt = _mm_blend_epi16(t2, m2, 0xC0);
+  tt = blend_epi16(t2, m2, 0xC0);
   t2 = _mm_shuffle_epi32(tt, _MM_SHUFFLE(1, 3, 2, 0));
   g1(&rows[0], &rows[1], &rows[2], &rows[3], t2);
   t3 = _mm_unpackhi_epi32(m1, m3);
