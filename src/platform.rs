@@ -403,14 +403,6 @@ pub fn sse2_detected() -> bool {
     {
         return true;
     }
-    // Dyanmic check, if std is enabled.
-    #[cfg(feature = "std")]
-    {
-        if is_x86_feature_detected!("sse2") {
-            return true;
-        }
-    }
-    false
 }
 
 #[inline(always)]
