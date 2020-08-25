@@ -139,9 +139,10 @@ unsafe fn undiagonalize(row0: &mut __m128i, row2: &mut __m128i, row3: &mut __m12
 
 #[inline(always)]
 unsafe fn blend_epi16(a: __m128i, b: __m128i, imm8: i32) -> __m128i {
+    let bits = _mm_set_epi16(0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01);
     let mut mask = _mm_set1_epi16(imm8 as i16);
-    mask = _mm_mullo_epi16(mask, set4(0x40008000, 0x10002000, 0x04000800, 0x01000200));
-    mask = _mm_srai_epi16(mask, 15);
+    mask = _mm_and_si128(mask, bits);
+    mask = _mm_cmpeq_epi16(mask, bits);
     _mm_or_si128(_mm_and_si128(mask, b), _mm_andnot_si128(mask, a))
 }
 

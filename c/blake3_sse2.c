@@ -79,10 +79,11 @@ INLINE void undiagonalize(__m128i *row0, __m128i *row2, __m128i *row3) {
 }
 
 INLINE __m128i blend_epi16(__m128i a, __m128i b, const int imm8) {
-    __m128i mask = _mm_set1_epi16(imm8);
-    mask = _mm_mullo_epi16(mask, set4(0x40008000, 0x10002000, 0x04000800, 0x01000200));
-    mask = _mm_srai_epi16(mask, 15);
-    return _mm_or_si128(_mm_and_si128(mask, b), _mm_andnot_si128(mask, a));
+  const __m128i bits = _mm_set_epi16(0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01);
+  __m128i mask = _mm_set1_epi16(imm8);
+  mask = _mm_and_si128(mask, bits);
+  mask = _mm_cmpeq_epi16(mask, bits);
+  return _mm_or_si128(_mm_and_si128(mask, b), _mm_andnot_si128(mask, a));
 }
 
 INLINE void compress_pre(__m128i rows[4], const uint32_t cv[8],
