@@ -110,12 +110,11 @@ void blake3_hasher_init_derive_key(
 
 Initialize a `blake3_hasher` in the key derivation mode. Key material
 should be given as input after initialization, using
-`blake3_hasher_update`. `context` is a standard C string of any length,
-and the terminating null byte is not included. The context string should
-be hardcoded, globally unique, and application-specific. A good default
-format for the context string is `"[application] [commit timestamp]
-[purpose]"`, e.g., `"example.com 2019-12-25 16:18:03 session tokens
-v1"`.
+`blake3_hasher_update`. `context` is a standard null-terminated C string
+of any length.  The context string should be hardcoded, globally unique,
+and application-specific. A good default format for the context string
+is `"[application] [commit timestamp] [purpose]"`, e.g., `"example.com
+2019-12-25 16:18:03 session tokens v1"`.
 
 ```c
 void blake3_hasher_finalize_seek(
