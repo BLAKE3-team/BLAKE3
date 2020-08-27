@@ -262,7 +262,13 @@ impl Eq for Hash {}
 
 impl fmt::Debug for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Hash({})", self.to_hex())
+        // Formatting field as `&str` to reduce code size since the `Debug`
+        // dynamic dispatch table for `&str` is likely needed elsewhere already,
+        // but that for `ArrayString<[u8; 64]>` is not.
+        let hex = self.to_hex();
+        let hex: &str = hex.as_str();
+
+        f.debug_tuple("Hash").field(&hex).finish()
     }
 }
 
@@ -412,14 +418,12 @@ impl ChunkState {
 // Don't derive(Debug), because the state may be secret.
 impl fmt::Debug for ChunkState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "ChunkState {{ len: {}, chunk_counter: {}, flags: {:?}, platform: {:?} }}",
-            self.len(),
-            self.chunk_counter,
-            self.flags,
-            self.platform
-        )
+        f.debug_struct("ChunkState")
+            .field("len", &self.len())
+            .field("chunk_counter", &self.chunk_counter)
+            .field("flags", &self.flags)
+            .field("platform", &self.platform)
+            .finish()
     }
 }
 
@@ -1208,11 +1212,10 @@ impl Hasher {
 // Don't derive(Debug), because the state may be secret.
 impl fmt::Debug for Hasher {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "Hasher {{ flags: {:?}, platform: {:?} }}",
-            self.chunk_state.flags, self.chunk_state.platform
-        )
+        f.debug_struct("Hasher")
+            .field("flags", &self.chunk_state.flags)
+            .field("platform", &self.chunk_state.platform)
+            .finish()
     }
 }
 
@@ -1309,7 +1312,9 @@ impl OutputReader {
 // Don't derive(Debug), because the state may be secret.
 impl fmt::Debug for OutputReader {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "OutputReader {{ position: {} }}", self.position())
+        f.debug_struct("OutputReader")
+            .field("position", &self.position())
+            .finish()
     }
 }
 
