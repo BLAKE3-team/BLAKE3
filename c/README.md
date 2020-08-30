@@ -117,6 +117,18 @@ is `"[application] [commit timestamp] [purpose]"`, e.g., `"example.com
 2019-12-25 16:18:03 session tokens v1"`.
 
 ```c
+void blake3_hasher_init_derive_key_len(
+  blake3_hasher *self,
+  const void *context,
+  size_t context_len);
+```
+
+Like `blake3_hasher_init_derive_key`, except the `context` and its 
+length are given as separate parameters, and not together as a C string.
+This can be more convenient than the C string version when writing 
+bindings to other languages.
+
+```c
 void blake3_hasher_finalize_seek(
   const blake3_hasher *self,
   uint64_t seek,
