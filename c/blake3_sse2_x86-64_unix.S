@@ -1915,23 +1915,12 @@ blake3_hash_many_sse2:
         movups  xmmword ptr [rbx+0x10], xmm1
         movups  xmmword ptr [rbx+0x20], xmm8
         movups  xmmword ptr [rbx+0x30], xmm9
-        movdqa  xmm0, xmmword ptr [rsp+0x130]
-        movdqa  xmm1, xmmword ptr [rsp+0x110]
-        movdqa  xmm2, xmmword ptr [rsp+0x120]
-        movdqu  xmm3, xmmword ptr [rsp+0x118]
-        movdqu  xmm4, xmmword ptr [rsp+0x128]
-        movdqa  xmm5, xmm0
-        movdqa  xmm6, xmm0
-        pandn   xmm5, xmm1
-        pand    xmm3, xmm6
-        por     xmm3, xmm5
-        movdqa  xmm5, xmm0
-        movdqa  xmm6, xmm0
-        pandn   xmm5, xmm2
-        pand    xmm4, xmm6
-        por     xmm4, xmm5
-        movdqa  xmmword ptr [rsp+0x110], xmm3
-        movdqa  xmmword ptr [rsp+0x120], xmm4
+        mov     eax, dword ptr [rsp+0x130]
+        neg     eax
+        mov    r10d, dword ptr [rsp+0x110+8*rax]
+        mov    r11d, dword ptr [rsp+0x120+8*rax]
+        mov dword ptr [rsp+0x110], r10d
+        mov dword ptr [rsp+0x120], r11d
         add     rdi, 16
         add     rbx, 64
         sub     rsi, 2

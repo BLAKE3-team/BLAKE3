@@ -1927,23 +1927,12 @@ endroundloop2:
         movups  xmmword ptr [rbx+10H], xmm1
         movups  xmmword ptr [rbx+20H], xmm8
         movups  xmmword ptr [rbx+30H], xmm9
-        movdqa  xmm0, xmmword ptr [rsp+130H]
-        movdqa  xmm1, xmmword ptr [rsp+110H]
-        movdqa  xmm2, xmmword ptr [rsp+120H]
-        movdqu  xmm3, xmmword ptr [rsp+118H]
-        movdqu  xmm4, xmmword ptr [rsp+128H]
-        movdqa  xmm5, xmm0
-        movdqa  xmm6, xmm0
-        pandn   xmm5, xmm1
-        pand    xmm3, xmm6
-        por     xmm3, xmm5
-        movdqa  xmm5, xmm0
-        movdqa  xmm6, xmm0
-        pandn   xmm5, xmm2
-        pand    xmm4, xmm6
-        por     xmm4, xmm5
-        movdqa  xmmword ptr [rsp+110H], xmm3
-        movdqa  xmmword ptr [rsp+120H], xmm4
+        mov     eax, dword ptr [rsp+130H]
+        neg     eax
+        mov    r10d, dword ptr [rsp+110H+8*rax]
+        mov    r11d, dword ptr [rsp+120H+8*rax]
+        mov dword ptr [rsp+110H], r10d
+        mov dword ptr [rsp+120H], r11d
         add     rdi, 16
         add     rbx, 64
         sub     rsi, 2
