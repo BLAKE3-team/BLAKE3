@@ -403,6 +403,8 @@ pub fn sse2_detected() -> bool {
     {
         return true;
     }
+    #[allow(unreachable_code)]
+    false
 }
 
 #[inline(always)]
