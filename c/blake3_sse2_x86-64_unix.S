@@ -1836,19 +1836,17 @@ blake3_hash_many_sse2:
         pand    xmm13, xmmword ptr [PBLENDW_0x33_MASK+rip]
         pand    xmm12, xmmword ptr [PBLENDW_0xCC_MASK+rip]
         por     xmm13, xmm12
+        movdqa  xmmword ptr [rsp+0x20], xmm13
         movdqa  xmm12, xmm7
         punpcklqdq xmm12, xmm5
-        movdqa  xmmword ptr [rsp+0x20], xmm2
-        movdqa  xmm2, xmm6
+        movdqa  xmm13, xmm6
         pand    xmm12, xmmword ptr [PBLENDW_0x3F_MASK+rip]
-        pand    xmm2, xmmword ptr [PBLENDW_0xC0_MASK+rip]
-        por     xmm12, xmm2
-        movdqa  xmm2, xmmword ptr [rsp+0x20]
+        pand    xmm13, xmmword ptr [PBLENDW_0xC0_MASK+rip]
+        por     xmm12, xmm13
         pshufd  xmm12, xmm12, 0x78
         punpckhdq xmm5, xmm7
         punpckldq xmm6, xmm5
         pshufd  xmm7, xmm6, 0x1E
-        movdqa  xmmword ptr [rsp+0x20], xmm13
         movdqa  xmmword ptr [rsp+0x40], xmm12
         movdqa  xmm5, xmmword ptr [rsp+0x30]
         movdqa  xmm13, xmmword ptr [rsp+0x50]
