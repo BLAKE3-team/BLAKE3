@@ -1848,19 +1848,17 @@ roundloop2:
         pand    xmm13, xmmword ptr [PBLENDW_0x33_MASK]
         pand    xmm12, xmmword ptr [PBLENDW_0xCC_MASK]
         por     xmm13, xmm12
+        movdqa  xmmword ptr [rsp+20H], xmm13
         movdqa  xmm12, xmm7
         punpcklqdq xmm12, xmm5
-        movdqa  xmmword ptr [rsp+20H], xmm2
-        movdqa  xmm2, xmm6
+        movdqa  xmm13, xmm6
         pand    xmm12, xmmword ptr [PBLENDW_0x3F_MASK]
-        pand    xmm2, xmmword ptr [PBLENDW_0xC0_MASK]
-        por     xmm12, xmm2
-        movdqa  xmm2, xmmword ptr [rsp+20H]
+        pand    xmm13, xmmword ptr [PBLENDW_0xC0_MASK]
+        por     xmm12, xmm13
         pshufd  xmm12, xmm12, 78H
         punpckhdq xmm5, xmm7
         punpckldq xmm6, xmm5
         pshufd  xmm7, xmm6, 1EH
-        movdqa  xmmword ptr [rsp+20H], xmm13
         movdqa  xmmword ptr [rsp+40H], xmm12
         movdqa  xmm5, xmmword ptr [rsp+30H]
         movdqa  xmm13, xmmword ptr [rsp+50H]
