@@ -71,6 +71,18 @@ fn bench_single_compression_portable(b: &mut Bencher) {
 
 #[bench]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn bench_single_compression_sse2(b: &mut Bencher) {
+    if !blake3_c_rust_bindings::sse2_detected() {
+        return;
+    }
+    bench_single_compression_fn(
+        b,
+        blake3_c_rust_bindings::ffi::x86::blake3_compress_in_place_sse2,
+    );
+}
+
+#[bench]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn bench_single_compression_sse41(b: &mut Bencher) {
     if !blake3_c_rust_bindings::sse41_detected() {
         return;
@@ -132,6 +144,19 @@ fn bench_many_chunks_fn(b: &mut Bencher, f: HashManyFn, degree: usize) {
             )
         }
     });
+}
+
+#[bench]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn bench_many_chunks_sse2(b: &mut Bencher) {
+    if !blake3_c_rust_bindings::sse2_detected() {
+        return;
+    }
+    bench_many_chunks_fn(
+        b,
+        blake3_c_rust_bindings::ffi::x86::blake3_hash_many_sse2,
+        4,
+    );
 }
 
 #[bench]
@@ -212,6 +237,20 @@ fn bench_many_parents_fn(b: &mut Bencher, f: HashManyFn, degree: usize) {
         }
     });
 }
+
+#[bench]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn bench_many_parents_sse2(b: &mut Bencher) {
+    if !blake3_c_rust_bindings::sse2_detected() {
+        return;
+    }
+    bench_many_parents_fn(
+        b,
+        blake3_c_rust_bindings::ffi::x86::blake3_hash_many_sse2,
+        4,
+    );
+}
+
 
 #[bench]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
