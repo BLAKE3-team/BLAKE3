@@ -1845,24 +1845,17 @@ roundloop2:
         pshufd  xmm4, xmm12, 39H
         movdqa  xmm12, xmm6
         shufps  xmm12, xmm7, 250
-        movdqa  xmmword ptr [rsp+20H], xmm2
-        movdqa  xmmword ptr [rsp+40H], xmm3
-        movdqa  xmm2, xmmword ptr [PBLENDW_0xCC_MASK]
-        movdqa  xmm3, xmm2
-        pandn   xmm2, xmm13
-        pand    xmm3, xmm12
-        movdqa  xmm13, xmm3
-        por     xmm13, xmm2
+        pand    xmm13, xmmword ptr [PBLENDW_0x33_MASK]
+        pand    xmm12, xmmword ptr [PBLENDW_0xCC_MASK]
+        por     xmm13, xmm12
         movdqa  xmm12, xmm7
         punpcklqdq xmm12, xmm5
-        movdqa  xmm2, xmmword ptr [PBLENDW_0xC0_MASK]
-        movdqa  xmm3, xmm2
-        pandn   xmm2, xmm12
-        pand    xmm3, xmm6
-        movdqa  xmm12, xmm3
+        movdqa  xmmword ptr [rsp+20H], xmm2
+        movdqa  xmm2, xmm6
+        pand    xmm12, xmmword ptr [PBLENDW_0x3F_MASK]
+        pand    xmm2, xmmword ptr [PBLENDW_0xC0_MASK]
         por     xmm12, xmm2
         movdqa  xmm2, xmmword ptr [rsp+20H]
-        movdqa  xmm3, xmmword ptr [rsp+40H]
         pshufd  xmm12, xmm12, 78H
         punpckhdq xmm5, xmm7
         punpckldq xmm6, xmm5
@@ -1876,24 +1869,17 @@ roundloop2:
         pshufd  xmm12, xmm5, 39H
         movdqa  xmm5, xmm14
         shufps  xmm5, xmm15, 250
-        movdqa  xmmword ptr [rsp+30H], xmm2
-        movdqa  xmmword ptr [rsp+50H], xmm3
-        movdqa  xmm2, xmmword ptr [PBLENDW_0xCC_MASK]
-        movdqa  xmm3, xmm2
-        pandn   xmm2, xmm6
-        pand    xmm3, xmm5
-        movdqa  xmm6, xmm3
-        por     xmm6, xmm2
+        pand    xmm6, xmmword ptr [PBLENDW_0x33_MASK]
+        pand    xmm5, xmmword ptr [PBLENDW_0xCC_MASK]
+        por     xmm6, xmm5
         movdqa  xmm5, xmm15
         punpcklqdq xmm5, xmm13
-        movdqa  xmm2, xmmword ptr [PBLENDW_0xC0_MASK]
-        movdqa  xmm3, xmm2
-        pandn   xmm2, xmm5
-        pand    xmm3, xmm14
-        movdqa  xmm5, xmm3
+        movdqa  xmmword ptr [rsp+30H], xmm2
+        movdqa  xmm2, xmm14
+        pand    xmm5, xmmword ptr [PBLENDW_0x3F_MASK]
+        pand    xmm2, xmmword ptr [PBLENDW_0xC0_MASK]
         por     xmm5, xmm2
         movdqa  xmm2, xmmword ptr [rsp+30H]
-        movdqa  xmm3, xmmword ptr [rsp+50H]
         pshufd  xmm5, xmm5, 78H
         punpckhdq xmm13, xmm15
         punpckldq xmm14, xmm13
@@ -2025,19 +2011,14 @@ roundloop1:
         pshufd  xmm4, xmm8, 39H
         movdqa  xmm8, xmm6
         shufps  xmm8, xmm7, 250
-        movdqa  xmm10, xmmword ptr [PBLENDW_0xCC_MASK]
-        movdqa  xmm11, xmm10
-        pandn   xmm10, xmm9
-        pand    xmm11, xmm8
-        movdqa  xmm9, xmm11
-        por     xmm9, xmm10
+        pand    xmm9, xmmword ptr [PBLENDW_0x33_MASK]
+        pand    xmm8, xmmword ptr [PBLENDW_0xCC_MASK]
+        por     xmm9, xmm8
         movdqa  xmm8, xmm7
         punpcklqdq xmm8, xmm5
-        movdqa  xmm10, xmmword ptr [PBLENDW_0xC0_MASK]
-        movdqa  xmm11, xmm10
-        pandn   xmm10, xmm8
-        pand    xmm11, xmm6
-        movdqa  xmm8, xmm11
+        movdqa  xmm10, xmm6
+        pand    xmm8, xmmword ptr [PBLENDW_0x3F_MASK]
+        pand    xmm10, xmmword ptr [PBLENDW_0xC0_MASK]
         por     xmm8, xmm10
         pshufd  xmm8, xmm8, 78H
         punpckhdq xmm5, xmm7
@@ -2155,19 +2136,14 @@ _blake3_compress_in_place_sse2 PROC
         pshufd  xmm4, xmm8, 39H
         movdqa  xmm8, xmm6
         shufps  xmm8, xmm7, 250
-        movdqa  xmm10, xmmword ptr [PBLENDW_0xCC_MASK]
-        movdqa  xmm11, xmm10
-        pandn   xmm10, xmm9
-        pand    xmm11, xmm8
-        movdqa  xmm9, xmm11
-        por     xmm9, xmm10
+        pand    xmm9, xmmword ptr [PBLENDW_0x33_MASK]
+        pand    xmm8, xmmword ptr [PBLENDW_0xCC_MASK]
+        por     xmm9, xmm8
         movdqa  xmm8, xmm7
         punpcklqdq xmm8, xmm5
-        movdqa  xmm10, xmmword ptr [PBLENDW_0xC0_MASK]
-        movdqa  xmm11, xmm10
-        pandn   xmm10, xmm8
-        pand    xmm11, xmm6
-        movdqa  xmm8, xmm11
+        movdqa  xmm10, xmm6
+        pand    xmm8, xmmword ptr [PBLENDW_0x3F_MASK]
+        pand    xmm10, xmmword ptr [PBLENDW_0xC0_MASK]
         por     xmm8, xmm10
         pshufd  xmm8, xmm8, 78H
         punpckhdq xmm5, xmm7
@@ -2292,19 +2268,14 @@ _blake3_compress_xof_sse2 PROC
         pshufd  xmm4, xmm8, 39H
         movdqa  xmm8, xmm6
         shufps  xmm8, xmm7, 250
-        movdqa  xmm10, xmmword ptr [PBLENDW_0xCC_MASK]
-        movdqa  xmm11, xmm10
-        pandn   xmm10, xmm9
-        pand    xmm11, xmm8
-        movdqa  xmm9, xmm11
-        por     xmm9, xmm10
+        pand    xmm9, xmmword ptr [PBLENDW_0x33_MASK]
+        pand    xmm8, xmmword ptr [PBLENDW_0xCC_MASK]
+        por     xmm9, xmm8
         movdqa  xmm8, xmm7
         punpcklqdq xmm8, xmm5
-        movdqa  xmm10, xmmword ptr [PBLENDW_0xC0_MASK]
-        movdqa  xmm11, xmm10
-        pandn   xmm10, xmm8
-        pand    xmm11, xmm6
-        movdqa  xmm8, xmm11
+        movdqa  xmm10, xmm6
+        pand    xmm8, xmmword ptr [PBLENDW_0x3F_MASK]
+        pand    xmm10, xmmword ptr [PBLENDW_0xC0_MASK]
         por     xmm8, xmm10
         pshufd  xmm8, xmm8, 78H
         punpckhdq xmm5, xmm7
@@ -2368,8 +2339,12 @@ BLAKE3_BLOCK_LEN:
 CMP_MSB_MASK:
         dd 8 dup(80000000H)
 
+PBLENDW_0x33_MASK:
+       dd 0FFFFFFFFH, 000000000H, 0FFFFFFFFH, 000000000H
 PBLENDW_0xCC_MASK:
        dd 000000000H, 0FFFFFFFFH, 000000000H, 0FFFFFFFFH
+PBLENDW_0x3F_MASK:
+	dd 0FFFFFFFFH, 0FFFFFFFFH, 0FFFFFFFFH, 000000000H
 PBLENDW_0xC0_MASK:
        dd 000000000H, 000000000H, 000000000H, 0FFFFFFFFH
 
