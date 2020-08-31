@@ -145,6 +145,18 @@ fn test_compress_portable() {
 
 #[test]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn test_compress_sse2() {
+    if !crate::sse2_detected() {
+        return;
+    }
+    test_compress_fn(
+        crate::ffi::x86::blake3_compress_in_place_sse2,
+        crate::ffi::x86::blake3_compress_xof_sse2,
+    );
+}
+
+#[test]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn test_compress_sse41() {
     if !crate::sse41_detected() {
         return;
@@ -282,6 +294,15 @@ pub fn test_hash_many_fn(hash_many_fn: HashManyFn) {
 #[test]
 fn test_hash_many_portable() {
     test_hash_many_fn(crate::ffi::blake3_hash_many_portable);
+}
+
+#[test]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn test_hash_many_sse2() {
+    if !crate::sse2_detected() {
+        return;
+    }
+    test_hash_many_fn(crate::ffi::x86::blake3_hash_many_sse2);
 }
 
 #[test]
