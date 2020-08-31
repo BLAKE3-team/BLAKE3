@@ -118,34 +118,40 @@ fn c_compiler_support() -> CCompilerSupport {
     }
 }
 
-fn build_sse41_avx2_rust_intrinsics() {
-    // No C code to compile here. Set the cfg flags that enable the Rust SSE4.1
-    // and AVX2 intrinsics modules. The regular Cargo build will compile them.
+fn build_sse2_sse41_avx2_rust_intrinsics() {
+    // No C code to compile here. Set the cfg flags that enable the Rust SSE2,
+    // SSE4.1, and AVX2 intrinsics modules. The regular Cargo build will compile
+    // them.
+    println!("cargo:rustc-cfg=blake3_sse2_rust");
     println!("cargo:rustc-cfg=blake3_sse41_rust");
     println!("cargo:rustc-cfg=blake3_avx2_rust");
 }
 
-fn build_sse41_avx2_assembly() {
+fn build_sse2_sse41_avx2_assembly() {
     // Build the assembly implementations for SSE4.1 and AVX2. This is
     // preferred, but it only supports x86_64.
     assert!(is_x86_64());
+    println!("cargo:rustc-cfg=blake3_sse2_ffi");
     println!("cargo:rustc-cfg=blake3_sse41_ffi");
     println!("cargo:rustc-cfg=blake3_avx2_ffi");
     let mut build = new_build();
     if is_windows_msvc() {
+        build.file("c/blake3_sse2_x86-64_windows_msvc.asm");
         build.file("c/blake3_sse41_x86-64_windows_msvc.asm");
         build.file("c/blake3_avx2_x86-64_windows_msvc.asm");
     } else if is_windows_gnu() {
+        build.file("c/blake3_sse2_x86-64_windows_gnu.S");
         build.file("c/blake3_sse41_x86-64_windows_gnu.S");
         build.file("c/blake3_avx2_x86-64_windows_gnu.S");
     } else {
         // All non-Windows implementations are assumed to support
         // Linux-style assembly. These files do contain a small
         // explicit workaround for macOS also.
+        build.file("c/blake3_sse2_x86-64_unix.S");
         build.file("c/blake3_sse41_x86-64_unix.S");
         build.file("c/blake3_avx2_x86-64_unix.S");
     }
-    build.compile("blake3_sse41_avx2_assembly");
+    build.compile("blake3_sse2_sse41_avx2_assembly");
 }
 
 fn build_avx512_c_intrinsics() {
@@ -215,11 +221,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if is_x86_64() || is_x86_32() {
         let support = c_compiler_support();
         if is_x86_32() || should_prefer_intrinsics() || is_pure() || support == NoCompiler {
-            build_sse41_avx2_rust_intrinsics();
+            build_sse2_sse41_avx2_rust_intrinsics();
         } else {
             // We assume that all C compilers can assemble SSE4.1 and AVX2. We
             // don't explicitly check for support.
-            build_sse41_avx2_assembly();
+            build_sse2_sse41_avx2_assembly();
         }
 
         if is_pure() || support == NoCompiler || support == NoAVX512 {

@@ -41,6 +41,8 @@ cfg_if::cfg_if! {
 pub enum Platform {
     Portable,
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    SSE2,
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     SSE41,
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     AVX2,
@@ -68,6 +70,9 @@ impl Platform {
             if sse41_detected() {
                 return Platform::SSE41;
             }
+            if sse2_detected() {
+                return Platform::SSE2;
+            }
         }
         // We don't use dynamic feature detection for NEON. If the "neon"
         // feature is on, NEON is assumed to be supported.
@@ -81,6 +86,8 @@ impl Platform {
     pub fn simd_degree(&self) -> usize {
         let degree = match self {
             Platform::Portable => 1,
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Platform::SSE2 => 4,
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::SSE41 => 4,
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -105,6 +112,11 @@ impl Platform {
     ) {
         match self {
             Platform::Portable => portable::compress_in_place(cv, block, block_len, counter, flags),
+            // Safe because detect() checked for platform support.
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Platform::SSE2 => unsafe {
+                crate::sse2::compress_in_place(cv, block, block_len, counter, flags)
+            },
             // Safe because detect() checked for platform support.
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::SSE41 | Platform::AVX2 => unsafe {
@@ -132,6 +144,11 @@ impl Platform {
     ) -> [u8; 64] {
         match self {
             Platform::Portable => portable::compress_xof(cv, block, block_len, counter, flags),
+            // Safe because detect() checked for platform support.
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Platform::SSE2 => unsafe {
+                crate::sse2::compress_xof(cv, block, block_len, counter, flags)
+            },
             // Safe because detect() checked for platform support.
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::SSE41 | Platform::AVX2 => unsafe {
@@ -181,6 +198,20 @@ impl Platform {
                 flags_end,
                 out,
             ),
+            // Safe because detect() checked for platform support.
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Platform::SSE2 => unsafe {
+                crate::sse2::hash_many(
+                    inputs,
+                    key,
+                    counter,
+                    increment_counter,
+                    flags,
+                    flags_start,
+                    flags_end,
+                    out,
+                )
+            },
             // Safe because detect() checked for platform support.
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::SSE41 => unsafe {
@@ -245,6 +276,15 @@ impl Platform {
 
     pub fn portable() -> Self {
         Self::Portable
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    pub fn sse2() -> Option<Self> {
+        if sse2_detected() {
+            Some(Self::SSE2)
+        } else {
+            None
+        }
     }
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -349,6 +389,20 @@ pub fn sse41_detected() -> bool {
         }
     }
     false
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[inline(always)]
+pub fn sse2_detected() -> bool {
+    // A testing-only short-circuit.
+    if cfg!(feature = "no_sse2") {
+        return false;
+    }
+    // Static check, e.g. for building with target-cpu=native.
+    #[cfg(target_feature = "sse2")]
+    {
+        return true;
+    }
 }
 
 #[inline(always)]

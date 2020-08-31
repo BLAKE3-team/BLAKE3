@@ -62,6 +62,14 @@ fn bench_single_compression_portable(b: &mut Bencher) {
 
 #[bench]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn bench_single_compression_sse2(b: &mut Bencher) {
+    if let Some(platform) = Platform::sse2() {
+        bench_single_compression_fn(b, platform);
+    }
+}
+
+#[bench]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn bench_single_compression_sse41(b: &mut Bencher) {
     if let Some(platform) = Platform::sse41() {
         bench_single_compression_fn(b, platform);
@@ -100,6 +108,14 @@ fn bench_many_chunks_fn(b: &mut Bencher, platform: Platform) {
             &mut out,
         );
     });
+}
+
+#[bench]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn bench_many_chunks_sse2(b: &mut Bencher) {
+    if let Some(platform) = Platform::sse2() {
+        bench_many_chunks_fn(b, platform);
+    }
 }
 
 #[bench]
@@ -159,6 +175,14 @@ fn bench_many_parents_fn(b: &mut Bencher, platform: Platform) {
             &mut out,
         );
     });
+}
+
+#[bench]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn bench_many_parents_sse2(b: &mut Bencher) {
+    if let Some(platform) = Platform::sse2() {
+        bench_many_parents_fn(b, platform);
+    }
 }
 
 #[bench]

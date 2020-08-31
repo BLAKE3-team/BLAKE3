@@ -16,6 +16,11 @@ pub const OUT_LEN: usize = 32;
 // Feature detection functions for tests and benchmarks. Note that the C code
 // does its own feature detection in blake3_dispatch.c.
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub fn sse2_detected() -> bool {
+    is_x86_feature_detected!("sse2")
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub fn sse41_detected() -> bool {
     is_x86_feature_detected!("sse4.1")
 }
@@ -153,6 +158,35 @@ pub mod ffi {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     pub mod x86 {
         extern "C" {
+            // SSE2 low level functions
+            pub fn blake3_compress_in_place_sse2(
+                cv: *mut u32,
+                block: *const u8,
+                block_len: u8,
+                counter: u64,
+                flags: u8,
+            );
+            pub fn blake3_compress_xof_sse2(
+                cv: *const u32,
+                block: *const u8,
+                block_len: u8,
+                counter: u64,
+                flags: u8,
+                out: *mut u8,
+            );
+            pub fn blake3_hash_many_sse2(
+                inputs: *const *const u8,
+                num_inputs: usize,
+                blocks: usize,
+                key: *const u32,
+                counter: u64,
+                increment_counter: bool,
+                flags: u8,
+                flags_start: u8,
+                flags_end: u8,
+                out: *mut u8,
+            );
+
             // SSE4.1 low level functions
             pub fn blake3_compress_in_place_sse41(
                 cv: *mut u32,
