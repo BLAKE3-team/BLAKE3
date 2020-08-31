@@ -337,7 +337,7 @@ pub fn avx512_detected() -> bool {
     {
         return true;
     }
-    // Dyanmic check, if std is enabled.
+    // Dynamic check, if std is enabled.
     #[cfg(feature = "std")]
     {
         if is_x86_feature_detected!("avx512f") && is_x86_feature_detected!("avx512vl") {
@@ -359,7 +359,7 @@ pub fn avx2_detected() -> bool {
     {
         return true;
     }
-    // Dyanmic check, if std is enabled.
+    // Dynamic check, if std is enabled.
     #[cfg(feature = "std")]
     {
         if is_x86_feature_detected!("avx2") {
@@ -381,7 +381,7 @@ pub fn sse41_detected() -> bool {
     {
         return true;
     }
-    // Dyanmic check, if std is enabled.
+    // Dynamic check, if std is enabled.
     #[cfg(feature = "std")]
     {
         if is_x86_feature_detected!("sse4.1") {
@@ -393,6 +393,7 @@ pub fn sse41_detected() -> bool {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline(always)]
+#[allow(unreachable_code)]
 pub fn sse2_detected() -> bool {
     // A testing-only short-circuit.
     if cfg!(feature = "no_sse2") {
@@ -403,7 +404,13 @@ pub fn sse2_detected() -> bool {
     {
         return true;
     }
-    #[allow(unreachable_code)]
+    // Dynamic check, if std is enabled.
+    #[cfg(feature = "std")]
+    {
+        if is_x86_feature_detected!("sse2") {
+            return true;
+        }
+    }
     false
 }
 
