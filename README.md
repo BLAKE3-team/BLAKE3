@@ -35,16 +35,16 @@ This repository is the official implementation of BLAKE3. It includes:
 * The [`blake3`](https://crates.io/crates/blake3) Rust crate, which
   includes optimized implementations for SSE2, SSE4.1, AVX2, AVX-512,
   and NEON, with automatic runtime CPU feature detection on x86. The
-  optional `rayon` feature also provides multi-threading.
+  `rayon` feature provides multithreading.
 
 * The [`b3sum`](https://crates.io/crates/b3sum) Rust crate, which
-  provides a command line interface. It uses multi-threading by default,
+  provides a command line interface. It uses multithreading by default,
   making it an order of magnitude faster than e.g. `sha256sum` on
   typical desktop hardware.
 
 * The [C implementation](c), which like the Rust implementation includes
   SIMD code and runtime CPU feature detection on x86. Unlike the Rust
-  implementation, it's not currently multi-threaded. See
+  implementation, it's not currently multithreaded. See
   [`c/README.md`](c/README.md).
 
 * The [reference implementation](reference_impl/reference_impl.rs),
@@ -52,7 +52,7 @@ This repository is the official implementation of BLAKE3. It includes:
   paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf).
   This implementation is much smaller and simpler than the optimized
   ones above. If you want to see how BLAKE3 works, or you're writing a
-  port that doesn't need multi-threading or SIMD optimizations, start
+  port that doesn't need multithreading or SIMD optimizations, start
   here.
 
 * A [set of test
