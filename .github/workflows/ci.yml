@@ -80,6 +80,13 @@ jobs:
     - run: cargo test --features=no_avx512,no_avx2,no_sse41 --release
     - run: cargo test --features=no_avx512,no_avx2,no_sse41,prefer_intrinsics --release
     - run: cargo test --features=no_avx512,no_avx2,no_sse41,pure --release
+    # No SSE2
+    - run: cargo test --features=no_avx512,no_avx2,no_sse41,no_sse2
+    - run: cargo test --features=no_avx512,no_avx2,no_sse41,no_sse2,prefer_intrinsics
+    - run: cargo test --features=no_avx512,no_avx2,no_sse41,no_sse2,pure
+    - run: cargo test --features=no_avx512,no_avx2,no_sse41,no_sse2 --release
+    - run: cargo test --features=no_avx512,no_avx2,no_sse41,no_sse2,prefer_intrinsics --release
+    - run: cargo test --features=no_avx512,no_avx2,no_sse41,no_sse2,pure --release
 
     # Test benchmarks. RUSTC_BOOTSTRAP=1 lets this run on non-nightly toolchains.
     - run: cargo test --benches
@@ -155,30 +162,38 @@ jobs:
     # Test the intrinsics-based implementations.
     - run: make -f Makefile.testing test
       working-directory: ./c
+    - run: make -f Makefile.testing clean && rm blake3_sse2.c
+      working-directory: ./c
+    - run: BLAKE3_NO_SSE2=1 make -f Makefile.testing test
+      working-directory: ./c
     - run: make -f Makefile.testing clean && rm blake3_sse41.c
       working-directory: ./c
-    - run: BLAKE3_NO_SSE41=1 make -f Makefile.testing test
+    - run: BLAKE3_NO_SSE2=1 BLAKE3_NO_SSE41=1 make -f Makefile.testing test
       working-directory: ./c
     - run: make -f Makefile.testing clean && rm blake3_avx2.c
       working-directory: ./c
-    - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 make -f Makefile.testing test
+    - run: BLAKE3_NO_SSE2=1 BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 make -f Makefile.testing test
       working-directory: ./c
     - run: make -f Makefile.testing clean && rm blake3_avx512.c
       working-directory: ./c
-    - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 BLAKE3_NO_AVX512=1 make -f Makefile.testing test
+    - run: BLAKE3_NO_SSE2=1 BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 BLAKE3_NO_AVX512=1 make -f Makefile.testing test
       working-directory: ./c
     # Test the assembly implementations.
     - run: make -f Makefile.testing test_asm
       working-directory: ./c
+    - run: make -f Makefile.testing clean && rm blake3_sse2_x86-64_unix.S
+      working-directory: ./c
+    - run: BLAKE3_NO_SSE2=1 make -f Makefile.testing test_asm
+      working-directory: ./c
     - run: make -f Makefile.testing clean && rm blake3_sse41_x86-64_unix.S
       working-directory: ./c
-    - run: BLAKE3_NO_SSE41=1 make -f Makefile.testing test_asm
+    - run: BLAKE3_NO_SSE2=1 BLAKE3_NO_SSE41=1 make -f Makefile.testing test_asm
       working-directory: ./c
     - run: make -f Makefile.testing clean && rm blake3_avx2_x86-64_unix.S
       working-directory: ./c
-    - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 make -f Makefile.testing test_asm
+    - run: BLAKE3_NO_SSE2=1 BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 make -f Makefile.testing test_asm
       working-directory: ./c
     - run: make -f Makefile.testing clean && rm blake3_avx512_x86-64_unix.S
       working-directory: ./c
-    - run: BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 BLAKE3_NO_AVX512=1 make -f Makefile.testing test_asm
+    - run: BLAKE3_NO_SSE2=1 BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 BLAKE3_NO_AVX512=1 make -f Makefile.testing test_asm
       working-directory: ./c
