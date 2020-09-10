@@ -383,11 +383,19 @@ fn test_compare_reference_impl() {
             let mut expected_out = [0; OUT];
             reference_hasher.finalize(&mut expected_out);
 
+            // the regular C string API
             let mut test_hasher = crate::Hasher::new_derive_key(context);
             test_hasher.update(input);
             let mut test_out = [0; OUT];
             test_hasher.finalize(&mut test_out);
             assert_eq!(test_out[..], expected_out[..]);
+
+            // the raw bytes API
+            let mut test_hasher_raw = crate::Hasher::new_derive_key_raw(context.as_bytes());
+            test_hasher_raw.update(input);
+            let mut test_out_raw = [0; OUT];
+            test_hasher_raw.finalize(&mut test_out_raw);
+            assert_eq!(test_out_raw[..], expected_out[..]);
         }
     }
 }

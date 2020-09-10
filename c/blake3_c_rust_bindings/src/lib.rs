@@ -64,6 +64,18 @@ impl Hasher {
         }
     }
 
+    pub fn new_derive_key_raw(context: &[u8]) -> Self {
+        let mut c_state = MaybeUninit::uninit();
+        unsafe {
+            ffi::blake3_hasher_init_derive_key_raw(
+                c_state.as_mut_ptr(),
+                context.as_ptr() as *const _,
+                context.len(),
+            );
+            Self(c_state.assume_init())
+        }
+    }
+
     pub fn update(&mut self, input: &[u8]) {
         unsafe {
             ffi::blake3_hasher_update(&mut self.0, input.as_ptr() as *const c_void, input.len());
@@ -111,6 +123,11 @@ pub mod ffi {
         pub fn blake3_hasher_init_derive_key(
             self_: *mut blake3_hasher,
             context: *const ::std::os::raw::c_char,
+        );
+        pub fn blake3_hasher_init_derive_key_raw(
+            self_: *mut blake3_hasher,
+            context: *const ::std::os::raw::c_void,
+            context_len: usize,
         );
         pub fn blake3_hasher_update(
             self_: *mut blake3_hasher,
