@@ -71,6 +71,8 @@ void blake3_hasher_init(
 
 Initialize a `blake3_hasher` in the default hashing mode.
 
+---
+
 ```c
 void blake3_hasher_update(
   blake3_hasher *self,
@@ -79,6 +81,8 @@ void blake3_hasher_update(
 ```
 
 Add input to the hasher. This can be called any number of times.
+
+---
 
 ```c
 void blake3_hasher_finalize(
@@ -103,6 +107,8 @@ void blake3_hasher_init_keyed(
 Initialize a `blake3_hasher` in the keyed hashing mode. The key must be
 exactly 32 bytes.
 
+---
+
 ```c
 void blake3_hasher_init_derive_key(
   blake3_hasher *self,
@@ -122,6 +128,8 @@ database at runtime. A good default format for the context string is
 This function is intended for application code written in C. For
 language bindings, see `blake3_hasher_init_derive_key_raw` below.
 
+---
+
 ```c
 void blake3_hasher_init_derive_key_raw(
   blake3_hasher *self,
@@ -139,6 +147,8 @@ Application code in C should prefer `blake3_hasher_init_derive_key`,
 which takes the context as a C string. If you need to use arbitrary
 bytes as a context string in application code, consider whether you're
 violating the requirement that context strings should be hardcoded.
+
+---
 
 ```c
 void blake3_hasher_finalize_seek(
