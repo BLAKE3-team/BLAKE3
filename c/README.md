@@ -104,35 +104,41 @@ Initialize a `blake3_hasher` in the keyed hashing mode. The key must be
 exactly 32 bytes.
 
 ```c
+void blake3_hasher_init_derive_key(
+  blake3_hasher *self,
+  const char *context);
+```
+
+Initialize a `blake3_hasher` in the key derivation mode. The context
+string is given as an initialization parameter, and afterwards input key
+material should be given with `blake3_hasher_update`. The context string
+is a null-terminated C string which should be **hardcoded, globally
+unique, and application-specific**. The context string should not
+include any dynamic input like salts, nonces, or identifiers read from a
+database at runtime. A good default format for the context string is
+`"[application] [commit timestamp] [purpose]"`, e.g., `"example.com
+2019-12-25 16:18:03 session tokens v1"`.
+
+This function is intended for application code written in C. For
+language bindings, see `blake3_hasher_init_derive_key_raw` below.
+
+```c
 void blake3_hasher_init_derive_key_raw(
   blake3_hasher *self,
   const void *context,
   size_t context_len);
 ```
 
-Initialize a `blake3_hasher` in the key derivation mode. Key material
-is to be given as input after initialization, using
-`blake3_hasher_update`. The key derivation `context` 
-should follow the __Key Derivation Context Guidelines__
-described below. `context_len` indicates the size of `context` in bytes.
+As `blake3_hasher_init_derive_key` above, except that the context string
+is given as a pointer to an array of arbitrary bytes with a provided
+length. This is intended for writing language bindings, where C string
+conversion would add unnecessary overhead and new error cases. Unicode
+strings should be encoded as UTF-8.
 
-```c
-void blake3_hasher_init_derive_key(
-  blake3_hasher *self,
-  const char *context);
-```
-
-Similar to `blake3_hasher_init_derive_key_raw`, except it takes the key 
-derivation `context` as a null-terminated C string. 
-
-This function is offered as a convenience. It is recommended to use this 
-function when giving a literal, hardcoded C string as parameter.  
-
-Notice that contrary to `blake3_hasher_init_derive_key_raw`, this function
-cannot accept `context`s containing the byte `0x00` except as a the 
-terminating byte. For this reason, `blake3_hasher_init_derive_key_raw` is 
-preferred in more general contexts, such as when implementing bindings to 
-this C library.
+Application code in C should prefer `blake3_hasher_init_derive_key`,
+which takes the context as a C string. If you need to use arbitrary
+bytes as a context string in application code, consider whether you're
+violating the requirement that context strings should be hardcoded.
 
 ```c
 void blake3_hasher_finalize_seek(
@@ -146,34 +152,6 @@ The same as `blake3_hasher_finalize`, but with an additional `seek`
 parameter for the starting byte position in the output stream. To
 efficiently stream a large output without allocating memory, call this
 function in a loop, incrementing `seek` by the output length each time.
-
-## Key Derivation Context Guidelines
-
-The key derivation context should uniquely describe the 
-application, place and purpose of the derivation.
-
-The context should be **statically known, 
-hardcoded, globally unique, and application-specific**.
-
-The context should not depend on any dynamic input such as salts, 
-nonces, or identifiers read from a database at runtime.
-
-A good format for the context string is:
-
-```
-[application] [commit timestamp] [purpose]
-```
-
-For example:
-
-```
-example.com 2019-12-25 16:18:03 session tokens v1
-```
-
-It's recommended that the context string consists of ASCII bytes 
-containing only alphanumeric characters, whitespace and punctuation. 
-However, any bytes are acceptable as long as they satisfy the 
-static constraints described above.
 
 # Building
 
