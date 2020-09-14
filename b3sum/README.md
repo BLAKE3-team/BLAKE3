@@ -84,9 +84,3 @@ On Linux for example, Cargo will put the compiled binary in
 If you want to install directly from this directory, you can run `cargo
 install --path .`. Or you can just build with `cargo build --release`,
 which puts the binary at `./target/release/b3sum`.
-
-By default, `b3sum` enables the assembly implementations, AVX-512
-support, and multi-threading features of the underlying
-[`blake3`](https://crates.io/crates/blake3) crate. To avoid this (for
-example, if your C compiler does not support AVX-512), you can use
-Cargo's `--no-default-features` flag.
