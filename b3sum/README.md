@@ -41,7 +41,7 @@ ARGS:
 ```
 
 See also [this document about how the `--check` flag
-works](./what_does_check_do.md).
+works](https://github.com/BLAKE3-team/BLAKE3/blob/master/b3sum/what_does_check_do.md).
 
 # Example
 
