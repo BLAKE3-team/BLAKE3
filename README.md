@@ -108,7 +108,7 @@ time openssl sha256 /tmp/bigfile
 time b3sum /tmp/bigfile
 ```
 
-### The `blake3` crate
+### The `blake3` crate [![docs.rs](https://docs.rs/blake3/badge.svg)](https://docs.rs/blake3)
 
 To use BLAKE3 from Rust code, add a dependency on the `blake3` crate to
 your `Cargo.toml`. Here's an example of hashing some input bytes:
