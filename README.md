@@ -14,8 +14,9 @@ BLAKE3 is a cryptographic hash function that is:
   on smaller architectures.
 
 The [chart below](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/benchmarks/bar_chart.py)
-shows BLAKE3's performance on modern server hardware, an Intel Cascade
-Lake-SP 8275CL processor:
+is an example benchmark of 16 KiB inputs on modern server hardware (a Cascade
+Lake-SP 8275CL processor). For more detailed benchmarks, see the
+[BLAKE3 paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf).
 
 <p align="center">
 <img src="media/speed.svg" alt="performance graph">
