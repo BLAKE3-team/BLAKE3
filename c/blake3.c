@@ -49,6 +49,14 @@ INLINE uint8_t chunk_state_maybe_start_flag(const blake3_chunk_state *self) {
   }
 }
 
+INLINE void store32(void *dst, uint32_t w) {
+  uint8_t *p = (uint8_t *)dst;
+  p[0] = (uint8_t)(w >> 0);
+  p[1] = (uint8_t)(w >> 8);
+  p[2] = (uint8_t)(w >> 16);
+  p[3] = (uint8_t)(w >> 24);
+}
+
 typedef struct {
   uint32_t input_cv[8];
   uint64_t counter;
@@ -595,7 +603,11 @@ void blake3_hasher_finalize_seek(const blake3_hasher *self, uint64_t seek,
   while (cvs_remaining > 0) {
     cvs_remaining -= 1;
     uint8_t parent_block[BLAKE3_BLOCK_LEN];
-    memcpy(parent_block, &self->cv_stack[cvs_remaining * 32], 32);
+    for (int i = 0; i < 8; i++) {
+      uint32_t word;
+      memcpy(&word, self->cv_stack+cvs_remaining*32+4*i, 4);
+      store32(parent_block+4*i, word);
+    }
     output_chaining_value(&output, &parent_block[32]);
     output = parent_output(parent_block, self->key, self->chunk.flags);
   }
