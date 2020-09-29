@@ -251,7 +251,6 @@ fn bench_many_parents_sse2(b: &mut Bencher) {
     );
 }
 
-
 #[bench]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn bench_many_parents_sse41(b: &mut Bencher) {

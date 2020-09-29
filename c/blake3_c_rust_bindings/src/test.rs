@@ -425,7 +425,10 @@ fn reference_hash(input: &[u8]) -> [u8; OUT_LEN] {
 fn test_compare_update_multiple() {
     // Don't use all the long test cases here, since that's unnecessarily slow
     // in debug mode.
-    let short_test_cases = &TEST_CASES[..10];
+    let mut short_test_cases = TEST_CASES;
+    while *short_test_cases.last().unwrap() > 4 * CHUNK_LEN {
+        short_test_cases = &short_test_cases[..short_test_cases.len() - 1];
+    }
     assert_eq!(*short_test_cases.last().unwrap(), 4 * CHUNK_LEN);
 
     let mut input_buf = [0; 2 * TEST_CASES_MAX];
