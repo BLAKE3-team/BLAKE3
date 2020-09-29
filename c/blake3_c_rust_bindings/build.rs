@@ -48,11 +48,22 @@ fn new_build() -> cc::Build {
     build
 }
 
+fn c_dir_path(filename: &str) -> String {
+    // The `cross` tool doesn't support reading files in parent directories. As a hacky workaround
+    // in `cross_test.sh`, we move the c/ directory around and set BLAKE3_C_DIR_OVERRIDE. Regular
+    // building and testing doesn't require this.
+    if let Ok(c_dir_override) = env::var("BLAKE3_C_DIR_OVERRIDE") {
+        c_dir_override + "/" + filename
+    } else {
+        "../".to_string() + filename
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut base_build = new_build();
-    base_build.file("../blake3.c");
-    base_build.file("../blake3_dispatch.c");
-    base_build.file("../blake3_portable.c");
+    base_build.file(c_dir_path("blake3.c"));
+    base_build.file(c_dir_path("blake3_dispatch.c"));
+    base_build.file(c_dir_path("blake3_portable.c"));
     base_build.compile("blake3_base");
 
     if is_x86_64() && !defined("CARGO_FEATURE_PREFER_INTRINSICS") {
@@ -60,27 +71,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // "prefer_intrinsics" feature is enabled.
         if is_windows_msvc() {
             let mut build = new_build();
-            build.file("../blake3_sse2_x86-64_windows_msvc.asm");
-            build.file("../blake3_sse41_x86-64_windows_msvc.asm");
-            build.file("../blake3_avx2_x86-64_windows_msvc.asm");
-            build.file("../blake3_avx512_x86-64_windows_msvc.asm");
+            build.file(c_dir_path("blake3_sse2_x86-64_windows_msvc.asm"));
+            build.file(c_dir_path("blake3_sse41_x86-64_windows_msvc.asm"));
+            build.file(c_dir_path("blake3_avx2_x86-64_windows_msvc.asm"));
+            build.file(c_dir_path("blake3_avx512_x86-64_windows_msvc.asm"));
             build.compile("blake3_asm");
         } else if is_windows_gnu() {
             let mut build = new_build();
-            build.file("../blake3_sse2_x86-64_windows_gnu.S");
-            build.file("../blake3_sse41_x86-64_windows_gnu.S");
-            build.file("../blake3_avx2_x86-64_windows_gnu.S");
-            build.file("../blake3_avx512_x86-64_windows_gnu.S");
+            build.file(c_dir_path("blake3_sse2_x86-64_windows_gnu.S"));
+            build.file(c_dir_path("blake3_sse41_x86-64_windows_gnu.S"));
+            build.file(c_dir_path("blake3_avx2_x86-64_windows_gnu.S"));
+            build.file(c_dir_path("blake3_avx512_x86-64_windows_gnu.S"));
             build.compile("blake3_asm");
         } else {
             // All non-Windows implementations are assumed to support
             // Linux-style assembly. These files do contain a small
             // explicit workaround for macOS also.
             let mut build = new_build();
-            build.file("../blake3_sse2_x86-64_unix.S");
-            build.file("../blake3_sse41_x86-64_unix.S");
-            build.file("../blake3_avx2_x86-64_unix.S");
-            build.file("../blake3_avx512_x86-64_unix.S");
+            build.file(c_dir_path("blake3_sse2_x86-64_unix.S"));
+            build.file(c_dir_path("blake3_sse41_x86-64_unix.S"));
+            build.file(c_dir_path("blake3_avx2_x86-64_unix.S"));
+            build.file(c_dir_path("blake3_avx512_x86-64_unix.S"));
             build.compile("blake3_asm");
         }
     } else if is_x86_64() || is_x86_32() {
@@ -91,7 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // extension explicitly enabled in the compiler.
 
         let mut sse2_build = new_build();
-        sse2_build.file("../blake3_sse2.c");
+        sse2_build.file(c_dir_path("blake3_sse2.c"));
         if is_windows_msvc() {
             // /arch:SSE2 is the default on x86 and undefined on x86_64:
             // https://docs.microsoft.com/en-us/cpp/build/reference/arch-x86
@@ -103,7 +114,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         sse2_build.compile("blake3_sse2");
 
         let mut sse41_build = new_build();
-        sse41_build.file("../blake3_sse41.c");
+        sse41_build.file(c_dir_path("blake3_sse41.c"));
         if is_windows_msvc() {
             // /arch:SSE2 is the default on x86 and undefined on x86_64:
             // https://docs.microsoft.com/en-us/cpp/build/reference/arch-x86
@@ -115,7 +126,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         sse41_build.compile("blake3_sse41");
 
         let mut avx2_build = new_build();
-        avx2_build.file("../blake3_avx2.c");
+        avx2_build.file(c_dir_path("blake3_avx2.c"));
         if is_windows_msvc() {
             avx2_build.flag("/arch:AVX2");
         } else {
@@ -124,7 +135,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         avx2_build.compile("blake3_avx2");
 
         let mut avx512_build = new_build();
-        avx512_build.file("../blake3_avx512.c");
+        avx512_build.file(c_dir_path("blake3_avx512.c"));
         if is_windows_msvc() {
             // Note that a lot of versions of MSVC don't support /arch:AVX512,
             // and they'll discard it with a warning, hopefully leading to a
@@ -142,7 +153,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // you build this crate by hand with the "neon" feature for some reason.
     if defined("CARGO_FEATURE_NEON") {
         let mut neon_build = new_build();
-        neon_build.file("../blake3_neon.c");
+        neon_build.file(c_dir_path("blake3_neon.c"));
         // ARMv7 platforms that support NEON generally need the following
         // flags. AArch64 supports NEON by default and does not support -mpfu.
         if is_armv7() {

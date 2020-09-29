@@ -151,6 +151,10 @@ jobs:
       if: startsWith(matrix.arch, 'armv7-') || startsWith(matrix.arch, 'aarch64-')
     # Test vectors. Note that this uses a hacky script due to path dependency limitations.
     - run: ./test_vectors/cross_test.sh --target ${{ matrix.arch }}
+    # C code. Same issue with the hacky script.
+    - run: ./c/blake3_c_rust_bindings/cross_test.sh --target ${{ matrix.arch }}
+    - run: ./c/blake3_c_rust_bindings/cross_test.sh --target ${{ matrix.arch }} --features=neon
+      if: startsWith(matrix.arch, 'armv7-') || startsWith(matrix.arch, 'aarch64-')
 
   # Currently only on x86.
   c_tests:
