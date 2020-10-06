@@ -130,47 +130,6 @@ fn words_from_little_endian_bytes(bytes: &[u8], words: &mut [u32]) {
     }
 }
 
-// Each chunk or parent node can produce either an 8-word chaining value or, by
-// setting the ROOT flag, any number of final output bytes. The Output struct
-// captures the state just prior to choosing between those two possibilities.
-struct Output {
-    input_chaining_value: [u32; 8],
-    block_words: [u32; 16],
-    counter: u64,
-    block_len: u32,
-    flags: u32,
-}
-
-impl Output {
-    fn chaining_value(&self) -> [u32; 8] {
-        first_8_words(compress(
-            &self.input_chaining_value,
-            &self.block_words,
-            self.counter,
-            self.block_len,
-            self.flags,
-        ))
-    }
-
-    fn root_output_bytes(&self, out_slice: &mut [u8]) {
-        let mut output_block_counter = 0;
-        for out_block in out_slice.chunks_mut(2 * OUT_LEN) {
-            let words = compress(
-                &self.input_chaining_value,
-                &self.block_words,
-                output_block_counter,
-                self.block_len,
-                self.flags | ROOT,
-            );
-            // The output length might not be a multiple of 4.
-            for (word, out_word) in words.iter().zip(out_block.chunks_mut(4)) {
-                out_word.copy_from_slice(&word.to_le_bytes()[..out_word.len()]);
-            }
-            output_block_counter += 1;
-        }
-    }
-}
-
 struct ChunkState {
     chaining_value: [u32; 8],
     chunk_counter: u64,
@@ -232,34 +191,16 @@ impl ChunkState {
         }
     }
 
-    fn output(&self) -> Output {
+    fn chaining_value(&self) -> [u32; 8] {
         let mut block_words = [0; 16];
         words_from_little_endian_bytes(&self.block, &mut block_words);
-        Output {
-            input_chaining_value: self.chaining_value,
-            block_words,
-            block_len: self.block_len as u32,
-            counter: self.chunk_counter,
-            flags: self.flags | self.start_flag() | CHUNK_END,
-        }
-    }
-}
-
-fn parent_output(
-    left_child_cv: [u32; 8],
-    right_child_cv: [u32; 8],
-    key: [u32; 8],
-    flags: u32,
-) -> Output {
-    let mut block_words = [0; 16];
-    block_words[..8].copy_from_slice(&left_child_cv);
-    block_words[8..].copy_from_slice(&right_child_cv);
-    Output {
-        input_chaining_value: key,
-        block_words,
-        counter: 0,                  // Always 0 for parent nodes.
-        block_len: BLOCK_LEN as u32, // Always BLOCK_LEN (64) for parent nodes.
-        flags: PARENT | flags,
+        first_8_words(compress(
+            &self.chaining_value,
+            &block_words,
+            self.chunk_counter,
+            self.block_len as u32,
+            CHUNK_END | self.flags | self.start_flag(),
+        ))
     }
 }
 
@@ -269,7 +210,16 @@ fn parent_cv(
     key: [u32; 8],
     flags: u32,
 ) -> [u32; 8] {
-    parent_output(left_child_cv, right_child_cv, key, flags).chaining_value()
+    let mut block_words = [0; 16];
+    block_words[..8].copy_from_slice(&left_child_cv);
+    block_words[8..].copy_from_slice(&right_child_cv);
+    first_8_words(compress(
+        &key,
+        &block_words,
+        0,
+        BLOCK_LEN as u32,
+        PARENT | flags,
+    ))
 }
 
 /// An incremental hasher that can accept any number of writes.
@@ -348,7 +298,7 @@ impl Hasher {
             // If the current chunk is complete, finalize it and reset the
             // chunk state. More input is coming, so this chunk is not ROOT.
             if self.chunk_state.len() == CHUNK_LEN {
-                let chunk_cv = self.chunk_state.output().chaining_value();
+                let chunk_cv = self.chunk_state.chaining_value();
                 let total_chunks = self.chunk_state.chunk_counter + 1;
                 self.add_chunk_chaining_value(chunk_cv, total_chunks);
                 self.chunk_state = ChunkState::new(self.key, total_chunks, self.flags);
@@ -364,20 +314,44 @@ impl Hasher {
 
     /// Finalize the hash and write any number of output bytes.
     pub fn finalize(&self, out_slice: &mut [u8]) {
-        // Starting with the Output from the current chunk, compute all the
-        // parent chaining values along the right edge of the tree, until we
-        // have the root Output.
-        let mut output = self.chunk_state.output();
+        let mut root_input_chaining_value = self.chunk_state.chaining_value;
+        let mut root_block_words = [0; 16];
+        words_from_little_endian_bytes(&self.chunk_state.block, &mut root_block_words);
+        let mut root_counter = self.chunk_state.chunk_counter;
+        let mut root_block_len = self.chunk_state.block_len as u32;
+        let mut root_flags = CHUNK_END | self.chunk_state.flags | self.chunk_state.start_flag();
         let mut parent_nodes_remaining = self.cv_stack_len as usize;
         while parent_nodes_remaining > 0 {
             parent_nodes_remaining -= 1;
-            output = parent_output(
-                self.cv_stack[parent_nodes_remaining],
-                output.chaining_value(),
-                self.key,
-                self.flags,
-            );
+            let cv = first_8_words(compress(
+                &root_input_chaining_value,
+                &root_block_words,
+                root_counter,
+                root_block_len,
+                root_flags,
+            ));
+            root_block_words[..8].copy_from_slice(&self.cv_stack[parent_nodes_remaining]);
+            root_block_words[8..].copy_from_slice(&cv);
+            root_input_chaining_value = self.key;
+            root_counter = 0;
+            root_block_len = BLOCK_LEN as u32;
+            root_flags = PARENT | self.chunk_state.flags;
         }
-        output.root_output_bytes(out_slice);
+
+        let mut output_block_counter = 0;
+        for out_block in out_slice.chunks_mut(2 * OUT_LEN) {
+            let words = compress(
+                &root_input_chaining_value,
+                &root_block_words,
+                output_block_counter,
+                root_block_len,
+                root_flags | ROOT,
+            );
+            // The output length might not be a multiple of 4.
+            for (word, out_word) in words.iter().zip(out_block.chunks_mut(4)) {
+                out_word.copy_from_slice(&word.to_le_bytes()[..out_word.len()]);
+            }
+            output_block_counter += 1;
+        }
     }
 }
