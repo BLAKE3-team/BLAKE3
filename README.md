@@ -197,5 +197,6 @@ Alternatively, it is licensed under the Apache License 2.0.
 
 ## Miscellany
 
-- @veorq and @oconnor663 did [a podcast
+- [@veorq](https://github.com/veorq) and
+  [@oconnor663](https://github.com/oconnor663) did [a podcast
   interview](https://www.cryptography.fm/3) about designing BLAKE3.
