@@ -35,8 +35,9 @@ int main() {
 }
 ```
 
-If you save the example code above as `example.c`, and you're on x86\_64
-with a Unix-like OS, you can compile a working binary like this:
+The code above is included in this directory as `example.c`. If you're
+on x86\_64 with a Unix-like OS, you can compile a working binary like
+this:
 
 ```bash
 gcc -O3 -o example example.c blake3.c blake3_dispatch.c blake3_portable.c \

@@ -201,3 +201,8 @@ jobs:
       working-directory: ./c
     - run: BLAKE3_NO_SSE2=1 BLAKE3_NO_SSE41=1 BLAKE3_NO_AVX2=1 BLAKE3_NO_AVX512=1 make -f Makefile.testing test_asm
       working-directory: ./c
+    # Restore the files we deleted above.
+    - run: git checkout .
+    # Build the example.
+    - run: make -f Makefile.testing example
+      working-directory: ./c

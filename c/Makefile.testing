@@ -71,5 +71,8 @@ test_asm: CFLAGS += -DBLAKE3_TESTING -fsanitize=address,undefined
 test_asm: asm
 	./test.py
 
+example: example.c blake3.c blake3_dispatch.c blake3_portable.c $(ASM_TARGETS)
+	$(CC) $(CFLAGS) $(EXTRAFLAGS) $^ -o $@ $(LDFLAGS)
+
 clean: 
 	rm -f $(NAME) *.o
