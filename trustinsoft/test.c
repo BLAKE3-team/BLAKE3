@@ -1,8 +1,4 @@
-/*
- * This main file is intended for testing via `make test`. It does not build in
- * other settings. See README.md in this directory for examples of how to build
- * C code.
- */
+/* Based on the c/main.c file. */
 
 #include <assert.h>
 #include <errno.h>
@@ -54,23 +50,7 @@ static int parse_key(char *hex_key, uint8_t out[BLAKE3_KEY_LEN]) {
   return 0;
 }
 
-/* A little repetition here */
-enum cpu_feature {
-  SSE2 = 1 << 0,
-  SSSE3 = 1 << 1,
-  SSE41 = 1 << 2,
-  AVX = 1 << 3,
-  AVX2 = 1 << 4,
-  AVX512F = 1 << 5,
-  AVX512VL = 1 << 6,
-  /* ... */
-  UNDEFINED = 1 << 30
-};
-
-extern enum cpu_feature g_cpu_features;
-enum cpu_feature get_cpu_features();
-
-int main(int argc, char **argv) {
+int test(int argc, char **argv, FILE *fp_output) {
   size_t out_len = BLAKE3_OUT_LEN;
   uint8_t key[BLAKE3_KEY_LEN];
   char *context = "";
@@ -107,10 +87,10 @@ int main(int argc, char **argv) {
     argv += 2;
   }
 
-  /* 
+  /*
    * We're going to hash the input multiple times, so we need to buffer it all.
    * This is just for test cases, so go ahead and assume that the input is less
-   * than 1 MiB. 
+   * than 1 MiB.
    */
   size_t buf_capacity = 1 << 20;
   uint8_t *buf = malloc(buf_capacity);
@@ -125,42 +105,81 @@ int main(int argc, char **argv) {
     assert(buf_len < buf_capacity);
   }
 
-  const int mask = get_cpu_features();
-  int feature = 0;
-  do {
-    fprintf(stderr, "Testing 0x%08X\n", feature);
-    g_cpu_features = feature;
-    blake3_hasher hasher;
-    switch (mode) {
-    case HASH_MODE:
-      blake3_hasher_init(&hasher);
-      break;
-    case KEYED_HASH_MODE:
-      blake3_hasher_init_keyed(&hasher, key);
-      break;
-    case DERIVE_KEY_MODE:
-      blake3_hasher_init_derive_key(&hasher, context);
-      break;
-    default:
-      abort();
-    }
+  blake3_hasher hasher;
+  switch (mode) {
+  case HASH_MODE:
+    blake3_hasher_init(&hasher);
+    break;
+  case KEYED_HASH_MODE:
+    blake3_hasher_init_keyed(&hasher, key);
+    break;
+  case DERIVE_KEY_MODE:
+    blake3_hasher_init_derive_key(&hasher, context);
+    break;
+  default:
+    abort();
+  }
 
-    blake3_hasher_update(&hasher, buf, buf_len);
+  blake3_hasher_update(&hasher, buf, buf_len);
 
-    /* TODO: An incremental output reader API to avoid this allocation. */
-    uint8_t *out = malloc(out_len);
-    if (out_len > 0 && out == NULL) {
-      fprintf(stderr, "malloc() failed.\n");
-      return 1;
-    }
-    blake3_hasher_finalize(&hasher, out, out_len);
-    for (size_t i = 0; i < out_len; i++) {
-      printf("%02x", out[i]);
-    }
-    printf("\n");
-    free(out);
-    feature = (feature - mask) & mask;
-  } while (feature != 0);
+  uint8_t *out = malloc(out_len);
+  if (out_len > 0 && out == NULL) {
+    fprintf(stderr, "malloc() failed.\n");
+    return 1;
+  }
+  blake3_hasher_finalize(&hasher, out, out_len);
+  for (size_t i = 0; i < out_len; i++) {
+    fprintf(fp_output, "%02x", (unsigned int) out[i]);
+  }
+  fprintf(fp_output, "\n");
+  free(out);
+
   free(buf);
   return 0;
+}
+
+int main(int argc, char **argv) {
+  /* 1. Prepare the output file. */
+  FILE *fp_output = fopen("output", "w+");
+
+  /* 2. Run the main test function and remember the return value. */
+  int main_retval = test(argc, argv, fp_output);
+
+  /* 3. Check if the actual test output and the expected output are the same. */
+  FILE *fp_expected = fopen("expected", "r");
+  int c_output, c_expected;
+  int ok = 1;
+  rewind(fp_output);
+
+  printf("Checking the output.");
+  while (1) {
+    c_output = fgetc(fp_output);
+    /* If the end of the test output is reached, stop. */
+    if (c_output == EOF)
+      break;
+    /* Each line of the test output should be compared with the same single line
+       of the expected output. */
+    if (c_output == '\n') {
+      rewind(fp_expected);
+      continue;
+    }
+    c_expected = fgetc(fp_expected);
+    /* Each character read from the test output should be the same as
+       the character read from the expected output. */
+    if (c_expected == c_output) {
+      printf("output = %c, expected = %c", c_output, c_expected);
+    } else {
+      ok = 0;
+      printf("output = %c, expected = %c : WRONG!", c_output, c_expected);
+    }
+  };
+  /*@ assert output_as_expected: ok == 1; */
+  printf("Done.");
+
+  fclose(fp_expected);
+  fclose(fp_output);
+
+  /* 4. Finish up: return the main test function's return value. */
+  /*@ assert main_returns_zero: main_retval == 0; */
+  return main_retval;
 }
