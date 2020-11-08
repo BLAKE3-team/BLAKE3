@@ -1,16 +1,10 @@
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::{App, Arg};
-use std::cmp;
 use std::convert::TryInto;
-use std::fs::File;
-use std::io;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 
-#[cfg(test)]
-mod unit_tests;
-
-const NAME: &str = "b3sum";
+use b3sum::*;
 
 const FILE_ARG: &str = "FILE";
 const DERIVE_KEY_ARG: &str = "derive-key";
@@ -26,7 +20,7 @@ const QUIET_ARG: &str = "quiet";
 struct Args {
     inner: clap::ArgMatches<'static>,
     file_args: Vec<PathBuf>,
-    base_hasher: blake3::Hasher,
+    generator: HasherGenerator,
 }
 
 impl Args {
@@ -125,19 +119,21 @@ impl Args {
         if inner.is_present(RAW_ARG) && file_args.len() > 1 {
             bail!("Only one filename can be provided when using --raw");
         }
-        let base_hasher = if inner.is_present(KEYED_ARG) {
+
+        let generator = if inner.is_present(KEYED_ARG) {
             // In keyed mode, since stdin is used for the key, we can't handle
             // `-` arguments. Input::open handles that case below.
-            blake3::Hasher::new_keyed(&read_key_from_stdin()?)
+            HasherGenerator::new_keyed(&read_key_from_stdin()?)
         } else if let Some(context) = inner.value_of(DERIVE_KEY_ARG) {
-            blake3::Hasher::new_derive_key(context)
+            HasherGenerator::new_derive_key(context)
         } else {
-            blake3::Hasher::new()
+            HasherGenerator::new()
         };
+
         Ok(Self {
             inner,
             file_args,
-            base_hasher,
+            generator,
         })
     }
 
@@ -177,155 +173,9 @@ impl Args {
         }
     }
 
-    fn keyed(&self) -> bool {
-        self.inner.is_present(KEYED_ARG)
-    }
-
     fn quiet(&self) -> bool {
         self.inner.is_present(QUIET_ARG)
     }
-}
-
-enum Input {
-    Mmap(io::Cursor<memmap::Mmap>),
-    File(File),
-    Stdin,
-}
-
-impl Input {
-    // Open an input file, using mmap if appropriate. "-" means stdin. Note
-    // that this convention applies both to command line arguments, and to
-    // filepaths that appear in a checkfile.
-    fn open(path: &Path, args: &Args) -> Result<Self> {
-        if path == Path::new("-") {
-            if args.keyed() {
-                bail!("Cannot open `-` in keyed mode");
-            }
-            return Ok(Self::Stdin);
-        }
-        let file = File::open(path)?;
-        if !args.no_mmap() {
-            if let Some(mmap) = maybe_memmap_file(&file)? {
-                return Ok(Self::Mmap(io::Cursor::new(mmap)));
-            }
-        }
-        Ok(Self::File(file))
-    }
-
-    fn hash(&mut self, args: &Args) -> Result<blake3::OutputReader> {
-        let mut hasher = args.base_hasher.clone();
-        match self {
-            // The fast path: If we mmapped the file successfully, hash using
-            // multiple threads. This doesn't work on stdin, or on some files,
-            // and it can also be disabled with --no-mmap.
-            Self::Mmap(cursor) => {
-                hasher.update_with_join::<blake3::join::RayonJoin>(cursor.get_ref());
-            }
-            // The slower paths, for stdin or files we didn't/couldn't mmap.
-            // This is currently all single-threaded. Doing multi-threaded
-            // hashing without memory mapping is tricky, since all your worker
-            // threads have to stop every time you refill the buffer, and that
-            // ends up being a lot of overhead. To solve that, we need a more
-            // complicated double-buffering strategy where a background thread
-            // fills one buffer while the worker threads are hashing the other
-            // one. We might implement that in the future, but since this is
-            // the slow path anyway, it's not high priority.
-            Self::File(file) => {
-                copy_wide(file, &mut hasher)?;
-            }
-            Self::Stdin => {
-                let stdin = io::stdin();
-                let lock = stdin.lock();
-                copy_wide(lock, &mut hasher)?;
-            }
-        }
-        Ok(hasher.finalize_xof())
-    }
-}
-
-impl Read for Input {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        match self {
-            Self::Mmap(cursor) => cursor.read(buf),
-            Self::File(file) => file.read(buf),
-            Self::Stdin => io::stdin().read(buf),
-        }
-    }
-}
-
-// A 16 KiB buffer is enough to take advantage of all the SIMD instruction sets
-// that we support, but `std::io::copy` currently uses 8 KiB. Most platforms
-// can support at least 64 KiB, and there's some performance benefit to using
-// bigger reads, so that's what we use here.
-fn copy_wide(mut reader: impl Read, hasher: &mut blake3::Hasher) -> io::Result<u64> {
-    let mut buffer = [0; 65536];
-    let mut total = 0;
-    loop {
-        match reader.read(&mut buffer) {
-            Ok(0) => return Ok(total),
-            Ok(n) => {
-                hasher.update(&buffer[..n]);
-                total += n as u64;
-            }
-            Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-            Err(e) => return Err(e),
-        }
-    }
-}
-
-// Mmap a file, if it looks like a good idea. Return None in cases where we
-// know mmap will fail, or if the file is short enough that mmapping isn't
-// worth it. However, if we do try to mmap and it fails, return the error.
-fn maybe_memmap_file(file: &File) -> Result<Option<memmap::Mmap>> {
-    let metadata = file.metadata()?;
-    let file_size = metadata.len();
-    Ok(if !metadata.is_file() {
-        // Not a real file.
-        None
-    } else if file_size > isize::max_value() as u64 {
-        // Too long to safely map.
-        // https://github.com/danburkert/memmap-rs/issues/69
-        None
-    } else if file_size == 0 {
-        // Mapping an empty file currently fails.
-        // https://github.com/danburkert/memmap-rs/issues/72
-        None
-    } else if file_size < 16 * 1024 {
-        // Mapping small files is not worth it.
-        None
-    } else {
-        // Explicitly set the length of the memory map, so that filesystem
-        // changes can't race to violate the invariants we just checked.
-        let map = unsafe {
-            memmap::MmapOptions::new()
-                .len(file_size as usize)
-                .map(&file)?
-        };
-        Some(map)
-    })
-}
-
-fn write_hex_output(mut output: blake3::OutputReader, args: &Args) -> Result<()> {
-    // Encoding multiples of the block size is most efficient.
-    let mut len = args.len()?;
-    let mut block = [0; blake3::BLOCK_LEN];
-    while len > 0 {
-        output.fill(&mut block);
-        let hex_str = hex::encode(&block[..]);
-        let take_bytes = cmp::min(len, block.len() as u64);
-        print!("{}", &hex_str[..2 * take_bytes as usize]);
-        len -= take_bytes;
-    }
-    Ok(())
-}
-
-fn write_raw_output(output: blake3::OutputReader, args: &Args) -> Result<()> {
-    let mut output = output.take(args.len()?);
-    let stdout = std::io::stdout();
-    let mut handler = stdout.lock();
-    std::io::copy(&mut output, &mut handler)?;
-
-    Ok(())
 }
 
 fn read_key_from_stdin() -> Result<[u8; blake3::KEY_LEN]> {
@@ -376,214 +226,67 @@ fn filepath_to_string(filepath: &Path) -> FilepathString {
     }
 }
 
-fn hex_half_byte(c: char) -> Result<u8> {
-    // The hex characters in the hash must be lowercase for now, though we
-    // could support uppercase too if we wanted to.
-    if '0' <= c && c <= '9' {
-        return Ok(c as u8 - '0' as u8);
-    }
-    if 'a' <= c && c <= 'f' {
-        return Ok(c as u8 - 'a' as u8 + 10);
-    }
-    bail!("Invalid hex");
-}
-
-// The `check` command is a security tool. That means it's much better for a
-// check to fail more often than it should (a false negative), than for a check
-// to ever succeed when it shouldn't (a false positive). By forbidding certain
-// characters in checked filepaths, we avoid a class of false positives where
-// two different filepaths can get confused with each other.
-fn check_for_invalid_characters(utf8_path: &str) -> Result<()> {
-    // Null characters in paths should never happen, but they can result in a
-    // path getting silently truncated on Unix.
-    if utf8_path.contains('\0') {
-        bail!("Null character in path");
-    }
-    // Because we convert invalid UTF-8 sequences in paths to the Unicode
-    // replacement character, multiple different invalid paths can map to the
-    // same UTF-8 string.
-    if utf8_path.contains('�') {
-        bail!("Unicode replacement character in path");
-    }
-    // We normalize all Windows backslashes to forward slashes in our output,
-    // so the only natural way to get a backslash in a checkfile on Windows is
-    // to construct it on Unix and copy it over. (Or of course you could just
-    // doctor it by hand.) To avoid confusing this with a directory separator,
-    // we forbid backslashes entirely on Windows. Note that this check comes
-    // after unescaping has been done.
-    if cfg!(windows) && utf8_path.contains('\\') {
-        bail!("Backslash in path");
-    }
-    Ok(())
-}
-
-fn unescape(mut path: &str) -> Result<String> {
-    let mut unescaped = String::with_capacity(2 * path.len());
-    while let Some(i) = path.find('\\') {
-        ensure!(i < path.len() - 1, "Invalid backslash escape");
-        unescaped.push_str(&path[..i]);
-        match path[i + 1..].chars().next().unwrap() {
-            // Anything other than a recognized escape sequence is an error.
-            'n' => unescaped.push_str("\n"),
-            '\\' => unescaped.push_str("\\"),
-            _ => bail!("Invalid backslash escape"),
-        }
-        path = &path[i + 2..];
-    }
-    unescaped.push_str(path);
-    Ok(unescaped)
-}
-
-#[derive(Debug)]
-struct ParsedCheckLine {
-    file_string: String,
-    is_escaped: bool,
-    file_path: PathBuf,
-    expected_hash: blake3::Hash,
-}
-
-fn parse_check_line(mut line: &str) -> Result<ParsedCheckLine> {
-    // Trim off the trailing newline, if any.
-    line = line.trim_end_matches('\n');
-    // If there's a backslash at the front of the line, that means we need to
-    // unescape the path below. This matches the behavior of e.g. md5sum.
-    let first = if let Some(c) = line.chars().next() {
-        c
-    } else {
-        bail!("Empty line");
-    };
-    let mut is_escaped = false;
-    if first == '\\' {
-        is_escaped = true;
-        line = &line[1..];
-    }
-    // The front of the line must be a hash of the usual length, followed by
-    // two spaces. The hex characters in the hash must be lowercase for now,
-    // though we could support uppercase too if we wanted to.
-    let hash_hex_len = 2 * blake3::OUT_LEN;
-    let num_spaces = 2;
-    let prefix_len = hash_hex_len + num_spaces;
-    ensure!(line.len() > prefix_len, "Short line");
-    ensure!(
-        line.chars().take(prefix_len).all(|c| c.is_ascii()),
-        "Non-ASCII prefix"
-    );
-    ensure!(&line[hash_hex_len..][..2] == "  ", "Invalid space");
-    // Decode the hash hex.
-    let mut hash_bytes = [0; blake3::OUT_LEN];
-    let mut hex_chars = line[..hash_hex_len].chars();
-    for byte in &mut hash_bytes {
-        let high_char = hex_chars.next().unwrap();
-        let low_char = hex_chars.next().unwrap();
-        *byte = 16 * hex_half_byte(high_char)? + hex_half_byte(low_char)?;
-    }
-    let expected_hash: blake3::Hash = hash_bytes.into();
-    let file_string = line[prefix_len..].to_string();
-    let file_path_string = if is_escaped {
-        // If we detected a backslash at the start of the line earlier, now we
-        // need to unescape backslashes and newlines.
-        unescape(&file_string)?
-    } else {
-        file_string.clone().into()
-    };
-    check_for_invalid_characters(&file_path_string)?;
-    Ok(ParsedCheckLine {
-        file_string,
-        is_escaped,
-        file_path: file_path_string.into(),
-        expected_hash,
-    })
-}
-
-fn hash_one_input(path: &Path, args: &Args) -> Result<()> {
-    let mut input = Input::open(path, args)?;
-    let output = input.hash(args)?;
-    if args.raw() {
-        write_raw_output(output, args)?;
+fn hash_one_input<P>(
+    path: P,
+    gen: &HasherGenerator,
+    no_mmap: bool,
+    raw: bool,
+    no_names: bool,
+    len: u64,
+) -> Result<()>
+where
+    P: AsRef<Path>,
+{
+    let output = hash(&path, &gen, no_mmap)?;
+    if raw {
+        print_hash_raw_output(output, len)?;
         return Ok(());
     }
-    if args.no_names() {
-        write_hex_output(output, args)?;
+    if no_names {
+        print_hash_hex_output(output, len)?;
         println!();
         return Ok(());
     }
     let FilepathString {
         filepath_string,
         is_escaped,
-    } = filepath_to_string(path);
+    } = filepath_to_string(path.as_ref());
     if is_escaped {
         print!("\\");
     }
-    write_hex_output(output, args)?;
+    print_hash_hex_output(output, len)?;
     println!("  {}", filepath_string);
     Ok(())
 }
 
-// Returns true for success. Having a boolean return value here, instead of
-// passing down the some_file_failed reference, makes it less likely that we
-// might forget to set it in some error condition.
-fn check_one_line(line: &str, args: &Args) -> bool {
-    let parse_result = parse_check_line(&line);
-    let ParsedCheckLine {
-        file_string,
-        is_escaped,
-        file_path,
-        expected_hash,
-    } = match parse_result {
-        Ok(parsed) => parsed,
-        Err(e) => {
-            eprintln!("{}: {}", NAME, e);
-            return false;
+fn hash_with_args(args: &Args) -> Result<i32> {
+    let mut some_file_failed = false;
+    for path in &args.file_args {
+        let result = hash_one_input(
+            path,
+            &args.generator,
+            args.no_mmap(),
+            args.raw(),
+            args.no_names(),
+            args.len()?,
+        );
+        if let Err(e) = result {
+            some_file_failed = true;
+            eprintln!("{}: {}: {}", NAME, path.to_string_lossy(), e);
         }
-    };
-    let file_string = if is_escaped {
-        "\\".to_string() + &file_string
-    } else {
-        file_string
-    };
-    let hash_result: Result<blake3::Hash> = Input::open(&file_path, args)
-        .and_then(|mut input| input.hash(args))
-        .map(|mut hash_output| {
-            let mut found_hash_bytes = [0; blake3::OUT_LEN];
-            hash_output.fill(&mut found_hash_bytes);
-            found_hash_bytes.into()
-        });
-    let found_hash: blake3::Hash = match hash_result {
-        Ok(hash) => hash,
-        Err(e) => {
-            println!("{}: FAILED ({})", file_string, e);
-            return false;
-        }
-    };
-    // This is a constant-time comparison.
-    if expected_hash == found_hash {
-        if !args.quiet() {
-            println!("{}: OK", file_string);
-        }
-        true
-    } else {
-        println!("{}: FAILED", file_string);
-        false
     }
+    Ok(if some_file_failed { 1 } else { 0 })
 }
 
-fn check_one_checkfile(path: &Path, args: &Args, some_file_failed: &mut bool) -> Result<()> {
-    let checkfile_input = Input::open(path, args)?;
-    let mut bufreader = io::BufReader::new(checkfile_input);
-    let mut line = String::new();
-    loop {
-        line.clear();
-        let n = bufreader.read_line(&mut line)?;
-        if n == 0 {
-            return Ok(());
-        }
-        // check_one_line() prints errors and turns them into a success=false
-        // return, so it doesn't return a Result.
-        let success = check_one_line(&line, args);
-        if !success {
-            *some_file_failed = true;
+fn check_with_args(args: &Args) -> Result<i32> {
+    let mut some_file_failed = false;
+    for path in &args.file_args {
+        let failed = print_check_checkfile(path, &args.generator, args.no_mmap(), args.quiet())?;
+        if failed {
+            some_file_failed = true;
         }
     }
+    Ok(if some_file_failed { 1 } else { 0 })
 }
 
 fn main() -> Result<()> {
@@ -593,29 +296,9 @@ fn main() -> Result<()> {
         thread_pool_builder = thread_pool_builder.num_threads(num_threads);
     }
     let thread_pool = thread_pool_builder.build()?;
-    thread_pool.install(|| {
-        let mut some_file_failed = false;
-        // Note that file_args automatically includes `-` if nothing is given.
-        for path in &args.file_args {
-            if args.check() {
-                // A hash mismatch or a failure to read a hashed file will be
-                // printed in the checkfile loop, and will not propagate here.
-                // This is similar to the explicit error handling we do in the
-                // hashing case immediately below. In these cases,
-                // some_file_failed will be set to false.
-                check_one_checkfile(path, &args, &mut some_file_failed)?;
-            } else {
-                // Errors encountered in hashing are tolerated and printed to
-                // stderr. This allows e.g. `b3sum *` to print errors for
-                // non-files and keep going. However, if we encounter any
-                // errors we'll still return non-zero at the end.
-                let result = hash_one_input(path, &args);
-                if let Err(e) = result {
-                    some_file_failed = true;
-                    eprintln!("{}: {}: {}", NAME, path.to_string_lossy(), e);
-                }
-            }
-        }
-        std::process::exit(if some_file_failed { 1 } else { 0 });
-    })
+    if args.check() {
+        thread_pool.install(|| std::process::exit(check_with_args(&args)?))
+    } else {
+        thread_pool.install(|| std::process::exit(hash_with_args(&args)?))
+    }
 }
