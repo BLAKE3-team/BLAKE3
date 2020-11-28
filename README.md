@@ -161,7 +161,7 @@ application-specific. A good default format for the context string is
 // Derive a couple of subkeys for different purposes.
 const EMAIL_CONTEXT: &str = "BLAKE3 example 2020-01-07 17:10:44 email key";
 const API_CONTEXT: &str = "BLAKE3 example 2020-01-07 17:11:21 API key";
-let input_key = b"some very secret key material (>'-')> <('-'<) ^('-')^";
+let input_key = b"some very secret, high entropy key material (>'-')> <('-'<) ^('-')^";
 let mut email_key = [0; 32];
 blake3::derive_key(EMAIL_CONTEXT, input_key, &mut email_key);
 let mut api_key = [0; 32];
