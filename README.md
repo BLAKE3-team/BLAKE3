@@ -151,21 +151,21 @@ let mac2 = hasher.finalize();
 assert_eq!(mac1, mac2);
 ```
 
-The `derive_key` mode takes a context string of any length and key
-material of any length, and it outputs a derived key of any length. The
-context string should be hardcoded, globally unique, and
-application-specific. A good default format for the context string is
-`"[application] [commit timestamp] [purpose]"`:
+The `derive_key` mode takes a context string of any length and key material of
+any length (not a password), and it outputs a derived key of any length. The
+context string should be hardcoded, globally unique, and application-specific.
+A good default format for the context string is `"[application] [commit
+timestamp] [purpose]"`:
 
 ```rust
 // Derive a couple of subkeys for different purposes.
 const EMAIL_CONTEXT: &str = "BLAKE3 example 2020-01-07 17:10:44 email key";
 const API_CONTEXT: &str = "BLAKE3 example 2020-01-07 17:11:21 API key";
-let input_key = b"some very secret key material (>'-')> <('-'<) ^('-')^";
+let input_key_material = b"usually at least 32 random bytes, not a password!";
 let mut email_key = [0; 32];
-blake3::derive_key(EMAIL_CONTEXT, input_key, &mut email_key);
+blake3::derive_key(EMAIL_CONTEXT, input_key_material, &mut email_key);
 let mut api_key = [0; 32];
-blake3::derive_key(API_CONTEXT, input_key, &mut api_key);
+blake3::derive_key(API_CONTEXT, input_key_material, &mut api_key);
 assert!(email_key != api_key);
 ```
 
