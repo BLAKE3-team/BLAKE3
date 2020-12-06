@@ -180,7 +180,9 @@ We post links to third-party bindings and implementations on the
 we hear about them. Some highlights include [an optimized Go
 implementation](https://github.com/zeebo/blake3), [Wasm bindings for
 Node.js and browsers](https://github.com/connor4312/blake3), [binary
-wheels for Python](https://github.com/oconnor663/blake3-py), and [a .NET version](https://github.com/xoofx/Blake3.NET).
+wheels for Python](https://github.com/oconnor663/blake3-py), [.NET
+bindings](https://github.com/xoofx/Blake3.NET), and [JNI
+bindings](https://github.com/sken77/BLAKE3jni).
 
 ## Contributing
 
