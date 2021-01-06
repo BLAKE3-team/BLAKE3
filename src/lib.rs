@@ -109,6 +109,7 @@ use arrayref::{array_mut_ref, array_ref};
 use arrayvec::{ArrayString, ArrayVec};
 use core::cmp;
 use core::fmt;
+use core::mem::{self, MaybeUninit};
 use join::{Join, SerialJoin};
 use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
 
@@ -1347,6 +1348,27 @@ impl OutputReader {
             let output_bytes = &block[self.position_within_block as usize..];
             let take = cmp::min(buf.len(), output_bytes.len());
             buf[..take].copy_from_slice(&output_bytes[..take]);
+            buf = &mut buf[take..];
+            self.position_within_block += take as u8;
+            if self.position_within_block == BLOCK_LEN as u8 {
+                self.inner.counter += 1;
+                self.position_within_block = 0;
+            }
+        }
+    }
+
+    /// Similar to [`fill`] but takes a [`MaybeUninit`] buffer instead.
+    ///
+    /// [`fill`]: #method.fill
+    /// [`MaybeUninit`]: https://doc.rust-lang.org/core/mem/union.MaybeUninit.html
+    pub fn fill_uinit(&mut self, mut buf: &mut [MaybeUninit<u8>]) {
+        while !buf.is_empty() {
+            let block: [u8; BLOCK_LEN] = self.inner.root_output_block();
+            let output_bytes = &block[self.position_within_block as usize..];
+            let take = cmp::min(buf.len(), output_bytes.len());
+            buf[..take].copy_from_slice(
+                unsafe { mem::transmute::<_, &[MaybeUninit<u8>]>(&output_bytes[..take])} // we are transmuting an initialized slice to an "maybe uninitialized" one, so this is by definition safe
+            );
             buf = &mut buf[take..];
             self.position_within_block += take as u8;
             if self.position_within_block == BLOCK_LEN as u8 {
