@@ -2054,8 +2054,8 @@ _blake3_compress_in_place_sse2 PROC
         movzx   r8d, r8b
         shl     rax, 32
         add     r8, rax
-        movq    xmm3, r9
-        movq    xmm4, r8
+        movd    xmm3, r9
+        movd    xmm4, r8
         punpcklqdq xmm3, xmm4
         movups  xmm4, xmmword ptr [rdx]
         movups  xmm5, xmmword ptr [rdx+10H]
@@ -2186,8 +2186,8 @@ _blake3_compress_xof_sse2 PROC
         mov     r10, qword ptr [rsp+0A8H]
         shl     rax, 32
         add     r8, rax
-        movq    xmm3, r9
-        movq    xmm4, r8
+        movd    xmm3, r9
+        movd    xmm4, r8
         punpcklqdq xmm3, xmm4
         movups  xmm4, xmmword ptr [rdx]
         movups  xmm5, xmmword ptr [rdx+10H]
