@@ -567,3 +567,31 @@ fn test_join_lengths() {
     );
     assert_eq!(CUSTOM_JOIN_CALLS.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn test_standard_hasher() {
+    fn hash<H>(mut hasher: H) -> u64
+    where
+        H: core::hash::Hasher,
+    {
+        hasher.write_u32(2020);
+        hasher.write_u8(7);
+        hasher.write_u8(23);
+        hasher.write(b"Hello, World!");
+
+        hasher.finish()
+    }
+
+    let hash = hash(crate::Hasher::new());
+    let expected = {
+        let mut hash = crate::Hasher::new();
+        hash.update(&2020u32.to_ne_bytes());
+        hash.update(&[7]);
+        hash.update(&[23]);
+        hash.update(&b"Hello, World!"[..]);
+
+        hash.finalize().into()
+    };
+
+    assert_eq!(hash, expected);
+}
