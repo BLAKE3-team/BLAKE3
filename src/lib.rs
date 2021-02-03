@@ -59,6 +59,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 #[cfg(test)]
 mod test;
 
@@ -205,6 +208,7 @@ fn counter_high(counter: u64) -> u32 {
 /// [`AsRef`]: https://doc.rust-lang.org/std/convert/trait.AsRef.html
 /// [`to_hex`]: #method.to_hex
 /// [`hex`]: https://crates.io/crates/hex
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[derive(Clone, Copy, Hash)]
 pub struct Hash([u8; OUT_LEN]);
 

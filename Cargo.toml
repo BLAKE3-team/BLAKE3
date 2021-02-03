@@ -78,6 +78,7 @@ rayon = { version = "1.2.1", optional = true }
 cfg-if = "0.1.10"
 digest = "0.9.0"
 crypto-mac = "0.8.0"
+serde = { features = ["derive"], version = "1.0.123", optional = true }
 
 [dev-dependencies]
 hex = "0.4.2"
