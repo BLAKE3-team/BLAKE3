@@ -161,6 +161,16 @@ const KEYED_HASH: u8 = 1 << 4;
 const DERIVE_KEY_CONTEXT: u8 = 1 << 5;
 const DERIVE_KEY_MATERIAL: u8 = 1 << 6;
 
+/// Errors from parsing hex values
+#[derive(Debug, PartialEq)]
+pub enum ParseError {
+    /// Hexadecimal str contains invalid character
+    InvalidChar,
+
+    /// Invalid str length. Only 32 byte digests can be parsed from a 64 char hex encoded str.
+    InvalidLen,
+}
+
 #[inline]
 fn counter_low(counter: u64) -> u32 {
     counter as u32
@@ -232,6 +242,33 @@ impl Hash {
         }
         s
     }
+
+    /// Parse a hexidecimal string and return the resulting Hash.
+    ///
+    /// The string must be 64 characters long, producting a 32 byte digest.
+    /// All other string length will return a `ParseError::InvalidLen`.
+    pub fn from_hex(hex: &str) -> Result<Self, ParseError> {
+        let str_bytes = hex.as_bytes();
+        if str_bytes.len() != OUT_LEN * 2 {
+            return Err(ParseError::InvalidLen);
+        }
+
+        let mut bytes: [u8; OUT_LEN] = [0; OUT_LEN];
+        for (i, pair) in str_bytes.chunks(2).enumerate() {
+            bytes[i] = hex_val(pair[0])? << 4 | hex_val(pair[1])?;
+        }
+
+        return Ok(Hash::from(bytes));
+
+        fn hex_val(byte: u8) -> Result<u8, ParseError> {
+            match byte {
+                b'A'..=b'F' => Ok(byte - b'A' + 10),
+                b'a'..=b'f' => Ok(byte - b'a' + 10),
+                b'0'..=b'9' => Ok(byte - b'0'),
+                _ => Err(ParseError::InvalidChar),
+            }
+        }
+    }
 }
 
 impl From<[u8; OUT_LEN]> for Hash {
@@ -245,6 +282,14 @@ impl From<Hash> for [u8; OUT_LEN] {
     #[inline]
     fn from(hash: Hash) -> Self {
         hash.0
+    }
+}
+
+impl core::str::FromStr for Hash {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Hash::from_hex(s)
     }
 }
 
