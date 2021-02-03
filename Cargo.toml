@@ -23,7 +23,7 @@ neon = []
 # --no-default-features, the only way to use the SIMD implementations in this
 # crate is to enable the corresponding instruction sets statically for the
 # entire build, with e.g. RUSTFLAGS="-C target-cpu=native".
-std = ["digest/std"]
+std = ["digest/std","serde?/std"]
 
 # The "rayon" feature (defined below as an optional dependency) enables the
 # join::RayonJoin type, which can be used with Hasher::update_with_join to
@@ -78,7 +78,7 @@ rayon = { version = "1.2.1", optional = true }
 cfg-if = "0.1.10"
 digest = "0.9.0"
 crypto-mac = "0.8.0"
-serde = { features = ["derive"], version = "1.0.123", optional = true }
+serde = { features = ["derive"], version = "1.0.123", optional = true, default-features = false }
 
 [dev-dependencies]
 hex = "0.4.2"
