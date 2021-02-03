@@ -580,6 +580,10 @@ fn test_hex_encoding_decoding() {
     let digest = crate::Hash::from_hex(digest_str).unwrap();
     assert_eq!(digest.to_hex().as_str(), digest_str);
 
+    // Test uppercase
+    let digest = crate::Hash::from_hex(digest_str.to_uppercase()).unwrap();
+    assert_eq!(digest.to_hex().as_str(), digest_str);
+
     // Test string parsing via FromStr
     let digest: crate::Hash = digest_str.parse().unwrap();
     assert_eq!(digest.to_hex().as_str(), digest_str);

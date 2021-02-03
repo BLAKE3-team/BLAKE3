@@ -182,21 +182,9 @@ fn counter_high(counter: u64) -> u32 {
 /// conversion happens implicitly and the constant-time property is
 /// accidentally lost.
 ///
-/// `Hash` provides the [`to_hex`] method for converting to hexadecimal. It
-/// doesn't directly support converting from hexadecimal, but here's an example
-/// of doing that with the [`hex`] crate:
-///
-/// ```
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// use std::convert::TryInto;
-///
-/// let hash_hex = "d74981efa70a0c880b8d8c1985d075dbcbf679b99a5f9914e5aaf96b831a9e24";
-/// let hash_bytes = hex::decode(hash_hex)?;
-/// let hash_array: [u8; blake3::OUT_LEN] = hash_bytes[..].try_into()?;
-/// let hash: blake3::Hash = hash_array.into();
-/// # Ok(())
-/// # }
-/// ```
+/// `Hash` provides the [`to_hex`] and [`from_hex`] methods for converting to
+/// and from hexadecimal. It also implements [`FromStr`], so [`str::parse`] is
+/// equivalent to `from_hex`.
 ///
 /// [`From`]: https://doc.rust-lang.org/std/convert/trait.From.html
 /// [`Into`]: https://doc.rust-lang.org/std/convert/trait.Into.html
@@ -204,12 +192,14 @@ fn counter_high(counter: u64) -> u32 {
 /// [`Deref`]: https://doc.rust-lang.org/stable/std/ops/trait.Deref.html
 /// [`AsRef`]: https://doc.rust-lang.org/std/convert/trait.AsRef.html
 /// [`to_hex`]: #method.to_hex
-/// [`hex`]: https://crates.io/crates/hex
+/// [`from_hex`]: #method.from_hex
+/// [`FromStr`]: https://doc.rust-lang.org/std/str/trait.FromStr.html
+/// [`std::parse`]: https://doc.rust-lang.org/std/primitive.str.html#method.parse
 #[derive(Clone, Copy, Hash)]
 pub struct Hash([u8; OUT_LEN]);
 
 impl Hash {
-    /// The bytes of the `Hash`. Note that byte arrays don't provide
+    /// The raw bytes of the `Hash`. Note that byte arrays don't provide
     /// constant-time equality checking, so if  you need to compare hashes,
     /// prefer the `Hash` type.
     #[inline]
@@ -217,10 +207,12 @@ impl Hash {
         &self.0
     }
 
-    /// The hexadecimal encoding of the `Hash`. The returned [`ArrayString`] is
-    /// a fixed size and doesn't allocate memory on the heap. Note that
-    /// [`ArrayString`] doesn't provide constant-time equality checking, so if
-    /// you need to compare hashes, prefer the `Hash` type.
+    /// Encode a `Hash` in lowercase hexadecimal.
+    ///
+    /// The returned [`ArrayString`] is a fixed size and doesn't allocate memory
+    /// on the heap. Note that [`ArrayString`] doesn't provide constant-time
+    /// equality checking, so if you need to compare hashes, prefer the `Hash`
+    /// type.
     ///
     /// [`ArrayString`]: https://docs.rs/arrayvec/0.5.1/arrayvec/struct.ArrayString.html
     pub fn to_hex(&self) -> ArrayString<[u8; 2 * OUT_LEN]> {
@@ -233,26 +225,27 @@ impl Hash {
         s
     }
 
-    /// Parse 64 hexidecimal characters into a 32-byte `Hash`.
+    /// Decode a `Hash` from hexadecimal. Both uppercase and lowercase ASCII
+    /// bytes are supported.
     ///
-    /// Both uppercase and lowercase ASCII characters are supported. Any character outside the
-    /// ranges `(0, 9)`, `(a, f)` and `(A, F)` results in an error. An input length other than 64
-    /// also results in an error.
+    /// Any byte outside the ranges `'0'...'9'`, `'a'...'f'`, and `'A'...'F'`
+    /// results in an error. An input length other than 64 also results in an
+    /// error.
     ///
-    /// Note that `Hash` also implements `FromStr`, `Hash::from_hex("...")` is equivalent to
-    /// `"...".parse()`.
-    pub fn from_hex(hex: impl AsRef<[u8]>) -> Result<Self, ParseError> {
-        fn hex_val(byte: u8) -> Result<u8, ParseError> {
+    /// Note that `Hash` also implements `FromStr`, `Hash::from_hex("...")` is
+    /// equivalent to `"...".parse()`.
+    pub fn from_hex(hex: impl AsRef<[u8]>) -> Result<Self, HexError> {
+        fn hex_val(byte: u8) -> Result<u8, HexError> {
             match byte {
                 b'A'..=b'F' => Ok(byte - b'A' + 10),
                 b'a'..=b'f' => Ok(byte - b'a' + 10),
                 b'0'..=b'9' => Ok(byte - b'0'),
-                _ => Err(ParseError(ParseErrorInner::InvalidByte(byte))),
+                _ => Err(HexError(HexErrorInner::InvalidByte(byte))),
             }
         }
         let hex_bytes: &[u8] = hex.as_ref();
         if hex_bytes.len() != OUT_LEN * 2 {
-            return Err(ParseError(ParseErrorInner::InvalidLen(hex_bytes.len())));
+            return Err(HexError(HexErrorInner::InvalidLen(hex_bytes.len())));
         }
         let mut hash_bytes: [u8; OUT_LEN] = [0; OUT_LEN];
         for i in 0..OUT_LEN {
@@ -277,7 +270,7 @@ impl From<Hash> for [u8; OUT_LEN] {
 }
 
 impl core::str::FromStr for Hash {
-    type Err = ParseError;
+    type Err = HexError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Hash::from_hex(s)
@@ -314,27 +307,31 @@ impl fmt::Debug for Hash {
     }
 }
 
-/// Errors from parsing hex values
+/// The error type for [`Hash::from_hex`].
+///
+/// The `.to_string()` representation of this error currently distinguishes between bad length
+/// errors and bad character errors. This is to help with logging and debugging, but it isn't a
+/// stable API detail, and it may change at any time.
 #[derive(Clone, Debug)]
-pub struct ParseError(ParseErrorInner);
+pub struct HexError(HexErrorInner);
 
 #[derive(Clone, Debug)]
-pub enum ParseErrorInner {
+enum HexErrorInner {
     InvalidByte(u8),
     InvalidLen(usize),
 }
 
-impl fmt::Display for ParseError {
+impl fmt::Display for HexError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
-            ParseErrorInner::InvalidByte(byte) => {
+            HexErrorInner::InvalidByte(byte) => {
                 if byte < 128 {
                     write!(f, "invalid hex character: {:?}", byte as char)
                 } else {
                     write!(f, "invalid hex character: 0x{:x}", byte)
                 }
             }
-            ParseErrorInner::InvalidLen(len) => {
+            HexErrorInner::InvalidLen(len) => {
                 write!(f, "expected 64 hex bytes, received {}", len)
             }
         }
@@ -342,7 +339,7 @@ impl fmt::Display for ParseError {
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for ParseError {}
+impl std::error::Error for HexError {}
 
 // Each chunk or parent node can produce either a 32-byte chaining value or, by
 // setting the ROOT flag, any number of final output bytes. The Output struct
