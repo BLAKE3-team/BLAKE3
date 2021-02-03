@@ -161,16 +161,6 @@ const KEYED_HASH: u8 = 1 << 4;
 const DERIVE_KEY_CONTEXT: u8 = 1 << 5;
 const DERIVE_KEY_MATERIAL: u8 = 1 << 6;
 
-/// Errors from parsing hex values
-#[derive(Debug, PartialEq)]
-pub enum ParseError {
-    /// Hexadecimal str contains invalid character
-    InvalidChar,
-
-    /// Invalid str length. Only 32 byte digests can be parsed from a 64 char hex encoded str.
-    InvalidLen,
-}
-
 #[inline]
 fn counter_low(counter: u64) -> u32 {
     counter as u32
@@ -243,31 +233,32 @@ impl Hash {
         s
     }
 
-    /// Parse a hexidecimal string and return the resulting Hash.
+    /// Parse 64 hexidecimal characters into a 32-byte `Hash`.
     ///
-    /// The string must be 64 characters long, producting a 32 byte digest.
-    /// All other string length will return a `ParseError::InvalidLen`.
-    pub fn from_hex(hex: &str) -> Result<Self, ParseError> {
-        let str_bytes = hex.as_bytes();
-        if str_bytes.len() != OUT_LEN * 2 {
-            return Err(ParseError::InvalidLen);
-        }
-
-        let mut bytes: [u8; OUT_LEN] = [0; OUT_LEN];
-        for (i, pair) in str_bytes.chunks(2).enumerate() {
-            bytes[i] = hex_val(pair[0])? << 4 | hex_val(pair[1])?;
-        }
-
-        return Ok(Hash::from(bytes));
-
+    /// Both uppercase and lowercase ASCII characters are supported. Any character outside the
+    /// ranges `(0, 9)`, `(a, f)` and `(A, F)` results in an error. An input length other than 64
+    /// also results in an error.
+    ///
+    /// Note that `Hash` also implements `FromStr`, `Hash::from_hex("...")` is equivalent to
+    /// `"...".parse()`.
+    pub fn from_hex(hex: impl AsRef<[u8]>) -> Result<Self, ParseError> {
         fn hex_val(byte: u8) -> Result<u8, ParseError> {
             match byte {
                 b'A'..=b'F' => Ok(byte - b'A' + 10),
                 b'a'..=b'f' => Ok(byte - b'a' + 10),
                 b'0'..=b'9' => Ok(byte - b'0'),
-                _ => Err(ParseError::InvalidChar),
+                _ => Err(ParseError(ParseErrorInner::InvalidByte(byte))),
             }
         }
+        let hex_bytes: &[u8] = hex.as_ref();
+        if hex_bytes.len() != OUT_LEN * 2 {
+            return Err(ParseError(ParseErrorInner::InvalidLen(hex_bytes.len())));
+        }
+        let mut hash_bytes: [u8; OUT_LEN] = [0; OUT_LEN];
+        for i in 0..OUT_LEN {
+            hash_bytes[i] = 16 * hex_val(hex_bytes[2 * i])? + hex_val(hex_bytes[2 * i + 1])?;
+        }
+        Ok(Hash::from(hash_bytes))
     }
 }
 
@@ -322,6 +313,36 @@ impl fmt::Debug for Hash {
         f.debug_tuple("Hash").field(&hex).finish()
     }
 }
+
+/// Errors from parsing hex values
+#[derive(Clone, Debug)]
+pub struct ParseError(ParseErrorInner);
+
+#[derive(Clone, Debug)]
+pub enum ParseErrorInner {
+    InvalidByte(u8),
+    InvalidLen(usize),
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.0 {
+            ParseErrorInner::InvalidByte(byte) => {
+                if byte < 128 {
+                    write!(f, "invalid hex character: {:?}", byte as char)
+                } else {
+                    write!(f, "invalid hex character: 0x{:x}", byte)
+                }
+            }
+            ParseErrorInner::InvalidLen(len) => {
+                write!(f, "expected 64 hex bytes, received {}", len)
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ParseError {}
 
 // Each chunk or parent node can produce either a 32-byte chaining value or, by
 // setting the ROOT flag, any number of final output bytes. The Output struct

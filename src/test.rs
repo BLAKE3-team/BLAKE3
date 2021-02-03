@@ -586,10 +586,16 @@ fn test_hex_encoding_decoding() {
 
     // Test errors
     let bad_len = "04e0bb39f30b1";
-    let result = crate::Hash::from_hex(bad_len).unwrap_err();
-    assert_eq!(result, crate::ParseError::InvalidLen);
+    let _result = crate::Hash::from_hex(bad_len).unwrap_err();
+    #[cfg(feature = "std")]
+    assert_eq!(_result.to_string(), "expected 64 hex bytes, received 13");
 
     let bad_char = "Z4e0bb39f30b1a3feb89f536c93be15055482df748674b00d26e5a75777702e9";
-    let result = crate::Hash::from_hex(bad_char).unwrap_err();
-    assert_eq!(result, crate::ParseError::InvalidChar);
+    let _result = crate::Hash::from_hex(bad_char).unwrap_err();
+    #[cfg(feature = "std")]
+    assert_eq!(_result.to_string(), "invalid hex character: 'Z'");
+
+    let _result = crate::Hash::from_hex([128; 64]).unwrap_err();
+    #[cfg(feature = "std")]
+    assert_eq!(_result.to_string(), "invalid hex character: 0x80");
 }
