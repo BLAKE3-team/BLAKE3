@@ -259,12 +259,13 @@ example:
 gcc -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c
 ```
 
-# Differences from the Rust Implementation
+# Multithreading
 
-The single-threaded Rust and C implementations use the same algorithms,
-and their performance is the same if you use the assembly
-implementations or if you compile the intrinsics-based implementations
-with Clang. (Both Clang and rustc are LLVM-based.)
-
-The C implementation doesn't currently include any multithreading
-optimizations. OpenMP support or similar might be added in the future.
+Unlike the Rust implementation, the C implementation doesn't currently support
+multithreading. A future version of this library could add support by taking an
+optional dependency on OpenMP or similar. Alternatively, we could expose a
+lower-level API to allow callers to implement concurrency themselves. The
+former would be more convenient and less error-prone, but the latter would give
+callers the maximum possible amount of control. The best choice here depends on
+the specific use case, so if you have a use case for multithreaded hashing in
+C, please file a GitHub issue and let us know.
