@@ -1704,7 +1704,7 @@ blake3_hash_many_sse2:
         pshufd  xmm15, xmm11, 0x93
         shl     rax, 0x20
         or      rax, 0x40
-        movd    xmm3, rax
+        movq    xmm3, rax
         movdqa  xmmword ptr [rsp+0x20], xmm3
         movaps  xmm3, xmmword ptr [rsp]
         movaps  xmm11, xmmword ptr [rsp+0x10]
@@ -1917,7 +1917,7 @@ blake3_hash_many_sse2:
         movaps  xmm2, xmmword ptr [BLAKE3_IV+rip]
         shl     rax, 32
         or      rax, 64
-        movd    xmm12, rax
+        movq    xmm12, rax
         movdqa  xmm3, xmm13
         punpcklqdq xmm3, xmm12
         movups  xmm4, xmmword ptr [r8+rdx-0x40]
