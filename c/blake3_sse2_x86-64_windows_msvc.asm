@@ -1716,7 +1716,7 @@ innerloop2:
         pshufd  xmm15, xmm11, 93H
         shl     rax, 20H
         or      rax, 40H
-        movq    xmm3, rax
+        movd    xmm3, rax
         movdqa  xmmword ptr [rsp+20H], xmm3
         movaps  xmm3, xmmword ptr [rsp]
         movaps  xmm11, xmmword ptr [rsp+10H]
@@ -1929,7 +1929,7 @@ innerloop1:
         movaps  xmm2, xmmword ptr [BLAKE3_IV]
         shl     rax, 32
         or      rax, 64
-        movq    xmm12, rax
+        movd    xmm12, rax
         movdqa  xmm3, xmm13
         punpcklqdq xmm3, xmm12
         movups  xmm4, xmmword ptr [r8+rdx-40H]
@@ -2054,8 +2054,8 @@ _blake3_compress_in_place_sse2 PROC
         movzx   r8d, r8b
         shl     rax, 32
         add     r8, rax
-        movq    xmm3, r9
-        movq    xmm4, r8
+        movd    xmm3, r9
+        movd    xmm4, r8
         punpcklqdq xmm3, xmm4
         movups  xmm4, xmmword ptr [rdx]
         movups  xmm5, xmmword ptr [rdx+10H]
@@ -2186,8 +2186,8 @@ _blake3_compress_xof_sse2 PROC
         mov     r10, qword ptr [rsp+0A8H]
         shl     rax, 32
         add     r8, rax
-        movq    xmm3, r9
-        movq    xmm4, r8
+        movd    xmm3, r9
+        movd    xmm4, r8
         punpcklqdq xmm3, xmm4
         movups  xmm4, xmmword ptr [rdx]
         movups  xmm5, xmmword ptr [rdx+10H]
