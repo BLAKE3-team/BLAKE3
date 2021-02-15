@@ -14,7 +14,6 @@ extern "C" {
 #define BLAKE3_BLOCK_LEN 64
 #define BLAKE3_CHUNK_LEN 1024
 #define BLAKE3_MAX_DEPTH 54
-#define BLAKE3_MAX_SIMD_DEGREE 16
 
 // This struct is a private implementation detail. It has to be here because
 // it's part of blake3_hasher below.
