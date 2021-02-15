@@ -107,10 +107,10 @@ int main(int argc, char **argv) {
     argv += 2;
   }
 
-  /* 
+  /*
    * We're going to hash the input multiple times, so we need to buffer it all.
    * This is just for test cases, so go ahead and assume that the input is less
-   * than 1 MiB. 
+   * than 1 MiB.
    */
   size_t buf_capacity = 1 << 20;
   uint8_t *buf = malloc(buf_capacity);
