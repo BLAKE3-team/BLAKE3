@@ -181,13 +181,13 @@ widest instruction set available. By default, `blake3_dispatch.c`
 expects to be linked with code for five different instruction sets:
 portable C, SSE2, SSE4.1, AVX2, and AVX-512.
 
-For each of the x86 SIMD instruction sets, two versions are available,
-one in assembly (which is further divided into three flavors: Unix,
-Windows MSVC, and Windows GNU) and one using C intrinsics. The assembly
-versions are generally preferred: they perform better, they perform more
-consistently across different compilers, and they build more quickly. On
-the other hand, the assembly versions are x86\_64-only, and you need to
-select the right flavor for your target platform.
+For each of the x86 SIMD instruction sets, four versions are available:
+three flavors of assembly (Unix, Windows MSVC, and Windows GNU) and one
+version using C intrinsics. The assembly versions are generally
+preferred. They perform better, they perform more consistently across
+different compilers, and they build more quickly. On the other hand, the
+assembly versions are x86\_64-only, and you need to select the right
+flavor for your target platform.
 
 Here's an example of building a shared library on x86\_64 Linux using
 the assembly implementations:
