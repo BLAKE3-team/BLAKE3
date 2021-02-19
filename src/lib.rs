@@ -1356,6 +1356,26 @@ impl OutputReader {
         }
     }
 
+    /// Similar to [`fill`] but instead of overriding the buffer this method XOR the data.
+    ///
+    /// [`fill`]: #method.fill
+    pub fn xor(&mut self, mut buf: &mut [u8]) {
+        while !buf.is_empty() {
+            let block: [u8; BLOCK_LEN] = self.inner.root_output_block();
+            let output_bytes = &block[self.position_within_block as usize..];
+            let take = cmp::min(buf.len(), output_bytes.len());
+            for (data_b, key_b) in buf.iter_mut().zip(output_bytes[..take].iter()) {
+                *data_b ^= *key_b;
+            }
+            buf = &mut buf[take..];
+            self.position_within_block += take as u8;
+            if self.position_within_block == BLOCK_LEN as u8 {
+                self.inner.counter += 1;
+                self.position_within_block = 0;
+            }
+        }
+    }
+
     /// Return the current read position in the output stream. The position of
     /// a new `OutputReader` starts at 0, and each call to [`fill`] or
     /// [`Read::read`] moves the position forward by the number of bytes read.
