@@ -2421,8 +2421,8 @@ _blake3_compress_in_place_avx512 PROC
         movzx   r8d, r8b
         shl     rax, 32
         add     r8, rax
-        vmovd   xmm3, r9
-        vmovd   xmm4, r8
+        vmovq   xmm3, r9
+        vmovq   xmm4, r8
         vpunpcklqdq xmm3, xmm3, xmm4
         vmovaps xmm2, xmmword ptr [BLAKE3_IV]
         vmovups xmm8, xmmword ptr [rdx]
@@ -2516,8 +2516,8 @@ _blake3_compress_xof_avx512 PROC
         mov     r10, qword ptr [rsp+78H]
         shl     rax, 32
         add     r8, rax
-        vmovd   xmm3, r9
-        vmovd   xmm4, r8
+        vmovq   xmm3, r9
+        vmovq   xmm4, r8
         vpunpcklqdq xmm3, xmm3, xmm4
         vmovaps xmm2, xmmword ptr [BLAKE3_IV]
         vmovups xmm8, xmmword ptr [rdx]
