@@ -276,11 +276,12 @@ mod tests {
         assert_eq!(&expected_hash[..32], blake3::hash(input).as_bytes());
         assert_eq!(
             &expected_keyed_hash[..32],
-            &blake3::keyed_hash(key, input).as_bytes()[..],
+            blake3::keyed_hash(key, input).as_bytes(),
         );
-        let mut derive_key_out = vec![0; expected_derive_key.len()];
-        blake3::derive_key(TEST_CONTEXT, input, &mut derive_key_out);
-        assert_eq!(expected_derive_key, &derive_key_out[..],);
+        assert_eq!(
+            expected_derive_key[..32],
+            blake3::derive_key(TEST_CONTEXT, input)
+        );
     }
 
     #[test]

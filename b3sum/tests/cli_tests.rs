@@ -121,9 +121,7 @@ fn test_derive_key() {
     let f = tempfile::NamedTempFile::new().unwrap();
     f.as_file().write_all(b"key material").unwrap();
     f.as_file().flush().unwrap();
-    let mut derive_key_out = [0; blake3::OUT_LEN];
-    blake3::derive_key(context, b"key material", &mut derive_key_out);
-    let expected = hex::encode(&derive_key_out);
+    let expected = hex::encode(blake3::derive_key(context, b"key material"));
     let output = cmd!(b3sum_exe(), "--derive-key", context, "--no-names", f.path())
         .read()
         .unwrap();

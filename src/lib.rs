@@ -788,29 +788,31 @@ fn hash_all_at_once(input: &[u8], key: &CVWords, flags: u8) -> Output {
 
 /// The default hash function.
 ///
-/// For an incremental version that accepts multiple writes, see [`Hasher::update`].
+/// For an incremental version that accepts multiple writes, see
+/// [`Hasher::update`].
+///
+/// For output sizes other than 32 bytes, see [`Hasher::finalize_xof`] and
+/// [`OutputReader`].
 ///
 /// This function is always single-threaded. For multi-threading support, see
 /// [`Hasher::update_with_join`].
-///
-/// [`Hasher::update`]: struct.Hasher.html#method.update
-/// [`Hasher::update_with_join`]: struct.Hasher.html#method.update_with_join
 pub fn hash(input: &[u8]) -> Hash {
     hash_all_at_once(input, IV, 0).root_hash()
 }
 
 /// The keyed hash function.
 ///
-/// This is suitable for use as a message authentication code, for
-/// example to replace an HMAC instance.
-///  In that use case, the constant-time equality checking provided by
-/// [`Hash`](struct.Hash.html) is almost always a security requirement, and
-/// callers need to be careful not to compare MACs as raw bytes.
+/// This is suitable for use as a message authentication code, for example to
+/// replace an HMAC instance. In that use case, the constant-time equality
+/// checking provided by [`Hash`](struct.Hash.html) is almost always a security
+/// requirement, and callers need to be careful not to compare MACs as raw
+/// bytes.
+///
+/// For output sizes other than 32 bytes, see [`Hasher::new_keyed`],
+/// [`Hasher::finalize_xof`], and [`OutputReader`].
 ///
 /// This function is always single-threaded. For multi-threading support, see
 /// [`Hasher::update_with_join`].
-///
-/// [`Hasher::update_with_join`]: struct.Hasher.html#method.update_with_join
 pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
     let key_words = platform::words_from_le_bytes_32(key);
     hash_all_at_once(input, &key_words, KEYED_HASH).root_hash()
@@ -819,9 +821,9 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 /// The key derivation function.
 ///
 /// Given cryptographic key material of any length and a context string of any
-/// length, this function outputs a derived subkey of any length. **The context
-/// string should be hardcoded, globally unique, and application-specific.** A
-/// good default format for such strings is `"[application] [commit timestamp]
+/// length, this function outputs a 32-byte derived subkey. **The context string
+/// should be hardcoded, globally unique, and application-specific.** A good
+/// default format for such strings is `"[application] [commit timestamp]
 /// [purpose]"`, e.g., `"example.com 2019-12-25 16:18:03 session tokens v1"`.
 ///
 /// Key derivation is important when you want to use the same key in multiple
@@ -842,18 +844,19 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 /// [Argon2]. Password hashes are entirely different from generic hash
 /// functions, with opposite design requirements.
 ///
+/// For output sizes other than 32 bytes, see [`Hasher::new_derive_key`],
+/// [`Hasher::finalize_xof`], and [`OutputReader`].
+///
 /// This function is always single-threaded. For multi-threading support, see
 /// [`Hasher::update_with_join`].
 ///
-/// [`Hasher::new_derive_key`]: struct.Hasher.html#method.new_derive_key
-/// [`Hasher::finalize_xof`]: struct.Hasher.html#method.finalize_xof
 /// [Argon2]: https://en.wikipedia.org/wiki/Argon2
-/// [`Hasher::update_with_join`]: struct.Hasher.html#method.update_with_join
-pub fn derive_key(context: &str, key_material: &[u8], output: &mut [u8]) {
+pub fn derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
     let context_key = hash_all_at_once(context.as_bytes(), IV, DERIVE_KEY_CONTEXT).root_hash();
     let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
-    let inner_output = hash_all_at_once(key_material, &context_key_words, DERIVE_KEY_MATERIAL);
-    OutputReader::new(inner_output).fill(output);
+    hash_all_at_once(key_material, &context_key_words, DERIVE_KEY_MATERIAL)
+        .root_hash()
+        .0
 }
 
 fn parent_node_output(

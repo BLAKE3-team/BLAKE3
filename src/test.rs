@@ -284,7 +284,7 @@ fn test_compare_reference_impl() {
 
             // all at once
             let test_out = crate::hash(input);
-            assert_eq!(test_out, *array_ref!(expected_out, 0, 32));
+            assert_eq!(test_out, expected_out[..32]);
             // incremental
             let mut hasher = crate::Hasher::new();
             hasher.update(input);
@@ -293,7 +293,7 @@ fn test_compare_reference_impl() {
             // xof
             let mut extended = [0; OUT];
             hasher.finalize_xof().fill(&mut extended);
-            assert_eq!(extended[..], expected_out[..]);
+            assert_eq!(extended, expected_out);
         }
 
         // keyed
@@ -305,7 +305,7 @@ fn test_compare_reference_impl() {
 
             // all at once
             let test_out = crate::keyed_hash(&TEST_KEY, input);
-            assert_eq!(test_out, *array_ref!(expected_out, 0, 32));
+            assert_eq!(test_out, expected_out[..32]);
             // incremental
             let mut hasher = crate::Hasher::new_keyed(&TEST_KEY);
             hasher.update(input);
@@ -314,7 +314,7 @@ fn test_compare_reference_impl() {
             // xof
             let mut extended = [0; OUT];
             hasher.finalize_xof().fill(&mut extended);
-            assert_eq!(extended[..], expected_out[..]);
+            assert_eq!(extended, expected_out);
         }
 
         // derive_key
@@ -326,9 +326,8 @@ fn test_compare_reference_impl() {
             reference_hasher.finalize(&mut expected_out);
 
             // all at once
-            let mut test_out = [0; OUT];
-            crate::derive_key(context, input, &mut test_out);
-            assert_eq!(test_out[..], expected_out[..]);
+            let test_out = crate::derive_key(context, input);
+            assert_eq!(test_out[..], expected_out[..32]);
             // incremental
             let mut hasher = crate::Hasher::new_derive_key(context);
             hasher.update(input);
@@ -337,7 +336,7 @@ fn test_compare_reference_impl() {
             // xof
             let mut extended = [0; OUT];
             hasher.finalize_xof().fill(&mut extended);
-            assert_eq!(extended[..], expected_out[..]);
+            assert_eq!(extended, expected_out);
         }
     }
 }
@@ -501,8 +500,7 @@ fn test_reset() {
     kdf.update(&[42; 3 * CHUNK_LEN + 7]);
     kdf.reset();
     kdf.update(&[42; CHUNK_LEN + 3]);
-    let mut expected = [0; crate::OUT_LEN];
-    crate::derive_key(context, &[42; CHUNK_LEN + 3], &mut expected);
+    let expected = crate::derive_key(context, &[42; CHUNK_LEN + 3]);
     assert_eq!(kdf.finalize(), expected);
 }
 
