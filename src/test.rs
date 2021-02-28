@@ -326,9 +326,8 @@ fn test_compare_reference_impl() {
             reference_hasher.finalize(&mut expected_out);
 
             // all at once
-            let mut test_out = [0; OUT];
-            crate::derive_key(context, input, &mut test_out);
-            assert_eq!(test_out[..], expected_out[..]);
+            let test_out = crate::derive_key(context, input);
+            assert_eq!(test_out, expected_out);
             // incremental
             let mut hasher = crate::Hasher::new_derive_key(context);
             hasher.update(input);
@@ -501,8 +500,7 @@ fn test_reset() {
     kdf.update(&[42; 3 * CHUNK_LEN + 7]);
     kdf.reset();
     kdf.update(&[42; CHUNK_LEN + 3]);
-    let mut expected = [0; crate::OUT_LEN];
-    crate::derive_key(context, &[42; CHUNK_LEN + 3], &mut expected);
+    let expected = crate::derive_key(context, &[42; CHUNK_LEN + 3]);
     assert_eq!(kdf.finalize(), expected);
 }
 

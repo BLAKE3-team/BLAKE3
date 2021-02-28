@@ -841,11 +841,13 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 /// [`Hasher::finalize_xof`]: struct.Hasher.html#method.finalize_xof
 /// [Argon2]: https://en.wikipedia.org/wiki/Argon2
 /// [`Hasher::update_with_join`]: struct.Hasher.html#method.update_with_join
-pub fn derive_key(context: &str, key_material: &[u8], output: &mut [u8]) {
+pub fn derive_key<const N: usize>(context: &str, key_material: &[u8]) -> [u8; N] {
     let context_key = hash_all_at_once(context.as_bytes(), IV, DERIVE_KEY_CONTEXT).root_hash();
     let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
     let inner_output = hash_all_at_once(key_material, &context_key_words, DERIVE_KEY_MATERIAL);
-    OutputReader::new(inner_output).fill(output);
+    let mut ret = [0; N];
+    OutputReader::new(inner_output).fill(&mut ret);
+    ret
 }
 
 fn parent_node_output(
