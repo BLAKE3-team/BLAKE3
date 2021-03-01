@@ -1,7 +1,6 @@
 use crate::{CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, OUT_LEN};
 use arrayref::array_ref;
 use arrayvec::ArrayVec;
-use core::sync::atomic::{AtomicUsize, Ordering};
 use core::usize;
 use rand::prelude::*;
 
@@ -513,57 +512,6 @@ fn test_update_with_rayon_join() {
         .update_with_join::<crate::join::RayonJoin>(&input)
         .finalize();
     assert_eq!(crate::hash(&input), rayon_hash);
-}
-
-// Test that the length values given to Join::join are what they're supposed to
-// be.
-#[test]
-fn test_join_lengths() {
-    // Use static atomics to let us safely get a couple of values in and out of
-    // CustomJoin. This avoids depending on std, though it assumes that this
-    // thread will only run once in the lifetime of the runner process.
-    static SINGLE_THREAD_LEN: AtomicUsize = AtomicUsize::new(0);
-    static CUSTOM_JOIN_CALLS: AtomicUsize = AtomicUsize::new(0);
-
-    // Use an input that's exactly (simd_degree * CHUNK_LEN) + 1. That should
-    // guarantee that compress_subtree_wide does exactly one split, with the
-    // last byte on the right side. Note that it we used
-    // Hasher::update_with_join, we would end up buffering that last byte,
-    // rather than splitting and joining it.
-    let single_thread_len = crate::platform::Platform::detect().simd_degree() * CHUNK_LEN;
-    SINGLE_THREAD_LEN.store(single_thread_len, Ordering::SeqCst);
-    let mut input_buf = [0; 2 * crate::platform::MAX_SIMD_DEGREE * CHUNK_LEN];
-    paint_test_input(&mut input_buf);
-    let input = &input_buf[..single_thread_len + 1];
-
-    enum CustomJoin {}
-
-    impl crate::join::Join for CustomJoin {
-        fn join<A, B, RA, RB>(oper_a: A, oper_b: B, len_a: usize, len_b: usize) -> (RA, RB)
-        where
-            A: FnOnce() -> RA + Send,
-            B: FnOnce() -> RB + Send,
-            RA: Send,
-            RB: Send,
-        {
-            let prev_calls = CUSTOM_JOIN_CALLS.fetch_add(1, Ordering::SeqCst);
-            assert_eq!(prev_calls, 0);
-            assert_eq!(len_a, SINGLE_THREAD_LEN.load(Ordering::SeqCst));
-            assert_eq!(len_b, 1);
-            (oper_a(), oper_b())
-        }
-    }
-
-    let mut out_buf = [0; crate::platform::MAX_SIMD_DEGREE_OR_2 * CHUNK_LEN];
-    crate::compress_subtree_wide::<CustomJoin>(
-        input,
-        crate::IV,
-        0,
-        0,
-        crate::platform::Platform::detect(),
-        &mut out_buf,
-    );
-    assert_eq!(CUSTOM_JOIN_CALLS.load(Ordering::SeqCst), 1);
 }
 
 #[test]

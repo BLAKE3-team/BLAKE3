@@ -51,8 +51,6 @@
 //!
 //! [BLAKE3]: https://blake3.io
 //! [Rayon]: https://github.com/rayon-rs/rayon
-//! [`join::RayonJoin`]: join/enum.RayonJoin.html
-//! [`Hasher::update_with_join`]: struct.Hasher.html#method.update_with_join
 //! [docs.rs]: https://docs.rs/
 //! [`Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
 //! [`Seek`]: https://doc.rust-lang.org/std/io/trait.Seek.html
@@ -103,7 +101,7 @@ mod sse41;
 
 pub mod traits;
 
-pub mod join;
+mod join;
 
 use arrayref::{array_mut_ref, array_ref};
 use arrayvec::{ArrayString, ArrayVec};
@@ -697,12 +695,11 @@ fn compress_subtree_wide<J: Join>(
     };
     let (left_out, right_out) = cv_array.split_at_mut(degree * OUT_LEN);
 
-    // Recurse! This uses multiple threads if the "rayon" feature is enabled.
+    // Recurse! For *_rayon functions, this is where we take advantage of RayonJoin and use
+    // multiple threads.
     let (left_n, right_n) = J::join(
         || compress_subtree_wide::<J>(left, key, chunk_counter, flags, platform, left_out),
         || compress_subtree_wide::<J>(right, key, right_chunk_counter, flags, platform, right_out),
-        left.len(),
-        right.len(),
     );
 
     // The special case again. If simd_degree=1, then we'll have left_n=1 and
