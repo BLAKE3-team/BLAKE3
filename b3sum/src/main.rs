@@ -74,10 +74,10 @@ impl Args {
                     .long(DERIVE_KEY_ARG)
                     .conflicts_with(KEYED_ARG)
                     .takes_value(true)
-                    .value_name("CONTEXT")
+                    .value_name("PURPOSE")
                     .help(
                         "Uses the key derivation mode, with the given\n\
-                         context string. Cannot be used with --keyed.",
+                         purpose string. Cannot be used with --keyed.",
                     ),
             )
             .arg(Arg::with_name(NO_MMAP_ARG).long(NO_MMAP_ARG).help(
@@ -129,8 +129,8 @@ impl Args {
             // In keyed mode, since stdin is used for the key, we can't handle
             // `-` arguments. Input::open handles that case below.
             blake3::Hasher::new_keyed(&read_key_from_stdin()?)
-        } else if let Some(context) = inner.value_of(DERIVE_KEY_ARG) {
-            blake3::Hasher::new_derive_key(context)
+        } else if let Some(purpose) = inner.value_of(DERIVE_KEY_ARG) {
+            blake3::Hasher::new_derive_key(purpose)
         } else {
             blake3::Hasher::new()
         };

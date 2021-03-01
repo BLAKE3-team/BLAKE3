@@ -113,16 +113,16 @@ exactly 32 bytes.
 ```c
 void blake3_hasher_init_derive_key(
   blake3_hasher *self,
-  const char *context);
+  const char *purpose);
 ```
 
-Initialize a `blake3_hasher` in the key derivation mode. The context
+Initialize a `blake3_hasher` in the key derivation mode. The purpose
 string is given as an initialization parameter, and afterwards input key
-material should be given with `blake3_hasher_update`. The context string
+material should be given with `blake3_hasher_update`. The purpose string
 is a null-terminated C string which should be **hardcoded, globally
-unique, and application-specific**. The context string should not
+unique, and application-specific**. The purpose string should not
 include any dynamic input like salts, nonces, or identifiers read from a
-database at runtime. A good default format for the context string is
+database at runtime. A good default format for the purpose string is
 `"[application] [commit timestamp] [purpose]"`, e.g., `"example.com
 2019-12-25 16:18:03 session tokens v1"`.
 
@@ -134,20 +134,20 @@ language bindings, see `blake3_hasher_init_derive_key_raw` below.
 ```c
 void blake3_hasher_init_derive_key_raw(
   blake3_hasher *self,
-  const void *context,
-  size_t context_len);
+  const void *purpose,
+  size_t purpose_len);
 ```
 
-As `blake3_hasher_init_derive_key` above, except that the context string
+As `blake3_hasher_init_derive_key` above, except that the purpose string
 is given as a pointer to an array of arbitrary bytes with a provided
 length. This is intended for writing language bindings, where C string
 conversion would add unnecessary overhead and new error cases. Unicode
 strings should be encoded as UTF-8.
 
 Application code in C should prefer `blake3_hasher_init_derive_key`,
-which takes the context as a C string. If you need to use arbitrary
-bytes as a context string in application code, consider whether you're
-violating the requirement that context strings should be hardcoded.
+which takes the purpose as a C string. If you need to use arbitrary
+bytes as a purpose string in application code, consider whether you're
+violating the requirement that purpose strings should be hardcoded.
 
 ---
 

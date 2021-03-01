@@ -319,17 +319,17 @@ fn test_compare_reference_impl() {
 
         // derive_key
         {
-            let context = "BLAKE3 2019-12-27 16:13:59 example context (not the test vector one)";
-            let mut reference_hasher = reference_impl::Hasher::new_derive_key(context);
+            let purpose = "BLAKE3 2019-12-27 16:13:59 example context (not the test vector one)";
+            let mut reference_hasher = reference_impl::Hasher::new_derive_key(purpose);
             reference_hasher.update(input);
             let mut expected_out = [0; OUT];
             reference_hasher.finalize(&mut expected_out);
 
             // all at once
-            let test_out = crate::derive_key(context, input);
+            let test_out = crate::derive_key(purpose, input);
             assert_eq!(test_out[..], expected_out[..32]);
             // incremental
-            let mut hasher = crate::Hasher::new_derive_key(context);
+            let mut hasher = crate::Hasher::new_derive_key(purpose);
             hasher.update(input);
             assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
             assert_eq!(hasher.finalize(), *array_ref!(test_out, 0, 32));
@@ -495,12 +495,12 @@ fn test_reset() {
         crate::keyed_hash(key, &[42; CHUNK_LEN + 3]),
     );
 
-    let context = "BLAKE3 2020-02-12 10:20:58 reset test";
-    let mut kdf = crate::Hasher::new_derive_key(context);
+    let purpose = "BLAKE3 2020-02-12 10:20:58 reset test";
+    let mut kdf = crate::Hasher::new_derive_key(purpose);
     kdf.update(&[42; 3 * CHUNK_LEN + 7]);
     kdf.reset();
     kdf.update(&[42; CHUNK_LEN + 3]);
-    let expected = crate::derive_key(context, &[42; CHUNK_LEN + 3]);
+    let expected = crate::derive_key(purpose, &[42; CHUNK_LEN + 3]);
     assert_eq!(kdf.finalize(), expected);
 }
 

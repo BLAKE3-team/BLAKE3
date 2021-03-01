@@ -26,8 +26,8 @@ FLAGS:
     -V, --version     Prints version information
 
 OPTIONS:
-        --derive-key <CONTEXT>    Uses the key derivation mode, with the given
-                                  context string. Cannot be used with --keyed.
+        --derive-key <PURPOSE>    Uses the key derivation mode, with the given
+                                  purpose string. Cannot be used with --keyed.
     -l, --length <LEN>            The number of output bytes, prior to hex
                                   encoding (default 32)
         --num-threads <NUM>       The maximum number of threads to use. By

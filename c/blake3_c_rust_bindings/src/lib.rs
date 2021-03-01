@@ -55,22 +55,22 @@ impl Hasher {
         }
     }
 
-    pub fn new_derive_key(context: &str) -> Self {
+    pub fn new_derive_key(purpose: &str) -> Self {
         let mut c_state = MaybeUninit::uninit();
-        let context_c_string = CString::new(context).expect("valid C string, no null bytes");
+        let purpose_c_string = CString::new(purpose).expect("valid C string, no null bytes");
         unsafe {
-            ffi::blake3_hasher_init_derive_key(c_state.as_mut_ptr(), context_c_string.as_ptr());
+            ffi::blake3_hasher_init_derive_key(c_state.as_mut_ptr(), purpose_c_string.as_ptr());
             Self(c_state.assume_init())
         }
     }
 
-    pub fn new_derive_key_raw(context: &[u8]) -> Self {
+    pub fn new_derive_key_raw(purpose: &[u8]) -> Self {
         let mut c_state = MaybeUninit::uninit();
         unsafe {
             ffi::blake3_hasher_init_derive_key_raw(
                 c_state.as_mut_ptr(),
-                context.as_ptr() as *const _,
-                context.len(),
+                purpose.as_ptr() as *const _,
+                purpose.len(),
             );
             Self(c_state.assume_init())
         }
@@ -122,12 +122,12 @@ pub mod ffi {
         pub fn blake3_hasher_init_keyed(self_: *mut blake3_hasher, key: *const u8);
         pub fn blake3_hasher_init_derive_key(
             self_: *mut blake3_hasher,
-            context: *const ::std::os::raw::c_char,
+            purpose: *const ::std::os::raw::c_char,
         );
         pub fn blake3_hasher_init_derive_key_raw(
             self_: *mut blake3_hasher,
-            context: *const ::std::os::raw::c_void,
-            context_len: usize,
+            purpose: *const ::std::os::raw::c_void,
+            purpose_len: usize,
         );
         pub fn blake3_hasher_update(
             self_: *mut blake3_hasher,

@@ -73,7 +73,7 @@ enum cpu_feature get_cpu_features();
 int main(int argc, char **argv) {
   size_t out_len = BLAKE3_OUT_LEN;
   uint8_t key[BLAKE3_KEY_LEN];
-  char *context = "";
+  char *purpose = "";
   uint8_t mode = HASH_MODE;
   while (argc > 1) {
     if (argc <= 2) {
@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
       }
     } else if (strcmp("--derive-key", argv[1]) == 0) {
       mode = DERIVE_KEY_MODE;
-      context = argv[2];
+      purpose = argv[2];
     } else {
       fprintf(stderr, "Unknown flag.\n");
       return 1;
@@ -139,7 +139,7 @@ int main(int argc, char **argv) {
       blake3_hasher_init_keyed(&hasher, key);
       break;
     case DERIVE_KEY_MODE:
-      blake3_hasher_init_derive_key(&hasher, context);
+      blake3_hasher_init_derive_key(&hasher, purpose);
       break;
     default:
       abort();

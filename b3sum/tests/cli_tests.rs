@@ -117,12 +117,12 @@ fn test_keyed() {
 
 #[test]
 fn test_derive_key() {
-    let context = "BLAKE3 2019-12-28 10:28:41 example context";
+    let purpose = "BLAKE3 2019-12-28 10:28:41 example context";
     let f = tempfile::NamedTempFile::new().unwrap();
     f.as_file().write_all(b"key material").unwrap();
     f.as_file().flush().unwrap();
-    let expected = hex::encode(blake3::derive_key(context, b"key material"));
-    let output = cmd!(b3sum_exe(), "--derive-key", context, "--no-names", f.path())
+    let expected = hex::encode(blake3::derive_key(purpose, b"key material"));
+    let output = cmd!(b3sum_exe(), "--derive-key", purpose, "--no-names", f.path())
         .read()
         .unwrap();
     assert_eq!(&*expected, &*output);

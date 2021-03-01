@@ -390,21 +390,21 @@ fn test_compare_reference_impl() {
 
         // derive_key
         {
-            let context = "BLAKE3 2019-12-27 16:13:59 example context (not the test vector one)";
-            let mut reference_hasher = reference_impl::Hasher::new_derive_key(context);
+            let purpose = "BLAKE3 2019-12-27 16:13:59 example context (not the test vector one)";
+            let mut reference_hasher = reference_impl::Hasher::new_derive_key(purpose);
             reference_hasher.update(input);
             let mut expected_out = [0; OUT];
             reference_hasher.finalize(&mut expected_out);
 
             // the regular C string API
-            let mut test_hasher = crate::Hasher::new_derive_key(context);
+            let mut test_hasher = crate::Hasher::new_derive_key(purpose);
             test_hasher.update(input);
             let mut test_out = [0; OUT];
             test_hasher.finalize(&mut test_out);
             assert_eq!(test_out[..], expected_out[..]);
 
             // the raw bytes API
-            let mut test_hasher_raw = crate::Hasher::new_derive_key_raw(context.as_bytes());
+            let mut test_hasher_raw = crate::Hasher::new_derive_key_raw(purpose.as_bytes());
             test_hasher_raw.update(input);
             let mut test_out_raw = [0; OUT];
             test_hasher_raw.finalize(&mut test_out_raw);

@@ -820,11 +820,11 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 
 /// The key derivation function.
 ///
-/// Given cryptographic key material of any length and a context string of any
-/// length, this function outputs a 32-byte derived subkey. **The context string
-/// should be hardcoded, globally unique, and application-specific.** A good
-/// default format for such strings is `"[application] [commit timestamp]
-/// [purpose]"`, e.g., `"example.com 2019-12-25 16:18:03 session tokens v1"`.
+/// Given a purpose string of any length and key material of any length, this
+/// function outputs a 32-byte derived subkey. **The purpose string should be
+/// hardcoded, globally unique, and application-specific.** A good default
+/// format for such strings is `"[application] [commit timestamp] [purpose]"`,
+/// e.g., `"example.com 2019-12-25 16:18:03 session tokens v1"`.
 ///
 /// Key derivation is important when you want to use the same key in multiple
 /// algorithms or use cases. Using the same key with different cryptographic
@@ -851,10 +851,10 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 /// [`Hasher::update_with_join`].
 ///
 /// [Argon2]: https://en.wikipedia.org/wiki/Argon2
-pub fn derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
-    let context_key = hash_all_at_once(context.as_bytes(), IV, DERIVE_KEY_CONTEXT).root_hash();
-    let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
-    hash_all_at_once(key_material, &context_key_words, DERIVE_KEY_MATERIAL)
+pub fn derive_key(purpose: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
+    let purpose_key = hash_all_at_once(purpose.as_bytes(), IV, DERIVE_KEY_CONTEXT).root_hash();
+    let purpose_key_words = platform::words_from_le_bytes_32(purpose_key.as_bytes());
+    hash_all_at_once(key_material, &purpose_key_words, DERIVE_KEY_MATERIAL)
         .root_hash()
         .0
 }
@@ -950,20 +950,20 @@ impl Hasher {
     }
 
     /// Construct a new `Hasher` for the key derivation function. See
-    /// [`derive_key`]. The context string should be hardcoded, globally
+    /// [`derive_key`]. The purpose string should be hardcoded, globally
     /// unique, and application-specific.
     ///
     /// [`derive_key`]: fn.derive_key.html
-    pub fn new_derive_key(context: &str) -> Self {
-        let context_key = hash_all_at_once(context.as_bytes(), IV, DERIVE_KEY_CONTEXT).root_hash();
-        let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
-        Self::new_internal(&context_key_words, DERIVE_KEY_MATERIAL)
+    pub fn new_derive_key(purpose: &str) -> Self {
+        let purpose_key = hash_all_at_once(purpose.as_bytes(), IV, DERIVE_KEY_CONTEXT).root_hash();
+        let purpose_key_words = platform::words_from_le_bytes_32(purpose_key.as_bytes());
+        Self::new_internal(&purpose_key_words, DERIVE_KEY_MATERIAL)
     }
 
     /// Reset the `Hasher` to its initial state.
     ///
     /// This is functionally the same as overwriting the `Hasher` with a new
-    /// one, using the same key or context string if any. However, depending on
+    /// one, using the same key or purpose string if any. However, depending on
     /// how much inlining the optimizer does, moving a `Hasher` might copy its
     /// entire CV stack, most of which is useless uninitialized bytes. This
     /// methods avoids that copy.

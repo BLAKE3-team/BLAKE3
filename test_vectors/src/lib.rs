@@ -44,16 +44,16 @@ pub const TEST_CASES: &[usize] = &[
 ];
 
 pub const TEST_KEY: &[u8; blake3::KEY_LEN] = b"whats the Elvish word for friend";
-pub const TEST_CONTEXT: &str = "BLAKE3 2019-12-27 16:29:52 test vectors context";
+pub const TEST_PURPOSE: &str = "BLAKE3 2019-12-27 16:29:52 test vectors context";
 
 const COMMENT: &str = r#"
 Each test is an input length and three outputs, one for each of the hash,
 keyed_hash, and derive_key modes. The input in each case is filled with a
 repeating sequence of 251 bytes: 0, 1, 2, ..., 249, 250, 0, 1, ..., and so on.
 The key used with keyed_hash is the 32-byte ASCII string "whats the Elvish word
-for friend", also given in the `key` field below. The context string used with
+for friend", also given in the `key` field below. The purpose string used with
 derive_key is the ASCII string "BLAKE3 2019-12-27 16:29:52 test vectors
-context", also given in the `context_string` field below. Outputs are encoded
+context", also given in the `purpose_string` field below. Outputs are encoded
 as hexadecimal. Each case is an extended output, and implementations should
 also check that the first 32 bytes match their default-length output.
 "#;
@@ -72,7 +72,7 @@ pub fn paint_test_input(buf: &mut [u8]) {
 pub struct Cases {
     pub _comment: String,
     pub key: String,
-    pub context_string: String,
+    pub purpose_string: String,
     pub cases: Vec<Case>,
 }
 
@@ -103,7 +103,7 @@ pub fn generate_json() -> String {
             .fill(&mut keyed_hash_out);
 
         let mut derive_key_out = [0; OUTPUT_LEN];
-        blake3::Hasher::new_derive_key(TEST_CONTEXT)
+        blake3::Hasher::new_derive_key(TEST_PURPOSE)
             .update(&input)
             .finalize_xof()
             .fill(&mut derive_key_out);
@@ -119,7 +119,7 @@ pub fn generate_json() -> String {
     let mut json = serde_json::to_string_pretty(&Cases {
         _comment: COMMENT.trim().replace("\n", " "),
         key: std::str::from_utf8(TEST_KEY).unwrap().to_string(),
-        context_string: TEST_CONTEXT.to_string(),
+        purpose_string: TEST_PURPOSE.to_string(),
         cases,
     })
     .unwrap();
@@ -164,7 +164,7 @@ mod tests {
         assert_eq!(expected_keyed_hash, &out[..]);
 
         let mut out = vec![0; expected_derive_key.len()];
-        let mut hasher = reference_impl::Hasher::new_derive_key(TEST_CONTEXT);
+        let mut hasher = reference_impl::Hasher::new_derive_key(TEST_PURPOSE);
         hasher.update(input);
         hasher.finalize(&mut out);
         assert_eq!(expected_derive_key, &out[..]);
@@ -194,7 +194,7 @@ mod tests {
         assert_eq!(expected_keyed_hash, &out[..]);
 
         let mut out = vec![0; expected_derive_key.len()];
-        let mut hasher = reference_impl::Hasher::new_derive_key(TEST_CONTEXT);
+        let mut hasher = reference_impl::Hasher::new_derive_key(TEST_PURPOSE);
         for &b in input {
             hasher.update(&[b]);
         }
@@ -224,7 +224,7 @@ mod tests {
         assert_eq!(&expected_keyed_hash[..32], hasher.finalize().as_bytes());
 
         let mut out = vec![0; expected_derive_key.len()];
-        let mut hasher = blake3::Hasher::new_derive_key(TEST_CONTEXT);
+        let mut hasher = blake3::Hasher::new_derive_key(TEST_PURPOSE);
         hasher.update(input);
         hasher.finalize_xof().fill(&mut out);
         assert_eq!(expected_derive_key, &out[..]);
@@ -257,7 +257,7 @@ mod tests {
         assert_eq!(&expected_keyed_hash[..32], hasher.finalize().as_bytes());
 
         let mut out = vec![0; expected_derive_key.len()];
-        let mut hasher = blake3::Hasher::new_derive_key(TEST_CONTEXT);
+        let mut hasher = blake3::Hasher::new_derive_key(TEST_PURPOSE);
         for &b in input {
             hasher.update(&[b]);
         }
@@ -280,7 +280,7 @@ mod tests {
         );
         assert_eq!(
             expected_derive_key[..32],
-            blake3::derive_key(TEST_CONTEXT, input)
+            blake3::derive_key(TEST_PURPOSE, input)
         );
     }
 

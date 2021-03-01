@@ -304,16 +304,16 @@ impl Hasher {
         Self::new_internal(key_words, KEYED_HASH)
     }
 
-    /// Construct a new `Hasher` for the key derivation function. The context
+    /// Construct a new `Hasher` for the key derivation function. The purpose
     /// string should be hardcoded, globally unique, and application-specific.
-    pub fn new_derive_key(context: &str) -> Self {
-        let mut context_hasher = Self::new_internal(IV, DERIVE_KEY_CONTEXT);
-        context_hasher.update(context.as_bytes());
-        let mut context_key = [0; KEY_LEN];
-        context_hasher.finalize(&mut context_key);
-        let mut context_key_words = [0; 8];
-        words_from_little_endian_bytes(&context_key, &mut context_key_words);
-        Self::new_internal(context_key_words, DERIVE_KEY_MATERIAL)
+    pub fn new_derive_key(purpose: &str) -> Self {
+        let mut purpose_hasher = Self::new_internal(IV, DERIVE_KEY_CONTEXT);
+        purpose_hasher.update(purpose.as_bytes());
+        let mut purpose_key = [0; KEY_LEN];
+        purpose_hasher.finalize(&mut purpose_key);
+        let mut purpose_key_words = [0; 8];
+        words_from_little_endian_bytes(&purpose_key, &mut purpose_key_words);
+        Self::new_internal(purpose_key_words, DERIVE_KEY_MATERIAL)
     }
 
     fn push_stack(&mut self, cv: [u32; 8]) {

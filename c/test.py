@@ -36,7 +36,7 @@ def main():
         input_len = case["input_len"]
         input = make_test_input(input_len)
         hex_key = hexlify(TEST_VECTORS["key"].encode())
-        context_string = TEST_VECTORS["context_string"]
+        purpose_string = TEST_VECTORS["purpose_string"]
         expected_hash_xof = case["hash"]
         expected_hash = expected_hash_xof[:64]
         expected_keyed_hash_xof = case["keyed_hash"]
@@ -76,7 +76,7 @@ def main():
                     input_len, expected_keyed_hash_xof, line)
 
         # Test the default derive key.
-        test_derive_key = run_blake3(["--derive-key", context_string], input)
+        test_derive_key = run_blake3(["--derive-key", purpose_string], input)
         for line in test_derive_key.splitlines():
             assert expected_derive_key == line, \
                 "derive_key({}): {} != {}".format(
@@ -85,7 +85,7 @@ def main():
         # Test the extended derive key.
         xof_len = len(expected_derive_key_xof) // 2
         test_derive_key_xof = run_blake3(
-            ["--derive-key", context_string, "--length",
+            ["--derive-key", purpose_string, "--length",
              str(xof_len)], input)
         for line in test_derive_key_xof.splitlines():
             assert expected_derive_key_xof == line, \
