@@ -219,7 +219,7 @@ impl Input {
             // multiple threads. This doesn't work on stdin, or on some files,
             // and it can also be disabled with --no-mmap.
             Self::Mmap(cursor) => {
-                hasher.update_with_join::<blake3::join::RayonJoin>(cursor.get_ref());
+                hasher.update_rayon(cursor.get_ref());
             }
             // The slower paths, for stdin or files we didn't/couldn't mmap.
             // This is currently all single-threaded. Doing multi-threaded

@@ -1,11 +1,12 @@
-//! The multi-threading abstractions used by [`Hasher::update_with_join`].
+//! The multi-threading abstractions used by `Hasher::update_with_join`.
 //!
 //! Different implementations of the `Join` trait determine whether
-//! [`Hasher::update_with_join`] performs multi-threading on sufficiently large
+//! `Hasher::update_with_join` performs multi-threading on sufficiently large
 //! inputs. The `SerialJoin` implementation is single-threaded, and the
-//! `RayonJoin` implementation (gated by the `rayon` feature) is
-//! multi-threaded. Interfaces other than [`Hasher::update_with_join`], like
-//! [`hash`] and [`Hasher::update`], always use `SerialJoin` internally.
+//! `RayonJoin` implementation (gated by the `rayon` feature) is multi-threaded.
+//! Interfaces other than `Hasher::update_with_join`, like [`hash`](crate::hash)
+//! and [`Hasher::update`](crate::Hasher::update), always use `SerialJoin`
+//! internally.
 //!
 //! The `Join` trait is an almost exact copy of the [`rayon::join`] API, and
 //! `RayonJoin` is the only non-trivial implementation. Previously this trait

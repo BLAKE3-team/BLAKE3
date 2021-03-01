@@ -25,10 +25,9 @@ neon = []
 # entire build, with e.g. RUSTFLAGS="-C target-cpu=native".
 std = ["digest/std"]
 
-# The "rayon" feature (defined below as an optional dependency) enables the
-# join::RayonJoin type, which can be used with Hasher::update_with_join to
-# perform multi-threaded hashing. However, even if this feature is enabled, all
-# other APIs remain single-threaded.
+# The "rayon" feature (defined below as an optional dependency) enables API
+# functions like `hash_rayon` and `update_rayon`. However, even if this feature
+# is enabled, all other APIs remain single-threaded.
 
 # ---------- Features below this line are for internal testing only. ----------
 
