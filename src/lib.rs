@@ -32,23 +32,27 @@
 //!
 //! # Cargo Features
 //!
-//! The `rayon` feature provides [Rayon]-based multi-threading, via functions
-//! with the `_rayon` suffix. It is disabled by default, but enabled for
-//! [docs.rs].
+//! The `std` feature (enabled by default) is required for implementations of
+//! the [`Write`] and [`Seek`] traits, and also for runtime CPU feature
+//! detection. If this feature is disabled, the only way to use the SIMD
+//! implementations in this crate is to enable the corresponding instruction
+//! sets globally, with e.g. `RUSTFLAGS="-C target-cpu=native"`. The resulting
+//! binary will not be portable to other machines.
+//!
+//! The `rayon` feature (disabled by default, but enabled for [docs.rs]) adds
+//! new functions that use [Rayon]-based multithreading internally:
+//! [`Hasher::update_rayon`], [`hash_rayon`], [`keyed_hash_rayon`], and
+//! [`derive_key_rayon`].
 //!
 //! The `neon` feature enables ARM NEON support. Currently there is no runtime
 //! CPU feature detection for NEON, so you must only enable this feature for
 //! targets that are known to have NEON support. In particular, some ARMv7
 //! targets support NEON, and some don't.
 //!
-//! The `std` feature (enabled by default) is required for implementations of
-//! the [`Write`] and [`Seek`] traits, and also for runtime CPU feature
-//! detection. If this feature is disabled, the only way to use the SIMD
-//! implementations in this crate is to enable the corresponding instruction
-//! sets statically for the entire build, with e.g. `RUSTFLAGS="-C
-//! target-cpu=native"`. The resulting binary will not be portable to other
-//! machines.
-//!
+//! [`Hasher::update_rayon`]: struct.Hasher.html#method.update_rayon
+//! [`hash_rayon`]: fn.hash_rayon.html
+//! [`keyed_hash_rayon`]: fn.keyed_hash_rayon.html
+//! [`derive_key_rayon`]: fn.derive_key_rayon.html
 //! [BLAKE3]: https://blake3.io
 //! [Rayon]: https://github.com/rayon-rs/rayon
 //! [docs.rs]: https://docs.rs/
@@ -508,7 +512,7 @@ impl fmt::Debug for ChunkState {
 // and for the incremental input with Hasher (though we have to be careful with
 // subtree boundaries in the incremental case). compress_subtree_wide() applies
 // several optimizations at the same time:
-// - Multi-threading with Rayon.
+// - Multithreading with Rayon.
 // - Parallel chunk hashing with SIMD.
 // - Parallel parent hashing with SIMD. Note that while SIMD chunk hashing
 //   maxes out at MAX_SIMD_DEGREE*CHUNK_LEN, parallel parent hashing continues
@@ -657,7 +661,7 @@ fn compress_parents_parallel(
 //
 // Why not just have the caller split the input on the first update(), instead
 // of implementing this special rule? Because we don't want to limit SIMD or
-// multi-threading parallelism for that update().
+// multithreading parallelism for that update().
 fn compress_subtree_wide<J: join::Join>(
     input: &[u8],
     key: &CVWords,
@@ -667,7 +671,7 @@ fn compress_subtree_wide<J: join::Join>(
     out: &mut [u8],
 ) -> usize {
     // Note that the single chunk case does *not* bump the SIMD degree up to 2
-    // when it is 1. This allows Rayon the option of multi-threading even the
+    // when it is 1. This allows Rayon the option of multithreading even the
     // 2-chunk case, which can help performance on smaller platforms.
     if input.len() <= platform.simd_degree() * CHUNK_LEN {
         return compress_chunks_parallel(input, key, chunk_counter, flags, platform, out);
@@ -790,20 +794,18 @@ fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8) -> Ou
 /// For output sizes other than 32 bytes, see [`Hasher::finalize_xof`] and
 /// [`OutputReader`].
 ///
-/// This function is always single-threaded. For multi-threading support, see
-/// the [`hash_rayon`](hash_rayon) function (enabled by the `rayon` Cargo
-/// feature).
+/// This function is always single-threaded. For multithreading support, see
+/// the [`hash_rayon`](fn.hash_rayon.html) function (enabled by the `rayon`
+/// Cargo feature).
 pub fn hash(input: &[u8]) -> Hash {
     hash_all_at_once::<join::SerialJoin>(input, IV, 0).root_hash()
 }
 
-/// Like [`hash`], but using Rayon-based multithreading used as a performance
-/// optimization.
+/// Identical to [`hash`], but using Rayon-based multithreading internally.
 ///
-/// To get any performance benefit from multi-threading, the input needs to be
-/// very large. As a rule of thumb on x86_64, there is no benefit to
-/// multi-threading inputs less than 128 KiB. Other platforms have different
-/// thresholds, and in general you need to benchmark your specific use case.
+/// Multithreading isn't always helpful for performance, and it's a good idea to
+/// benchmark your specific use case. See performance notes on
+/// [`Hasher::update_rayon`].
 #[cfg(feature = "rayon")]
 pub fn hash_rayon(input: &[u8]) -> Hash {
     hash_all_at_once::<join::RayonJoin>(input, IV, 0).root_hash()
@@ -820,21 +822,20 @@ pub fn hash_rayon(input: &[u8]) -> Hash {
 /// For output sizes other than 32 bytes, see [`Hasher::new_keyed`],
 /// [`Hasher::finalize_xof`], and [`OutputReader`].
 ///
-/// This function is always single-threaded. For multi-threading support, see
-/// the [`keyed_hash_rayon`](keyed_hash_rayon) function (enabled by the `rayon`
-/// Cargo feature).
+/// This function is always single-threaded. For multithreading support, see
+/// the [`keyed_hash_rayon`](fn.keyed_hash_rayon.html) function (enabled by the
+/// `rayon` Cargo feature).
 pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
     let key_words = platform::words_from_le_bytes_32(key);
     hash_all_at_once::<join::SerialJoin>(input, &key_words, KEYED_HASH).root_hash()
 }
 
-/// Like [`keyed_hash`], but using Rayon-based multithreading as a performance
-/// optimization.
+/// Identical to [`keyed_hash`], but using Rayon-based multithreading
+/// internally.
 ///
-/// To get any performance benefit from multi-threading, the input needs to be
-/// very large. As a rule of thumb on x86_64, there is no benefit to
-/// multi-threading inputs less than 128 KiB. Other platforms have different
-/// thresholds, and in general you need to benchmark your specific use case.
+/// Multithreading isn't always helpful for performance, and it's a good idea to
+/// benchmark your specific use case. See performance notes on
+/// [`Hasher::update_rayon`].
 #[cfg(feature = "rayon")]
 pub fn keyed_hash_rayon(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
     let key_words = platform::words_from_le_bytes_32(key);
@@ -870,9 +871,9 @@ pub fn keyed_hash_rayon(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 /// For output sizes other than 32 bytes, see [`Hasher::new_derive_key`],
 /// [`Hasher::finalize_xof`], and [`OutputReader`].
 ///
-/// This function is always single-threaded. For multi-threading support, see
-/// the [`derive_key_rayon`](derive_key_rayon) function (enabled by the `rayon`
-/// Cargo feature).
+/// This function is always single-threaded. For multithreading support, see
+/// the [`derive_key_rayon`](fn.derive_key_rayon.html) function (enabled by the
+/// `rayon` Cargo feature).
 ///
 /// [Argon2]: https://en.wikipedia.org/wiki/Argon2
 pub fn derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
@@ -885,13 +886,12 @@ pub fn derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
         .0
 }
 
-/// Like [`derive_key`], but using Rayon-based multithreading as a performance
-/// optimization.
+/// Identical to [`derive_key`], but using Rayon-based multithreading
+/// internally.
 ///
-/// To get any performance benefit from multi-threading, the input needs to be
-/// very large. As a rule of thumb on x86_64, there is no benefit to
-/// multi-threading inputs less than 128 KiB. Other platforms have different
-/// thresholds, and in general you need to benchmark your specific use case.
+/// Multithreading isn't always helpful for performance, and it's a good idea to
+/// benchmark your specific use case. See performance notes on
+/// [`Hasher::update_rayon`].
 #[cfg(feature = "rayon")]
 pub fn derive_key_rayon(context: &str, key_material: &[u8]) -> [u8; 32] {
     // There is no conceivable reason anyone should use a context string long
@@ -931,10 +931,10 @@ fn parent_node_output(
 /// used traits from the [`digest`](https://crates.io/crates/digest) and
 /// [`crypto_mac`](https://crates.io/crates/crypto-mac) crates.
 ///
-/// **Performance note:** The [`update`] and (if the `rayon` Cargo feature is
-/// enabled) [`update_rayon`] methods perform poorly when the caller's input
-/// buffer is small. See their method docs below. A 16 KiB buffer is large
-/// enough to leverage all currently supported SIMD instruction sets.
+/// **Performance note:** The [`update`] method can't take full advantage of
+/// SIMD optimizations if its input buffer is too small or oddly sized. Using a
+/// 16 KiB buffer, or any multiple of that, enables all currently supported SIMD
+/// instruction sets.
 ///
 /// # Examples
 ///
@@ -959,7 +959,7 @@ fn parent_node_output(
 /// ```
 ///
 /// [`update`]: #method.update
-/// [`update_with_join`]: #method.update_with_join
+/// [`update_rayon`]: #method.update_rayon
 #[derive(Clone)]
 pub struct Hasher {
     key: CVWords,
@@ -1011,10 +1011,7 @@ impl Hasher {
     /// Reset the `Hasher` to its initial state.
     ///
     /// This is functionally the same as overwriting the `Hasher` with a new
-    /// one, using the same key or context string if any. However, depending on
-    /// how much inlining the optimizer does, moving a `Hasher` might copy its
-    /// entire CV stack, most of which is useless uninitialized bytes. This
-    /// methods avoids that copy.
+    /// one, using the same key or context string if any.
     pub fn reset(&mut self) -> &mut Self {
         self.chunk_state = ChunkState::new(
             &self.key,
@@ -1094,8 +1091,9 @@ impl Hasher {
     /// Add input bytes to the hash state. You can call this any number of
     /// times.
     ///
-    /// This method is always single-threaded. For multi-threading support, see
-    /// `update_with_join` below.
+    /// This method is always single-threaded. For multithreading support, see
+    /// [`update_rayon`](#method.update_rayon) below (enabled with the `rayon`
+    /// Cargo feature).
     ///
     /// Note that the degree of SIMD parallelism that `update` can use is
     /// limited by the size of this input buffer. The 8 KiB buffer currently
@@ -1108,39 +1106,22 @@ impl Hasher {
         self.update_with_join::<join::SerialJoin>(input)
     }
 
-    /// Like [`update`](Hasher::update), but using Rayon-based multithreading as
-    /// a performance optimization.
+    /// Identical to [`update`](Hasher::update), but using Rayon-based
+    /// multithreading internally.
     ///
-    /// To get any performance benefit from multi-threading, the input buffer
-    /// size needs to be very large. As a rule of thumb on x86_64, there is no
-    /// benefit to multi-threading inputs less than 128 KiB. Other platforms
-    /// have different thresholds, and in general you need to benchmark your
-    /// specific use case. Where possible, memory mapping an entire input file
-    /// is recommended, to take maximum advantage of multi-threading without
-    /// needing to tune a specific buffer size. Where memory mapping is not
-    /// possible, good multi-threading performance requires doing IO on a
-    /// background thread, to avoid sleeping all your worker threads while the
-    /// input buffer is (serially) refilled. This is quite complicated compared
-    /// to memory mapping.
+    /// To get any performance benefit from multithreading, the input buffer
+    /// needs to be large. As a rule of thumb on x86_64, `update_rayon` is
+    /// _slower_ than `update` for inputs under 128 KiB. That threshold varies
+    /// quite a lot across different processors, and it's important to benchmark
+    /// your specific use case.
     ///
-    /// # Example
-    ///
-    /// ```
-    /// // Hash a large input using multi-threading. Note that multi-threading
-    /// // comes with some overhead, and it can actually hurt performance for small
-    /// // inputs. The meaning of "small" varies, however, depending on the
-    /// // platform and the number of threads. (On x86_64, the cutoff tends to be
-    /// // around 128 KiB.) You should benchmark your own use case to see whether
-    /// // multi-threading helps.
-    /// # #[cfg(feature = "rayon")]
-    /// # {
-    /// # fn some_large_input() -> &'static [u8] { b"foo" }
-    /// let input: &[u8] = some_large_input();
-    /// let mut hasher = blake3::Hasher::new();
-    /// hasher.update_rayon(input);
-    /// let hash = hasher.finalize();
-    /// # }
-    /// ```
+    /// Memory mapping an entire input file is a good way to take advantage of
+    /// multithreading without needing to carefully tune your buffer size or
+    /// offload IO. However, on spinning disks where random access is expensive,
+    /// this can lead to disk thrashing and terrible IO performance. OS page
+    /// caching can mask this problem, in which case it might only affect files
+    /// larger than available RAM. Again, benchmarking your specific use case is
+    /// important.
     #[cfg(feature = "rayon")]
     pub fn update_rayon(&mut self, input: &[u8]) -> &mut Self {
         self.update_with_join::<join::RayonJoin>(input)
@@ -1175,7 +1156,7 @@ impl Hasher {
         // Now the chunk_state is clear, and we have more input. If there's
         // more than a single chunk (so, definitely not the root chunk), hash
         // the largest whole subtree we can, with the full benefits of SIMD and
-        // multi-threading parallelism. Two restrictions:
+        // multithreading parallelism. Two restrictions:
         // - The subtree has to be a power-of-2 number of chunks. Only subtrees
         //   along the right edge can be incomplete, and we don't know where
         //   the right edge is going to be until we get to finalize().
