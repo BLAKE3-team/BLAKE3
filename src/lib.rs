@@ -32,12 +32,12 @@
 //!
 //! # Cargo Features
 //!
-//! The `std` feature (enabled by default) is required for implementations of
-//! the [`Write`] and [`Seek`] traits, and also for runtime CPU feature
-//! detection. If this feature is disabled, the only way to use the SIMD
-//! implementations in this crate is to enable the corresponding instruction
-//! sets globally, with e.g. `RUSTFLAGS="-C target-cpu=native"`. The resulting
-//! binary will not be portable to other machines.
+//! The `std` feature (the only feature enabled by default) is required for
+//! implementations of the [`Write`] and [`Seek`] traits, and also for runtime
+//! CPU feature detection. If this feature is disabled, the only way to use the
+//! SIMD implementations in this crate is to enable the corresponding
+//! instruction sets globally, with e.g. `RUSTFLAGS="-C target-cpu=native"`. The
+//! resulting binary will not be portable to other machines.
 //!
 //! The `rayon` feature (disabled by default, but enabled for [docs.rs]) adds
 //! new functions that use [Rayon]-based multithreading internally:
@@ -49,6 +49,15 @@
 //! targets that are known to have NEON support. In particular, some ARMv7
 //! targets support NEON, and some don't.
 //!
+//! The `traits-preview` feature enables implementations of traits from the
+//! RustCrypto [`digest`] and [`crypto-mac`] crates, and re-exports those crates
+//! as `traits::digest` and `traits::crypto_mac`. However, the traits aren't
+//! stable, and they're expected to change in incompatible ways before those
+//! crates reach 1.0. For that reason, this crate makes no SemVer guarantees for
+//! this feature, and callers who use it should expect breaking changes between
+//! patch versions. (The "-preview" feature name follows the conventions of the
+//! RustCrypto [`signature`] crate.)
+//!
 //! [`Hasher::update_rayon`]: struct.Hasher.html#method.update_rayon
 //! [`hash_rayon`]: fn.hash_rayon.html
 //! [`keyed_hash_rayon`]: fn.keyed_hash_rayon.html
@@ -58,6 +67,9 @@
 //! [docs.rs]: https://docs.rs/
 //! [`Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
 //! [`Seek`]: https://doc.rust-lang.org/std/io/trait.Seek.html
+//! [`digest`]: https://crates.io/crates/digest
+//! [`crypto-mac`]: https://crates.io/crates/crypto-mac
+//! [`signature`]: https://crates.io/crates/signature
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -103,6 +115,7 @@ mod sse41;
 #[path = "ffi_sse41.rs"]
 mod sse41;
 
+#[cfg(feature = "traits-preview")]
 pub mod traits;
 
 mod join;
@@ -927,9 +940,14 @@ fn parent_node_output(
 
 /// An incremental hash state that can accept any number of writes.
 ///
-/// In addition to its inherent methods, this type implements several commonly
-/// used traits from the [`digest`](https://crates.io/crates/digest) and
-/// [`crypto_mac`](https://crates.io/crates/crypto-mac) crates.
+/// When the `traits-preview` Cargo feature is enabled, this type implements
+/// several commonly used traits from the
+/// [`digest`](https://crates.io/crates/digest) and
+/// [`crypto_mac`](https://crates.io/crates/crypto-mac) crates. However, those
+/// traits aren't stable, and they're expected to change in incompatible ways
+/// before those crates reach 1.0. For that reason, this crate makes no SemVer
+/// guarantees for this feature, and callers who use it should expect breaking
+/// changes between patch versions.
 ///
 /// **Performance note:** The [`update`] method can't take full advantage of
 /// SIMD optimizations if its input buffer is too small or oddly sized. Using a

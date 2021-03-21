@@ -42,8 +42,8 @@ jobs:
     - name: print instruction set support
       run: cargo run --quiet
       working-directory: ./tools/instruction_set_support
-    # Default tests plus Rayon.
-    - run: cargo test --features=rayon
+    # Default tests plus Rayon and RustCrypto trait implementations.
+    - run: cargo test --features=rayon,traits-preview
     # no_std tests.
     - run: cargo test --no-default-features
 
