@@ -25,9 +25,9 @@ neon = []
 # entire build, with e.g. RUSTFLAGS="-C target-cpu=native".
 std = ["digest/std"]
 
-# The "rayon" feature (defined below as an optional dependency) enables API
-# functions like `hash_rayon` and `update_rayon`. However, even if this feature
-# is enabled, all other APIs remain single-threaded.
+# The "rayon" feature (defined below as an optional dependency) enables the
+# `Hasher::update_rayon` method, for multithreaded hashing. However, even if
+# this feature is enabled, all other APIs remain single-threaded.
 
 # This crate implements traits from the RustCrypto project, exposed here as the
 # "traits-preview" feature. However, these traits aren't stable, and they're
@@ -75,7 +75,7 @@ no_avx2 = []
 no_avx512 = []
 
 [package.metadata.docs.rs]
-# Document blake3::join::RayonJoin on docs.rs.
+# Document Hasher::update_rayon on docs.rs.
 features = ["rayon"]
 
 [dependencies]

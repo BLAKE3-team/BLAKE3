@@ -89,7 +89,7 @@ jobs:
     - run: cargo test --features=no_avx512,no_avx2,no_sse41,no_sse2,pure --release
 
     # Test benchmarks. RUSTC_BOOTSTRAP=1 lets this run on non-nightly toolchains.
-    - run: cargo test --benches
+    - run: cargo test --benches --features=rayon
       env:
         RUSTC_BOOTSTRAP: 1
     # Test vectors.

@@ -421,7 +421,7 @@ fn bench_reference_1024_kib(b: &mut Bencher) {
 #[cfg(feature = "rayon")]
 fn bench_rayon(b: &mut Bencher, len: usize) {
     let mut input = RandomInput::new(b, len);
-    b.iter(|| blake3::hash_rayon(input.get()));
+    b.iter(|| blake3::Hasher::new().update_rayon(input.get()).finalize());
 }
 
 #[bench]

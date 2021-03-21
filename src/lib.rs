@@ -40,9 +40,8 @@
 //! resulting binary will not be portable to other machines.
 //!
 //! The `rayon` feature (disabled by default, but enabled for [docs.rs]) adds
-//! new functions that use [Rayon]-based multithreading internally:
-//! [`Hasher::update_rayon`], [`hash_rayon`], [`keyed_hash_rayon`], and
-//! [`derive_key_rayon`].
+//! the [`Hasher::update_rayon`] method, for multithreaded hashing. However,
+//! even if this feature is enabled, all other APIs remain single-threaded.
 //!
 //! The `neon` feature enables ARM NEON support. Currently there is no runtime
 //! CPU feature detection for NEON, so you must only enable this feature for
@@ -59,9 +58,6 @@
 //! RustCrypto [`signature`] crate.)
 //!
 //! [`Hasher::update_rayon`]: struct.Hasher.html#method.update_rayon
-//! [`hash_rayon`]: fn.hash_rayon.html
-//! [`keyed_hash_rayon`]: fn.keyed_hash_rayon.html
-//! [`derive_key_rayon`]: fn.derive_key_rayon.html
 //! [BLAKE3]: https://blake3.io
 //! [Rayon]: https://github.com/rayon-rs/rayon
 //! [docs.rs]: https://docs.rs/
@@ -711,8 +707,8 @@ fn compress_subtree_wide<J: join::Join>(
     };
     let (left_out, right_out) = cv_array.split_at_mut(degree * OUT_LEN);
 
-    // Recurse! For *_rayon functions, this is where we take advantage of RayonJoin and use
-    // multiple threads.
+    // Recurse! For update_rayon(), this is where we take advantage of RayonJoin and use multiple
+    // threads.
     let (left_n, right_n) = J::join(
         || compress_subtree_wide::<J>(left, key, chunk_counter, flags, platform, left_out),
         || compress_subtree_wide::<J>(right, key, right_chunk_counter, flags, platform, right_out),
@@ -808,20 +804,9 @@ fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8) -> Ou
 /// [`OutputReader`].
 ///
 /// This function is always single-threaded. For multithreading support, see
-/// the [`hash_rayon`](fn.hash_rayon.html) function (enabled by the `rayon`
-/// Cargo feature).
+/// [`Hasher::update_rayon`](struct.Hasher.html#method.update_rayon).
 pub fn hash(input: &[u8]) -> Hash {
     hash_all_at_once::<join::SerialJoin>(input, IV, 0).root_hash()
-}
-
-/// Identical to [`hash`], but using Rayon-based multithreading internally.
-///
-/// Multithreading isn't always helpful for performance, and it's a good idea to
-/// benchmark your specific use case. See performance notes on
-/// [`Hasher::update_rayon`].
-#[cfg(feature = "rayon")]
-pub fn hash_rayon(input: &[u8]) -> Hash {
-    hash_all_at_once::<join::RayonJoin>(input, IV, 0).root_hash()
 }
 
 /// The keyed hash function.
@@ -836,23 +821,11 @@ pub fn hash_rayon(input: &[u8]) -> Hash {
 /// [`Hasher::finalize_xof`], and [`OutputReader`].
 ///
 /// This function is always single-threaded. For multithreading support, see
-/// the [`keyed_hash_rayon`](fn.keyed_hash_rayon.html) function (enabled by the
-/// `rayon` Cargo feature).
+/// [`Hasher::new_keyed`] and
+/// [`Hasher::update_rayon`](struct.Hasher.html#method.update_rayon).
 pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
     let key_words = platform::words_from_le_bytes_32(key);
     hash_all_at_once::<join::SerialJoin>(input, &key_words, KEYED_HASH).root_hash()
-}
-
-/// Identical to [`keyed_hash`], but using Rayon-based multithreading
-/// internally.
-///
-/// Multithreading isn't always helpful for performance, and it's a good idea to
-/// benchmark your specific use case. See performance notes on
-/// [`Hasher::update_rayon`].
-#[cfg(feature = "rayon")]
-pub fn keyed_hash_rayon(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
-    let key_words = platform::words_from_le_bytes_32(key);
-    hash_all_at_once::<join::RayonJoin>(input, &key_words, KEYED_HASH).root_hash()
 }
 
 /// The key derivation function.
@@ -885,8 +858,8 @@ pub fn keyed_hash_rayon(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 /// [`Hasher::finalize_xof`], and [`OutputReader`].
 ///
 /// This function is always single-threaded. For multithreading support, see
-/// the [`derive_key_rayon`](fn.derive_key_rayon.html) function (enabled by the
-/// `rayon` Cargo feature).
+/// [`Hasher::new_derive_key`] and
+/// [`Hasher::update_rayon`](struct.Hasher.html#method.update_rayon).
 ///
 /// [Argon2]: https://en.wikipedia.org/wiki/Argon2
 pub fn derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
@@ -895,25 +868,6 @@ pub fn derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
             .root_hash();
     let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
     hash_all_at_once::<join::SerialJoin>(key_material, &context_key_words, DERIVE_KEY_MATERIAL)
-        .root_hash()
-        .0
-}
-
-/// Identical to [`derive_key`], but using Rayon-based multithreading
-/// internally.
-///
-/// Multithreading isn't always helpful for performance, and it's a good idea to
-/// benchmark your specific use case. See performance notes on
-/// [`Hasher::update_rayon`].
-#[cfg(feature = "rayon")]
-pub fn derive_key_rayon(context: &str, key_material: &[u8]) -> [u8; 32] {
-    // There is no conceivable reason anyone should use a context string long
-    // enough for multithreading to make a difference.
-    let context_key =
-        hash_all_at_once::<join::SerialJoin>(context.as_bytes(), IV, DERIVE_KEY_CONTEXT)
-            .root_hash();
-    let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
-    hash_all_at_once::<join::RayonJoin>(key_material, &context_key_words, DERIVE_KEY_MATERIAL)
         .root_hash()
         .0
 }
@@ -949,10 +903,14 @@ fn parent_node_output(
 /// guarantees for this feature, and callers who use it should expect breaking
 /// changes between patch versions.
 ///
-/// **Performance note:** The [`update`] method can't take full advantage of
-/// SIMD optimizations if its input buffer is too small or oddly sized. Using a
-/// 16 KiB buffer, or any multiple of that, enables all currently supported SIMD
-/// instruction sets.
+/// When the `rayon` Cargo feature is enabled, the
+/// [`update_rayon`](#method.update_rayon) method is available for multithreaded
+/// hashing.
+///
+/// **Performance note:** The [`update`](#method.update) method can't take full
+/// advantage of SIMD optimizations if its input buffer is too small or oddly
+/// sized. Using a 16 KiB buffer, or any multiple of that, enables all currently
+/// supported SIMD instruction sets.
 ///
 /// # Examples
 ///
@@ -975,9 +933,6 @@ fn parent_node_output(
 /// # Ok(())
 /// # }
 /// ```
-///
-/// [`update`]: #method.update
-/// [`update_rayon`]: #method.update_rayon
 #[derive(Clone)]
 pub struct Hasher {
     key: CVWords,
@@ -1127,19 +1082,22 @@ impl Hasher {
     /// Identical to [`update`](Hasher::update), but using Rayon-based
     /// multithreading internally.
     ///
+    /// This method is gated by the `rayon` Cargo feature, which is disabled by
+    /// default but enabled on [docs.rs](https://docs.rs).
+    ///
     /// To get any performance benefit from multithreading, the input buffer
     /// needs to be large. As a rule of thumb on x86_64, `update_rayon` is
     /// _slower_ than `update` for inputs under 128 KiB. That threshold varies
     /// quite a lot across different processors, and it's important to benchmark
     /// your specific use case.
     ///
-    /// Memory mapping an entire input file is a good way to take advantage of
+    /// Memory mapping an entire input file is a simple way to take advantage of
     /// multithreading without needing to carefully tune your buffer size or
     /// offload IO. However, on spinning disks where random access is expensive,
-    /// this can lead to disk thrashing and terrible IO performance. OS page
-    /// caching can mask this problem, in which case it might only affect files
-    /// larger than available RAM. Again, benchmarking your specific use case is
-    /// important.
+    /// that approach can lead to disk thrashing and terrible IO performance.
+    /// Note that OS page caching can mask this problem, in which case it might
+    /// only appear for files larger than available RAM. Again, benchmarking
+    /// your specific use case is important.
     #[cfg(feature = "rayon")]
     pub fn update_rayon(&mut self, input: &[u8]) -> &mut Self {
         self.update_with_join::<join::RayonJoin>(input)
