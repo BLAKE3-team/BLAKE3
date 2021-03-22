@@ -253,24 +253,56 @@ impl Read for Input {
     }
 }
 
-// A 16 KiB buffer is enough to take advantage of all the SIMD instruction sets
-// that we support, but `std::io::copy` currently uses 8 KiB. Most platforms
-// can support at least 64 KiB, and there's some performance benefit to using
-// bigger reads, so that's what we use here.
+// EXPERIMENTAL: Use double buffering and channels to do blocking reads on the main thread, while
+// offloading all hashing work to the Rayon thread pool. Currently on my laptop, Hyperfine measures
+// this approach to be 1.25x slower than full memory mapping. This is resonably good, but I want to
+// do better before I make this the default.
+//
+// Notably, buffer sizes on either size of 1<<20 are measurably worse for performance. This optimum
+// is going to be different on other machines, though, and that's a downside of this approach.
+//
+// I think the biggest problem here is that we can only have one update_rayon() call "in flight" at
+// a time. That means all the worker threads have to terminate, before the next call can begin.
+// Ideally, we would put many buffers in flight, but that requires a public or semi-public API for
+// computing and ingesting unfinalized subtree chaining values. This is TODO.
 fn copy_wide(mut reader: impl Read, hasher: &mut blake3::Hasher) -> io::Result<u64> {
-    let mut buffer = [0; 65536];
+    struct Pair {
+        hasher: Box<blake3::Hasher>,
+        buffer: Box<[u8]>,
+    }
+    const BUF_SIZE: usize = 1 << 20;
+    let (main_sender, worker_receiver) = crossbeam_channel::bounded::<Pair>(1);
+    let (worker_sender, main_receiver) = crossbeam_channel::bounded::<Pair>(1);
+    let mut free_buffer = vec![0; BUF_SIZE].into_boxed_slice();
+    let starter_pair = Pair {
+        hasher: Box::new(hasher.clone()),
+        buffer: free_buffer.clone(),
+    };
+    worker_sender.send(starter_pair).unwrap();
     let mut total = 0;
     loop {
-        match reader.read(&mut buffer) {
-            Ok(0) => return Ok(total),
+        match reader.read(&mut free_buffer) {
+            Ok(0) => break,
             Ok(n) => {
-                hasher.update(&buffer[..n]);
+                let mut pair = main_receiver.recv().unwrap();
+                let worker_sender = worker_sender.clone();
+                let worker_receiver = worker_receiver.clone();
+                rayon::spawn(move || {
+                    if let Ok(mut pair) = worker_receiver.recv() {
+                        pair.hasher.update_rayon(&pair.buffer[..n]);
+                        worker_sender.send(pair).unwrap();
+                    }
+                });
+                std::mem::swap(&mut free_buffer, &mut pair.buffer);
+                main_sender.send(pair).unwrap();
                 total += n as u64;
             }
             Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
             Err(e) => return Err(e),
         }
     }
+    *hasher = *main_receiver.recv().unwrap().hasher;
+    Ok(total)
 }
 
 // Mmap a file, if it looks like a good idea. Return None in cases where we
