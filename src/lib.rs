@@ -72,7 +72,7 @@
 #[cfg(test)]
 mod test;
 
-// The guts module is for incremental use cases like the `bao` crate that need
+// The guts module is for incremental use cases like the `bao` crate that needs
 // to explicitly compute chunk and parent chaining values. It is semi-stable
 // and likely to keep working, but largely undocumented and not intended for
 // widespread use.
@@ -209,7 +209,7 @@ pub struct Hash([u8; OUT_LEN]);
 
 impl Hash {
     /// The raw bytes of the `Hash`. Note that byte arrays don't provide
-    /// constant-time equality checking, so if  you need to compare hashes,
+    /// constant-time equality checking, so if you need to compare hashes,
     /// prefer the `Hash` type.
     #[inline]
     pub fn as_bytes(&self) -> &[u8; OUT_LEN] {
