@@ -156,7 +156,7 @@ fn build_sse2_sse41_avx2_assembly() {
 
 fn build_avx512_c_intrinsics() {
     // This is required on 32-bit x86 targets, since the assembly
-    // implementation doesn't support  those.
+    // implementation doesn't support those.
     println!("cargo:rustc-cfg=blake3_avx512_ffi");
     let mut build = new_build();
     build.file("c/blake3_avx512.c");
