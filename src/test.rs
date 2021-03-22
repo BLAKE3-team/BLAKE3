@@ -534,6 +534,8 @@ fn test_hex_encoding_decoding() {
     hasher.update(b"foo");
     let digest = hasher.finalize();
     assert_eq!(digest.to_hex().as_str(), digest_str);
+    #[cfg(feature = "std")]
+    assert_eq!(digest.to_string(), digest_str);
 
     // Test round trip
     let digest = crate::Hash::from_hex(digest_str).unwrap();

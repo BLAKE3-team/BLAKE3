@@ -193,8 +193,7 @@ fn counter_high(counter: u64) -> u32 {
 /// accidentally lost.
 ///
 /// `Hash` provides the [`to_hex`] and [`from_hex`] methods for converting to
-/// and from hexadecimal. It also implements [`FromStr`], so [`str::parse`] is
-/// equivalent to `from_hex`.
+/// and from hexadecimal. It also implements [`Display`] and [`FromStr`].
 ///
 /// [`From`]: https://doc.rust-lang.org/std/convert/trait.From.html
 /// [`Into`]: https://doc.rust-lang.org/std/convert/trait.Into.html
@@ -203,8 +202,8 @@ fn counter_high(counter: u64) -> u32 {
 /// [`AsRef`]: https://doc.rust-lang.org/std/convert/trait.AsRef.html
 /// [`to_hex`]: #method.to_hex
 /// [`from_hex`]: #method.from_hex
+/// [`Display`]: https://doc.rust-lang.org/std/fmt/trait.Display.html
 /// [`FromStr`]: https://doc.rust-lang.org/std/str/trait.FromStr.html
-/// [`std::parse`]: https://doc.rust-lang.org/std/primitive.str.html#method.parse
 #[derive(Clone, Copy, Hash)]
 pub struct Hash([u8; OUT_LEN]);
 
@@ -242,8 +241,8 @@ impl Hash {
     /// results in an error. An input length other than 64 also results in an
     /// error.
     ///
-    /// Note that `Hash` also implements `FromStr`, `Hash::from_hex("...")` is
-    /// equivalent to `"...".parse()`.
+    /// Note that `Hash` also implements `FromStr`, so `Hash::from_hex("...")`
+    /// is equivalent to `"...".parse()`.
     pub fn from_hex(hex: impl AsRef<[u8]>) -> Result<Self, HexError> {
         fn hex_val(byte: u8) -> Result<u8, HexError> {
             match byte {
@@ -312,6 +311,18 @@ impl PartialEq<[u8]> for Hash {
 }
 
 impl Eq for Hash {}
+
+impl fmt::Display for Hash {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Formatting field as `&str` to reduce code size since the `Debug`
+        // dynamic dispatch table for `&str` is likely needed elsewhere already,
+        // but that for `ArrayString<[u8; 64]>` is not.
+        let hex = self.to_hex();
+        let hex: &str = hex.as_str();
+
+        f.write_str(hex)
+    }
+}
 
 impl fmt::Debug for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
