@@ -1,7 +1,10 @@
-// This module is for incremental use cases like the `bao` crate, which need to
-// get their hands on internal chunk and parent chaining values. The vast
-// majority of users should ignore this and use the publicly documented
-// interface instead.
+//! This undocumented and unstable module is for use cases like the `bao` crate,
+//! which need to traverse the BLAKE3 Merkle tree and work with chunk and parent
+//! chaining values directly. There might be breaking changes to this module
+//! between patch versions.
+//!
+//! We could stabilize something like this module in the future. If you have a
+//! use case for it, please let us know by filing a GitHub issue.
 
 #[derive(Clone, Debug)]
 pub struct ChunkState(crate::ChunkState);
