@@ -6,6 +6,23 @@
 //! We could stabilize something like this module in the future. If you have a
 //! use case for it, please let us know by filing a GitHub issue.
 
+pub fn set_chunk_counter(hasher: &mut crate::Hasher, value: u64) {
+    assert_eq!(0, hasher.chunk_state.len(), "already accepted input");
+    assert_eq!(0, hasher.cv_stack.len(), "already accepted input");
+    hasher.chunk_state.chunk_counter = value;
+}
+
+pub fn finalize_subtree_cv(hasher: &crate::Hasher) -> crate::CVBytes {
+    hasher.final_output().chaining_value()
+}
+
+pub fn push_subtree_cv(hasher: &crate::Hasher, subtree_len: u64) -> crate::CVBytes {
+    // assert_eq!(0, hasher.chunk_state.len(), ");
+    // let count_so_far = self.chunk_state.chunk_counter * CHUNK_LEN as u64;
+    // assert_eq!(0,
+    todo!()
+}
+
 #[derive(Clone, Debug)]
 pub struct ChunkState(crate::ChunkState);
 
