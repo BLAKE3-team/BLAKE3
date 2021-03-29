@@ -6,6 +6,9 @@
 //! We could stabilize something like this module in the future. If you have a
 //! use case for it, please let us know by filing a GitHub issue.
 
+pub const BLOCK_LEN: usize = 64;
+pub const CHUNK_LEN: usize = 1024;
+
 #[derive(Clone, Debug)]
 pub struct ChunkState(crate::ChunkState);
 

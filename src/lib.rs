@@ -79,7 +79,7 @@ mod test;
 #[doc(hidden)]
 pub mod guts;
 
-// The platform module is pub for benchmarks only. It is not stable.
+/// Undocumented and unstable, for benchmarks only.
 #[doc(hidden)]
 pub mod platform;
 
@@ -128,14 +128,8 @@ pub const OUT_LEN: usize = 32;
 /// The number of bytes in a key, 32.
 pub const KEY_LEN: usize = 32;
 
-// These constants are pub for incremental use cases like `bao`, as well as
-// tests and benchmarks. Most callers should not need them.
-#[doc(hidden)]
-pub const BLOCK_LEN: usize = 64;
-#[doc(hidden)]
-pub const CHUNK_LEN: usize = 1024;
-#[doc(hidden)]
-pub const MAX_DEPTH: usize = 54; // 2^54 * CHUNK_LEN = 2^64
+const MAX_DEPTH: usize = 54; // 2^54 * CHUNK_LEN = 2^64
+use guts::{BLOCK_LEN, CHUNK_LEN};
 
 // While iterating the compression function within a chunk, the CV is
 // represented as words, to avoid doing two extra endianness conversions for
@@ -540,7 +534,7 @@ impl fmt::Debug for ChunkState {
 //   use full-width SIMD vectors for parent hashing. Without parallel parent
 //   hashing, we lose about 10% of overall throughput on AVX2 and AVX-512.
 
-// pub for benchmarks
+/// Undocumented and unstable, for benchmarks only.
 #[doc(hidden)]
 #[derive(Clone, Copy)]
 pub enum IncrementCounter {

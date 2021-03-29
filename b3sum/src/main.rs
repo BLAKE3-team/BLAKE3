@@ -308,7 +308,7 @@ fn maybe_memmap_file(file: &File) -> Result<Option<memmap::Mmap>> {
 fn write_hex_output(mut output: blake3::OutputReader, args: &Args) -> Result<()> {
     // Encoding multiples of the block size is most efficient.
     let mut len = args.len()?;
-    let mut block = [0; blake3::BLOCK_LEN];
+    let mut block = [0; blake3::guts::BLOCK_LEN];
     while len > 0 {
         output.fill(&mut block);
         let hex_str = hex::encode(&block[..]);

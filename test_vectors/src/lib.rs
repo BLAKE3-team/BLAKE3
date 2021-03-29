@@ -1,9 +1,9 @@
-use blake3::{BLOCK_LEN, CHUNK_LEN};
+use blake3::guts::{BLOCK_LEN, CHUNK_LEN};
 use serde::{Deserialize, Serialize};
 
 // A non-multiple of 4 is important, since one possible bug is to fail to emit
 // partial words.
-pub const OUTPUT_LEN: usize = 2 * blake3::BLOCK_LEN + 3;
+pub const OUTPUT_LEN: usize = 2 * BLOCK_LEN + 3;
 
 pub const TEST_CASES: &[usize] = &[
     0,
