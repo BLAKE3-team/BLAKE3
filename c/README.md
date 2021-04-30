@@ -92,10 +92,21 @@ void blake3_hasher_finalize(
   size_t out_len);
 ```
 
-Finalize the hasher and emit an output of any length. This doesn't
-modify the hasher itself, and it's possible to finalize again after
-adding more input. The constant `BLAKE3_OUT_LEN` provides the default
-output length, 32 bytes.
+Finalize the hasher and return an output of any length, given in bytes.
+This doesn't modify the hasher itself, and it's possible to finalize
+again after adding more input. The constant `BLAKE3_OUT_LEN` provides
+the default output length, 32 bytes, which is recommended for most
+callers.
+
+Outputs shorter than the default length of 32 bytes (256 bits) provide
+less security. An N-bit BLAKE3 output is intended to provide N bits of
+first and second preimage resistance and N/2 bits of collision
+resistance, for any N up to 256. Longer outputs don't provide any
+additional security.
+
+Shorter BLAKE3 outputs are prefixes of longer ones. Explicitly
+requesting a short output is equivalent to truncating the default-length
+output. (Note that this is different between BLAKE2 and BLAKE3.)
 
 ## Less Common API Functions
 

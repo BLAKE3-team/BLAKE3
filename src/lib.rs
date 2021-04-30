@@ -1337,6 +1337,17 @@ impl std::io::Write for Hasher {
 
 /// An incremental reader for extended output, returned by
 /// [`Hasher::finalize_xof`](struct.Hasher.html#method.finalize_xof).
+///
+/// Outputs shorter than the default length of 32 bytes (256 bits)
+/// provide less security. An N-bit BLAKE3 output is intended to provide
+/// N bits of first and second preimage resistance and N/2 bits of
+/// collision resistance, for any N up to 256. Longer outputs don't
+/// provide any additional security.
+///
+/// Shorter BLAKE3 outputs are prefixes of longer ones. Explicitly
+/// requesting a short output is equivalent to truncating the
+/// default-length output. (Note that this is different between BLAKE2
+/// and BLAKE3.)
 #[derive(Clone)]
 pub struct OutputReader {
     inner: Output,
