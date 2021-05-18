@@ -383,8 +383,8 @@ pub unsafe fn hash8(
 }
 
 #[target_feature(enable = "avx2")]
-pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
-    mut inputs: &[&A],
+pub unsafe fn hash_many<const N: usize>(
+    mut inputs: &[&[u8; N]],
     key: &CVWords,
     mut counter: u64,
     increment_counter: IncrementCounter,
@@ -398,7 +398,7 @@ pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
         // Safe because the layout of arrays is guaranteed, and because the
         // `blocks` count is determined statically from the argument type.
         let input_ptrs: &[*const u8; DEGREE] = &*(inputs.as_ptr() as *const [*const u8; DEGREE]);
-        let blocks = A::CAPACITY / BLOCK_LEN;
+        let blocks = N / BLOCK_LEN;
         hash8(
             input_ptrs,
             blocks,

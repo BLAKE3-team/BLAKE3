@@ -215,7 +215,7 @@ pub fn test_hash_many_fn(hash_many_fn: HashManyFn) {
     let counter = (1u64 << 32) - 1;
 
     // First hash chunks.
-    let mut chunks = ArrayVec::<[&[u8; CHUNK_LEN]; NUM_INPUTS]>::new();
+    let mut chunks = ArrayVec::<&[u8; CHUNK_LEN], NUM_INPUTS>::new();
     for i in 0..NUM_INPUTS {
         chunks.push(array_ref!(input_buf, i * CHUNK_LEN, CHUNK_LEN));
     }
@@ -259,7 +259,7 @@ pub fn test_hash_many_fn(hash_many_fn: HashManyFn) {
     }
 
     // Then hash parents.
-    let mut parents = ArrayVec::<[&[u8; 2 * OUT_LEN]; NUM_INPUTS]>::new();
+    let mut parents = ArrayVec::<&[u8; 2 * OUT_LEN], NUM_INPUTS>::new();
     for i in 0..NUM_INPUTS {
         parents.push(array_ref!(input_buf, i * 2 * OUT_LEN, 2 * OUT_LEN));
     }

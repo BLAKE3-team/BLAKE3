@@ -218,7 +218,7 @@ impl Hash {
     /// type.
     ///
     /// [`ArrayString`]: https://docs.rs/arrayvec/0.5.1/arrayvec/struct.ArrayString.html
-    pub fn to_hex(&self) -> ArrayString<[u8; 2 * OUT_LEN]> {
+    pub fn to_hex(&self) -> ArrayString<{ 2 * OUT_LEN }> {
         let mut s = ArrayString::new();
         let table = b"0123456789abcdef";
         for &b in self.0.iter() {
@@ -584,7 +584,7 @@ fn compress_chunks_parallel(
     debug_assert!(input.len() <= MAX_SIMD_DEGREE * CHUNK_LEN);
 
     let mut chunks_exact = input.chunks_exact(CHUNK_LEN);
-    let mut chunks_array = ArrayVec::<[&[u8; CHUNK_LEN]; MAX_SIMD_DEGREE]>::new();
+    let mut chunks_array = ArrayVec::<&[u8; CHUNK_LEN], MAX_SIMD_DEGREE>::new();
     for chunk in &mut chunks_exact {
         chunks_array.push(array_ref!(chunk, 0, CHUNK_LEN));
     }
@@ -634,7 +634,7 @@ fn compress_parents_parallel(
     let mut parents_exact = child_chaining_values.chunks_exact(BLOCK_LEN);
     // Use MAX_SIMD_DEGREE_OR_2 rather than MAX_SIMD_DEGREE here, because of
     // the requirements of compress_subtree_wide().
-    let mut parents_array = ArrayVec::<[&[u8; BLOCK_LEN]; MAX_SIMD_DEGREE_OR_2]>::new();
+    let mut parents_array = ArrayVec::<&[u8; BLOCK_LEN], MAX_SIMD_DEGREE_OR_2>::new();
     for parent in &mut parents_exact {
         parents_array.push(array_ref!(parent, 0, BLOCK_LEN));
     }
@@ -947,7 +947,7 @@ pub struct Hasher {
     // requires a 4th entry, rather than merging everything down to 1, because
     // we don't know whether more input is coming. This is different from how
     // the reference implementation does things.
-    cv_stack: ArrayVec<[CVBytes; MAX_DEPTH + 1]>,
+    cv_stack: ArrayVec<CVBytes, { MAX_DEPTH + 1 }>,
 }
 
 impl Hasher {

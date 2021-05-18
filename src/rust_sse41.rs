@@ -632,8 +632,8 @@ pub unsafe fn hash4(
 }
 
 #[target_feature(enable = "sse4.1")]
-unsafe fn hash1<A: arrayvec::Array<Item = u8>>(
-    input: &A,
+unsafe fn hash1<const N: usize>(
+    input: &[u8; N],
     key: &CVWords,
     counter: u64,
     flags: u8,
@@ -641,10 +641,10 @@ unsafe fn hash1<A: arrayvec::Array<Item = u8>>(
     flags_end: u8,
     out: &mut CVBytes,
 ) {
-    debug_assert_eq!(A::CAPACITY % BLOCK_LEN, 0, "uneven blocks");
+    debug_assert_eq!(N % BLOCK_LEN, 0, "uneven blocks");
     let mut cv = *key;
     let mut block_flags = flags | flags_start;
-    let mut slice = input.as_slice();
+    let mut slice = &input[..];
     while slice.len() >= BLOCK_LEN {
         if slice.len() == BLOCK_LEN {
             block_flags |= flags_end;
@@ -663,8 +663,8 @@ unsafe fn hash1<A: arrayvec::Array<Item = u8>>(
 }
 
 #[target_feature(enable = "sse4.1")]
-pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
-    mut inputs: &[&A],
+pub unsafe fn hash_many<const N: usize>(
+    mut inputs: &[&[u8; N]],
     key: &CVWords,
     mut counter: u64,
     increment_counter: IncrementCounter,
@@ -678,7 +678,7 @@ pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
         // Safe because the layout of arrays is guaranteed, and because the
         // `blocks` count is determined statically from the argument type.
         let input_ptrs: &[*const u8; DEGREE] = &*(inputs.as_ptr() as *const [*const u8; DEGREE]);
-        let blocks = A::CAPACITY / BLOCK_LEN;
+        let blocks = N / BLOCK_LEN;
         hash4(
             input_ptrs,
             blocks,

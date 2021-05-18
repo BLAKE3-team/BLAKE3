@@ -176,9 +176,9 @@ impl Platform {
     // after every block, there's a small but measurable performance loss.
     // Compressing chunks with a dedicated loop avoids this.
 
-    pub fn hash_many<A: arrayvec::Array<Item = u8>>(
+    pub fn hash_many<const N: usize>(
         &self,
-        inputs: &[&A],
+        inputs: &[&[u8; N]],
         key: &CVWords,
         counter: u64,
         increment_counter: IncrementCounter,
