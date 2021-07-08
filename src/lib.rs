@@ -25,7 +25,7 @@
 //! # }
 //!
 //! // Print a hash as hex.
-//! println!("{}", hash1.to_hex());
+//! println!("{}", hash1);
 //! # Ok(())
 //! # }
 //! ```

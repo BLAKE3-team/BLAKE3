@@ -133,7 +133,7 @@ output_reader.fill(&mut output);
 assert_eq!(&output[..32], hash1.as_bytes());
 
 // Print a hash as hex.
-println!("{}", hash1.to_hex());
+println!("{}", hash1);
 ```
 
 Besides `hash`, BLAKE3 provides two other modes, `keyed_hash` and
@@ -151,21 +151,18 @@ let mac2 = hasher.finalize();
 assert_eq!(mac1, mac2);
 ```
 
-The `derive_key` mode takes a context string of any length and key material of
-any length (not a password), and it outputs a derived key of any length. The
-context string should be hardcoded, globally unique, and application-specific.
-A good default format for the context string is `"[application] [commit
-timestamp] [purpose]"`:
+The `derive_key` mode takes a context string and some key material (not a
+password). The context string should be hardcoded, globally unique, and
+application-specific. A good default format for the context string is
+`"[application] [commit timestamp] [purpose]"`:
 
 ```rust
 // Derive a couple of subkeys for different purposes.
 const EMAIL_CONTEXT: &str = "BLAKE3 example 2020-01-07 17:10:44 email key";
 const API_CONTEXT: &str = "BLAKE3 example 2020-01-07 17:11:21 API key";
-let input_key_material = b"usually at least 32 random bytes, not a password!";
-let mut email_key = [0; 32];
-blake3::derive_key(EMAIL_CONTEXT, input_key_material, &mut email_key);
-let mut api_key = [0; 32];
-blake3::derive_key(API_CONTEXT, input_key_material, &mut api_key);
+let input_key_material = b"usually at least 32 random bytes, not a password";
+let email_key = blake3::derive_key(EMAIL_CONTEXT, input_key_material);
+let api_key = blake3::derive_key(API_CONTEXT, input_key_material);
 assert!(email_key != api_key);
 ```
 
