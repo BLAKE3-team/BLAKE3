@@ -1,6 +1,6 @@
 [package]
 name = "b3sum"
-version = "0.3.7"
+version = "1.0.0"
 authors = ["Jack O'Connor <oconnor663@gmail.com>"]
 description = "a command line implementation of the BLAKE3 hash function"
 repository = "https://github.com/BLAKE3-team/BLAKE3"
@@ -15,7 +15,7 @@ pure = ["blake3/pure"]
 
 [dependencies]
 anyhow = "1.0.25"
-blake3 = { version = "0.3", path = "..", features = ["rayon"] }
+blake3 = { version = "1", path = "..", features = ["rayon"] }
 clap = "2.33.1"
 hex = "0.4.0"
 memmap = "0.7.0"
