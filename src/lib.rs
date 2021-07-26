@@ -1115,7 +1115,7 @@ impl Hasher {
     fn update_with_join<J: join::Join>(&mut self, mut input: &[u8]) -> &mut Self {
         // If we have some partial chunk bytes in the internal chunk_state, we
         // need to finish that chunk first.
-        if self.chunk_state.len() > 0 {
+        if !self.chunk_state.is_empty() {
             let want = CHUNK_LEN - self.chunk_state.len();
             let take = cmp::min(want, input.len());
             self.chunk_state.update(&input[..take]);
@@ -1255,7 +1255,7 @@ impl Hasher {
         // the empty chunk is taken care of above.
         let mut output: Output;
         let mut num_cvs_remaining = self.cv_stack.len();
-        if self.chunk_state.len() > 0 {
+        if !self.chunk_state.is_empty() {
             debug_assert_eq!(
                 self.cv_stack.len(),
                 self.chunk_state.chunk_counter.count_ones() as usize,
