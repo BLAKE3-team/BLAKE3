@@ -30,6 +30,11 @@ impl ChunkState {
     }
 
     #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    #[inline]
     pub fn update(&mut self, input: &[u8]) -> &mut Self {
         self.0.update(input);
         self

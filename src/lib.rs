@@ -437,6 +437,10 @@ impl ChunkState {
         BLOCK_LEN * self.blocks_compressed as usize + self.buf_len as usize
     }
 
+    fn is_empty(&self) -> bool {
+        self.blocks_compressed + self.buf_len == 0
+    }
+
     fn fill_buf(&mut self, input: &mut &[u8]) {
         let want = BLOCK_LEN - self.buf_len as usize;
         let take = cmp::min(want, input.len());
