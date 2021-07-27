@@ -5,7 +5,7 @@ A command line utility for calculating
 Coreutils tools like `b2sum` or `md5sum`.
 
 ```
-b3sum 0.3.6
+b3sum 1.0.0
 
 USAGE:
     b3sum [FLAGS] [OPTIONS] [FILE]...
