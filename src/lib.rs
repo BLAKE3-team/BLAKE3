@@ -437,10 +437,6 @@ impl ChunkState {
         BLOCK_LEN * self.blocks_compressed as usize + self.buf_len as usize
     }
 
-    fn is_empty(&self) -> bool {
-        self.blocks_compressed + self.buf_len == 0
-    }
-
     fn fill_buf(&mut self, input: &mut &[u8]) {
         let want = BLOCK_LEN - self.buf_len as usize;
         let take = cmp::min(want, input.len());
@@ -1115,7 +1111,7 @@ impl Hasher {
     fn update_with_join<J: join::Join>(&mut self, mut input: &[u8]) -> &mut Self {
         // If we have some partial chunk bytes in the internal chunk_state, we
         // need to finish that chunk first.
-        if !self.chunk_state.is_empty() {
+        if self.chunk_state.len() > 0 {
             let want = CHUNK_LEN - self.chunk_state.len();
             let take = cmp::min(want, input.len());
             self.chunk_state.update(&input[..take]);
@@ -1255,7 +1251,7 @@ impl Hasher {
         // the empty chunk is taken care of above.
         let mut output: Output;
         let mut num_cvs_remaining = self.cv_stack.len();
-        if !self.chunk_state.is_empty() {
+        if self.chunk_state.len() > 0 {
             debug_assert_eq!(
                 self.cv_stack.len(),
                 self.chunk_state.chunk_counter.count_ones() as usize,
