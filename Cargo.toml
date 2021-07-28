@@ -8,7 +8,7 @@ license = "CC0-1.0 OR Apache-2.0"
 documentation = "https://docs.rs/blake3"
 readme = "README.md"
 edition = "2018"
-include = ["src/**/*", "LICENSE", "README.md", "c/*", "build.rs"]
+exclude = ["b3sum/**/*", "benches/*", "media/*", "reference_impl/*", "test_vectors/**/*", "tools/**/*", ".github/*"]
 
 [features]
 default = ["std"]
