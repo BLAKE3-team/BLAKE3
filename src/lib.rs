@@ -198,7 +198,7 @@ fn counter_high(counter: u64) -> u32 {
 /// [`from_hex`]: #method.from_hex
 /// [`Display`]: https://doc.rust-lang.org/std/fmt/trait.Display.html
 /// [`FromStr`]: https://doc.rust-lang.org/std/str/trait.FromStr.html
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash)]
 pub struct Hash([u8; OUT_LEN]);
 
 impl Hash {
