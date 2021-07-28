@@ -9,6 +9,7 @@ documentation = "https://docs.rs/blake3"
 readme = "README.md"
 edition = "2018"
 exclude = ["b3sum/**/*", "benches/*", "media/*", "reference_impl/*", "test_vectors/**/*", "tools/**/*", ".github/*"]
+categories = ["cryptography"]
 
 [features]
 default = ["std"]
