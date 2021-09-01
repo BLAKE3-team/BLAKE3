@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
       char *endptr = NULL;
       errno = 0;
       unsigned long long out_len_ll = strtoull(argv[2], &endptr, 10);
-      if (errno != 0 || out_len > SIZE_MAX || endptr == argv[2] ||
+      if (errno != 0 || out_len_ll > SIZE_MAX || endptr == argv[2] ||
           *endptr != 0) {
         fprintf(stderr, "Bad length argument.\n");
         return 1;
