@@ -852,7 +852,8 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 /// another algorithm. You might need to do this if you're adding features to
 /// an existing application, which does not yet use key derivation internally.
 /// However, you still must not share key material with algorithms that forbid
-/// key reuse entirely, like a one-time pad.
+/// key reuse entirely, like a one-time pad. For more on this, see sections 6.2
+/// and 7.8 of the [BLAKE3 paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf).
 ///
 /// Note that BLAKE3 is not a password hash, and **`derive_key` should never be
 /// used with passwords.** Instead, use a dedicated password hash like
