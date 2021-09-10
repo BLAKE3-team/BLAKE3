@@ -1393,10 +1393,13 @@ impl OutputReader {
         }
     }
 
-    /// Return the current read position in the output stream. The position of
-    /// a new `OutputReader` starts at 0, and each call to [`fill`] or
-    /// [`Read::read`] moves the position forward by the number of bytes read.
+    /// Return the current read position in the output stream. This is
+    /// equivalent to [`Seek::stream_position`], except that it doesn't return
+    /// a `Result`. The position of a new `OutputReader` starts at 0, and each
+    /// call to [`fill`] or [`Read::read`] moves the position forward by the
+    /// number of bytes read.
     ///
+    /// [`Seek::stream_position`]: #method.stream_position
     /// [`fill`]: #method.fill
     /// [`Read::read`]: #method.read
     pub fn position(&self) -> u64 {
