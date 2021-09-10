@@ -163,7 +163,7 @@ const API_CONTEXT: &str = "BLAKE3 example 2020-01-07 17:11:21 API key";
 let input_key_material = b"usually at least 32 random bytes, not a password";
 let email_key = blake3::derive_key(EMAIL_CONTEXT, input_key_material);
 let api_key = blake3::derive_key(API_CONTEXT, input_key_material);
-assert!(email_key != api_key);
+assert_ne!(email_key, api_key);
 ```
 
 ### The C implementation
