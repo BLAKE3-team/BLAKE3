@@ -1,0 +1,97 @@
+{
+  "nodes": {
+    "flake-utils": {
+      "locked": {
+        "lastModified": 1623875721,
+        "narHash": "sha256-A8BU7bjS5GirpAUv4QA+QnJ4CceLHkcXdRp4xITDB0s=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "f7e004a55b120c02ecb6219596820fcd32ca8772",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "naersk": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1618844365,
+        "narHash": "sha256-Z9t0rr+5OG/ru3jdg3jivfYVU4ydV/nqt8UwIut7uHs=",
+        "owner": "yatima-inc",
+        "repo": "naersk",
+        "rev": "32e3ba39d9d83098b13720a4384bdda191dd0445",
+        "type": "github"
+      },
+      "original": {
+        "owner": "yatima-inc",
+        "repo": "naersk",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1632176121,
+        "narHash": "sha256-N2oSOhbW38rbc53R1R8qXC/Xstht1PIsAcTzJfmCpTc=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "3397f0ede9ea2ded1f8b6fa689dda71a7a67b806",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-21.05",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1626198252,
+        "narHash": "sha256-OF9Adtb2puee7EqFTcWnNxlnfjSrDuUawgc0s+kKfiQ=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "81e24d81e47fb7608f7935d6f4ace6f64681c31c",
+        "type": "github"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "type": "indirect"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "utils": "utils"
+      }
+    },
+    "utils": {
+      "inputs": {
+        "flake-utils": "flake-utils",
+        "naersk": "naersk",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1630152091,
+        "narHash": "sha256-3geoLMXCbCv87a2lVfIotijrY4M+a+hbmr3KoZzGKas=",
+        "owner": "yatima-inc",
+        "repo": "nix-utils",
+        "rev": "aaf706f221c5dacdfe1bba61cf0a4b297936acdb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "yatima-inc",
+        "repo": "nix-utils",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
