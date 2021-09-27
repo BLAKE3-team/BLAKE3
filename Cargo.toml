@@ -79,6 +79,12 @@ no_neon = []
 # Document Hasher::update_rayon on docs.rs.
 features = ["rayon"]
 
+[workspace]
+# Needed since naersk does not detect local libs otherwise
+members = [
+  "reference_impl"
+]
+
 [dependencies]
 arrayref = "0.3.5"
 arrayvec = { version = "0.7.0", default-features = false }

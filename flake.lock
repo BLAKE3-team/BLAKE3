@@ -1,0 +1,89 @@
+{
+  "nodes": {
+    "flake-utils": {
+      "locked": {
+        "lastModified": 1631561581,
+        "narHash": "sha256-3VQMV5zvxaVLvqqUrNz3iJelLw30mIVSfZmAaauM3dA=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "7e5bf3925f6fbdfaf50a2a7ca0be2879c4261d19",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "naersk": {
+      "inputs": {
+        "nixpkgs": [
+          "utils",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1618844365,
+        "narHash": "sha256-Z9t0rr+5OG/ru3jdg3jivfYVU4ydV/nqt8UwIut7uHs=",
+        "owner": "yatima-inc",
+        "repo": "naersk",
+        "rev": "32e3ba39d9d83098b13720a4384bdda191dd0445",
+        "type": "github"
+      },
+      "original": {
+        "owner": "yatima-inc",
+        "repo": "naersk",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1633853057,
+        "narHash": "sha256-TUf/NYJlIw7wVMLFt5G4TRwtrnbz+uuXtTEbulxxI8Y=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "93ca5ab64f78ce778c0bcecf9458263f0f6289b6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-21.05",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "flake-utils": "flake-utils",
+        "nixpkgs": "nixpkgs",
+        "utils": "utils"
+      }
+    },
+    "utils": {
+      "inputs": {
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "naersk": "naersk",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1633962851,
+        "narHash": "sha256-vv75nSAPqh6EPgIY3fWVtD9oFKE8wqjRXW1ZjAUl90k=",
+        "owner": "yatima-inc",
+        "repo": "nix-utils",
+        "rev": "2f4b2f83fa0d6b428be33e2b7dc633eb9442f7ba",
+        "type": "github"
+      },
+      "original": {
+        "owner": "yatima-inc",
+        "repo": "nix-utils",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
