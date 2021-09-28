@@ -515,3 +515,18 @@ fn bench_two_updates(b: &mut Bencher) {
         hasher.finalize()
     });
 }
+
+const BIG: usize = 4 * 1024 * KIB;
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_recursive_big(b: &mut Bencher) {
+    bench_rayon(b, BIG);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_reader_big(b: &mut Bencher) {
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| blake3::hash_reader_rayon(input.get(), 1 << 15, 2 * num_cpus::get()));
+}

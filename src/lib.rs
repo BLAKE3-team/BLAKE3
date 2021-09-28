@@ -116,7 +116,7 @@ pub mod traits;
 
 mod join;
 
-use arrayref::{array_mut_ref, array_ref};
+use arrayref::{array_mut_ref, array_ref, array_refs};
 use arrayvec::{ArrayString, ArrayVec};
 use core::cmp;
 use core::fmt;
@@ -777,7 +777,7 @@ fn compress_subtree_to_parent_node<J: join::Join>(
 
 // Hash a complete input all at once. Unlike compress_subtree_wide() and
 // compress_subtree_to_parent_node(), this function handles the 1 chunk case.
-// Note that this we use SerialJoin here, so this is always single-threaded.
+// Note that we use SerialJoin here, so this is always single-threaded.
 fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8) -> Output {
     let platform = Platform::detect();
 
@@ -1458,5 +1458,121 @@ impl std::io::Seek for OutputReader {
         }
         self.set_position(cmp::min(target_position, max_position) as u64);
         Ok(self.position())
+    }
+}
+
+fn push_parent_node(state: &mut Hasher, parent_node: &[u8; BLOCK_LEN], subtree_len: u64) {
+    // This function only handles full buffers, which are power-of-2 sized.
+    assert_eq!(subtree_len.count_ones(), 1);
+    assert_eq!(state.chunk_state.len(), 0);
+    let count_so_far = state.chunk_state.chunk_counter * CHUNK_LEN as u64;
+    assert_eq!(count_so_far % subtree_len, 0);
+
+    let (left, right) = array_refs!(parent_node, 32, 32);
+    state.push_cv(left, state.chunk_state.chunk_counter);
+    state.chunk_state.chunk_counter += subtree_len / (CHUNK_LEN as u64) / 2;
+    state.push_cv(right, state.chunk_state.chunk_counter);
+    state.chunk_state.chunk_counter += subtree_len / (CHUNK_LEN as u64) / 2;
+}
+
+#[cfg(feature = "rayon")]
+#[cfg(feature = "std")]
+pub fn hash_reader_rayon(mut reader: impl std::io::Read, buf_size: usize, max_jobs: usize) -> Hash {
+    use crossbeam_channel::Receiver;
+    use std::collections::VecDeque;
+    use std::io::prelude::*;
+
+    type Tuple = ([u8; 64], Vec<u8>);
+
+    assert!(buf_size > CHUNK_LEN);
+    assert_eq!(buf_size.count_ones(), 1);
+    assert!(max_jobs > 1);
+
+    let mut state = Hasher::new();
+    let mut receivers: VecDeque<Receiver<Tuple>> = VecDeque::new();
+    loop {
+        // Get a buffer for hashing more.
+        let mut buf = if receivers.len() < max_jobs {
+            // A new buf.
+            Vec::with_capacity(buf_size)
+        } else {
+            // Reclaim a buf from an existing job. It's guaranteed to be full, because there are
+            // more jobs after it.
+            let next_receiver = receivers.pop_front().unwrap();
+            let (parent_node, mut buf) = next_receiver.recv().unwrap();
+            assert_eq!(buf.len(), buf_size);
+            push_parent_node(&mut state, &parent_node, buf_size as u64);
+            buf.clear();
+            buf
+        };
+
+        // Fill the buffer.
+        let n = reader
+            .by_ref()
+            .take(buf_size as u64)
+            .read_to_end(&mut buf)
+            .unwrap();
+        debug_assert_eq!(
+            buf.capacity(),
+            buf_size,
+            "Rust versions prior to 1.39.0 fail this assert, see https://github.com/rust-lang/rust/pull/63216",
+        );
+
+        // If the buffer is partial, we've reached EOF. Drain all the existing jobs, process the
+        // buffer as a regular update, and quit.
+        if n < buf_size {
+            // Drain existing jobs.
+            while let Some(next_receiver) = receivers.pop_front() {
+                let (parent_node, buf) = next_receiver.recv().unwrap();
+                assert_eq!(buf.len(), buf_size);
+                push_parent_node(&mut state, &parent_node, buf_size as u64);
+            }
+
+            // Process the buffer as a regular update and quit.
+            state.update(&buf);
+            return state.finalize();
+        }
+
+        // If we didn't quit above, the buffer is full. Fire off a Rayon task to hash it, and
+        // continue the loop.
+        let chunks_so_far =
+            state.chunk_state.chunk_counter + (receivers.len() * buf_size / CHUNK_LEN) as u64;
+        let (sender, receiver) = crossbeam_channel::bounded(1);
+        receivers.push_back(receiver);
+        let key = state.key;
+        let flags = state.chunk_state.flags;
+        let platform = state.chunk_state.platform;
+        rayon::spawn_fifo(move || {
+            let parent_node = compress_subtree_to_parent_node::<join::SerialJoin>(
+                &buf,
+                &key,
+                chunks_so_far,
+                flags,
+                platform,
+            );
+            sender.send((parent_node, buf)).unwrap();
+        });
+    }
+}
+
+#[test]
+#[cfg(feature = "rayon")]
+#[cfg(feature = "std")]
+fn test_hash_reader_rayon() {
+    let mut buf = [0; test::TEST_CASES_MAX];
+    test::paint_test_input(&mut buf);
+    for &case in test::TEST_CASES {
+        eprintln!();
+        eprintln!(
+            "===================== case {} ==========================",
+            case
+        );
+        let input = &buf[..case];
+        eprintln!("expected >>>");
+        let expected = hash(input);
+        // Note that &[u8] implements Read.
+        eprintln!("found >>>");
+        let found = hash_reader_rayon(input, 2048, 3);
+        assert_eq!(expected, found);
     }
 }
