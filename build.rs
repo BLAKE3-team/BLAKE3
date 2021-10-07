@@ -44,6 +44,14 @@ fn is_x86_32() -> bool {
     arch == "i386" || arch == "i586" || arch == "i686"
 }
 
+fn is_arm() -> bool {
+    is_armv7() || is_aarch64() || target_components()[0] == "arm"
+}
+
+fn is_aarch64() -> bool {
+    target_components()[0] == "aarch64"
+}
+
 fn is_armv7() -> bool {
     target_components()[0] == "armv7"
 }
@@ -237,7 +245,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    if is_neon() {
+    if (is_arm() && is_neon()) || (is_aarch64() && !is_pure()) {
+        println!("cargo:rustc-cfg=blake3_neon");
         build_neon_c_intrinsics();
     }
 
