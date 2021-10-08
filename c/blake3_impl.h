@@ -45,6 +45,10 @@ enum blake3_flags {
 #include <immintrin.h>
 #endif
 
+#if defined(__aarch64__) && !defined(BLAKE3_NO_NEON) && !defined(BLAKE3_USE_NEON)
+#define BLAKE3_USE_NEON
+#endif
+
 #if defined(IS_X86)
 #define MAX_SIMD_DEGREE 16
 #elif defined(BLAKE3_USE_NEON)

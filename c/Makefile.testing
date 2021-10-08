@@ -42,6 +42,10 @@ EXTRAFLAGS += -DBLAKE3_USE_NEON
 TARGETS += blake3_neon.o
 endif
 
+ifdef BLAKE3_NO_NEON
+EXTRAFLAGS += -DBLAKE3_NO_NEON
+endif
+
 all: blake3.c blake3_dispatch.c blake3_portable.c main.c $(TARGETS)
 	$(CC) $(CFLAGS) $(EXTRAFLAGS) $^ -o $(NAME) $(LDFLAGS)
 

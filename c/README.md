@@ -250,13 +250,22 @@ gcc -shared -O3 -o libblake3.so -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_A
 
 ## ARM NEON
 
-The NEON implementation is not enabled by default on ARM, since not all
-ARM targets support it. To enable it, set `BLAKE3_USE_NEON=1`. Here's an
-example of building a shared library on ARM Linux with NEON support:
+The NEON implementation is enabled by default on AARCH64, but not on
+other ARM targets, since not all of them support it. To enable it, set
+`BLAKE3_USE_NEON=1`. Here's an example of building a shared library on
+ARM Linux with NEON support:
 
 ```bash
 gcc -shared -O3 -o libblake3.so -DBLAKE3_USE_NEON blake3.c blake3_dispatch.c \
     blake3_portable.c blake3_neon.c
+```
+
+To explicitiy disable using NEON instructions on AARCH64, set
+`BLAKE3_NO_NEON=1`.
+
+```bash
+gcc -shared -O3 -o libblake3.so -DBLAKE3_NO_NEON blake3.c blake3_dispatch.c \
+    blake3_portable.c 
 ```
 
 Note that on some targets (ARMv7 in particular), extra flags may be
