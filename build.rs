@@ -17,6 +17,10 @@ fn is_neon() -> bool {
     defined("CARGO_FEATURE_NEON")
 }
 
+fn is_no_neon() -> bool {
+    defined("CARGO_FEATURE_NO_NEON")
+}
+
 fn is_ci() -> bool {
     defined("BLAKE3_CI")
 }
@@ -226,6 +230,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("It doesn't make sense to enable both \"pure\" and \"neon\".");
     }
 
+    if is_no_neon() && is_neon() {
+        panic!("It doesn't make sense to enable both \"no_neon\" and \"neon\".");
+    }
+
     if is_x86_64() || is_x86_32() {
         let support = c_compiler_support();
         if is_x86_32() || should_prefer_intrinsics() || is_pure() || support == NoCompiler {
@@ -245,7 +253,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    if (is_arm() && is_neon()) || (is_aarch64() && !is_pure()) {
+    if (is_arm() && is_neon()) || (!is_no_neon() && !is_pure() && is_aarch64()) {
         println!("cargo:rustc-cfg=blake3_neon");
         build_neon_c_intrinsics();
     }

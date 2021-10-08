@@ -73,6 +73,7 @@ no_sse2 = []
 no_sse41 = []
 no_avx2 = []
 no_avx512 = []
+no_neon = []
 
 [package.metadata.docs.rs]
 # Document Hasher::update_rayon on docs.rs.
