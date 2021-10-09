@@ -516,7 +516,8 @@ fn bench_two_updates(b: &mut Bencher) {
     });
 }
 
-const BIG: usize = 4 * 1024 * KIB;
+const BIG: usize = 1 << 25;
+const BUF: usize = 1 << 18;
 
 #[bench]
 #[cfg(feature = "rayon")]
@@ -528,5 +529,327 @@ fn bench_rayon_recursive_big(b: &mut Bencher) {
 #[cfg(feature = "rayon")]
 fn bench_rayon_reader_big(b: &mut Bencher) {
     let mut input = RandomInput::new(b, BIG);
-    b.iter(|| blake3::hash_reader_rayon(input.get(), 1 << 15, 2 * num_cpus::get()));
+    b.iter(|| blake3::hash_reader_rayon(input.get(), BUF, 2 * num_cpus::get()));
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_big(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_10(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 10;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_11(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 11;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_12(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 12;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_13(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 13;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_14(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 14;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_15(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 15;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_16(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 16;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_17(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 17;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_18(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 18;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_19(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 19;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_20(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 20;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_21(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 21;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_22(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 22;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_23(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 23;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_24(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 24;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_just_read_25(b: &mut Bencher) {
+    use std::io::prelude::*;
+
+    const BUF: usize = 1 << 25;
+    let mut input = RandomInput::new(b, BIG);
+    b.iter(|| {
+        let reader: &mut &[u8] = &mut input.get();
+        let mut v = Vec::with_capacity(BUF);
+        loop {
+            let n = reader.take(BUF as u64).read_to_end(&mut v).unwrap();
+            if n < BUF {
+                break;
+            }
+        }
+    });
 }
