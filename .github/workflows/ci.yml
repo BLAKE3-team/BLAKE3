@@ -158,8 +158,6 @@ jobs:
     - run: ./c/blake3_c_rust_bindings/cross_test.sh --target ${{ matrix.arch }}
     - run: ./c/blake3_c_rust_bindings/cross_test.sh --target ${{ matrix.arch }} --features=neon
       if: startsWith(matrix.arch, 'armv7-') || startsWith(matrix.arch, 'aarch64-')
-    - run: ./c/blake3_c_rust_bindings/cross_test.sh --target ${{ matrix.arch }} --features=no_neon
-      if: startsWith(matrix.arch, 'aarch64-')
 
   # Currently only on x86.
   c_tests:
