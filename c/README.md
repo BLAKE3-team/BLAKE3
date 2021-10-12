@@ -256,15 +256,15 @@ other ARM targets, since not all of them support it. To enable it, set
 ARM Linux with NEON support:
 
 ```bash
-gcc -shared -O3 -o libblake3.so -DBLAKE3_USE_NEON blake3.c blake3_dispatch.c \
+gcc -shared -O3 -o libblake3.so -DBLAKE3_USE_NEON=1 blake3.c blake3_dispatch.c \
     blake3_portable.c blake3_neon.c
 ```
 
 To explicitiy disable using NEON instructions on AARCH64, set
-`BLAKE3_NO_NEON=1`.
+`BLAKE3_USE_NEON=0`.
 
 ```bash
-gcc -shared -O3 -o libblake3.so -DBLAKE3_NO_NEON blake3.c blake3_dispatch.c \
+gcc -shared -O3 -o libblake3.so -DBLAKE3_USE_NEON=0 blake3.c blake3_dispatch.c \
     blake3_portable.c 
 ```
 
