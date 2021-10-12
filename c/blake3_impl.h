@@ -38,6 +38,10 @@ enum blake3_flags {
 #define IS_X86_32
 #endif
 
+#if defined(__aarch64__) || defined(_M_ARM64)
+#define IS_AARCH64
+#endif
+
 #if defined(IS_X86)
 #if defined(_MSC_VER)
 #include <intrin.h>
@@ -45,7 +49,7 @@ enum blake3_flags {
 #include <immintrin.h>
 #endif
 
-#if defined(__aarch64__) && !defined(BLAKE3_NO_NEON) && !defined(BLAKE3_USE_NEON)
+#if defined(IS_AARCH64) && !defined(BLAKE3_NO_NEON) && !defined(BLAKE3_USE_NEON)
 #define BLAKE3_USE_NEON
 #endif
 
