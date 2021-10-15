@@ -149,6 +149,9 @@ jobs:
     # Test the NEON implementation on ARM targets.
     - run: cross test --target ${{ matrix.arch }} --features=neon
       if: startsWith(matrix.arch, 'armv7-') || startsWith(matrix.arch, 'aarch64-')
+    # NEON is enabled by default on aarch64, disabling it through the no_neon feature.
+    - run: cross test --target ${{ matrix.arch }} --features=no_neon
+      if: startsWith(matrix.arch, 'aarch64-')
     # Test vectors. Note that this uses a hacky script due to path dependency limitations.
     - run: ./test_vectors/cross_test.sh --target ${{ matrix.arch }}
     # C code. Same issue with the hacky script.
