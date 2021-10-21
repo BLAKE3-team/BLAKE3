@@ -349,8 +349,8 @@ INLINE void compress_subtree_to_parent_node(
   // The second half of this loop condition is always true, and we just
   // asserted it above. But GCC can't tell that it's always true, and if NDEBUG
   // is set on platforms where MAX_SIMD_DEGREE_OR_2 == 2, GCC emits spurious
-  // warnings here. GCC 8.5 is particular sensitive, so if you're changing this
-  // code, test it against that version.
+  // warnings here. GCC 8.5 is particularly sensitive, so if you're changing
+  // this code, test it against that version.
   while (num_cvs > 2 && num_cvs <= MAX_SIMD_DEGREE_OR_2) {
     num_cvs =
         compress_parents_parallel(cv_array, num_cvs, key, flags, out_array);
