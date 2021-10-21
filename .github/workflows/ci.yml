@@ -209,3 +209,22 @@ jobs:
     # Build the example.
     - run: make -f Makefile.testing example
       working-directory: ./c
+
+  # Note that this jobs builds AArch64 binaries from an x86_64 host.
+  build_apple_silicon:
+    name: build for Apple Silicon
+    runs-on: macOS-latest
+    strategy:
+      fail-fast: false
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: aarch64-apple-darwin
+        override: true
+    - name: build blake3
+      run: cargo build --target aarch64-apple-darwin
+    - name: build b3sum
+      run: cargo build --target aarch64-apple-darwin
+      working-directory: ./b3sum
