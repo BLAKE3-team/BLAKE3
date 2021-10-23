@@ -34,19 +34,19 @@
 //!
 //! The `std` feature (the only feature enabled by default) is required for
 //! implementations of the [`Write`] and [`Seek`] traits, and also for runtime
-//! CPU feature detection. If this feature is disabled, the only way to use the
-//! SIMD implementations in this crate is to enable the corresponding
-//! instruction sets globally, with e.g. `RUSTFLAGS="-C target-cpu=native"`. The
-//! resulting binary will not be portable to other machines.
+//! CPU feature detection on x86. If this feature is disabled, the only way to
+//! use the x86 SIMD implementations is to enable the corresponding instruction
+//! sets globally, with e.g. `RUSTFLAGS="-C target-cpu=native"`. The resulting
+//! binary will not be portable to other machines.
 //!
 //! The `rayon` feature (disabled by default, but enabled for [docs.rs]) adds
 //! the [`Hasher::update_rayon`] method, for multithreaded hashing. However,
 //! even if this feature is enabled, all other APIs remain single-threaded.
 //!
-//! The `neon` feature enables ARM NEON support. Currently there is no runtime
-//! CPU feature detection for NEON, so you must only enable this feature for
-//! targets that are known to have NEON support. In particular, some ARMv7
-//! targets support NEON, and some don't.
+//! The NEON implementation is enabled by default for AArch64 but requires the
+//! `neon` feature for other ARM targets. Not all ARMv7 CPUs support NEON, and
+//! enabling this feature will produce a binary that's not portable to CPUs
+//! without NEON support.
 //!
 //! The `traits-preview` feature enables implementations of traits from the
 //! RustCrypto [`digest`] and [`crypto-mac`] crates, and re-exports those crates
