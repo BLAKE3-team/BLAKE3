@@ -777,7 +777,6 @@ fn compress_subtree_to_parent_node<J: join::Join>(
 
 // Hash a complete input all at once. Unlike compress_subtree_wide() and
 // compress_subtree_to_parent_node(), this function handles the 1 chunk case.
-// Note that this we use SerialJoin here, so this is always single-threaded.
 fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8) -> Output {
     let platform = Platform::detect();
 
