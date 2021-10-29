@@ -238,8 +238,8 @@ impl ChunkState {
         Output {
             input_chaining_value: self.chaining_value,
             block_words,
-            block_len: self.block_len as u32,
             counter: self.chunk_counter,
+            block_len: self.block_len as u32,
             flags: self.flags | self.start_flag() | CHUNK_END,
         }
     }
