@@ -22,6 +22,7 @@ const NUM_THREADS_ARG: &str = "num-threads";
 const RAW_ARG: &str = "raw";
 const CHECK_ARG: &str = "check";
 const QUIET_ARG: &str = "quiet";
+const FRONT_ARG: &str = "front";
 
 struct Args {
     inner: clap::ArgMatches,
@@ -114,6 +115,11 @@ impl Args {
                          Must be used with --check.",
                     ),
             )
+            .arg(
+                Arg::with_name(FRONT_ARG)
+                    .long(FRONT_ARG)
+                    .help("Uses a from-the-front multithreading strategy."),
+            )
             // wild::args_os() is equivalent to std::env::args_os() on Unix,
             // but on Windows it adds support for globbing.
             .get_matches_from(wild::args_os());
@@ -184,6 +190,10 @@ impl Args {
     fn quiet(&self) -> bool {
         self.inner.is_present(QUIET_ARG)
     }
+
+    fn front(&self) -> bool {
+        self.inner.is_present(FRONT_ARG)
+    }
 }
 
 enum Input {
@@ -219,7 +229,11 @@ impl Input {
             // multiple threads. This doesn't work on stdin, or on some files,
             // and it can also be disabled with --no-mmap.
             Self::Mmap(cursor) => {
-                hasher.update_rayon(cursor.get_ref());
+                if args.front() {
+                    hasher.update_rayon_from_the_front(cursor.get_ref());
+                } else {
+                    hasher.update_rayon(cursor.get_ref());
+                }
             }
             // The slower paths, for stdin or files we didn't/couldn't mmap.
             // This is currently all single-threaded. Doing multi-threaded

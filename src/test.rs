@@ -292,8 +292,15 @@ fn test_compare_reference_impl() {
             // incremental (rayon)
             #[cfg(feature = "rayon")]
             {
+                // regular recursive
                 let mut hasher = crate::Hasher::new();
                 hasher.update_rayon(input);
+                assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+                assert_eq!(hasher.finalize(), test_out);
+
+                // from the front
+                let mut hasher = crate::Hasher::new();
+                hasher.update_rayon_from_the_front_parametrized(input, 2048, 2);
                 assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
                 assert_eq!(hasher.finalize(), test_out);
             }
@@ -321,8 +328,15 @@ fn test_compare_reference_impl() {
             // incremental (rayon)
             #[cfg(feature = "rayon")]
             {
+                // regular recursive
                 let mut hasher = crate::Hasher::new_keyed(&TEST_KEY);
                 hasher.update_rayon(input);
+                assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+                assert_eq!(hasher.finalize(), test_out);
+
+                // from the front
+                let mut hasher = crate::Hasher::new_keyed(&TEST_KEY);
+                hasher.update_rayon_from_the_front_parametrized(input, 2048, 2);
                 assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
                 assert_eq!(hasher.finalize(), test_out);
             }
@@ -351,8 +365,15 @@ fn test_compare_reference_impl() {
             // incremental (rayon)
             #[cfg(feature = "rayon")]
             {
+                // regular recursive
                 let mut hasher = crate::Hasher::new_derive_key(context);
                 hasher.update_rayon(input);
+                assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+                assert_eq!(hasher.finalize(), *array_ref!(test_out, 0, 32));
+
+                // from the front
+                let mut hasher = crate::Hasher::new_derive_key(context);
+                hasher.update_rayon_from_the_front_parametrized(input, 2048, 2);
                 assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
                 assert_eq!(hasher.finalize(), *array_ref!(test_out, 0, 32));
             }
@@ -433,6 +454,67 @@ fn test_fuzz_hasher() {
             dbg!(input_len);
             let input = &input_buf[total_input..][..input_len];
             hasher.update(input);
+            total_input += input_len;
+        }
+        let expected = reference_hash(&input_buf[..total_input]);
+        assert_eq!(expected, hasher.finalize());
+    }
+}
+
+// There are lots of corner cases to consider in how the update(), update_rayon(), and
+// update_rayon_from_the_front() methods interact. The last of those is very different from the
+// first two, and it does different things with the chunk state. Exercise many different random
+// permutations of these.
+#[test]
+#[cfg(feature = "rayon")]
+fn test_fuzz_rayon() {
+    type UpdateFn = for<'a> fn(&'a mut crate::Hasher, &[u8]) -> &'a mut crate::Hasher;
+    let update_fns: &[UpdateFn] = &[
+        crate::Hasher::update,
+        crate::Hasher::update_rayon,
+        |state, input| state.update_rayon_from_the_front_parametrized(input, 2048, 2),
+    ];
+
+    pub const LENGTHS: &[usize] = &[
+        0,
+        1,
+        CHUNK_LEN - 1,
+        CHUNK_LEN,
+        CHUNK_LEN + 1,
+        2 * CHUNK_LEN - 1,
+        2 * CHUNK_LEN,
+        2 * CHUNK_LEN + 1,
+        3 * CHUNK_LEN - 1,
+        3 * CHUNK_LEN,
+        3 * CHUNK_LEN + 1,
+        4 * CHUNK_LEN - 1,
+        4 * CHUNK_LEN,
+        4 * CHUNK_LEN + 1,
+    ];
+    const LENGTH_MAX: usize = LENGTHS[LENGTHS.len() - 1];
+    let mut input_buf = [0; 3 * LENGTH_MAX];
+    paint_test_input(&mut input_buf);
+
+    // Don't do too many iterations in debug mode, to keep the tests under a
+    // second or so. CI should run tests in release mode also. Provide an
+    // environment variable for specifying a larger number of fuzz iterations.
+    let num_tests = if cfg!(debug_assertions) { 100 } else { 10_000 };
+
+    // Use a fixed RNG seed for reproducibility.
+    let mut rng = rand_chacha::ChaCha8Rng::from_seed([1; 32]);
+    for num_test in 0..num_tests {
+        eprintln!("==================== {} ====================", num_test);
+        let mut hasher = crate::Hasher::new();
+        let mut total_input = 0;
+        // For each test, write 3 inputs of random length, using a randomly chosen update function.
+        for _ in 0..3 {
+            let input_len = *LENGTHS.choose(&mut rng).unwrap();
+            dbg!(input_len);
+            let input = &input_buf[total_input..][..input_len];
+            let update_fn_index = rng.gen_range(0..update_fns.len());
+            dbg!(update_fn_index);
+            let update_fn = update_fns[update_fn_index];
+            update_fn(&mut hasher, input);
             total_input += input_len;
         }
         let expected = reference_hash(&input_buf[..total_input]);

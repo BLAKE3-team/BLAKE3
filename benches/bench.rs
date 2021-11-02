@@ -11,6 +11,8 @@ use rand::prelude::*;
 use test::Bencher;
 
 const KIB: usize = 1024;
+const MIB: usize = 1024 * KIB;
+const BIG: usize = 64 * MIB;
 
 // This struct randomizes two things:
 // 1. The actual bytes of input.
@@ -420,81 +422,175 @@ fn bench_reference_1024_kib(b: &mut Bencher) {
 }
 
 #[cfg(feature = "rayon")]
-fn bench_rayon(b: &mut Bencher, len: usize) {
+fn bench_rayon_recursive(b: &mut Bencher, len: usize) {
     let mut input = RandomInput::new(b, len);
     b.iter(|| blake3::Hasher::new().update_rayon(input.get()).finalize());
 }
 
 #[bench]
 #[cfg(feature = "rayon")]
-fn bench_rayon_0001_block(b: &mut Bencher) {
-    bench_rayon(b, BLOCK_LEN);
+fn bench_rayon_recursive_0001_block(b: &mut Bencher) {
+    bench_rayon_recursive(b, BLOCK_LEN);
 }
 
 #[bench]
 #[cfg(feature = "rayon")]
-fn bench_rayon_0001_kib(b: &mut Bencher) {
-    bench_rayon(b, 1 * KIB);
+fn bench_rayon_recursive_0001_kib(b: &mut Bencher) {
+    bench_rayon_recursive(b, 1 * KIB);
 }
 
 #[bench]
 #[cfg(feature = "rayon")]
-fn bench_rayon_0002_kib(b: &mut Bencher) {
-    bench_rayon(b, 2 * KIB);
+fn bench_rayon_recursive_0002_kib(b: &mut Bencher) {
+    bench_rayon_recursive(b, 2 * KIB);
 }
 
 #[bench]
 #[cfg(feature = "rayon")]
-fn bench_rayon_0004_kib(b: &mut Bencher) {
-    bench_rayon(b, 4 * KIB);
+fn bench_rayon_recursive_0004_kib(b: &mut Bencher) {
+    bench_rayon_recursive(b, 4 * KIB);
 }
 
 #[bench]
 #[cfg(feature = "rayon")]
-fn bench_rayon_0008_kib(b: &mut Bencher) {
-    bench_rayon(b, 8 * KIB);
+fn bench_rayon_recursive_0008_kib(b: &mut Bencher) {
+    bench_rayon_recursive(b, 8 * KIB);
 }
 
 #[bench]
 #[cfg(feature = "rayon")]
-fn bench_rayon_0016_kib(b: &mut Bencher) {
-    bench_rayon(b, 16 * KIB);
+fn bench_rayon_recursive_0016_kib(b: &mut Bencher) {
+    bench_rayon_recursive(b, 16 * KIB);
 }
 
 #[bench]
 #[cfg(feature = "rayon")]
-fn bench_rayon_0032_kib(b: &mut Bencher) {
-    bench_rayon(b, 32 * KIB);
+fn bench_rayon_recursive_0032_kib(b: &mut Bencher) {
+    bench_rayon_recursive(b, 32 * KIB);
 }
 
 #[bench]
 #[cfg(feature = "rayon")]
-fn bench_rayon_0064_kib(b: &mut Bencher) {
-    bench_rayon(b, 64 * KIB);
+fn bench_rayon_recursive_0064_kib(b: &mut Bencher) {
+    bench_rayon_recursive(b, 64 * KIB);
 }
 
 #[bench]
 #[cfg(feature = "rayon")]
-fn bench_rayon_0128_kib(b: &mut Bencher) {
-    bench_rayon(b, 128 * KIB);
+fn bench_rayon_recursive_0128_kib(b: &mut Bencher) {
+    bench_rayon_recursive(b, 128 * KIB);
 }
 
 #[bench]
 #[cfg(feature = "rayon")]
-fn bench_rayon_0256_kib(b: &mut Bencher) {
-    bench_rayon(b, 256 * KIB);
+fn bench_rayon_recursive_0256_kib(b: &mut Bencher) {
+    bench_rayon_recursive(b, 256 * KIB);
 }
 
 #[bench]
 #[cfg(feature = "rayon")]
-fn bench_rayon_0512_kib(b: &mut Bencher) {
-    bench_rayon(b, 512 * KIB);
+fn bench_rayon_recursive_0512_kib(b: &mut Bencher) {
+    bench_rayon_recursive(b, 512 * KIB);
 }
 
 #[bench]
 #[cfg(feature = "rayon")]
-fn bench_rayon_1024_kib(b: &mut Bencher) {
-    bench_rayon(b, 1024 * KIB);
+fn bench_rayon_recursive_1024_kib(b: &mut Bencher) {
+    bench_rayon_recursive(b, 1024 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_recursive_big(b: &mut Bencher) {
+    bench_rayon_recursive(b, BIG);
+}
+
+#[cfg(feature = "rayon")]
+fn bench_rayon_from_the_front(b: &mut Bencher, len: usize) {
+    let mut input = RandomInput::new(b, len);
+    b.iter(|| {
+        blake3::Hasher::new()
+            .update_rayon_from_the_front(input.get())
+            .finalize()
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_from_the_front_0001_block(b: &mut Bencher) {
+    bench_rayon_from_the_front(b, BLOCK_LEN);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_from_the_front_0001_kib(b: &mut Bencher) {
+    bench_rayon_from_the_front(b, 1 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_from_the_front_0002_kib(b: &mut Bencher) {
+    bench_rayon_from_the_front(b, 2 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_from_the_front_0004_kib(b: &mut Bencher) {
+    bench_rayon_from_the_front(b, 4 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_from_the_front_0008_kib(b: &mut Bencher) {
+    bench_rayon_from_the_front(b, 8 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_from_the_front_0016_kib(b: &mut Bencher) {
+    bench_rayon_from_the_front(b, 16 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_from_the_front_0032_kib(b: &mut Bencher) {
+    bench_rayon_from_the_front(b, 32 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_from_the_front_0064_kib(b: &mut Bencher) {
+    bench_rayon_from_the_front(b, 64 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_from_the_front_0128_kib(b: &mut Bencher) {
+    bench_rayon_from_the_front(b, 128 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_from_the_front_0256_kib(b: &mut Bencher) {
+    bench_rayon_from_the_front(b, 256 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_from_the_front_0512_kib(b: &mut Bencher) {
+    bench_rayon_from_the_front(b, 512 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_from_the_front_1024_kib(b: &mut Bencher) {
+    bench_rayon_from_the_front(b, 1024 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_from_the_front_big(b: &mut Bencher) {
+    bench_rayon_from_the_front(b, BIG);
 }
 
 // This checks that update() splits up its input in increasing powers of 2, so

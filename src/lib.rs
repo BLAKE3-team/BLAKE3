@@ -1058,9 +1058,32 @@ impl Hasher {
     // merging with each of them separately, so that the second CV will always
     // remain unmerged. (That also helps us support extendable output when
     // we're hashing an input all-at-once.)
-    fn push_cv(&mut self, new_cv: &CVBytes, chunk_counter: u64) {
-        self.merge_cv_stack(chunk_counter);
+    fn push_cv(&mut self, new_cv: &CVBytes, subtree_chunks: usize) {
+        debug_assert_eq!(self.chunk_state.len(), 0, "the chunk state must be empty");
+        debug_assert_eq!(
+            self.chunk_state.chunk_counter % subtree_chunks as u64,
+            0,
+            "the size of the subtree must evenly divide the number of chunks so far",
+        );
+        self.merge_cv_stack(self.chunk_state.chunk_counter);
+        self.chunk_state.chunk_counter += subtree_chunks as u64;
         self.cv_stack.push(*new_cv);
+    }
+
+    fn finish_chunk(&mut self) {
+        debug_assert_eq!(
+            self.chunk_state.len(),
+            CHUNK_LEN,
+            "the chunk state must be full",
+        );
+        let chunk_cv = self.chunk_state.output().chaining_value();
+        self.chunk_state = ChunkState::new(
+            &self.key,
+            self.chunk_state.chunk_counter, // bumped in push_cv
+            self.chunk_state.flags,
+            self.chunk_state.platform,
+        );
+        self.push_cv(&chunk_cv, 1);
     }
 
     /// Add input bytes to the hash state. You can call this any number of
@@ -1117,15 +1140,7 @@ impl Hasher {
                 // We've filled the current chunk, and there's more input
                 // coming, so we know it's not the root and we can finalize it.
                 // Then we'll proceed to hashing whole chunks below.
-                debug_assert_eq!(self.chunk_state.len(), CHUNK_LEN);
-                let chunk_cv = self.chunk_state.output().chaining_value();
-                self.push_cv(&chunk_cv, self.chunk_state.chunk_counter);
-                self.chunk_state = ChunkState::new(
-                    &self.key,
-                    self.chunk_state.chunk_counter + 1,
-                    self.chunk_state.flags,
-                    self.chunk_state.platform,
-                );
+                self.finish_chunk();
             } else {
                 return self;
             }
@@ -1172,7 +1187,6 @@ impl Hasher {
             // The shrunken subtree_len might now be 1 chunk long. If so, hash
             // that one chunk by itself. Otherwise, compress the subtree into a
             // pair of CVs.
-            let subtree_chunks = (subtree_len / CHUNK_LEN) as u64;
             if subtree_len <= CHUNK_LEN {
                 debug_assert_eq!(subtree_len, CHUNK_LEN);
                 self.push_cv(
@@ -1185,7 +1199,7 @@ impl Hasher {
                     .update(&input[..subtree_len])
                     .output()
                     .chaining_value(),
-                    self.chunk_state.chunk_counter,
+                    1,
                 );
             } else {
                 // This is the high-performance happy path, though getting here
@@ -1202,13 +1216,10 @@ impl Hasher {
                 // Push the two CVs we received into the CV stack in order. Because
                 // the stack merges lazily, this guarantees we aren't merging the
                 // root.
-                self.push_cv(left_cv, self.chunk_state.chunk_counter);
-                self.push_cv(
-                    right_cv,
-                    self.chunk_state.chunk_counter + (subtree_chunks / 2),
-                );
+                let subtree_chunks = subtree_len / CHUNK_LEN;
+                self.push_cv(left_cv, subtree_chunks / 2);
+                self.push_cv(right_cv, subtree_chunks / 2);
             }
-            self.chunk_state.chunk_counter += subtree_chunks;
             input = &input[subtree_len..];
         }
 
@@ -1223,6 +1234,109 @@ impl Hasher {
         }
 
         self
+    }
+
+    #[cfg(feature = "rayon")]
+    fn push_parent_node(&mut self, parent_node: &[u8; BLOCK_LEN], job_size: usize) {
+        debug_assert_eq!(self.count() % job_size as u64, 0);
+
+        let (left, right) = arrayref::array_refs!(parent_node, 32, 32);
+        let job_chunks = job_size / CHUNK_LEN;
+        self.push_cv(left, job_chunks / 2);
+        self.push_cv(right, job_chunks / 2);
+    }
+
+    #[cfg(feature = "rayon")]
+    pub fn update_rayon_from_the_front_parametrized(
+        &mut self,
+        mut input: &[u8],
+        job_size: usize,
+        max_jobs: usize,
+    ) -> &mut Self {
+        assert!(max_jobs > 0);
+        assert!(job_size >= 2 * CHUNK_LEN);
+        assert_eq!(job_size.count_ones(), 1, "must be a power of two");
+
+        // If we've already consumed some input, we need to ensure that the amount consumed so far
+        // is a multiple of job_size. If needed, consume more bytes from the front of the input.
+        if self.count() % job_size as u64 != 0 {
+            let remainder = job_size - (self.count() % job_size as u64) as usize;
+            if input.len() < remainder {
+                // Not enough input. Short-circuit.
+                return self.update(input);
+            }
+            self.update(&input[..remainder]);
+            input = &input[remainder..];
+        }
+        debug_assert_eq!(self.count() % job_size as u64, 0);
+
+        // If there are any bytes in the chunk state, we need to clear it. At this point it should
+        // be either completely empty or completely full.
+        if self.chunk_state.len() != 0 {
+            self.finish_chunk();
+        }
+        debug_assert_eq!(self.chunk_state.len(), 0);
+
+        // Rayon jobs will be allocated on the heap and will run in the background, but they need
+        // to borrow `input`, which is bound to the caller's stack. This scope makes that work
+        // without lifetime errors.
+        rayon::scope(|scope| {
+            let mut output_receivers =
+                std::collections::VecDeque::<crossbeam_channel::Receiver<[u8; BLOCK_LEN]>>::new();
+
+            while input.len() >= job_size {
+                // If we already have max_jobs outstanding, await one of them.
+                debug_assert!(output_receivers.len() <= max_jobs);
+                if output_receivers.len() == max_jobs {
+                    let parent_node = output_receivers.pop_front().unwrap().recv().unwrap();
+                    self.push_parent_node(&parent_node, job_size);
+                }
+
+                // Start a new job.
+                let take = cmp::min(job_size, input.len());
+                let job_input = &input[..take];
+                input = &input[take..];
+                let chunks_per_job = job_size / CHUNK_LEN;
+                let job_chunk_counter = self.chunk_state.chunk_counter
+                    + (chunks_per_job * output_receivers.len()) as u64;
+                let key = self.key;
+                let flags = self.chunk_state.flags;
+                let platform = self.chunk_state.platform;
+                let (sender, receiver) = crossbeam_channel::bounded(1);
+                output_receivers.push_back(receiver);
+                scope.spawn(move |_| {
+                    let parent_node = compress_subtree_to_parent_node::<join::SerialJoin>(
+                        job_input,
+                        &key,
+                        job_chunk_counter,
+                        flags,
+                        platform,
+                    );
+                    sender.send(parent_node).unwrap();
+                });
+            }
+
+            // We've kicked off as many jobs as we can. Wait for them to finish.
+            while let Some(receiver) = output_receivers.pop_front() {
+                let parent_node = receiver.recv().unwrap();
+                self.push_parent_node(&parent_node, job_size);
+            }
+        });
+
+        // Consume any remainder input shorter than FRONT_JOB_SIZE.
+        debug_assert!(input.len() < job_size);
+        self.update(input);
+
+        self
+    }
+
+    #[cfg(feature = "rayon")]
+    pub fn update_rayon_from_the_front(&mut self, input: &[u8]) -> &mut Self {
+        // These parameters seem roughly optimal on my i5-1145G7 (Tiger Lake) laptop CPU.
+        // TODO: smaller job sizes when the input is small
+        let job_size = 256 * 1024;
+        let max_jobs = num_cpus::get() * 2;
+        self.update_rayon_from_the_front_parametrized(input, job_size, max_jobs)
     }
 
     fn final_output(&self) -> Output {
