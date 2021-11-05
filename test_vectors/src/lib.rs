@@ -240,8 +240,9 @@ mod tests {
     ) {
         let mut out = vec![0; expected_hash.len()];
         let mut hasher = blake3::Hasher::new();
-        for &b in input {
-            hasher.update(&[b]);
+        for i in 0..input.len() {
+            hasher.update(&[input[i]]);
+            assert_eq!(i as u64 + 1, hasher.count());
         }
         hasher.finalize_xof().fill(&mut out);
         assert_eq!(expected_hash, &out[..]);
@@ -249,8 +250,9 @@ mod tests {
 
         let mut out = vec![0; expected_keyed_hash.len()];
         let mut hasher = blake3::Hasher::new_keyed(key);
-        for &b in input {
-            hasher.update(&[b]);
+        for i in 0..input.len() {
+            hasher.update(&[input[i]]);
+            assert_eq!(i as u64 + 1, hasher.count());
         }
         hasher.finalize_xof().fill(&mut out);
         assert_eq!(expected_keyed_hash, &out[..]);
@@ -258,8 +260,9 @@ mod tests {
 
         let mut out = vec![0; expected_derive_key.len()];
         let mut hasher = blake3::Hasher::new_derive_key(TEST_CONTEXT);
-        for &b in input {
-            hasher.update(&[b]);
+        for i in 0..input.len() {
+            hasher.update(&[input[i]]);
+            assert_eq!(i as u64 + 1, hasher.count());
         }
         hasher.finalize_xof().fill(&mut out);
         assert_eq!(expected_derive_key, &out[..]);

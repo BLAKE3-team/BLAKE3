@@ -1301,6 +1301,11 @@ impl Hasher {
     pub fn finalize_xof(&self) -> OutputReader {
         OutputReader::new(self.final_output())
     }
+
+    /// Return the total number of bytes hashed so far.
+    pub fn count(&self) -> u64 {
+        self.chunk_state.chunk_counter * CHUNK_LEN as u64 + self.chunk_state.len() as u64
+    }
 }
 
 // Don't derive(Debug), because the state may be secret.
