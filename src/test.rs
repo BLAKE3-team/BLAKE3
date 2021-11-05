@@ -564,3 +564,33 @@ fn test_hex_encoding_decoding() {
     #[cfg(feature = "std")]
     assert_eq!(_result.to_string(), "invalid hex character: 0x80");
 }
+
+// This test is a mimized failure case for the Windows SSE2 bug described in
+// https://github.com/BLAKE3-team/BLAKE3/issues/206.
+//
+// Before that issue was fixed, this test would fail on Windows in the following configuration:
+//
+//     cargo test --features=no_avx512,no_avx2,no_sse41 --release
+//
+// Bugs like this one (stomping on a caller's register) are very sensitive to the details of
+// surrounding code, so it's not especially likely that this test will catch another bug (or even
+// the same bug) in the future. Still, there's no harm in keeping it.
+#[test]
+fn test_trigger_sse2() {
+    // This stupid loop has to be here to trigger the bug. I don't know why.
+    for _ in &[0] {
+        // The length 65 (two blocks) is significant. It doesn't repro with 64 (one block). It also
+        // doesn't repro with an all-zero input.
+        let input = &[0xff; 65];
+        let expected_hash = [
+            183, 235, 50, 217, 156, 24, 190, 219, 2, 216, 176, 255, 224, 53, 28, 95, 57, 148, 179,
+            245, 162, 90, 37, 121, 0, 142, 219, 62, 234, 204, 225, 161,
+        ];
+
+        // This throwaway call has to be here to trigger the bug.
+        crate::Hasher::new().update(input);
+
+        // This assert fails when the bug is triggered.
+        assert_eq!(crate::Hasher::new().update(input).finalize(), expected_hash);
+    }
+}
