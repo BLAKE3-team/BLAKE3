@@ -80,10 +80,10 @@ Similarly, if the filepath contained a backslash, `b3sum` would escape it as
 
 ## Invalid Unicode
 
-This is where `b3sum` and `md5um` diverge. Apart from the newline and backslash
-escapes described above, `md5sum` copies all other filepath bytes verbatim to
-its output. That means its output encoding is "ASCII plus whatever bytes we got
-from the command line". This creates two problems:
+This is where `b3sum` and `md5sum` diverge. Apart from the newline and
+backslash escapes described above, `md5sum` copies all other filepath bytes
+verbatim to its output. That means its output encoding is "ASCII plus whatever
+bytes we got from the command line". This creates two problems:
 
 1. Printing something that isn't UTF-8 is kind of gross.
 2. Windows support.
