@@ -22,6 +22,9 @@ memmap2 = "0.5.3"
 rayon = "1.2.1"
 wild = "2.0.3"
 
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["memoryapi", "processthreadsapi"] }
+
 [dev-dependencies]
 duct = "0.13.3"
 tempfile = "3.1.0"

@@ -23,6 +23,7 @@ const RAW_ARG: &str = "raw";
 const CHECK_ARG: &str = "check";
 const QUIET_ARG: &str = "quiet";
 const FRONT_ARG: &str = "front";
+const PREFETCH_ARG: &str = "prefetch";
 
 struct Args {
     inner: clap::ArgMatches,
@@ -120,6 +121,11 @@ impl Args {
                     .long(FRONT_ARG)
                     .help("Uses a from-the-front multithreading strategy."),
             )
+            .arg(
+                Arg::with_name(PREFETCH_ARG)
+                    .long(PREFETCH_ARG)
+                    .help("Uses OS-specific prefetch hints when memory mapping."),
+            )
             // wild::args_os() is equivalent to std::env::args_os() on Unix,
             // but on Windows it adds support for globbing.
             .get_matches_from(wild::args_os());
@@ -194,6 +200,10 @@ impl Args {
     fn front(&self) -> bool {
         self.inner.is_present(FRONT_ARG)
     }
+
+    fn prefetch(&self) -> bool {
+        self.inner.is_present(PREFETCH_ARG)
+    }
 }
 
 enum Input {
@@ -229,6 +239,22 @@ impl Input {
             // multiple threads. This doesn't work on stdin, or on some files,
             // and it can also be disabled with --no-mmap.
             Self::Mmap(cursor) => {
+                if args.prefetch() {
+                    #[cfg(windows)]
+                    unsafe {
+                        let mut entries = [winapi::um::memoryapi::WIN32_MEMORY_RANGE_ENTRY {
+                            VirtualAddress: cursor.get_ref().as_ptr()
+                                as *mut winapi::ctypes::c_void,
+                            NumberOfBytes: cursor.get_ref().len(),
+                        }];
+                        winapi::um::memoryapi::PrefetchVirtualMemory(
+                            winapi::um::processthreadsapi::GetCurrentProcess(),
+                            entries.len(),
+                            entries.as_mut_ptr(),
+                            0,
+                        );
+                    }
+                }
                 if args.front() {
                     hasher.update_rayon_from_the_front(cursor.get_ref());
                 } else {
