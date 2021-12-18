@@ -129,12 +129,14 @@ pub const KEY_LEN: usize = 32;
 const MAX_DEPTH: usize = 54; // 2^54 * CHUNK_LEN = 2^64
 use guts::{BLOCK_LEN, CHUNK_LEN};
 
-// While iterating the compression function within a chunk, the CV is
-// represented as words, to avoid doing two extra endianness conversions for
-// each compression in the portable implementation. But the hash_many interface
-// needs to hash both input bytes and parent nodes, so its better for its
-// output CVs to be represented as bytes.
-type CVWords = [u32; 8];
+pub fn default_front_job_size() -> usize {
+    256 * 1024
+}
+pub fn default_front_max_jobs() -> usize {
+    num_cpus::get() * 2
+}
+
+pub type CVWords = [u32; 8];
 type CVBytes = [u8; 32]; // little-endian
 
 const IV: &CVWords = &[
@@ -1334,8 +1336,8 @@ impl Hasher {
     pub fn update_rayon_from_the_front(&mut self, input: &[u8]) -> &mut Self {
         // These parameters seem roughly optimal on my i5-1145G7 (Tiger Lake) laptop CPU.
         // TODO: smaller job sizes when the input is small
-        let job_size = 256 * 1024;
-        let max_jobs = num_cpus::get() * 2;
+        let job_size = default_front_max_jobs();
+        let max_jobs = default_front_max_jobs();
         self.update_rayon_from_the_front_parametrized(input, job_size, max_jobs)
     }
 

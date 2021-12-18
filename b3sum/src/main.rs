@@ -23,6 +23,8 @@ const RAW_ARG: &str = "raw";
 const CHECK_ARG: &str = "check";
 const QUIET_ARG: &str = "quiet";
 const FRONT_ARG: &str = "front";
+const FRONT_JOBS_ARG: &str = "front-jobs";
+const FRONT_SIZE_ARG: &str = "front-size-kb";
 const PREFETCH_ARG: &str = "prefetch";
 
 struct Args {
@@ -122,6 +124,16 @@ impl Args {
                     .help("Uses a from-the-front multithreading strategy."),
             )
             .arg(
+                Arg::with_name(FRONT_JOBS_ARG)
+                    .long(FRONT_JOBS_ARG)
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::with_name(FRONT_SIZE_ARG)
+                    .long(FRONT_SIZE_ARG)
+                    .takes_value(true),
+            )
+            .arg(
                 Arg::with_name(PREFETCH_ARG)
                     .long(PREFETCH_ARG)
                     .help("Uses OS-specific prefetch hints when memory mapping."),
@@ -201,6 +213,22 @@ impl Args {
         self.inner.is_present(FRONT_ARG)
     }
 
+    fn front_jobs(&self) -> usize {
+        if let Some(s) = self.inner.value_of(FRONT_JOBS_ARG) {
+            s.parse().unwrap()
+        } else {
+            blake3::default_front_max_jobs()
+        }
+    }
+
+    fn front_size(&self) -> usize {
+        if let Some(s) = self.inner.value_of(FRONT_SIZE_ARG) {
+            s.parse::<usize>().unwrap() * 1024
+        } else {
+            blake3::default_front_job_size()
+        }
+    }
+
     fn prefetch(&self) -> bool {
         self.inner.is_present(PREFETCH_ARG)
     }
@@ -256,7 +284,11 @@ impl Input {
                     }
                 }
                 if args.front() {
-                    hasher.update_rayon_from_the_front(cursor.get_ref());
+                    hasher.update_rayon_from_the_front_parametrized(
+                        cursor.get_ref(),
+                        args.front_size(),
+                        args.front_jobs(),
+                    );
                 } else {
                     hasher.update_rayon(cursor.get_ref());
                 }
