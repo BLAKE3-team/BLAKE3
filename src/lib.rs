@@ -49,13 +49,12 @@
 //! without NEON support.
 //!
 //! The `traits-preview` feature enables implementations of traits from the
-//! RustCrypto [`digest`] and [`crypto-mac`] crates, and re-exports those crates
-//! as `traits::digest` and `traits::crypto_mac`. However, the traits aren't
-//! stable, and they're expected to change in incompatible ways before those
-//! crates reach 1.0. For that reason, this crate makes no SemVer guarantees for
-//! this feature, and callers who use it should expect breaking changes between
-//! patch versions. (The "-preview" feature name follows the conventions of the
-//! RustCrypto [`signature`] crate.)
+//! RustCrypto [`digest`] crate, and re-exports those crates as
+//! `traits::digest`. However, the traits aren't stable, and they're expected to
+//! change in incompatible ways before those crates reach 1.0. For that reason,
+//! this crate makes no SemVer guarantees for this feature, and callers who use
+//! it should expect breaking changes between patch versions. (The "-preview"
+//! feature name follows the conventions of the RustCrypto [`signature`] crate.)
 //!
 //! [`Hasher::update_rayon`]: struct.Hasher.html#method.update_rayon
 //! [BLAKE3]: https://blake3.io
@@ -64,7 +63,6 @@
 //! [`Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
 //! [`Seek`]: https://doc.rust-lang.org/std/io/trait.Seek.html
 //! [`digest`]: https://crates.io/crates/digest
-//! [`crypto-mac`]: https://crates.io/crates/crypto-mac
 //! [`signature`]: https://crates.io/crates/signature
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -901,8 +899,7 @@ fn parent_node_output(
 ///
 /// When the `traits-preview` Cargo feature is enabled, this type implements
 /// several commonly used traits from the
-/// [`digest`](https://crates.io/crates/digest) and
-/// [`crypto_mac`](https://crates.io/crates/crypto-mac) crates. However, those
+/// [`digest`](https://crates.io/crates/digest) crate. However, those
 /// traits aren't stable, and they're expected to change in incompatible ways
 /// before those crates reach 1.0. For that reason, this crate makes no SemVer
 /// guarantees for this feature, and callers who use it should expect breaking
