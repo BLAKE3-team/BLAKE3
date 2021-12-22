@@ -1,24 +1,18 @@
-//! Implementations of commonly used traits like
-//! [`digest::Digest`](https://crates.io/crates/digest) and
-//! [`crypto_mac::Mac`](https://crates.io/crates/crypto-mac).
+//! Implementations of commonly used traits like `Digest` and `Mac` from the
+//! [`digest`](https://crates.io/crates/digest) crate.
 
-pub use crypto_mac;
 pub use digest;
 
 use crate::{Hasher, OutputReader};
-use digest::generic_array::{
-    typenum::{U32, U64},
-    GenericArray,
-};
+use digest::crypto_common;
+use digest::generic_array::{typenum::U32, GenericArray};
 
-impl digest::BlockInput for Hasher {
-    type BlockSize = U64;
-}
+impl digest::HashMarker for Hasher {}
 
 impl digest::Update for Hasher {
     #[inline]
-    fn update(&mut self, data: impl AsRef<[u8]>) {
-        self.update(data.as_ref());
+    fn update(&mut self, data: &[u8]) {
+        self.update(data);
     }
 }
 
@@ -29,14 +23,18 @@ impl digest::Reset for Hasher {
     }
 }
 
-impl digest::FixedOutput for Hasher {
+impl digest::OutputSizeUser for Hasher {
     type OutputSize = U32;
+}
 
+impl digest::FixedOutput for Hasher {
     #[inline]
     fn finalize_into(self, out: &mut GenericArray<u8, Self::OutputSize>) {
         out.copy_from_slice(self.finalize().as_bytes());
     }
+}
 
+impl digest::FixedOutputReset for Hasher {
     #[inline]
     fn finalize_into_reset(&mut self, out: &mut GenericArray<u8, Self::OutputSize>) {
         out.copy_from_slice(self.finalize().as_bytes());
@@ -51,7 +49,9 @@ impl digest::ExtendableOutput for Hasher {
     fn finalize_xof(self) -> Self::Reader {
         Hasher::finalize_xof(&self)
     }
+}
 
+impl digest::ExtendableOutputReset for Hasher {
     #[inline]
     fn finalize_xof_reset(&mut self) -> Self::Reader {
         let reader = Hasher::finalize_xof(self);
@@ -67,32 +67,17 @@ impl digest::XofReader for OutputReader {
     }
 }
 
-impl crypto_mac::NewMac for Hasher {
+impl crypto_common::KeySizeUser for Hasher {
     type KeySize = U32;
-
-    #[inline]
-    fn new(key: &crypto_mac::Key<Self>) -> Self {
-        let key_bytes: [u8; 32] = (*key).into();
-        Hasher::new_keyed(&key_bytes)
-    }
 }
 
-impl crypto_mac::Mac for Hasher {
-    type OutputSize = U32;
+impl digest::MacMarker for Hasher {}
 
+impl digest::KeyInit for Hasher {
     #[inline]
-    fn update(&mut self, data: &[u8]) {
-        self.update(data);
-    }
-
-    #[inline]
-    fn reset(&mut self) {
-        self.reset();
-    }
-
-    #[inline]
-    fn finalize(self) -> crypto_mac::Output<Self> {
-        crypto_mac::Output::new(digest::Digest::finalize(self))
+    fn new(key: &digest::Key<Self>) -> Self {
+        let key_bytes: [u8; 32] = (*key).into();
+        Hasher::new_keyed(&key_bytes)
     }
 }
 
@@ -132,26 +117,26 @@ mod test {
         let mut hasher3: crate::Hasher = digest::Digest::new();
         digest::Digest::update(&mut hasher3, b"foobarbaz");
         let mut out3 = [0; 32];
-        digest::FixedOutput::finalize_into_reset(
+        digest::FixedOutputReset::finalize_into_reset(
             &mut hasher3,
             GenericArray::from_mut_slice(&mut out3),
         );
         digest::Digest::update(&mut hasher3, b"foobarbaz");
         let mut out4 = [0; 32];
-        digest::FixedOutput::finalize_into_reset(
+        digest::FixedOutputReset::finalize_into_reset(
             &mut hasher3,
             GenericArray::from_mut_slice(&mut out4),
         );
         digest::Digest::update(&mut hasher3, b"foobarbaz");
         let mut xof3 = [0; 301];
         digest::XofReader::read(
-            &mut digest::ExtendableOutput::finalize_xof_reset(&mut hasher3),
+            &mut digest::ExtendableOutputReset::finalize_xof_reset(&mut hasher3),
             &mut xof3,
         );
         digest::Digest::update(&mut hasher3, b"foobarbaz");
         let mut xof4 = [0; 301];
         digest::XofReader::read(
-            &mut digest::ExtendableOutput::finalize_xof_reset(&mut hasher3),
+            &mut digest::ExtendableOutputReset::finalize_xof_reset(&mut hasher3),
             &mut xof4,
         );
         assert_eq!(out1.as_bytes(), &out3[..]);
@@ -172,13 +157,13 @@ mod test {
 
         // Trait implementation.
         let generic_key = (*key).into();
-        let mut hasher2: crate::Hasher = crypto_mac::NewMac::new(&generic_key);
-        crypto_mac::Mac::update(&mut hasher2, b"xxx");
-        crypto_mac::Mac::reset(&mut hasher2);
-        crypto_mac::Mac::update(&mut hasher2, b"foo");
-        crypto_mac::Mac::update(&mut hasher2, b"bar");
-        crypto_mac::Mac::update(&mut hasher2, b"baz");
-        let out2 = crypto_mac::Mac::finalize(hasher2);
+        let mut hasher2: crate::Hasher = digest::Mac::new(&generic_key);
+        digest::Mac::update(&mut hasher2, b"xxx");
+        digest::Mac::reset(&mut hasher2);
+        digest::Mac::update(&mut hasher2, b"foo");
+        digest::Mac::update(&mut hasher2, b"bar");
+        digest::Mac::update(&mut hasher2, b"baz");
+        let out2 = digest::Mac::finalize(hasher2);
         assert_eq!(out1.as_bytes(), out2.into_bytes().as_slice());
     }
 }
