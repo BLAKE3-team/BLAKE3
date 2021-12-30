@@ -49,9 +49,9 @@
 //! without NEON support.
 //!
 //! The `traits-preview` feature enables implementations of traits from the
-//! RustCrypto [`digest`] crate, and re-exports those crates as
+//! RustCrypto [`digest`] crate, and re-exports that crate as
 //! `traits::digest`. However, the traits aren't stable, and they're expected to
-//! change in incompatible ways before those crates reach 1.0. For that reason,
+//! change in incompatible ways before that crate reaches 1.0. For that reason,
 //! this crate makes no SemVer guarantees for this feature, and callers who use
 //! it should expect breaking changes between patch versions. (The "-preview"
 //! feature name follows the conventions of the RustCrypto [`signature`] crate.)
@@ -901,7 +901,7 @@ fn parent_node_output(
 /// several commonly used traits from the
 /// [`digest`](https://crates.io/crates/digest) crate. However, those
 /// traits aren't stable, and they're expected to change in incompatible ways
-/// before those crates reach 1.0. For that reason, this crate makes no SemVer
+/// before that crate reaches 1.0. For that reason, this crate makes no SemVer
 /// guarantees for this feature, and callers who use it should expect breaking
 /// changes between patch versions.
 ///
