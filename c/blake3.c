@@ -609,3 +609,8 @@ void blake3_hasher_finalize_seek(const blake3_hasher *self, uint64_t seek,
   }
   output_root_bytes(&output, seek, out, out_len);
 }
+
+void blake3_hasher_reset(blake3_hasher *self) {
+  chunk_state_reset(&self->chunk, self->key, 0);
+  self->cv_stack_len = 0;
+}

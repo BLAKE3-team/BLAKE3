@@ -51,6 +51,7 @@ void blake3_hasher_finalize(const blake3_hasher *self, uint8_t *out,
                             size_t out_len);
 void blake3_hasher_finalize_seek(const blake3_hasher *self, uint64_t seek,
                                  uint8_t *out, size_t out_len);
+void blake3_hasher_reset(blake3_hasher *self);
 
 #ifdef __cplusplus
 }

@@ -185,6 +185,21 @@ parameter for the starting byte position in the output stream. To
 efficiently stream a large output without allocating memory, call this
 function in a loop, incrementing `seek` by the output length each time.
 
+---
+
+```c
+void blake3_hasher_reset(
+  blake3_hasher *self);
+```
+
+Reset the hasher to its initial state, prior to any calls to
+`blake3_hasher_update`. Currently this is no different from calling
+`blake3_hasher_init` or similar again. However, if this implementation gains
+multithreading support in the future, and if `blake3_hasher` holds (optional)
+threading resources, this function will reuse those resources. Until then, this
+is mainly for feature compatibility with the Rust implementation.
+
+
 # Building
 
 This implementation is just C and assembly files. It doesn't include a
