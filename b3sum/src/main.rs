@@ -24,7 +24,7 @@ const CHECK_ARG: &str = "check";
 const QUIET_ARG: &str = "quiet";
 
 struct Args {
-    inner: clap::ArgMatches<'static>,
+    inner: clap::ArgMatches,
     file_args: Vec<PathBuf>,
     base_hasher: blake3::Hasher,
 }
@@ -33,14 +33,19 @@ impl Args {
     fn parse() -> Result<Self> {
         let inner = App::new(NAME)
             .version(env!("CARGO_PKG_VERSION"))
-            .arg(Arg::with_name(FILE_ARG).multiple(true).help(
-                "Files to hash, or checkfiles to check. When no file is given,\n\
-                 or when - is given, read standard input.",
-            ))
             .arg(
-                Arg::with_name(LENGTH_ARG)
+                Arg::new(FILE_ARG)
+                    .multiple_occurrences(true)
+                    .allow_invalid_utf8(true)
+                    .help(
+                        "Files to hash, or checkfiles to check. When no file is given,\n\
+                 or when - is given, read standard input.",
+                    ),
+            )
+            .arg(
+                Arg::new(LENGTH_ARG)
                     .long(LENGTH_ARG)
-                    .short("l")
+                    .short('l')
                     .takes_value(true)
                     .value_name("LEN")
                     .help(
@@ -49,7 +54,7 @@ impl Args {
                     ),
             )
             .arg(
-                Arg::with_name(NUM_THREADS_ARG)
+                Arg::new(NUM_THREADS_ARG)
                     .long(NUM_THREADS_ARG)
                     .takes_value(true)
                     .value_name("NUM")
@@ -60,17 +65,12 @@ impl Args {
                          RAYON_NUM_THREADS is also respected.",
                     ),
             )
-            .arg(
-                Arg::with_name(KEYED_ARG)
-                    .long(KEYED_ARG)
-                    .requires(FILE_ARG)
-                    .help(
-                        "Uses the keyed mode. The secret key is read from standard\n\
+            .arg(Arg::new(KEYED_ARG).long(KEYED_ARG).requires(FILE_ARG).help(
+                "Uses the keyed mode. The secret key is read from standard\n\
                          input, and it must be exactly 32 raw bytes.",
-                    ),
-            )
+            ))
             .arg(
-                Arg::with_name(DERIVE_KEY_ARG)
+                Arg::new(DERIVE_KEY_ARG)
                     .long(DERIVE_KEY_ARG)
                     .conflicts_with(KEYED_ARG)
                     .takes_value(true)
@@ -80,33 +80,33 @@ impl Args {
                          context string. Cannot be used with --keyed.",
                     ),
             )
-            .arg(Arg::with_name(NO_MMAP_ARG).long(NO_MMAP_ARG).help(
+            .arg(Arg::new(NO_MMAP_ARG).long(NO_MMAP_ARG).help(
                 "Disables memory mapping. Currently this also disables\n\
                  multithreading.",
             ))
             .arg(
-                Arg::with_name(NO_NAMES_ARG)
+                Arg::new(NO_NAMES_ARG)
                     .long(NO_NAMES_ARG)
                     .help("Omits filenames in the output"),
             )
-            .arg(Arg::with_name(RAW_ARG).long(RAW_ARG).help(
+            .arg(Arg::new(RAW_ARG).long(RAW_ARG).help(
                 "Writes raw output bytes to stdout, rather than hex.\n\
                  --no-names is implied. In this case, only a single\n\
                  input is allowed.",
             ))
             .arg(
-                Arg::with_name(CHECK_ARG)
+                Arg::new(CHECK_ARG)
                     .long(CHECK_ARG)
-                    .short("c")
+                    .short('c')
                     .conflicts_with(DERIVE_KEY_ARG)
                     .conflicts_with(KEYED_ARG)
                     .conflicts_with(LENGTH_ARG)
                     .conflicts_with(RAW_ARG)
                     .conflicts_with(NO_NAMES_ARG)
-                    .help("Reads BLAKE3 sums from the [file]s and checks them"),
+                    .help("Reads BLAKE3 sums from the [FILE]s and checks them"),
             )
             .arg(
-                Arg::with_name(QUIET_ARG)
+                Arg::new(QUIET_ARG)
                     .long(QUIET_ARG)
                     .requires(CHECK_ARG)
                     .help(
