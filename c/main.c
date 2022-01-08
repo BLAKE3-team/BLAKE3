@@ -68,7 +68,7 @@ enum cpu_feature {
 };
 
 extern enum cpu_feature g_cpu_features;
-enum cpu_feature get_cpu_features();
+enum cpu_feature get_cpu_features(void);
 
 int main(int argc, char **argv) {
   size_t out_len = BLAKE3_OUT_LEN;
