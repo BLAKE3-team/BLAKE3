@@ -96,11 +96,11 @@ static unsigned int highest_one(uint64_t x) {
 #elif defined(_MSC_VER) && defined(IS_X86_32)
   if(x >> 32) {
     unsigned long index;
-    _BitScanReverse(&index, x >> 32);
+    _BitScanReverse(&index, (unsigned long)(x >> 32));
     return 32 + index;
   } else {
     unsigned long index;
-    _BitScanReverse(&index, x);
+    _BitScanReverse(&index, (unsigned long)x);
     return index;
   }
 #else
