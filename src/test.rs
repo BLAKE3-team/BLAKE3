@@ -303,6 +303,12 @@ fn test_compare_reference_impl() {
                 hasher.update_rayon_from_the_front_parametrized(input, 2048, 2);
                 assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
                 assert_eq!(hasher.finalize(), test_out);
+
+                // from the front chain
+                let mut hasher = crate::Hasher::new();
+                hasher.update_rayon_chain(input, 2048, 1024);
+                assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+                assert_eq!(hasher.finalize(), test_out);
             }
             // xof
             let mut extended = [0; OUT];
@@ -337,6 +343,12 @@ fn test_compare_reference_impl() {
                 // from the front
                 let mut hasher = crate::Hasher::new_keyed(&TEST_KEY);
                 hasher.update_rayon_from_the_front_parametrized(input, 2048, 2);
+                assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+                assert_eq!(hasher.finalize(), test_out);
+
+                // from the front chain
+                let mut hasher = crate::Hasher::new_keyed(&TEST_KEY);
+                hasher.update_rayon_chain(input, 2048, 1024);
                 assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
                 assert_eq!(hasher.finalize(), test_out);
             }
@@ -376,6 +388,12 @@ fn test_compare_reference_impl() {
                 hasher.update_rayon_from_the_front_parametrized(input, 2048, 2);
                 assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
                 assert_eq!(hasher.finalize(), *array_ref!(test_out, 0, 32));
+
+                // from the front chain
+                let mut hasher = crate::Hasher::new_derive_key(context);
+                hasher.update_rayon_chain(input, 2048, 1024);
+                assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+                assert_eq!(hasher.finalize(), test_out);
             }
             // xof
             let mut extended = [0; OUT];
@@ -473,6 +491,7 @@ fn test_fuzz_rayon() {
         crate::Hasher::update,
         crate::Hasher::update_rayon,
         |state, input| state.update_rayon_from_the_front_parametrized(input, 2048, 2),
+        |state, input| state.update_rayon_chain(input, 2048, 1024),
     ];
 
     pub const LENGTHS: &[usize] = &[
@@ -505,9 +524,11 @@ fn test_fuzz_rayon() {
     for num_test in 0..num_tests {
         eprintln!("==================== {} ====================", num_test);
         let mut hasher = crate::Hasher::new();
+        let mut reference_hasher = reference_impl::Hasher::new();
         let mut total_input = 0;
         // For each test, write 3 inputs of random length, using a randomly chosen update function.
-        for _ in 0..3 {
+        for i in 0..3 {
+            eprintln!("     >>>>> write {i} <<<<<");
             let input_len = *LENGTHS.choose(&mut rng).unwrap();
             dbg!(input_len);
             let input = &input_buf[total_input..][..input_len];
@@ -515,8 +536,14 @@ fn test_fuzz_rayon() {
             dbg!(update_fn_index);
             let update_fn = update_fns[update_fn_index];
             update_fn(&mut hasher, input);
+            // After each update, make sure the reference hasher gives the same hash.
+            reference_hasher.update(input);
+            let mut expected = [0; 32];
+            reference_hasher.finalize(&mut expected);
+            assert_eq!(expected, *hasher.finalize().as_bytes());
             total_input += input_len;
         }
+        // For good measure, check another all-at-once reference_hash.
         let expected = reference_hash(&input_buf[..total_input]);
         assert_eq!(expected, hasher.finalize());
     }

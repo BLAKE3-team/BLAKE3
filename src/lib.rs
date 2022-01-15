@@ -1241,9 +1241,11 @@ impl Hasher {
     #[cfg(feature = "rayon")]
     fn push_parent_node(&mut self, parent_node: &[u8; BLOCK_LEN], job_size: usize) {
         debug_assert_eq!(self.count() % job_size as u64, 0);
-
-        let (left, right) = arrayref::array_refs!(parent_node, 32, 32);
+        debug_assert_eq!(self.chunk_state.len(), 0);
+        debug_assert_eq!(job_size % CHUNK_LEN, 0);
         let job_chunks = job_size / CHUNK_LEN;
+        debug_assert_eq!(job_chunks % 2, 0);
+        let (left, right) = arrayref::array_refs!(parent_node, 32, 32);
         self.push_cv(left, job_chunks / 2);
         self.push_cv(right, job_chunks / 2);
     }
@@ -1339,6 +1341,140 @@ impl Hasher {
         let job_size = default_front_max_jobs();
         let max_jobs = default_front_max_jobs();
         self.update_rayon_from_the_front_parametrized(input, job_size, max_jobs)
+    }
+
+    #[cfg(feature = "rayon")]
+    pub fn update_rayon_chain(
+        &mut self,
+        mut input: &[u8],
+        job_size: usize,
+        probe_stride: usize,
+    ) -> &mut Self {
+        assert!(job_size >= 2 * CHUNK_LEN);
+        assert_eq!(job_size.count_ones(), 1, "must be a power of two");
+        assert_eq!(probe_stride.count_ones(), 1, "must be a power of two");
+        assert!(probe_stride <= job_size);
+
+        // If we've already consumed some input, we need to ensure that the amount consumed so far
+        // is a multiple of job_size. If needed, consume more bytes from the front of the input.
+        if self.count() % job_size as u64 != 0 {
+            let remainder = job_size - (self.count() % job_size as u64) as usize;
+            if input.len() < remainder {
+                // Not enough input. Short-circuit.
+                return self.update(input);
+            }
+            self.update(&input[..remainder]);
+            input = &input[remainder..];
+        }
+        debug_assert_eq!(self.count() % job_size as u64, 0);
+
+        // If there are any bytes in the chunk state, we need to clear it. At this point it should
+        // be either completely empty or completely full.
+        if self.chunk_state.len() != 0 {
+            self.finish_chunk();
+        }
+        debug_assert_eq!(self.chunk_state.len(), 0);
+
+        // Rayon jobs will be allocated on the heap and will run in the background, but they need
+        // to borrow `input`, which is bound to the caller's stack. This scope makes that work
+        // without lifetime errors.
+        let (overall_sender, overall_receivers) = crossbeam_channel::unbounded();
+        rayon::scope(|scope| {
+            use crossbeam_channel::{Receiver, Sender};
+            type ThisJobReceiver = Receiver<[u8; BLOCK_LEN]>;
+            type AllJobsSender = Sender<ThisJobReceiver>;
+
+            fn job_fn<'scope>(
+                rest: &'scope [u8],
+                job_size: usize,
+                probe_stride: usize,
+                overall_sender: AllJobsSender,
+                scope: &rayon::Scope<'scope>,
+                job_chunk_counter: u64,
+                key: [u32; 8],
+                flags: u8,
+                platform: Platform,
+            ) {
+                assert!(rest.len() >= job_size);
+
+                // Probe the input.
+                let mut i = 0;
+                while i < job_size {
+                    unsafe {
+                        std::ptr::read_volatile(rest.as_ptr().add(i));
+                    }
+                    i += probe_stride;
+                }
+
+                // Establish a channel for the job result.
+                let (job_sender, job_receiver) = crossbeam_channel::bounded(1);
+                overall_sender.send(job_receiver).unwrap();
+
+                // If there's enough input, launch the next job.
+                if rest.len() >= 2 * job_size {
+                    let next_job_chunk_counter = job_chunk_counter
+                        .checked_add((job_size / CHUNK_LEN) as u64)
+                        .expect("overflow");
+                    scope.spawn(move |scope| {
+                        job_fn(
+                            &rest[job_size..],
+                            job_size,
+                            probe_stride,
+                            overall_sender,
+                            scope,
+                            next_job_chunk_counter,
+                            key,
+                            flags,
+                            platform,
+                        );
+                    });
+                }
+
+                // Hash this job's subtree.
+                let parent_node = compress_subtree_to_parent_node::<join::SerialJoin>(
+                    &rest[..job_size],
+                    &key,
+                    job_chunk_counter,
+                    flags,
+                    platform,
+                );
+
+                // Send the result.
+                job_sender.send(parent_node).unwrap();
+            }
+
+            // If there's enough input, launch the first job, and then wait for all jobs to finish.
+            if input.len() >= job_size {
+                let key = self.key;
+                let flags = self.chunk_state.flags;
+                let platform = self.chunk_state.platform;
+                let chunk_counter = self.chunk_state.chunk_counter;
+                scope.spawn(move |scope| {
+                    job_fn(
+                        input,
+                        job_size,
+                        probe_stride,
+                        overall_sender,
+                        scope,
+                        chunk_counter,
+                        key,
+                        flags,
+                        platform,
+                    );
+                });
+                for job_receiver in overall_receivers {
+                    let parent_node = job_receiver.recv().unwrap();
+                    self.push_parent_node(&parent_node, job_size);
+                    debug_assert!(job_receiver.recv().is_err());
+                }
+            }
+        });
+
+        // Consume any remaining input shorter than FRONT_JOB_SIZE.
+        let remainder = input.len() % job_size;
+        self.update(&input[input.len() - remainder..]);
+
+        self
     }
 
     fn final_output(&self) -> Output {
