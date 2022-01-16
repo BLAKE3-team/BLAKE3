@@ -510,7 +510,11 @@ fn bench_rayon_from_the_front(b: &mut Bencher, len: usize) {
     let mut input = RandomInput::new(b, len);
     b.iter(|| {
         blake3::Hasher::new()
-            .update_rayon_from_the_front(input.get())
+            .update_rayon_from_the_front(
+                input.get(),
+                blake3::default_front_job_size(),
+                blake3::default_front_max_jobs(),
+            )
             .finalize()
     });
 }
@@ -591,6 +595,98 @@ fn bench_rayon_from_the_front_1024_kib(b: &mut Bencher) {
 #[cfg(feature = "rayon")]
 fn bench_rayon_from_the_front_big(b: &mut Bencher) {
     bench_rayon_from_the_front(b, BIG);
+}
+
+#[cfg(feature = "rayon")]
+fn bench_rayon_chain(b: &mut Bencher, len: usize) {
+    let mut input = RandomInput::new(b, len);
+    b.iter(|| {
+        blake3::Hasher::new()
+            .update_rayon_chain(
+                input.get(),
+                blake3::default_front_job_size(),
+                1024,
+            )
+            .finalize()
+    });
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_chain_0001_block(b: &mut Bencher) {
+    bench_rayon_chain(b, BLOCK_LEN);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_chain_0001_kib(b: &mut Bencher) {
+    bench_rayon_chain(b, 1 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_chain_0002_kib(b: &mut Bencher) {
+    bench_rayon_chain(b, 2 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_chain_0004_kib(b: &mut Bencher) {
+    bench_rayon_chain(b, 4 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_chain_0008_kib(b: &mut Bencher) {
+    bench_rayon_chain(b, 8 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_chain_0016_kib(b: &mut Bencher) {
+    bench_rayon_chain(b, 16 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_chain_0032_kib(b: &mut Bencher) {
+    bench_rayon_chain(b, 32 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_chain_0064_kib(b: &mut Bencher) {
+    bench_rayon_chain(b, 64 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_chain_0128_kib(b: &mut Bencher) {
+    bench_rayon_chain(b, 128 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_chain_0256_kib(b: &mut Bencher) {
+    bench_rayon_chain(b, 256 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_chain_0512_kib(b: &mut Bencher) {
+    bench_rayon_chain(b, 512 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_chain_1024_kib(b: &mut Bencher) {
+    bench_rayon_chain(b, 1024 * KIB);
+}
+
+#[bench]
+#[cfg(feature = "rayon")]
+fn bench_rayon_chain_big(b: &mut Bencher) {
+    bench_rayon_chain(b, BIG);
 }
 
 // This checks that update() splits up its input in increasing powers of 2, so

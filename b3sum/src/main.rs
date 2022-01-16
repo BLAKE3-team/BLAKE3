@@ -284,7 +284,7 @@ impl Input {
                     }
                 }
                 if args.front() {
-                    hasher.update_rayon_from_the_front_parametrized(
+                    hasher.update_rayon_from_the_front(
                         cursor.get_ref(),
                         args.front_size(),
                         args.front_jobs(),

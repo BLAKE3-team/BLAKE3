@@ -1251,7 +1251,7 @@ impl Hasher {
     }
 
     #[cfg(feature = "rayon")]
-    pub fn update_rayon_from_the_front_parametrized(
+    pub fn update_rayon_from_the_front(
         &mut self,
         mut input: &[u8],
         job_size: usize,
@@ -1332,15 +1332,6 @@ impl Hasher {
         self.update(input);
 
         self
-    }
-
-    #[cfg(feature = "rayon")]
-    pub fn update_rayon_from_the_front(&mut self, input: &[u8]) -> &mut Self {
-        // These parameters seem roughly optimal on my i5-1145G7 (Tiger Lake) laptop CPU.
-        // TODO: smaller job sizes when the input is small
-        let job_size = default_front_max_jobs();
-        let max_jobs = default_front_max_jobs();
-        self.update_rayon_from_the_front_parametrized(input, job_size, max_jobs)
     }
 
     #[cfg(feature = "rayon")]
