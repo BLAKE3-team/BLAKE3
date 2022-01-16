@@ -61,6 +61,8 @@ static void cpuidex(uint32_t out[4], uint32_t id, uint32_t sid) {
 
 #endif
 
+#if defined(IS_X86) // only define cpu_feature on x86
+#include <stdatomic.h>
 enum cpu_feature {
   SSE2 = 1 << 0,
   SSSE3 = 1 << 1,
@@ -76,7 +78,7 @@ enum cpu_feature {
 #if !defined(BLAKE3_TESTING)
 static /* Allow the variable to be controlled manually for testing */
 #endif
-    enum cpu_feature g_cpu_features = UNDEFINED;
+    atomic_int g_cpu_features = UNDEFINED;
 
 #if !defined(BLAKE3_TESTING)
 static
@@ -84,8 +86,9 @@ static
     enum cpu_feature
     get_cpu_features() {
 
-  if (g_cpu_features != UNDEFINED) {
-    return g_cpu_features;
+  int load = atomic_load_explicit(&g_cpu_features, memory_order_relaxed);
+  if (load != UNDEFINED) {
+    return (enum cpu_feature)load;
   } else {
 #if defined(IS_X86)
     uint32_t regs[4] = {0};
@@ -124,7 +127,7 @@ static
         }
       }
     }
-    g_cpu_features = features;
+    atomic_store_explicit(&g_cpu_features, (int)features, memory_order_relaxed);
     return features;
 #else
     /* How to detect NEON? */
@@ -132,6 +135,7 @@ static
 #endif
   }
 }
+#endif // only define cpu_feature on x86
 
 void blake3_compress_in_place(uint32_t cv[8],
                               const uint8_t block[BLAKE3_BLOCK_LEN],
