@@ -25,6 +25,8 @@ const QUIET_ARG: &str = "quiet";
 const FRONT_ARG: &str = "front";
 const FRONT_JOBS_ARG: &str = "front-jobs";
 const FRONT_SIZE_ARG: &str = "front-size-kb";
+const CHAIN_ARG: &str = "chain";
+const CHAIN_PROBE_ARG: &str = "chain-probe";
 const PREFETCH_ARG: &str = "prefetch";
 
 struct Args {
@@ -138,6 +140,17 @@ impl Args {
                     .long(PREFETCH_ARG)
                     .help("Uses OS-specific prefetch hints when memory mapping."),
             )
+            .arg(
+                Arg::with_name(CHAIN_ARG)
+                    .long(CHAIN_ARG)
+                    .help("Uses a chaining from-the-front multithreading strategy."),
+            )
+            .arg(
+                Arg::with_name(CHAIN_PROBE_ARG)
+                    .long(CHAIN_PROBE_ARG)
+                    .takes_value(true)
+                    .help("The probing stride, given in bytes (not KiB)"),
+            )
             // wild::args_os() is equivalent to std::env::args_os() on Unix,
             // but on Windows it adds support for globbing.
             .get_matches_from(wild::args_os());
@@ -232,6 +245,18 @@ impl Args {
     fn prefetch(&self) -> bool {
         self.inner.is_present(PREFETCH_ARG)
     }
+
+    fn chain(&self) -> bool {
+        self.inner.is_present(CHAIN_ARG)
+    }
+
+    fn chain_probe(&self) -> usize {
+        if let Some(s) = self.inner.value_of(CHAIN_PROBE_ARG) {
+            s.parse::<usize>().unwrap()
+        } else {
+            blake3::default_front_probe()
+        }
+    }
 }
 
 enum Input {
@@ -283,11 +308,18 @@ impl Input {
                         );
                     }
                 }
+                assert!(!(args.front() && args.chain()), "can't do both");
                 if args.front() {
                     hasher.update_rayon_from_the_front(
                         cursor.get_ref(),
                         args.front_size(),
                         args.front_jobs(),
+                    );
+                } else if args.chain() {
+                    hasher.update_rayon_chain(
+                        cursor.get_ref(),
+                        args.front_size(),
+                        args.chain_probe(),
                     );
                 } else {
                     hasher.update_rayon(cursor.get_ref());

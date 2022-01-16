@@ -306,7 +306,7 @@ fn test_compare_reference_impl() {
 
                 // from the front chain
                 let mut hasher = crate::Hasher::new();
-                hasher.update_rayon_chain(input, 2048, 1024);
+                hasher.update_rayon_chain(input, 2048, crate::default_front_probe());
                 assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
                 assert_eq!(hasher.finalize(), test_out);
             }
@@ -348,7 +348,7 @@ fn test_compare_reference_impl() {
 
                 // from the front chain
                 let mut hasher = crate::Hasher::new_keyed(&TEST_KEY);
-                hasher.update_rayon_chain(input, 2048, 1024);
+                hasher.update_rayon_chain(input, 2048, crate::default_front_probe());
                 assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
                 assert_eq!(hasher.finalize(), test_out);
             }
@@ -391,7 +391,7 @@ fn test_compare_reference_impl() {
 
                 // from the front chain
                 let mut hasher = crate::Hasher::new_derive_key(context);
-                hasher.update_rayon_chain(input, 2048, 1024);
+                hasher.update_rayon_chain(input, 2048, crate::default_front_probe());
                 assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
                 assert_eq!(hasher.finalize(), test_out);
             }
@@ -491,7 +491,7 @@ fn test_fuzz_rayon() {
         crate::Hasher::update,
         crate::Hasher::update_rayon,
         |state, input| state.update_rayon_from_the_front(input, 2048, 2),
-        |state, input| state.update_rayon_chain(input, 2048, 1024),
+        |state, input| state.update_rayon_chain(input, 2048, crate::default_front_probe()),
     ];
 
     pub const LENGTHS: &[usize] = &[

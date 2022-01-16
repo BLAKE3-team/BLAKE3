@@ -135,6 +135,9 @@ pub fn default_front_job_size() -> usize {
 pub fn default_front_max_jobs() -> usize {
     num_cpus::get() * 2
 }
+pub fn default_front_probe() -> usize {
+    1024
+}
 
 pub type CVWords = [u32; 8];
 type CVBytes = [u8; 32]; // little-endian
