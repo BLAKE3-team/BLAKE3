@@ -199,7 +199,7 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
   const enum cpu_feature features = get_cpu_features();
   MAYBE_UNUSED(features);
 #if !defined(BLAKE3_NO_AVX512)
-  if ((features & (AVX512F|AVX512VL)) == (AVX512F|AVX512VL)) {
+  if ((features & (AVX512F | AVX512VL)) == (AVX512F | AVX512VL)) {
     blake3_hash_many_avx512(inputs, num_inputs, blocks, key, counter,
                             increment_counter, flags, flags_start, flags_end,
                             out);
@@ -249,7 +249,7 @@ size_t blake3_simd_degree(void) {
   const enum cpu_feature features = get_cpu_features();
   MAYBE_UNUSED(features);
 #if !defined(BLAKE3_NO_AVX512)
-  if ((features & (AVX512F|AVX512VL)) == (AVX512F|AVX512VL)) {
+  if ((features & (AVX512F | AVX512VL)) == (AVX512F | AVX512VL)) {
     return 16;
   }
 #endif
