@@ -1341,6 +1341,12 @@ impl Hasher {
         job_size: usize,
         probe_stride: usize,
     ) -> &mut Self {
+        // For inputs shorter than two jobs, short-circuit with a regular update and skip all the
+        // high-overhead stuff below.
+        if (input.len() / 2) < job_size {
+            return self.update(input);
+        }
+
         assert!(job_size >= 2 * CHUNK_LEN);
         assert_eq!(job_size.count_ones(), 1, "must be a power of two");
         assert_eq!(probe_stride.count_ones(), 1, "must be a power of two");
@@ -1350,14 +1356,16 @@ impl Hasher {
         // is a multiple of job_size. If needed, consume more bytes from the front of the input.
         if self.count() % job_size as u64 != 0 {
             let remainder = job_size - (self.count() % job_size as u64) as usize;
-            if input.len() < remainder {
-                // Not enough input. Short-circuit.
-                return self.update(input);
-            }
             self.update(&input[..remainder]);
             input = &input[remainder..];
         }
         debug_assert_eq!(self.count() % job_size as u64, 0);
+
+        // Repeat the shorter-than-two-jobs check, since we might've just consumed some input
+        // above.
+        if (input.len() / 2) < job_size {
+            return self.update(input);
+        }
 
         // If there are any bytes in the chunk state, we need to clear it. At this point it should
         // be either completely empty or completely full.
@@ -1366,10 +1374,10 @@ impl Hasher {
         }
         debug_assert_eq!(self.chunk_state.len(), 0);
 
-        // Rayon jobs will be allocated on the heap and will run in the background, but they need
-        // to borrow `input`, which is bound to the caller's stack. This scope makes that work
-        // without lifetime errors.
         let (overall_sender, overall_receivers) = crossbeam_channel::unbounded();
+        // Rayon jobs will be allocated on the heap and will run in the background, but they
+        // need to borrow `input`, which is bound to the caller's stack. Rayon's scope API
+        // makes that work without lifetime errors.
         rayon::scope(|scope| {
             use crossbeam_channel::{Receiver, Sender};
             type ThisJobReceiver = Receiver<[u8; BLOCK_LEN]>;
@@ -1434,30 +1442,30 @@ impl Hasher {
                 job_sender.send(parent_node).unwrap();
             }
 
-            // If there's enough input, launch the first job, and then wait for all jobs to finish.
-            if input.len() >= job_size {
-                let key = self.key;
-                let flags = self.chunk_state.flags;
-                let platform = self.chunk_state.platform;
-                let chunk_counter = self.chunk_state.chunk_counter;
-                scope.spawn(move |scope| {
-                    job_fn(
-                        input,
-                        job_size,
-                        probe_stride,
-                        overall_sender,
-                        scope,
-                        chunk_counter,
-                        key,
-                        flags,
-                        platform,
-                    );
-                });
-                for job_receiver in overall_receivers {
-                    let parent_node = job_receiver.recv().unwrap();
-                    self.push_parent_node(&parent_node, job_size);
-                    debug_assert!(job_receiver.recv().is_err());
-                }
+            // Launch the first job.
+            let key = self.key;
+            let flags = self.chunk_state.flags;
+            let platform = self.chunk_state.platform;
+            let chunk_counter = self.chunk_state.chunk_counter;
+            scope.spawn(move |scope| {
+                job_fn(
+                    input,
+                    job_size,
+                    probe_stride,
+                    overall_sender,
+                    scope,
+                    chunk_counter,
+                    key,
+                    flags,
+                    platform,
+                );
+            });
+
+            // Wait for the entire chain of jobs to finish.
+            for job_receiver in overall_receivers {
+                let parent_node = job_receiver.recv().unwrap();
+                self.push_parent_node(&parent_node, job_size);
+                debug_assert!(job_receiver.recv().is_err());
             }
         });
 

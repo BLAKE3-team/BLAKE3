@@ -602,11 +602,7 @@ fn bench_rayon_chain(b: &mut Bencher, len: usize) {
     let mut input = RandomInput::new(b, len);
     b.iter(|| {
         blake3::Hasher::new()
-            .update_rayon_chain(
-                input.get(),
-                blake3::default_front_job_size(),
-                1024,
-            )
+            .update_rayon_chain(input.get(), blake3::default_front_job_size(), 1024)
             .finalize()
     });
 }
