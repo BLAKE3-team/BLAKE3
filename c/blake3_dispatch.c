@@ -62,7 +62,12 @@ static void cpuidex(uint32_t out[4], uint32_t id, uint32_t sid) {
 #endif
 
 #if defined(IS_X86) // only define cpu_feature on x86
+
+// stdatomic.h is not yet available under MSVC
+#if !defined(_MSC_VER)
 #include <stdatomic.h>
+#endif
+
 enum cpu_feature {
   SSE2 = 1 << 0,
   SSSE3 = 1 << 1,
@@ -78,7 +83,11 @@ enum cpu_feature {
 #if !defined(BLAKE3_TESTING)
 static /* Allow the variable to be controlled manually for testing */
 #endif
-    atomic_int g_cpu_features = UNDEFINED;
+#if defined(_MSC_VER)
+    long g_cpu_features = UNDEFINED;
+#else
+atomic_int g_cpu_features = UNDEFINED;
+#endif
 
 #if !defined(BLAKE3_TESTING)
 static
@@ -86,7 +95,13 @@ static
     enum cpu_feature
     get_cpu_features() {
 
+#if defined(_MSC_VER)
+  // This ordinary load is effectively a relaxed atomic under MSVC.
+  // https://docs.microsoft.com/en-us/windows/win32/sync/interlocked-variable-access
+  long load = g_cpu_features;
+#else
   int load = atomic_load_explicit(&g_cpu_features, memory_order_relaxed);
+#endif
   if (load != UNDEFINED) {
     return (enum cpu_feature)load;
   } else {
@@ -127,7 +142,13 @@ static
         }
       }
     }
+#if defined(_MSC_VER)
+    // This ordinary store is effectively a relaxed atomic under MSVC.
+    // https://docs.microsoft.com/en-us/windows/win32/sync/interlocked-variable-access
+    g_cpu_features = (long)features;
+#else
     atomic_store_explicit(&g_cpu_features, (int)features, memory_order_relaxed);
+#endif
     return features;
 #else
     /* How to detect NEON? */
