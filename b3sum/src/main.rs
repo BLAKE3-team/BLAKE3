@@ -121,32 +121,32 @@ impl Args {
                     ),
             )
             .arg(
-                Arg::with_name(FRONT_ARG)
+                Arg::new(FRONT_ARG)
                     .long(FRONT_ARG)
                     .help("Uses a from-the-front multithreading strategy."),
             )
             .arg(
-                Arg::with_name(FRONT_JOBS_ARG)
+                Arg::new(FRONT_JOBS_ARG)
                     .long(FRONT_JOBS_ARG)
                     .takes_value(true),
             )
             .arg(
-                Arg::with_name(FRONT_SIZE_ARG)
+                Arg::new(FRONT_SIZE_ARG)
                     .long(FRONT_SIZE_ARG)
                     .takes_value(true),
             )
             .arg(
-                Arg::with_name(PREFETCH_ARG)
+                Arg::new(PREFETCH_ARG)
                     .long(PREFETCH_ARG)
                     .help("Uses OS-specific prefetch hints when memory mapping."),
             )
             .arg(
-                Arg::with_name(CHAIN_ARG)
+                Arg::new(CHAIN_ARG)
                     .long(CHAIN_ARG)
                     .help("Uses a chaining from-the-front multithreading strategy."),
             )
             .arg(
-                Arg::with_name(CHAIN_PROBE_ARG)
+                Arg::new(CHAIN_PROBE_ARG)
                     .long(CHAIN_PROBE_ARG)
                     .takes_value(true)
                     .help("The probing stride, given in bytes (not KiB)"),

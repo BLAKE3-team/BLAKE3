@@ -50,6 +50,7 @@ dependencies = [
  "rayon",
  "tempfile",
  "wild",
+ "winapi",
 ]
 
 [[package]]
@@ -67,7 +68,9 @@ dependencies = [
  "cc",
  "cfg-if",
  "constant_time_eq",
+ "crossbeam-channel",
  "digest",
+ "num_cpus",
  "rayon",
 ]
 
