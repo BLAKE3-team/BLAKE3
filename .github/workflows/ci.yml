@@ -44,6 +44,11 @@ jobs:
       working-directory: ./tools/instruction_set_support
     # Default tests plus Rayon and RustCrypto trait implementations.
     - run: cargo test --features=rayon,traits-preview
+    # Same but with only one thread in the Rayon pool. This can find deadlocks.
+    - name: "again with RAYON_NUM_THREADS=1"
+      run: cargo test --features=rayon,traits-preview
+      env:
+        RAYON_NUM_THREADS: 1
     # no_std tests.
     - run: cargo test --no-default-features
 
