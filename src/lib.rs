@@ -1287,7 +1287,20 @@ impl Hasher {
         // Rayon jobs will be allocated on the heap and will run in the background, but they need
         // to borrow `input`, which is bound to the caller's stack. This scope makes that work
         // without lifetime errors.
-        rayon::scope(|scope| {
+        //
+        // XXX: in_place_scope() is mandatory here. If we used the regular scope() API, the closure
+        // that waits on wokers would run in the Rayon thread pool with all the workers. If the
+        // thread pool happened to be only 1 thread (which happens in CI among other things), this
+        // would be a deadlock!
+        //
+        // Similarly, we need to assert that our calling thread isn't already a Rayon worker. That
+        // could lead to similar deadlocks, and in general blocking a worker is bad for
+        // performance.
+        assert!(
+            rayon::current_thread_index().is_none(),
+            "This function can't be called inside a Rayon thread pool.",
+        );
+        rayon::in_place_scope(|scope| {
             let mut output_receivers =
                 std::collections::VecDeque::<crossbeam_channel::Receiver<[u8; BLOCK_LEN]>>::new();
 
@@ -1381,7 +1394,20 @@ impl Hasher {
         // Rayon jobs will be allocated on the heap and will run in the background, but they
         // need to borrow `input`, which is bound to the caller's stack. Rayon's scope API
         // makes that work without lifetime errors.
-        rayon::scope(|scope| {
+        //
+        // XXX: in_place_scope() is mandatory here. If we used the regular scope() API, the closure
+        // that waits on wokers would run in the Rayon thread pool with all the workers. If the
+        // thread pool happened to be only 1 thread (which happens in CI among other things), this
+        // would be a deadlock!
+        //
+        // Similarly, we need to assert that our calling thread isn't already a Rayon worker. That
+        // could lead to similar deadlocks, and in general blocking a worker is bad for
+        // performance.
+        assert!(
+            rayon::current_thread_index().is_none(),
+            "This function can't be called inside a Rayon thread pool.",
+        );
+        rayon::in_place_scope(|scope| {
             use crossbeam_channel::{Receiver, Sender};
             type ThisJobReceiver = Receiver<[u8; BLOCK_LEN]>;
             type AllJobsSender = Sender<ThisJobReceiver>;
