@@ -10,7 +10,8 @@ readme = "README.md"
 edition = "2018"
 
 [features]
-default = ["std"]
+# XXX: DO NOT SHIP THIS CHANGE
+default = ["std", "rayon"]
 
 # The NEON implementation does not participate in dynamic feature detection,
 # which is currently x86-only. If "neon" is on, NEON support is assumed. Note
