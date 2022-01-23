@@ -5,7 +5,7 @@ pub use digest;
 
 use crate::{Hasher, OutputReader};
 use digest::crypto_common;
-use digest::generic_array::{typenum::U32, GenericArray};
+use digest::generic_array::{typenum::U32, typenum::U64, GenericArray};
 
 impl digest::HashMarker for Hasher {}
 
@@ -69,6 +69,10 @@ impl digest::XofReader for OutputReader {
 
 impl crypto_common::KeySizeUser for Hasher {
     type KeySize = U32;
+}
+
+impl crypto_common::BlockSizeUser for Hasher {
+    type BlockSize = U64;
 }
 
 impl digest::MacMarker for Hasher {}
