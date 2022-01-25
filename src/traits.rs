@@ -170,4 +170,13 @@ mod test {
         let out2 = digest::Mac::finalize(hasher2);
         assert_eq!(out1.as_bytes(), out2.into_bytes().as_slice());
     }
+
+    #[test]
+    fn test_hmac_compatibility() {
+        use hmac::{SimpleHmac, Mac};
+
+        let mut x = SimpleHmac::<Hasher>::new_from_slice(b"key").unwrap();
+        hmac::digest::Update::update(&mut x, b"data");
+        assert_ne!(x.finalize().into_bytes().len(), 0);
+    }
 }
