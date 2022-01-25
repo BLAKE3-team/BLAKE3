@@ -5,7 +5,7 @@ A command line utility for calculating
 Coreutils tools like `b2sum` or `md5sum`.
 
 ```
-b3sum 1.3.0
+b3sum 1.3.1
 
 USAGE:
     b3sum [OPTIONS] [FILE]...
@@ -15,7 +15,7 @@ ARGS:
                  or when - is given, read standard input.
 
 OPTIONS:
-    -c, --check                   Reads BLAKE3 sums from the [file]s and checks them
+    -c, --check                   Reads BLAKE3 sums from the [FILE]s and checks them
         --derive-key <CONTEXT>    Uses the key derivation mode, with the given
                                   context string. Cannot be used with --keyed.
     -h, --help                    Print help information
