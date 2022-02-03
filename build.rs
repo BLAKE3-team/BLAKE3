@@ -26,7 +26,7 @@ fn is_ci() -> bool {
 }
 
 fn warn(warning: &str) {
-    assert!(!warning.contains("\n"));
+    assert!(!warning.contains('\n'));
     println!("cargo:warning={}", warning);
     if is_ci() {
         println!("cargo:warning=Warnings in CI are treated as errors. Build failed.");
@@ -36,7 +36,7 @@ fn warn(warning: &str) {
 
 fn target_components() -> Vec<String> {
     let target = env::var("TARGET").unwrap();
-    target.split("-").map(|s| s.to_string()).collect()
+    target.split('-').map(|s| s.to_string()).collect()
 }
 
 fn is_x86_64() -> bool {
