@@ -1,10 +1,12 @@
 #! /usr/bin/env python3
 
 import os
+from os import path
 import subprocess
 import sys
 import time
 
+HERE = path.dirname(__file__)
 NUM_RUNS = 5
 
 
@@ -18,7 +20,7 @@ def one_run():
         )
     start = time.monotonic()
     subprocess.run(
-        sys.argv[1:],
+        [path.join(HERE, "target/release/b3sum")] + sys.argv[1:],
         stdout=subprocess.DEVNULL,
         check=True,
     )
@@ -40,6 +42,11 @@ def median_run():
 
 
 def main():
+    subprocess.run(
+        ["cargo", "build", "--release"],
+        check=True,
+        cwd=HERE,
+    )
     t = median_run()
     print()
     print("{:.3f}".format(t))
