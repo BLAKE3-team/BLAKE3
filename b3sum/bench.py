@@ -1,5 +1,6 @@
 #! /usr/bin/env python3
 
+import os
 import subprocess
 import sys
 import time
@@ -8,6 +9,13 @@ NUM_RUNS = 5
 
 
 def one_run():
+    if os.environ.get("FLUSH") == "1":
+        subprocess.run(
+            ["sudo", "tee", "/proc/sys/vm/drop_caches"],
+            input=b"3\n",
+            stdout=subprocess.DEVNULL,
+            check=True,
+        )
     start = time.monotonic()
     subprocess.run(
         sys.argv[1:],
@@ -15,6 +23,8 @@ def one_run():
         check=True,
     )
     end = time.monotonic()
+    print(".", end="")
+    sys.stdout.flush()
     assert end > start
     return end - start
 
@@ -31,6 +41,7 @@ def median_run():
 
 def main():
     t = median_run()
+    print()
     print("{:.3f}".format(t))
 
 
