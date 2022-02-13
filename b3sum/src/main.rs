@@ -692,34 +692,32 @@ fn check_one_checkfile(path: &Path, args: &Args, some_file_failed: &mut bool) ->
 
 fn main() -> Result<()> {
     let args = Args::parse()?;
-    let mut thread_pool_builder = rayon::ThreadPoolBuilder::new();
     if let Some(num_threads) = args.num_threads()? {
-        thread_pool_builder = thread_pool_builder.num_threads(num_threads);
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(num_threads)
+            .build_global()?;
     }
-    let thread_pool = thread_pool_builder.build()?;
-    thread_pool.install(|| {
-        let mut some_file_failed = false;
-        // Note that file_args automatically includes `-` if nothing is given.
-        for path in &args.file_args {
-            if args.check() {
-                // A hash mismatch or a failure to read a hashed file will be
-                // printed in the checkfile loop, and will not propagate here.
-                // This is similar to the explicit error handling we do in the
-                // hashing case immediately below. In these cases,
-                // some_file_failed will be set to false.
-                check_one_checkfile(path, &args, &mut some_file_failed)?;
-            } else {
-                // Errors encountered in hashing are tolerated and printed to
-                // stderr. This allows e.g. `b3sum *` to print errors for
-                // non-files and keep going. However, if we encounter any
-                // errors we'll still return non-zero at the end.
-                let result = hash_one_input(path, &args);
-                if let Err(e) = result {
-                    some_file_failed = true;
-                    eprintln!("{}: {}: {}", NAME, path.to_string_lossy(), e);
-                }
+    let mut some_file_failed = false;
+    // Note that file_args automatically includes `-` if nothing is given.
+    for path in &args.file_args {
+        if args.check() {
+            // A hash mismatch or a failure to read a hashed file will be
+            // printed in the checkfile loop, and will not propagate here.
+            // This is similar to the explicit error handling we do in the
+            // hashing case immediately below. In these cases,
+            // some_file_failed will be set to false.
+            check_one_checkfile(path, &args, &mut some_file_failed)?;
+        } else {
+            // Errors encountered in hashing are tolerated and printed to
+            // stderr. This allows e.g. `b3sum *` to print errors for
+            // non-files and keep going. However, if we encounter any
+            // errors we'll still return non-zero at the end.
+            let result = hash_one_input(path, &args);
+            if let Err(e) = result {
+                some_file_failed = true;
+                eprintln!("{}: {}: {}", NAME, path.to_string_lossy(), e);
             }
         }
-        std::process::exit(if some_file_failed { 1 } else { 0 });
-    })
+    }
+    std::process::exit(if some_file_failed { 1 } else { 0 });
 }
