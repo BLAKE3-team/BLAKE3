@@ -106,17 +106,7 @@ Finalize the hasher and return an output of any length, given in bytes.
 This doesn't modify the hasher itself, and it's possible to finalize
 again after adding more input. The constant `BLAKE3_OUT_LEN` provides
 the default output length, 32 bytes, which is recommended for most
-callers.
-
-Outputs shorter than the default length of 32 bytes (256 bits) provide
-less security. An N-bit BLAKE3 output is intended to provide N bits of
-first and second preimage resistance and N/2 bits of collision
-resistance, for any N up to 256. Longer outputs don't provide any
-additional security.
-
-Shorter BLAKE3 outputs are prefixes of longer ones. Explicitly
-requesting a short output is equivalent to truncating the default-length
-output. (Note that this is different between BLAKE2 and BLAKE3.)
+callers. See the [Security Notes](#security-notes) below.
 
 ## Less Common API Functions
 
@@ -199,6 +189,33 @@ multithreading support in the future, and if `blake3_hasher` holds (optional)
 threading resources, this function will reuse those resources. Until then, this
 is mainly for feature compatibility with the Rust implementation.
 
+# Security Notes
+
+Outputs shorter than the default length of 32 bytes (256 bits) provide less security. An N-bit
+BLAKE3 output is intended to provide N bits of first and second preimage resistance and N/2
+bits of collision resistance, for any N up to 256. Longer outputs don't provide any additional
+security.
+
+[_Block-Cipher-Based Tree Hashing_ by Aldo Gunsing](https://eprint.iacr.org/2022/283) shows
+that an extended BLAKE3 output doesn't protect the secrecy of its offset — that is the number
+of output bytes that came before, or the argument to
+[`seek`](struct.OutputReader.html#method.seek) or
+[`position`](struct.OutputReader.html#method.position) — as well as it ideally could. Callers
+who rely on secret output lengths or offsets need to pay attention to this, but the vast
+majority of callers use constant and/or public lengths and offsets and aren't affected.
+
+The underlying issue is that the BLAKE3 compression function is invertible if an attacker
+already knows the message and the key and also observes an extended output. In particular,
+inverting the compression function doesn't require knowing the internal `t` parameter that
+represents the offset. In other words, an output offset doesn't contribute any entropy towards
+protecting its own secrecy or the secrecy of other inputs. However, the offset does benefit
+from the entropy of the message and the key, so for example a caller using a 256-bit secret key
+is also not affected.
+
+For comparison, AES-CTR has a similar property. If you know the key, you can decrypt a block
+from an unknown position in the output stream to recover its block index. However, the Salsa
+and ChaCha stream ciphers don't have this property, because they feed their offsets forward
+into their output.
 
 # Building
 
