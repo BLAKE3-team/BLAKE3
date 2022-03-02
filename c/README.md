@@ -196,21 +196,13 @@ BLAKE3 output is intended to provide N bits of first and second preimage resista
 bits of collision resistance, for any N up to 256. Longer outputs don't provide any additional
 security.
 
-[_Block-Cipher-Based Tree Hashing_ by Aldo Gunsing](https://eprint.iacr.org/2022/283) shows
-that an extended BLAKE3 output doesn't protect the secrecy of its offset — that is the number
-of output bytes that came before, or the argument to
-[`seek`](struct.OutputReader.html#method.seek) or
-[`position`](struct.OutputReader.html#method.position) — as well as it ideally could. Callers
-who rely on secret output lengths or offsets need to pay attention to this, but the vast
-majority of callers use constant and/or public lengths and offsets and aren't affected.
-
-The underlying issue is that the BLAKE3 compression function is invertible if an attacker
-already knows the message and the key and also observes an extended output. In particular,
-inverting the compression function doesn't require knowing the internal `t` parameter that
-represents the offset. In other words, an output offset doesn't contribute any entropy towards
-protecting its own secrecy or the secrecy of other inputs. However, the offset does benefit
-from the entropy of the message and the key, so for example a caller using a 256-bit secret key
-is also not affected.
+Don't rely on the secrecy of the output offset, i.e. the number of output bytes read or the
+arguments to [`seek`](struct.OutputReader.html#method.seek) or
+[`set_position`](struct.OutputReader.html#method.set_position). [_Block-Cipher-Based Tree
+Hashing_ by Aldo Gunsing](https://eprint.iacr.org/2022/283) shows that an attacker who knows
+both the message and the key can easily recover the offset. Callers with uniformly random keys
+aren't affected in practice, but relying on the secrecy of the offset is a [design
+smell](https://en.wikipedia.org/wiki/Design_smell) in any case.
 
 For comparison, AES-CTR has a similar property. If you know the key, you can decrypt a block
 from an unknown position in the output stream to recover its block index. However, the Salsa
