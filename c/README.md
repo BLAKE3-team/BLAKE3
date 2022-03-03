@@ -197,8 +197,7 @@ bits of collision resistance, for any N up to 256. Longer outputs don't provide 
 security.
 
 Avoid relying on the secrecy of the output offset, that is, the number of output bytes read or
-the arguments to [`seek`](struct.OutputReader.html#method.seek) or
-[`set_position`](struct.OutputReader.html#method.set_position). [_Block-Cipher-Based Tree
+the `seek` argument of `blake3_hasher_finalize_seek`. [_Block-Cipher-Based Tree
 Hashing_ by Aldo Gunsing](https://eprint.iacr.org/2022/283) shows that an attacker who knows
 both the message and the key can easily determine the offset of an extended output. For
 comparison, AES-CTR has a similar property: if you know the key, you can decrypt a block from
