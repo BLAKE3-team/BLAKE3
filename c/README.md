@@ -196,18 +196,15 @@ BLAKE3 output is intended to provide N bits of first and second preimage resista
 bits of collision resistance, for any N up to 256. Longer outputs don't provide any additional
 security.
 
-Don't rely on the secrecy of the output offset, i.e. the number of output bytes read or the
-arguments to [`seek`](struct.OutputReader.html#method.seek) or
+Avoid relying on the secrecy of the output offset, that is, the number of output bytes read or
+the arguments to [`seek`](struct.OutputReader.html#method.seek) or
 [`set_position`](struct.OutputReader.html#method.set_position). [_Block-Cipher-Based Tree
 Hashing_ by Aldo Gunsing](https://eprint.iacr.org/2022/283) shows that an attacker who knows
-both the message and the key can easily recover the offset. Callers with uniformly random keys
-aren't affected in practice, but relying on the secrecy of the offset is a [design
+both the message and the key can easily determine the offset of an extended output. For
+comparison, AES-CTR has a similar property: if you know the key, you can decrypt a block from
+an unknown position in the output stream to recover its block index. Callers with strong secret
+keys aren't affected in practice, but secret offsets are a [design
 smell](https://en.wikipedia.org/wiki/Design_smell) in any case.
-
-For comparison, AES-CTR has a similar property. If you know the key, you can decrypt a block
-from an unknown position in the output stream to recover its block index. However, the Salsa
-and ChaCha stream ciphers don't have this property, because they feed their offsets forward
-into their output.
 
 # Building
 
