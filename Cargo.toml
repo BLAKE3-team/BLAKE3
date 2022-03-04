@@ -92,7 +92,7 @@ hex = "0.4.2"
 page_size = "0.4.1"
 rand = "0.8.0"
 rand_chacha = "0.3.0"
-reference_impl = { path = "./reference_impl" }
+reference_impl = { path = "./reference_impl", package = "blake3_reference" }
 hmac = "0.12.0"
 
 [build-dependencies]
