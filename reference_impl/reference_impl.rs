@@ -154,7 +154,8 @@ impl Output {
     }
 
     fn root_output_bytes(&self, out_slice: &mut [u8]) {
-        for (output_block_counter, out_block) in (0u64..).zip(out_slice.chunks_mut(2 * OUT_LEN)) {
+        let mut output_block_counter = 0;
+        for out_block in out_slice.chunks_mut(2 * OUT_LEN) {
             let words = compress(
                 &self.input_chaining_value,
                 &self.block_words,
@@ -166,6 +167,7 @@ impl Output {
             for (word, out_word) in words.iter().zip(out_block.chunks_mut(4)) {
                 out_word.copy_from_slice(&word.to_le_bytes()[..out_word.len()]);
             }
+            output_block_counter += 1;
         }
     }
 }
@@ -378,11 +380,5 @@ impl Hasher {
             );
         }
         output.root_output_bytes(out_slice);
-    }
-}
-
-impl Default for Hasher {
-    fn default() -> Self {
-        Self::new()
     }
 }
