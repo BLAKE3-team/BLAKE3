@@ -1355,10 +1355,10 @@ impl std::io::Write for Hasher {
 /// the arguments to [`seek`](struct.OutputReader.html#method.seek) or
 /// [`set_position`](struct.OutputReader.html#method.set_position). [_Block-Cipher-Based Tree
 /// Hashing_ by Aldo Gunsing](https://eprint.iacr.org/2022/283) shows that an attacker who knows
-/// both the message and the key can easily determine the offset of an extended output. For
-/// comparison, AES-CTR has a similar property: if you know the key, you can decrypt a block from
-/// an unknown position in the output stream to recover its block index. Callers with strong secret
-/// keys aren't affected in practice, but secret offsets are a [design
+/// both the message and the key (if any) can easily determine the offset of an extended output.
+/// For comparison, AES-CTR has a similar property: if you know the key, you can decrypt a block
+/// from an unknown position in the output stream to recover its block index. Callers with strong
+/// secret keys aren't affected in practice, but secret offsets are a [design
 /// smell](https://en.wikipedia.org/wiki/Design_smell) in any case.
 #[derive(Clone)]
 pub struct OutputReader {
