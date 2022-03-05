@@ -48,13 +48,16 @@ This repository is the official implementation of BLAKE3. It includes:
   implementation, it's not currently multithreaded. See
   [`c/README.md`](c/README.md).
 
-* The [reference implementation](reference_impl/reference_impl.rs),
+* The [Rust reference implementation](reference_impl/reference_impl.rs),
   which is discussed in Section 5.1 of the [BLAKE3
   paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf).
   This implementation is much smaller and simpler than the optimized
   ones above. If you want to see how BLAKE3 works, or you're writing a
   port that doesn't need multithreading or SIMD optimizations, start
-  here.
+  here. Ports of the reference implementation to other languages are
+  hosted in separate repositories
+  ([C](https://github.com/oconnor663/blake3_reference_impl_c),
+  [Python](https://github.com/oconnor663/pure_python_blake3)).
 
 * A [set of test
   vectors](https://github.com/BLAKE3-team/BLAKE3/blob/master/test_vectors/test_vectors.json)
