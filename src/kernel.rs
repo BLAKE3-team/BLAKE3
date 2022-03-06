@@ -1,4 +1,4 @@
-// use crate::CHUNK_LEN;
+use crate::CHUNK_LEN;
 use std::arch::{asm, global_asm};
 
 global_asm!(
@@ -968,7 +968,7 @@ static BLAKE3_IV6_16: Words16 = Words16([crate::IV[6]; 16]);
 static BLAKE3_IV7_16: Words16 = Words16([crate::IV[7]; 16]);
 
 pub unsafe fn chunks16(
-    message: &[u8; 16 * 1024],
+    message: &[u8; 16 * CHUNK_LEN],
     _key: &[u32; 8],
     counter: u64,
     flags: u32,
@@ -1065,12 +1065,17 @@ pub unsafe fn chunks16(
 
 #[test]
 fn test_chunks16() {
-    let zero_chunk = [0u8; 1024];
-    let zero_chunk_refs = [&zero_chunk; 16];
+    let mut message = [0; 16 * CHUNK_LEN];
+    crate::test::paint_test_input(&mut message);
+
+    let mut chunk_refs: Vec<&[u8; CHUNK_LEN]> = Vec::new();
+    for i in 0..16 {
+        chunk_refs.push(message[i * CHUNK_LEN..][..CHUNK_LEN].try_into().unwrap());
+    }
     let mut expected_out = [0; 32 * 16];
     unsafe {
         crate::avx512::hash_many(
-            &zero_chunk_refs,
+            chunk_refs[..].try_into().unwrap(),
             crate::IV,
             0,
             crate::IncrementCounter::Yes,
@@ -1081,10 +1086,9 @@ fn test_chunks16() {
         );
     }
 
-    let zero_chunks = [0u8; 1024 * 16];
     let mut found_out = [Words16([0; 16]); 8];
     unsafe {
-        chunks16(&zero_chunks, &[0; 8], 0, 0, &mut found_out);
+        chunks16(&message, &[0; 8], 0, 0, &mut found_out);
     }
     let mut found_out_transposed = [0; 16 * 8 * 4];
     for vector_i in 0..8 {
