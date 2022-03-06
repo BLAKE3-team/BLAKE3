@@ -13,6 +13,23 @@ fn is_x86_64() -> bool {
     target_components()[0] == "x86_64"
 }
 
+fn is_windows_target() -> bool {
+    env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows"
+}
+
+fn use_msvc_asm() -> bool {
+    // cc assumes if it is passed .asm and targetting MSVC that it can use the
+    // Microsoft assemblers, which isn't true when we're not on a Windows
+    // host, but are cross-compiling with clang-cl, so we explicitly check if
+    // we're on a Windows host (with the assumption they'll have the MSVC
+    // toolchain installed if they are, though that's not necessarily true)
+    if env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default() == "gnu" {
+        false
+    } else {
+        env::var("HOST").unwrap_or_default().contains("-windows-")
+    }
+}
+
 fn is_x86_32() -> bool {
     let arch = &target_components()[0];
     arch == "i386" || arch == "i586" || arch == "i686"
@@ -35,13 +52,6 @@ fn is_windows_msvc() -> bool {
     target_components()[1] == "pc"
         && target_components()[2] == "windows"
         && target_components()[3] == "msvc"
-}
-
-fn is_windows_gnu() -> bool {
-    // Some targets are only two components long, so check in steps.
-    target_components()[1] == "pc"
-        && target_components()[2] == "windows"
-        && target_components()[3] == "gnu"
 }
 
 fn new_build() -> cc::Build {
@@ -73,20 +83,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if is_x86_64() && !defined("CARGO_FEATURE_PREFER_INTRINSICS") {
         // On 64-bit, use the assembly implementations, unless the
         // "prefer_intrinsics" feature is enabled.
-        if is_windows_msvc() {
-            let mut build = new_build();
-            build.file(c_dir_path("blake3_sse2_x86-64_windows_msvc.asm"));
-            build.file(c_dir_path("blake3_sse41_x86-64_windows_msvc.asm"));
-            build.file(c_dir_path("blake3_avx2_x86-64_windows_msvc.asm"));
-            build.file(c_dir_path("blake3_avx512_x86-64_windows_msvc.asm"));
-            build.compile("blake3_asm");
-        } else if is_windows_gnu() {
-            let mut build = new_build();
-            build.file(c_dir_path("blake3_sse2_x86-64_windows_gnu.S"));
-            build.file(c_dir_path("blake3_sse41_x86-64_windows_gnu.S"));
-            build.file(c_dir_path("blake3_avx2_x86-64_windows_gnu.S"));
-            build.file(c_dir_path("blake3_avx512_x86-64_windows_gnu.S"));
-            build.compile("blake3_asm");
+        if is_windows_target() {
+            if use_msvc_asm() {
+                let mut build = new_build();
+                build.file(c_dir_path("blake3_sse2_x86-64_windows_msvc.asm"));
+                build.file(c_dir_path("blake3_sse41_x86-64_windows_msvc.asm"));
+                build.file(c_dir_path("blake3_avx2_x86-64_windows_msvc.asm"));
+                build.file(c_dir_path("blake3_avx512_x86-64_windows_msvc.asm"));
+                build.compile("blake3_asm");
+            } else {
+                let mut build = new_build();
+                build.file(c_dir_path("blake3_sse2_x86-64_windows_gnu.S"));
+                build.file(c_dir_path("blake3_sse41_x86-64_windows_gnu.S"));
+                build.file(c_dir_path("blake3_avx2_x86-64_windows_gnu.S"));
+                build.file(c_dir_path("blake3_avx512_x86-64_windows_gnu.S"));
+                build.compile("blake3_asm");
+            }
         } else {
             // All non-Windows implementations are assumed to support
             // Linux-style assembly. These files do contain a small
@@ -184,6 +196,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "cargo:rerun-if-changed={}",
             file?.path().to_str().expect("utf-8")
         );
+    }
+
+    // When compiling with clang-cl for windows, it adds .asm files to the root
+    // which we need to delete so cargo doesn't get angry
+    if is_windows_target() && !use_msvc_asm() {
+        let _ = std::fs::remove_file("blake3_avx2_x86-64_windows_gnu.asm");
+        let _ = std::fs::remove_file("blake3_avx512_x86-64_windows_gnu.asm");
+        let _ = std::fs::remove_file("blake3_sse2_x86-64_windows_gnu.asm");
+        let _ = std::fs::remove_file("blake3_sse41_x86-64_windows_gnu.asm");
     }
 
     Ok(())
