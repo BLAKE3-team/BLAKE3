@@ -898,38 +898,38 @@ global_asm!(
     // The third pass, interleaving 128-bit lanes. After this the first vector will be:
     // (zmm24) a0,  b0,  c0,  d0,  a8,  b8,  c8,  d8,  e0,  f0,  g0,  h0,  e8,  f8,  g8,  h8
     "vshufi32x4 zmm24,  zmm8, zmm12, 0x88", // 0b10001000: lo 128-bit lanes A0/A2/B0/B2
-    "vshufi32x4 zmm25,  zmm8, zmm12, 0xdd", // 0b11011101: hi 128-bit lanes A1/A3/B1/B3
-    "vshufi32x4 zmm26,  zmm9, zmm13, 0x88",
-    "vshufi32x4 zmm27,  zmm9, zmm13, 0xdd",
-    "vshufi32x4 zmm28, zmm10, zmm14, 0x88",
-    "vshufi32x4 zmm29, zmm10, zmm14, 0xdd",
-    "vshufi32x4 zmm30, zmm11, zmm15, 0x88",
+    "vshufi32x4 zmm25,  zmm9, zmm13, 0x88",
+    "vshufi32x4 zmm26, zmm10, zmm14, 0x88",
+    "vshufi32x4 zmm27, zmm11, zmm15, 0x88",
+    "vshufi32x4 zmm28,  zmm8, zmm12, 0xdd", // 0b11011101: hi 128-bit lanes A1/A3/B1/B3
+    "vshufi32x4 zmm29,  zmm9, zmm13, 0xdd",
+    "vshufi32x4 zmm30, zmm10, zmm14, 0xdd",
     "vshufi32x4 zmm31, zmm11, zmm15, 0xdd",
-    "vshufi32x4  zmm8, zmm16, zmm20, 0x88",
-    "vshufi32x4  zmm9, zmm16, zmm20, 0xdd",
-    "vshufi32x4 zmm10, zmm17, zmm21, 0x88",
-    "vshufi32x4 zmm11, zmm17, zmm21, 0xdd",
-    "vshufi32x4 zmm12, zmm18, zmm22, 0x88",
-    "vshufi32x4 zmm13, zmm18, zmm22, 0xdd",
-    "vshufi32x4 zmm14, zmm19, zmm23, 0x88",
+    "vshufi32x4  zmm8, zmm16, zmm20, 0x88", // lo
+    "vshufi32x4  zmm9, zmm17, zmm21, 0x88",
+    "vshufi32x4 zmm10, zmm18, zmm22, 0x88",
+    "vshufi32x4 zmm11, zmm19, zmm23, 0x88",
+    "vshufi32x4 zmm12, zmm16, zmm20, 0xdd", // hi
+    "vshufi32x4 zmm13, zmm17, zmm21, 0xdd",
+    "vshufi32x4 zmm14, zmm18, zmm22, 0xdd",
     "vshufi32x4 zmm15, zmm19, zmm23, 0xdd",
     // The fourth and final pass, interleaving 128-bit lanes again. The first vector will be:
     // (zmm16) a0,  b0,  c0,  d0,  e0,  f0,  g0,  h0,  i0,  j0,  k0,  l0,  m0,  n0,  o0,  p0
-    "vshufi32x4 zmm16, zmm24,  zmm8, 0x88", // same as the previous pass
-    "vshufi32x4 zmm17, zmm24,  zmm8, 0xdd",
-    "vshufi32x4 zmm18, zmm25,  zmm9, 0x88",
-    "vshufi32x4 zmm19, zmm25,  zmm9, 0xdd",
-    "vshufi32x4 zmm20, zmm26, zmm10, 0x88",
-    "vshufi32x4 zmm21, zmm26, zmm10, 0xdd",
-    "vshufi32x4 zmm22, zmm27, zmm11, 0x88",
-    "vshufi32x4 zmm23, zmm27, zmm11, 0xdd",
-    "vshufi32x4 zmm24, zmm28, zmm12, 0x88",
-    "vshufi32x4 zmm25, zmm28, zmm12, 0xdd",
-    "vshufi32x4 zmm26, zmm29, zmm13, 0x88",
-    "vshufi32x4 zmm27, zmm29, zmm13, 0xdd",
-    "vshufi32x4 zmm28, zmm30, zmm14, 0x88",
-    "vshufi32x4 zmm29, zmm30, zmm14, 0xdd",
-    "vshufi32x4 zmm30, zmm31, zmm15, 0x88",
+    "vshufi32x4 zmm16, zmm24,  zmm8, 0x88", // lo
+    "vshufi32x4 zmm17, zmm25,  zmm9, 0x88",
+    "vshufi32x4 zmm18, zmm26, zmm10, 0x88",
+    "vshufi32x4 zmm19, zmm27, zmm11, 0x88",
+    "vshufi32x4 zmm20, zmm28, zmm12, 0x88",
+    "vshufi32x4 zmm21, zmm29, zmm13, 0x88",
+    "vshufi32x4 zmm22, zmm30, zmm14, 0x88",
+    "vshufi32x4 zmm23, zmm31, zmm15, 0x88",
+    "vshufi32x4 zmm24, zmm24,  zmm8, 0xdd", // hi
+    "vshufi32x4 zmm25, zmm25,  zmm9, 0xdd",
+    "vshufi32x4 zmm26, zmm26, zmm10, 0xdd",
+    "vshufi32x4 zmm27, zmm27, zmm11, 0xdd",
+    "vshufi32x4 zmm28, zmm28, zmm12, 0xdd",
+    "vshufi32x4 zmm29, zmm29, zmm13, 0xdd",
+    "vshufi32x4 zmm30, zmm30, zmm14, 0xdd",
     "vshufi32x4 zmm31, zmm31, zmm15, 0xdd",
     // Load the third and fourth rows of the state, which we just used as scratch space during
     // transposition. The third row is the last one accessed in compression, so load it last.
