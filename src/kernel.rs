@@ -964,6 +964,7 @@ global_asm!(
     // CVs in zmm0-zmm7 are written to the out pointer.
     // --------------------------------------------------------------------------------------------
     "blake3_avx512_chunks_16:",
+    // TODO: Prefetches
     // Broadcast the key into zmm0-zmm7. Use ecx as scratch.
     "mov ecx, dword ptr [rsi + 0 * 4]",
     "vpbroadcastd zmm0, ecx",
@@ -1038,7 +1039,7 @@ global_asm!(
 
 #[repr(C, align(64))]
 #[derive(Copy, Clone, Debug)]
-pub struct Words16([u32; 16]);
+pub struct Words16(pub [u32; 16]);
 
 #[no_mangle]
 static BLAKE3_IV0_16: Words16 = Words16([crate::IV[0]; 16]);

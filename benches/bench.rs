@@ -151,6 +151,15 @@ fn bench_many_chunks_neon(b: &mut Bencher) {
     }
 }
 
+#[bench]
+fn bench_many_chunks_kernel(b: &mut Bencher) {
+    let mut input = RandomInput::new(b, 16 * CHUNK_LEN);
+    let mut out = [blake3::kernel::Words16([0; 16]); 8];
+    b.iter(|| unsafe {
+        blake3::kernel::chunks16(input.get().try_into().unwrap(), &[0; 8], 0, 0, &mut out);
+    });
+}
+
 // TODO: When we get const generics we can unify this with the chunks code.
 fn bench_many_parents_fn(b: &mut Bencher, platform: Platform) {
     let degree = platform.simd_degree();
