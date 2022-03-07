@@ -819,11 +819,13 @@ global_asm!(
     //
     // zmm0-zmm7: incoming CV
     // rdi: pointer to first message block in rdi, subsequent blocks offset by 1024 bytes each
-    // rsi: pointer to fourth state row, four aligned vectors in a row
+    // rsi: [unused]
+    // rdx: pointer to two 64-byte aligned vectors, counter-low followed by counter-high
+    // ecx: block len (always 64)
+    // r8d: flags (other than CHUNK_START and CHUNK_END)
     //
     // This routine loads and transposes message words, populates the rest of the state registers,
-    // and invokes blake3_avx512_kernel_16. At the end it bumps rdi, in preparation for the next
-    // call.
+    // and invokes blake3_avx512_kernel_16.
     // --------------------------------------------------------------------------------------------
     "blake3_avx512_blocks_16:",
     // Load the message blocks first (unaligned). See the comments immediately below for why we
@@ -932,31 +934,106 @@ global_asm!(
     "vshufi32x4 zmm29, zmm29, zmm13, 0xdd",
     "vshufi32x4 zmm30, zmm30, zmm14, 0xdd",
     "vshufi32x4 zmm31, zmm31, zmm15, 0xdd",
-    // Load the third and fourth rows of the state, which we just used as scratch space during
-    // transposition. The third row is the last one accessed in compression, so load it last.
-    "vmovdqa32 zmm12, zmmword ptr [rsi + 64 * 0]",
-    "vmovdqa32 zmm13, zmmword ptr [rsi + 64 * 1]",
-    "vmovdqa32 zmm14, zmmword ptr [rsi + 64 * 2]",
-    "vmovdqa32 zmm15, zmmword ptr [rsi + 64 * 3]",
-    "vmovdqa32  zmm8, zmmword ptr [BLAKE3_IV0_16 + rip]",
+    // Initialize the third and fourth rows of the state, which we just used as scratch space
+    // during transposition.
+    "vmovdqa32  zmm8, zmmword ptr [BLAKE3_IV0_16 + rip]", // IV constants
     "vmovdqa32  zmm9, zmmword ptr [BLAKE3_IV1_16 + rip]",
     "vmovdqa32 zmm10, zmmword ptr [BLAKE3_IV2_16 + rip]",
     "vmovdqa32 zmm11, zmmword ptr [BLAKE3_IV3_16 + rip]",
-    // Run the kernel, bump rdi for the next call, and then exit.
+    "vmovdqa32 zmm12, zmmword ptr [rdx + 64 * 0]", // counter low
+    "vmovdqa32 zmm13, zmmword ptr [rdx + 64 * 1]", // counter high
+    "vpbroadcastd zmm14, ecx",                     // block length (always 64)
+    "vpbroadcastd zmm15, r8d",                     // flags
+    // Run the kernel and then exit.
     "call blake3_avx512_kernel_16",
-    "add rdi, 64",
     "ret",
     //
     // --------------------------------------------------------------------------------------------
     // blake3_avx512_chunks_16
     //
-    // rdi: pointer to 16 contiguous chunks of 1024 bytes each
-    // rsi: pointer to the 32-byte key
-    // rdx: chunk counter
-    // rcx: flags
-    //  r8:
+    // zmm0-zmm31: [clobbered]
+    // rdi: pointer to 16 contiguous chunks of 1024 bytes each, unaligned
+    // rsi: pointer to the 32-byte key, unaligned
+    // rdx: pointer to two 64-byte aligned vectors, counter-low followed by counter-high
+    // ecx: [clobbered]
+    // r8d: flags (other than CHUNK_START and CHUNK_END)
+    //  r9: out pointer to 8x64 bytes, 64-byte aligned
+    //
+    // This routine broadcasts the key and calls blake3_avx512_blocks_16 for each block, setting
+    // CHUNK_START and CHUNK_END for the first and last blocks respectively. The final transposed
+    // CVs in zmm0-zmm7 are written to the out pointer.
     // --------------------------------------------------------------------------------------------
     "blake3_avx512_chunks_16:",
+    // Broadcast the key into zmm0-zmm7. Use ecx as scratch.
+    "mov ecx, dword ptr [rsi + 0 * 4]",
+    "vpbroadcastd zmm0, ecx",
+    "mov ecx, dword ptr [rsi + 1 * 4]",
+    "vpbroadcastd zmm1, ecx",
+    "mov ecx, dword ptr [rsi + 2 * 4]",
+    "vpbroadcastd zmm2, ecx",
+    "mov ecx, dword ptr [rsi + 3 * 4]",
+    "vpbroadcastd zmm3, ecx",
+    "mov ecx, dword ptr [rsi + 4 * 4]",
+    "vpbroadcastd zmm4, ecx",
+    "mov ecx, dword ptr [rsi + 5 * 4]",
+    "vpbroadcastd zmm5, ecx",
+    "mov ecx, dword ptr [rsi + 6 * 4]",
+    "vpbroadcastd zmm6, ecx",
+    "mov ecx, dword ptr [rsi + 7 * 4]",
+    "vpbroadcastd zmm7, ecx",
+    // ecx is the block length arg to blake3_avx512_blocks_16. It is always 64.
+    "mov ecx, 64",
+    // Set the CHUNK_START flag.
+    "or r8d, 1",
+    // Compress the first block.
+    "call blake3_avx512_blocks_16",
+    // Clear the CHUNK_START flag.
+    "and r8d, 0xFFFFFFFE",
+    // Compress the middle fourteen blocks.
+    "add rdi, 64",
+    "call blake3_avx512_blocks_16",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_16",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_16",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_16",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_16",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_16",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_16",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_16",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_16",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_16",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_16",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_16",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_16",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_16",
+    // Set the CHUNK_END flag.
+    "or r8d, 2",
+    // Compress the last block.
+    "add rdi, 64",
+    "call blake3_avx512_blocks_16",
+    // Write the output and exit.
+    "vmovdqa32 zmmword ptr [r9 + 0 * 64], zmm0",
+    "vmovdqa32 zmmword ptr [r9 + 1 * 64], zmm1",
+    "vmovdqa32 zmmword ptr [r9 + 2 * 64], zmm2",
+    "vmovdqa32 zmmword ptr [r9 + 3 * 64], zmm3",
+    "vmovdqa32 zmmword ptr [r9 + 4 * 64], zmm4",
+    "vmovdqa32 zmmword ptr [r9 + 5 * 64], zmm5",
+    "vmovdqa32 zmmword ptr [r9 + 6 * 64], zmm6",
+    "vmovdqa32 zmmword ptr [r9 + 7 * 64], zmm7",
+    "vzeroupper",
+    "ret",
 );
 
 #[repr(C, align(64))]
@@ -971,14 +1048,6 @@ static BLAKE3_IV1_16: Words16 = Words16([crate::IV[1]; 16]);
 static BLAKE3_IV2_16: Words16 = Words16([crate::IV[2]; 16]);
 #[no_mangle]
 static BLAKE3_IV3_16: Words16 = Words16([crate::IV[3]; 16]);
-#[no_mangle]
-static BLAKE3_IV4_16: Words16 = Words16([crate::IV[4]; 16]);
-#[no_mangle]
-static BLAKE3_IV5_16: Words16 = Words16([crate::IV[5]; 16]);
-#[no_mangle]
-static BLAKE3_IV6_16: Words16 = Words16([crate::IV[6]; 16]);
-#[no_mangle]
-static BLAKE3_IV7_16: Words16 = Words16([crate::IV[7]; 16]);
 
 pub unsafe fn chunks16(
     message: &[u8; 16 * CHUNK_LEN],
@@ -987,85 +1056,20 @@ pub unsafe fn chunks16(
     flags: u32,
     out_ptr: *mut [Words16; 8],
 ) {
-    // The fourth state row contains counter_low, counter_high, blocklen, and flags.
-    let mut fourth_row = [Words16([0; 16]); 4];
+    // Prepare the counter vectors, the low words and high words.
+    let mut counter_vectors = [Words16([0; 16]); 2];
     for i in 0..16 {
-        fourth_row[0].0[i] = (counter + i as u64) as u32;
-        fourth_row[1].0[i] = ((counter + i as u64) >> 32) as u32;
-        fourth_row[2].0[i] = 64;
-        fourth_row[3].0[i] = flags | crate::CHUNK_START as u32;
+        counter_vectors[0].0[i] = (counter + i as u64) as u32;
+        counter_vectors[1].0[i] = ((counter + i as u64) >> 32) as u32;
     }
     asm!(
-        // Load the key into zmm0-zmm7.
-        "mov {scratch:e}, dword ptr [{key} + 0 * 4]",
-        "vpbroadcastd zmm0, {scratch:e}",
-        "mov {scratch:e}, dword ptr [{key} + 1 * 4]",
-        "vpbroadcastd zmm1, {scratch:e}",
-        "mov {scratch:e}, dword ptr [{key} + 2 * 4]",
-        "vpbroadcastd zmm2, {scratch:e}",
-        "mov {scratch:e}, dword ptr [{key} + 3 * 4]",
-        "vpbroadcastd zmm3, {scratch:e}",
-        "mov {scratch:e}, dword ptr [{key} + 4 * 4]",
-        "vpbroadcastd zmm4, {scratch:e}",
-        "mov {scratch:e}, dword ptr [{key} + 5 * 4]",
-        "vpbroadcastd zmm5, {scratch:e}",
-        "mov {scratch:e}, dword ptr [{key} + 6 * 4]",
-        "vpbroadcastd zmm6, {scratch:e}",
-        "mov {scratch:e}, dword ptr [{key} + 7 * 4]",
-        "vpbroadcastd zmm7, {scratch:e}",
-
-        // Compress the first block.
-        "call blake3_avx512_blocks_16",
-
-        // After the first block, clear the CHUNK_START flag.
-        "vmovdqa32 zmm8, zmmword ptr [rsi + 64 * 3]",
-        "mov {scratch:e}, 0xFFFFFFFE",
-        "vpbroadcastd zmm9, {scratch:e}",
-        "vpandd zmm8, zmm8, zmm9",
-        "vmovdqa32 zmmword ptr [rsi + 64 * 3], zmm8",
-
-        // Compress the middle blocks.
-        "call blake3_avx512_blocks_16",
-        "call blake3_avx512_blocks_16",
-        "call blake3_avx512_blocks_16",
-        "call blake3_avx512_blocks_16",
-        "call blake3_avx512_blocks_16",
-        "call blake3_avx512_blocks_16",
-        "call blake3_avx512_blocks_16",
-        "call blake3_avx512_blocks_16",
-        "call blake3_avx512_blocks_16",
-        "call blake3_avx512_blocks_16",
-        "call blake3_avx512_blocks_16",
-        "call blake3_avx512_blocks_16",
-        "call blake3_avx512_blocks_16",
-        "call blake3_avx512_blocks_16",
-
-        // Before the last block, set the CHUNK_END flag.
-        "vmovdqa32 zmm8, zmmword ptr [rsi + 64 * 3]",
-        "mov {scratch:e}, 2",
-        "vpbroadcastd zmm9, {scratch:e}",
-        "vpord zmm8, zmm8, zmm9",
-        "vmovdqa32 zmmword ptr [rsi + 64 * 3], zmm8",
-
-        // Compress the last block.
-        "call blake3_avx512_blocks_16",
-
-        // Write the output and exit.
-        "vmovdqa32 zmmword ptr [{out_ptr} + 0*64], zmm0",
-        "vmovdqa32 zmmword ptr [{out_ptr} + 1*64], zmm1",
-        "vmovdqa32 zmmword ptr [{out_ptr} + 2*64], zmm2",
-        "vmovdqa32 zmmword ptr [{out_ptr} + 3*64], zmm3",
-        "vmovdqa32 zmmword ptr [{out_ptr} + 4*64], zmm4",
-        "vmovdqa32 zmmword ptr [{out_ptr} + 5*64], zmm5",
-        "vmovdqa32 zmmword ptr [{out_ptr} + 6*64], zmm6",
-        "vmovdqa32 zmmword ptr [{out_ptr} + 7*64], zmm7",
-        "vzeroupper",
-
-        scratch = out(reg) _,
-        key = inout(reg) key => _,
-        out_ptr = in(reg) out_ptr,
+        "call blake3_avx512_chunks_16",
         inout("rdi") message => _,
-        in("rsi") &mut fourth_row,
+        inout("rsi") key => _,
+        inout("rdx") &counter_vectors => _,
+        out("ecx") _,
+        inout("r8d") flags => _,
+        inout("r9") out_ptr => _,
         out("zmm0") _, out("zmm1") _, out("zmm2") _, out("zmm3") _,
         out("zmm4") _, out("zmm5") _, out("zmm6") _, out("zmm7") _,
         out("zmm8") _, out("zmm9") _, out("zmm10") _, out("zmm11") _,
