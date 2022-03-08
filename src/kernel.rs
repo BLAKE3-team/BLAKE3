@@ -827,113 +827,59 @@ global_asm!(
     // This routine loads and transposes message words, populates the rest of the state registers,
     // and invokes blake3_avx512_kernel_16.
     // --------------------------------------------------------------------------------------------
+    ".p2align 6",
+    "BLAKE3_CHUNK_OFFSETS_16:",
+    ".long 0, 1024, 2048, 3072, 4096, 5120, 6144, 7168, 8192, 9216, 10240, 11264, 12288, 13312, 14336, 15360",
     "blake3_avx512_blocks_16:",
-    // Load the message blocks first (unaligned). See the comments immediately below for why we
-    // choose these registers.
-    "vmovdqu32 zmm24, zmmword ptr [rdi +  0 * 1024]",
-    "vmovdqu32 zmm25, zmmword ptr [rdi +  1 * 1024]",
-    "vmovdqu32 zmm26, zmmword ptr [rdi +  2 * 1024]",
-    "vmovdqu32 zmm27, zmmword ptr [rdi +  3 * 1024]",
-    "vmovdqu32 zmm28, zmmword ptr [rdi +  4 * 1024]",
-    "vmovdqu32 zmm29, zmmword ptr [rdi +  5 * 1024]",
-    "vmovdqu32 zmm30, zmmword ptr [rdi +  6 * 1024]",
-    "vmovdqu32 zmm31, zmmword ptr [rdi +  7 * 1024]",
-    "vmovdqu32  zmm8, zmmword ptr [rdi +  8 * 1024]",
-    "vmovdqu32  zmm9, zmmword ptr [rdi +  9 * 1024]",
-    "vmovdqu32 zmm10, zmmword ptr [rdi + 10 * 1024]",
-    "vmovdqu32 zmm11, zmmword ptr [rdi + 11 * 1024]",
-    "vmovdqu32 zmm12, zmmword ptr [rdi + 12 * 1024]",
-    "vmovdqu32 zmm13, zmmword ptr [rdi + 13 * 1024]",
-    "vmovdqu32 zmm14, zmmword ptr [rdi + 14 * 1024]",
-    "vmovdqu32 zmm15, zmmword ptr [rdi + 15 * 1024]",
-    // Transpose the message blocks. This requires a few different passes:
-    // 1) interleave 32-bit lanes
-    // 2) interleave 64-bit lanes
-    // 3) interleave 128-bit lanes
-    // 4) interleave 256-bit lanes (but there's no such instruction, so actually 128 bits again)
-    // The last of these passes is easier to implement if we can make use of 8 scratch registers.
-    // zmm0-zmm7 are holding the incoming CV and we don't want to touch those. But zmm8-zmm15
-    // aren't holding anything important, and we can use those as long as we reinitialize them
-    // before we run the kernel. For consistency, we'll use all 8 scratch registers for each pass
-    // (even though the earlier passes would be fine using fewer), and we'll have each pass rotate
-    // our 24 message+scratch vectors 8 places "to the left". Thus starting 8 places "to the right"
-    // in the rotation lets us end up on target after 4 passes, and that's why we loaded the
-    // message vectors in the order we did above.
-    //
-    // The first pass, interleaving 32-bit lanes. Here's the first vector before:
-    // (zmm24) a0,  a1,  a2,  a3,  a4,  a5,  a8,  a7,  a8,  a9, a10, a11, a12, a13, a14, a15
-    // And after:
-    // (zmm16) a0,  b0,  a1,  b1,  a4,  b4,  a5,  b5,  a8,  b8,  a9,  b9, a12, b12, a13, b13
-    "vpunpckldq zmm16, zmm24, zmm25",
-    "vpunpckhdq zmm17, zmm24, zmm25",
-    "vpunpckldq zmm18, zmm26, zmm27",
-    "vpunpckhdq zmm19, zmm26, zmm27",
-    "vpunpckldq zmm20, zmm28, zmm29",
-    "vpunpckhdq zmm21, zmm28, zmm29",
-    "vpunpckldq zmm22, zmm30, zmm31",
-    "vpunpckhdq zmm23, zmm30, zmm31",
-    "vpunpckldq zmm24,  zmm8,  zmm9",
-    "vpunpckhdq zmm25,  zmm8,  zmm9",
-    "vpunpckldq zmm26, zmm10, zmm11",
-    "vpunpckhdq zmm27, zmm10, zmm11",
-    "vpunpckldq zmm28, zmm12, zmm13",
-    "vpunpckhdq zmm29, zmm12, zmm13",
-    "vpunpckldq zmm30, zmm14, zmm15",
-    "vpunpckhdq zmm31, zmm14, zmm15",
-    // The second pass, interleaving 64-bit lanes. After this the first vector will be:
-    // (zmm8)  a0,  b0,  c0,  d0,  a4,  b4,  c4,  d4,  a8,  b8,  c8,  d8, a12, b12, c12, d12
-    "vpunpcklqdq  zmm8, zmm16, zmm18",
-    "vpunpckhqdq  zmm9, zmm16, zmm18",
-    "vpunpcklqdq zmm10, zmm17, zmm19",
-    "vpunpckhqdq zmm11, zmm17, zmm19",
-    "vpunpcklqdq zmm12, zmm20, zmm22",
-    "vpunpckhqdq zmm13, zmm20, zmm22",
-    "vpunpcklqdq zmm14, zmm21, zmm23",
-    "vpunpckhqdq zmm15, zmm21, zmm23",
-    "vpunpcklqdq zmm16, zmm24, zmm26",
-    "vpunpckhqdq zmm17, zmm24, zmm26",
-    "vpunpcklqdq zmm18, zmm25, zmm27",
-    "vpunpckhqdq zmm19, zmm25, zmm27",
-    "vpunpcklqdq zmm20, zmm28, zmm30",
-    "vpunpckhqdq zmm21, zmm28, zmm30",
-    "vpunpcklqdq zmm22, zmm29, zmm31",
-    "vpunpckhqdq zmm23, zmm29, zmm31",
-    // The third pass, interleaving 128-bit lanes. After this the first vector will be:
-    // (zmm24) a0,  b0,  c0,  d0,  a8,  b8,  c8,  d8,  e0,  f0,  g0,  h0,  e8,  f8,  g8,  h8
-    "vshufi32x4 zmm24,  zmm8, zmm12, 0x88", // 0b10001000: lo 128-bit lanes A0/A2/B0/B2
-    "vshufi32x4 zmm25,  zmm9, zmm13, 0x88",
-    "vshufi32x4 zmm26, zmm10, zmm14, 0x88",
-    "vshufi32x4 zmm27, zmm11, zmm15, 0x88",
-    "vshufi32x4 zmm28,  zmm8, zmm12, 0xdd", // 0b11011101: hi 128-bit lanes A1/A3/B1/B3
-    "vshufi32x4 zmm29,  zmm9, zmm13, 0xdd",
-    "vshufi32x4 zmm30, zmm10, zmm14, 0xdd",
-    "vshufi32x4 zmm31, zmm11, zmm15, 0xdd",
-    "vshufi32x4  zmm8, zmm16, zmm20, 0x88", // lo
-    "vshufi32x4  zmm9, zmm17, zmm21, 0x88",
-    "vshufi32x4 zmm10, zmm18, zmm22, 0x88",
-    "vshufi32x4 zmm11, zmm19, zmm23, 0x88",
-    "vshufi32x4 zmm12, zmm16, zmm20, 0xdd", // hi
-    "vshufi32x4 zmm13, zmm17, zmm21, 0xdd",
-    "vshufi32x4 zmm14, zmm18, zmm22, 0xdd",
-    "vshufi32x4 zmm15, zmm19, zmm23, 0xdd",
-    // The fourth and final pass, interleaving 128-bit lanes again. The first vector will be:
-    // (zmm16) a0,  b0,  c0,  d0,  e0,  f0,  g0,  h0,  i0,  j0,  k0,  l0,  m0,  n0,  o0,  p0
-    "vshufi32x4 zmm16, zmm24,  zmm8, 0x88", // lo
-    "vshufi32x4 zmm17, zmm25,  zmm9, 0x88",
-    "vshufi32x4 zmm18, zmm26, zmm10, 0x88",
-    "vshufi32x4 zmm19, zmm27, zmm11, 0x88",
-    "vshufi32x4 zmm20, zmm28, zmm12, 0x88",
-    "vshufi32x4 zmm21, zmm29, zmm13, 0x88",
-    "vshufi32x4 zmm22, zmm30, zmm14, 0x88",
-    "vshufi32x4 zmm23, zmm31, zmm15, 0x88",
-    "vshufi32x4 zmm24, zmm24,  zmm8, 0xdd", // hi
-    "vshufi32x4 zmm25, zmm25,  zmm9, 0xdd",
-    "vshufi32x4 zmm26, zmm26, zmm10, 0xdd",
-    "vshufi32x4 zmm27, zmm27, zmm11, 0xdd",
-    "vshufi32x4 zmm28, zmm28, zmm12, 0xdd",
-    "vshufi32x4 zmm29, zmm29, zmm13, 0xdd",
-    "vshufi32x4 zmm30, zmm30, zmm14, 0xdd",
-    "vshufi32x4 zmm31, zmm31, zmm15, 0xdd",
+    "vmovdqa32 zmm8, zmmword ptr [rip + BLAKE3_CHUNK_OFFSETS_16]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm16, xmm16, xmm16",
+    "vpgatherdd zmm16{{k1}}, [rdi + ( 0 * 4) + zmm8]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm17, xmm17, xmm17",
+    "vpgatherdd zmm17{{k1}}, [rdi + ( 1 * 4) + zmm8]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm18, xmm18, xmm18",
+    "vpgatherdd zmm18{{k1}}, [rdi + ( 2 * 4) + zmm8]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm19, xmm19, xmm19",
+    "vpgatherdd zmm19{{k1}}, [rdi + ( 3 * 4) + zmm8]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm20, xmm20, xmm20",
+    "vpgatherdd zmm20{{k1}}, [rdi + ( 4 * 4) + zmm8]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm21, xmm21, xmm21",
+    "vpgatherdd zmm21{{k1}}, [rdi + ( 5 * 4) + zmm8]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm22, xmm22, xmm22",
+    "vpgatherdd zmm22{{k1}}, [rdi + ( 6 * 4) + zmm8]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm23, xmm23, xmm23",
+    "vpgatherdd zmm23{{k1}}, [rdi + ( 7 * 4) + zmm8]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm24, xmm24, xmm24",
+    "vpgatherdd zmm24{{k1}}, [rdi + ( 8 * 4) + zmm8]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm25, xmm25, xmm25",
+    "vpgatherdd zmm25{{k1}}, [rdi + ( 9 * 4) + zmm8]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm26, xmm26, xmm26",
+    "vpgatherdd zmm26{{k1}}, [rdi + (10 * 4) + zmm8]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm27, xmm27, xmm27",
+    "vpgatherdd zmm27{{k1}}, [rdi + (11 * 4) + zmm8]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm28, xmm28, xmm28",
+    "vpgatherdd zmm28{{k1}}, [rdi + (12 * 4) + zmm8]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm29, xmm29, xmm29",
+    "vpgatherdd zmm29{{k1}}, [rdi + (13 * 4) + zmm8]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm30, xmm30, xmm30",
+    "vpgatherdd zmm30{{k1}}, [rdi + (14 * 4) + zmm8]",
+    "kxnorw k1, k0, k0",
+    "vpxorq xmm31, xmm31, xmm31",
+    "vpgatherdd zmm31{{k1}}, [rdi + (15 * 4) + zmm8]",
     // Initialize the third and fourth rows of the state, which we just used as scratch space
     // during transposition.
     "vmovdqa32  zmm8, zmmword ptr [BLAKE3_IV0_16 + rip]", // IV constants
