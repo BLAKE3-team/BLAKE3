@@ -1044,6 +1044,122 @@ global_asm!(
     "vmovdqa32 zmmword ptr [r9 + 7 * 64], zmm7",
     "vzeroupper",
     "ret",
+    //
+    // --------------------------------------------------------------------------------------------
+    // blake3_avx512_parents_16
+    //
+    // zmm0-zmm31: [clobbered]
+    // rdi: pointer to 16 transposed state vectors, 8 left and 8 right, 64-byte aligned
+    // rsi: pointer to the 32-byte key, unaligned
+    // rdx: [unused]
+    // ecx: [clobbered]
+    // r8d: flags (other than PARENT)
+    //  r9: out pointer to 8x64 bytes, 64-byte aligned
+    //
+    // This routine interleaves the input state vectors into message block vectors for a parent
+    // compression, broadcasts the key, and calls blake3_avx512_kernel_16 with the PARENT flag set.
+    // Note that the input state vectors are in exactly the format produced by two calls to
+    // blake3_avx512_chunks_16, and the transposed output written to the out pointer is also in the
+    // same format. This keeps transposition overhead to a minimum as we work our way up the tree.
+    // --------------------------------------------------------------------------------------------
+    ".p2align 6",
+    "BLAKE3_AVX512_EVEN_INDEXES:",
+    ".long 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30",
+    "BLAKE3_AVX512_ODD_INDEXES:",
+    ".long 1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31",
+    "blake3_avx512_parents_16:",
+    // The first 8 out of 16 input message vectors, which are the transposed CVs of the first 8
+    // children, come in looking like this:
+    //
+    // a0, b0, c0, d0, e0, f0, g0, h0, i0, j0, k0, l0, m0, n0, o0, p0
+    //
+    // Here, a and b are the chaining values of the leftmost two children. In this parent
+    // compression we're about to do, we're going to compress them together, and that means that we
+    // need to get a and b into different vector registers. In particular, all of a's words need to
+    // wind up in zmm16-zmm23 (the transposed left half of each message block) and all of b's words
+    // need to wind up in zmm24-zmm31 (the transposed right half of each message block). So for
+    // example we need zmm16 to look like this (where ' indicates the last 8 children):
+    //
+    // a0, c0, e0, g0, i0, k0, m0, o0, a'0, c'0, e'0, g'0, i'0, k'0, m'0, o'0
+    //
+    // Use zmm0 and zmm1 to hold the even and odd index values for vpermt2d, and use zmm2 as a
+    // scratch register.
+    "vmovdqa32 zmm0, zmmword ptr [rip + BLAKE3_AVX512_EVEN_INDEXES]",
+    "vmovdqa32 zmm1, zmmword ptr [rip + BLAKE3_AVX512_ODD_INDEXES]",
+    "vmovdqa32 zmm16, zmmword ptr [rdi + 0 * 64]",
+    "vmovdqa32 zmm24, zmm16",
+    "vmovdqa32  zmm2, zmmword ptr [rdi + 8 * 64]",
+    "vpermt2d  zmm16, zmm0, zmm2",
+    "vpermt2d  zmm24, zmm1, zmm2",
+    "vmovdqa32 zmm17, zmmword ptr [rdi + 1 * 64]",
+    "vmovdqa32 zmm25, zmm17",
+    "vmovdqa32  zmm2, zmmword ptr [rdi + 9 * 64]",
+    "vpermt2d  zmm17, zmm0, zmm2",
+    "vpermt2d  zmm25, zmm1, zmm2",
+    "vmovdqa32 zmm18, zmmword ptr [rdi + 2 * 64]",
+    "vmovdqa32 zmm26, zmm18",
+    "vmovdqa32  zmm2, zmmword ptr [rdi + 10 * 64]",
+    "vpermt2d  zmm18, zmm0, zmm2",
+    "vpermt2d  zmm26, zmm1, zmm2",
+    "vmovdqa32 zmm19, zmmword ptr [rdi + 3 * 64]",
+    "vmovdqa32 zmm27, zmm19",
+    "vmovdqa32  zmm2, zmmword ptr [rdi + 11 * 64]",
+    "vpermt2d  zmm19, zmm0, zmm2",
+    "vpermt2d  zmm27, zmm1, zmm2",
+    "vmovdqa32 zmm20, zmmword ptr [rdi + 4 * 64]",
+    "vmovdqa32 zmm28, zmm20",
+    "vmovdqa32  zmm2, zmmword ptr [rdi + 12 * 64]",
+    "vpermt2d  zmm20, zmm0, zmm2",
+    "vpermt2d  zmm28, zmm1, zmm2",
+    "vmovdqa32 zmm21, zmmword ptr [rdi + 5 * 64]",
+    "vmovdqa32 zmm29, zmm21",
+    "vmovdqa32  zmm2, zmmword ptr [rdi + 13 * 64]",
+    "vpermt2d  zmm21, zmm0, zmm2",
+    "vpermt2d  zmm29, zmm1, zmm2",
+    "vmovdqa32 zmm22, zmmword ptr [rdi + 6 * 64]",
+    "vmovdqa32 zmm30, zmm22",
+    "vmovdqa32  zmm2, zmmword ptr [rdi + 14 * 64]",
+    "vpermt2d  zmm22, zmm0, zmm2",
+    "vpermt2d  zmm30, zmm1, zmm2",
+    "vmovdqa32 zmm23, zmmword ptr [rdi + 7 * 64]",
+    "vmovdqa32 zmm31, zmm23",
+    "vmovdqa32  zmm2, zmmword ptr [rdi + 15 * 64]",
+    "vpermt2d  zmm23, zmm0, zmm2",
+    "vpermt2d  zmm31, zmm1, zmm2",
+    // Broadcast the key into zmm0-zmm7.
+    "vpbroadcastd zmm0, dword ptr [rsi + 0 * 4]",
+    "vpbroadcastd zmm1, dword ptr [rsi + 1 * 4]",
+    "vpbroadcastd zmm2, dword ptr [rsi + 2 * 4]",
+    "vpbroadcastd zmm3, dword ptr [rsi + 3 * 4]",
+    "vpbroadcastd zmm4, dword ptr [rsi + 4 * 4]",
+    "vpbroadcastd zmm5, dword ptr [rsi + 5 * 4]",
+    "vpbroadcastd zmm6, dword ptr [rsi + 6 * 4]",
+    "vpbroadcastd zmm7, dword ptr [rsi + 7 * 4]",
+    // Initialize the third and fourth rows of the state.
+    "vmovdqa32  zmm8, zmmword ptr [BLAKE3_IV0_16 + rip]", // IV constants
+    "vmovdqa32  zmm9, zmmword ptr [BLAKE3_IV1_16 + rip]",
+    "vmovdqa32 zmm10, zmmword ptr [BLAKE3_IV2_16 + rip]",
+    "vmovdqa32 zmm11, zmmword ptr [BLAKE3_IV3_16 + rip]",
+    "xor ecx, ecx",            // zero
+    "vpbroadcastd zmm12, ecx", // counter low (always 0)
+    "vpbroadcastd zmm13, ecx", // counter high (always 0)
+    "mov ecx, 64",
+    "vpbroadcastd zmm14, ecx", // block length (always 64)
+    "or r8d, 4",               // set the PARENT flag
+    "vpbroadcastd zmm15, r8d", // flags
+    // Run the kernel.
+    "call blake3_avx512_kernel_16",
+    // Write the output and exit.
+    "vmovdqa32 zmmword ptr [r9 + 0 * 64], zmm0",
+    "vmovdqa32 zmmword ptr [r9 + 1 * 64], zmm1",
+    "vmovdqa32 zmmword ptr [r9 + 2 * 64], zmm2",
+    "vmovdqa32 zmmword ptr [r9 + 3 * 64], zmm3",
+    "vmovdqa32 zmmword ptr [r9 + 4 * 64], zmm4",
+    "vmovdqa32 zmmword ptr [r9 + 5 * 64], zmm5",
+    "vmovdqa32 zmmword ptr [r9 + 6 * 64], zmm6",
+    "vmovdqa32 zmmword ptr [r9 + 7 * 64], zmm7",
+    "vzeroupper",
+    "ret",
 );
 
 #[repr(C, align(64))]
@@ -1091,23 +1207,50 @@ pub unsafe fn chunks16(
     );
 }
 
+pub unsafe fn parents16(
+    child_cvs: &[Words16; 16],
+    key: &[u32; 8],
+    flags: u32,
+    out_ptr: *mut [Words16; 8],
+) {
+    asm!(
+        "call blake3_avx512_parents_16",
+        inout("rdi") child_cvs => _,
+        inout("rsi") key => _,
+        out("rdx") _,
+        out("ecx") _,
+        inout("r8d") flags => _,
+        inout("r9") out_ptr => _,
+        out("zmm0") _, out("zmm1") _, out("zmm2") _, out("zmm3") _,
+        out("zmm4") _, out("zmm5") _, out("zmm6") _, out("zmm7") _,
+        out("zmm8") _, out("zmm9") _, out("zmm10") _, out("zmm11") _,
+        out("zmm12") _, out("zmm13") _, out("zmm14") _, out("zmm15") _,
+        out("zmm16") _, out("zmm17") _, out("zmm18") _, out("zmm19") _,
+        out("zmm20") _, out("zmm21") _, out("zmm22") _, out("zmm23") _,
+        out("zmm24") _, out("zmm25") _, out("zmm26") _, out("zmm27") _,
+        out("zmm28") _, out("zmm29") _, out("zmm30") _, out("zmm31") _,
+    );
+}
+
 #[test]
 fn test_chunks16() {
-    let mut message = [0; 16 * CHUNK_LEN];
+    let mut message = [0u8; 16 * CHUNK_LEN];
     crate::test::paint_test_input(&mut message);
 
     let mut chunk_refs: Vec<&[u8; CHUNK_LEN]> = Vec::new();
     for i in 0..16 {
         chunk_refs.push(message[i * CHUNK_LEN..][..CHUNK_LEN].try_into().unwrap());
     }
-    let mut expected_out = [0; 32 * 16];
+    let counter = u32::MAX as u64; // a counter value that will overflow 32 bits
+    let flags = crate::KEYED_HASH;
+    let mut expected_out = [0u8; 32 * 16];
     unsafe {
         crate::avx512::hash_many(
             chunk_refs[..].try_into().unwrap(),
             crate::IV,
-            0,
+            counter,
             crate::IncrementCounter::Yes,
-            0,
+            flags,
             crate::CHUNK_START,
             crate::CHUNK_END,
             &mut expected_out,
@@ -1116,9 +1259,9 @@ fn test_chunks16() {
 
     let mut found_out = [Words16([0; 16]); 8];
     unsafe {
-        chunks16(&message, crate::IV, 0, 0, &mut found_out);
+        chunks16(&message, crate::IV, counter, flags as u32, &mut found_out);
     }
-    let mut found_out_transposed = [0; 16 * 8 * 4];
+    let mut found_out_transposed = [0; 8 * 16 * 4];
     for vector_i in 0..8 {
         for element_i in 0..16 {
             let word = found_out[vector_i].0[element_i];
@@ -1126,6 +1269,72 @@ fn test_chunks16() {
             found_out_transposed[word_start..][..4].copy_from_slice(&word.to_le_bytes());
         }
     }
+    assert_eq!(expected_out, found_out_transposed);
+}
 
+#[test]
+fn test_parents16() {
+    // 16 left child CVs and 16 right child CVs, each 32 bytes long
+    let mut child_cvs = [0u8; 2 * 16 * 32];
+    crate::test::paint_test_input(&mut child_cvs);
+    let mut child_cv_refs = [&[0; 64]; 16]; // references to parent nodes
+    for i in 0..16 {
+        child_cv_refs[i] = (&child_cvs[i * 64..][..64]).try_into().unwrap();
+    }
+    // 16 output CVs of 32 bytes each.
+    let flags = crate::KEYED_HASH;
+    let mut expected_out = [0; 32 * 16];
+    unsafe {
+        crate::avx512::hash_many(
+            &child_cv_refs,
+            crate::IV,
+            0,
+            crate::IncrementCounter::No,
+            flags | crate::PARENT,
+            0,
+            0,
+            &mut expected_out,
+        );
+    }
+
+    // 8 transposed left child CVs and 8 transposed right child CVs
+    let mut transposed_child_cvs = [Words16([0; 16]); 16];
+    for child_i in 0..16 {
+        for word_i in 0..8 {
+            let word = u32::from_le_bytes(
+                child_cvs[child_i * 32 + word_i * 4..][..4]
+                    .try_into()
+                    .unwrap(),
+            );
+            transposed_child_cvs[word_i].0[child_i] = word;
+        }
+    }
+    for child_i in 16..32 {
+        for word_i in 0..8 {
+            let word = u32::from_le_bytes(
+                child_cvs[child_i * 32 + word_i * 4..][..4]
+                    .try_into()
+                    .unwrap(),
+            );
+            transposed_child_cvs[8 + word_i].0[child_i - 16] = word;
+        }
+    }
+    let mut found_out = [Words16([0; 16]); 8];
+    unsafe {
+        parents16(
+            &transposed_child_cvs,
+            crate::IV,
+            flags as u32,
+            &mut found_out,
+        );
+    }
+    let mut found_out_transposed = [0; 8 * 16 * 4];
+    for vector_i in 0..8 {
+        for element_i in 0..16 {
+            let word = found_out[vector_i].0[element_i];
+            let word_start = 32 * element_i + 4 * vector_i;
+            found_out_transposed[word_start..][..4].copy_from_slice(&word.to_le_bytes());
+        }
+    }
     assert_eq!(expected_out, found_out_transposed);
 }
