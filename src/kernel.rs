@@ -982,24 +982,16 @@ global_asm!(
     // --------------------------------------------------------------------------------------------
     "blake3_avx512_chunks_16:",
     // TODO: Prefetches
-    // Broadcast the key into zmm0-zmm7. Use ecx as scratch.
-    "mov ecx, dword ptr [rsi + 0 * 4]",
-    "vpbroadcastd zmm0, ecx",
-    "mov ecx, dword ptr [rsi + 1 * 4]",
-    "vpbroadcastd zmm1, ecx",
-    "mov ecx, dword ptr [rsi + 2 * 4]",
-    "vpbroadcastd zmm2, ecx",
-    "mov ecx, dword ptr [rsi + 3 * 4]",
-    "vpbroadcastd zmm3, ecx",
-    "mov ecx, dword ptr [rsi + 4 * 4]",
-    "vpbroadcastd zmm4, ecx",
-    "mov ecx, dword ptr [rsi + 5 * 4]",
-    "vpbroadcastd zmm5, ecx",
-    "mov ecx, dword ptr [rsi + 6 * 4]",
-    "vpbroadcastd zmm6, ecx",
-    "mov ecx, dword ptr [rsi + 7 * 4]",
-    "vpbroadcastd zmm7, ecx",
-    // ecx is the block length arg to blake3_avx512_blocks_16. It is always 64.
+    // Broadcast the key into zmm0-zmm7.
+    "vpbroadcastd zmm0, dword ptr [rsi + 0 * 4]",
+    "vpbroadcastd zmm1, dword ptr [rsi + 1 * 4]",
+    "vpbroadcastd zmm2, dword ptr [rsi + 2 * 4]",
+    "vpbroadcastd zmm3, dword ptr [rsi + 3 * 4]",
+    "vpbroadcastd zmm4, dword ptr [rsi + 4 * 4]",
+    "vpbroadcastd zmm5, dword ptr [rsi + 5 * 4]",
+    "vpbroadcastd zmm6, dword ptr [rsi + 6 * 4]",
+    "vpbroadcastd zmm7, dword ptr [rsi + 7 * 4]",
+    // ecx is the block length parameter for blake3_avx512_blocks_16. It is always 64.
     "mov ecx, 64",
     // Set the CHUNK_START flag.
     "or r8d, 1",
