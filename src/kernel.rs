@@ -5,13 +5,36 @@ global_asm!(
     // --------------------------------------------------------------------------------------------
     // blake3_avx512_kernel_16
     //
-    // zmm0-zmm15: state vectors
+    //   zmm0-zmm7: transposed input CV (which may be the key or the IV)
+    //       zmm12: transposed lower order counter words
+    //       zmm13: transposed higher order counter words
+    //       zmm14: transposed block sizes (all 64)
+    //       zmm15: transposed flag words
     // zmm16-zmm31: transposed message vectors
     //
-    // This routine executes all 7 rounds of compression and performs the XOR of the upper half of
-    // the state into the lower half (but not the feed-forward). The result is left in zmm0-zmm7.
+    // This routine overwrites zmm8-zmm11 (the third row of the state) with IV bytes, executes all
+    // 7 rounds of compression, and performs the XOR of the upper half of the state into the lower
+    // half (but not the feed-forward). The result is left in zmm0-zmm7.
     // --------------------------------------------------------------------------------------------
+    ".p2align 6",
+    "BLAKE3_IV0_16:",
+    ".long 0x6A09E667, 0x6A09E667, 0x6A09E667, 0x6A09E667, 0x6A09E667, 0x6A09E667, 0x6A09E667, 0x6A09E667",
+    ".long 0x6A09E667, 0x6A09E667, 0x6A09E667, 0x6A09E667, 0x6A09E667, 0x6A09E667, 0x6A09E667, 0x6A09E667",
+    "BLAKE3_IV1_16:",
+    ".long 0xBB67AE85, 0xBB67AE85, 0xBB67AE85, 0xBB67AE85, 0xBB67AE85, 0xBB67AE85, 0xBB67AE85, 0xBB67AE85",
+    ".long 0xBB67AE85, 0xBB67AE85, 0xBB67AE85, 0xBB67AE85, 0xBB67AE85, 0xBB67AE85, 0xBB67AE85, 0xBB67AE85",
+    "BLAKE3_IV2_16:",
+    ".long 0x3C6EF372, 0x3C6EF372, 0x3C6EF372, 0x3C6EF372, 0x3C6EF372, 0x3C6EF372, 0x3C6EF372, 0x3C6EF372",
+    ".long 0x3C6EF372, 0x3C6EF372, 0x3C6EF372, 0x3C6EF372, 0x3C6EF372, 0x3C6EF372, 0x3C6EF372, 0x3C6EF372",
+    "BLAKE3_IV3_16:",
+    ".long 0xA54FF53A, 0xA54FF53A, 0xA54FF53A, 0xA54FF53A, 0xA54FF53A, 0xA54FF53A, 0xA54FF53A, 0xA54FF53A",
+    ".long 0xA54FF53A, 0xA54FF53A, 0xA54FF53A, 0xA54FF53A, 0xA54FF53A, 0xA54FF53A, 0xA54FF53A, 0xA54FF53A",
     "blake3_avx512_kernel_16:",
+    // load IV constants into the third row
+    "vmovdqa32  zmm8, zmmword ptr [BLAKE3_IV0_16 + rip]",
+    "vmovdqa32  zmm9, zmmword ptr [BLAKE3_IV1_16 + rip]",
+    "vmovdqa32 zmm10, zmmword ptr [BLAKE3_IV2_16 + rip]",
+    "vmovdqa32 zmm11, zmmword ptr [BLAKE3_IV3_16 + rip]",
     // round 1
     "vpaddd  zmm0, zmm0, zmm16",
     "vpaddd  zmm1, zmm1, zmm18",
@@ -951,12 +974,8 @@ global_asm!(
     "vpunpckhqdq  zmm29, zmm30, zmm13",
     "vpunpcklqdq  zmm30, zmm31, zmm14",
     "vpunpckhqdq  zmm31, zmm31, zmm14",
-    // Initialize the third and fourth rows of the state, part of which we just used as scratch
-    // space during transposition.
-    "vmovdqa32  zmm8, zmmword ptr [BLAKE3_IV0_16 + rip]", // IV constants
-    "vmovdqa32  zmm9, zmmword ptr [BLAKE3_IV1_16 + rip]",
-    "vmovdqa32 zmm10, zmmword ptr [BLAKE3_IV2_16 + rip]",
-    "vmovdqa32 zmm11, zmmword ptr [BLAKE3_IV3_16 + rip]",
+    // Initialize fourth row of the state, part of which we just used as scratch space during
+    // transposition.
     "vmovdqa32 zmm12, zmmword ptr [rdx + 64 * 0]", // counter low
     "vmovdqa32 zmm13, zmmword ptr [rdx + 64 * 1]", // counter high
     "vpbroadcastd zmm14, ecx",                     // block length (always 64)
@@ -1135,11 +1154,7 @@ global_asm!(
     "vpbroadcastd zmm5, dword ptr [rdx + 5 * 4]",
     "vpbroadcastd zmm6, dword ptr [rdx + 6 * 4]",
     "vpbroadcastd zmm7, dword ptr [rdx + 7 * 4]",
-    // Initialize the third and fourth rows of the state.
-    "vmovdqa32  zmm8, zmmword ptr [BLAKE3_IV0_16 + rip]", // IV constants
-    "vmovdqa32  zmm9, zmmword ptr [BLAKE3_IV1_16 + rip]",
-    "vmovdqa32 zmm10, zmmword ptr [BLAKE3_IV2_16 + rip]",
-    "vmovdqa32 zmm11, zmmword ptr [BLAKE3_IV3_16 + rip]",
+    // Initialize the fourth row of the state.
     "xor ecx, ecx",            // zero
     "vpbroadcastd zmm12, ecx", // counter low (always 0)
     "vpbroadcastd zmm13, ecx", // counter high (always 0)
@@ -1185,11 +1200,7 @@ global_asm!(
     "vpbroadcastd zmm5, dword ptr [rsi + 5 * 4]",
     "vpbroadcastd zmm6, dword ptr [rsi + 6 * 4]",
     "vpbroadcastd zmm7, dword ptr [rsi + 7 * 4]",
-    // Initialize zmm8-zmm15, the third and fourth rows of the state.
-    "vmovdqa32  zmm8, zmmword ptr [BLAKE3_IV0_16 + rip]", // IV constants
-    "vmovdqa32  zmm9, zmmword ptr [BLAKE3_IV1_16 + rip]",
-    "vmovdqa32 zmm10, zmmword ptr [BLAKE3_IV2_16 + rip]",
-    "vmovdqa32 zmm11, zmmword ptr [BLAKE3_IV3_16 + rip]",
+    // Initialize zmm12-zmm15, fourth row of the state.
     "vmovdqa32 zmm12, zmmword ptr [rdx + 64 * 0]", // counter low
     "vmovdqa32 zmm13, zmmword ptr [rdx + 64 * 1]", // counter high
     "mov ecx, 64",
@@ -1354,15 +1365,6 @@ global_asm!(
 #[repr(C, align(64))]
 #[derive(Copy, Clone, Debug)]
 pub struct Words16(pub [u32; 16]);
-
-#[no_mangle]
-static BLAKE3_IV0_16: Words16 = Words16([crate::IV[0]; 16]);
-#[no_mangle]
-static BLAKE3_IV1_16: Words16 = Words16([crate::IV[1]; 16]);
-#[no_mangle]
-static BLAKE3_IV2_16: Words16 = Words16([crate::IV[2]; 16]);
-#[no_mangle]
-static BLAKE3_IV3_16: Words16 = Words16([crate::IV[3]; 16]);
 
 pub unsafe fn chunks16(
     message: &[u8; 16 * CHUNK_LEN],
