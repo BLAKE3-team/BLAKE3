@@ -1585,7 +1585,11 @@ fn test_xof_stream16() {
     let block_words = crate::platform::words_from_le_bytes_64(&padded_block);
     let key_words = crate::platform::words_from_le_bytes_32(&key);
     let flags = crate::KEYED_HASH | crate::CHUNK_START | crate::CHUNK_END;
-    let mut found = [0; 1024];
+    let mut found_aligned = [0u32; 16 * 16 + 1];
+    assert!(std::mem::size_of_val(&found_aligned) > 1024);
+    let found: &mut [u8; 1024] =
+        unsafe { &mut *((found_aligned.as_mut_ptr() as *mut u8).add(1) as *mut _) };
+    assert_eq!(1, found.as_ptr() as usize % 4);
     unsafe {
         xof_stream16(
             &block_words,
@@ -1593,8 +1597,8 @@ fn test_xof_stream16() {
             0,
             block_len as u32,
             flags as u32,
-            &mut found,
+            found,
         );
     }
-    assert_eq!(expected, found);
+    assert_eq!(expected, *found);
 }
