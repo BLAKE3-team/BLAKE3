@@ -1049,9 +1049,9 @@ global_asm!(
     // blake3_avx512_parents_16
     //
     // zmm0-zmm31: [clobbered]
-    // rdi: pointer to 16 transposed state vectors, 8 left and 8 right, 64-byte aligned
-    // rsi: pointer to the 32-byte key, unaligned
-    // rdx: [unused]
+    // rdi: pointer to the left child CVs, 8 transposed state vectors, 64-byte aligned
+    // rsi: pointer to the right child CVs, 8 transposed state vectors, 64-byte aligned
+    // rdx: pointer to the 32-byte key, unaligned
     // ecx: [clobbered]
     // r8d: flags (other than PARENT)
     //  r9: out pointer to 8x64 bytes, 64-byte aligned
@@ -1088,53 +1088,53 @@ global_asm!(
     "vmovdqa32 zmm1, zmmword ptr [rip + BLAKE3_AVX512_ODD_INDEXES]",
     "vmovdqa32 zmm16, zmmword ptr [rdi + 0 * 64]",
     "vmovdqa32 zmm24, zmm16",
-    "vmovdqa32  zmm2, zmmword ptr [rdi + 8 * 64]",
+    "vmovdqa32  zmm2, zmmword ptr [rsi + 0 * 64]",
     "vpermt2d  zmm16, zmm0, zmm2",
     "vpermt2d  zmm24, zmm1, zmm2",
     "vmovdqa32 zmm17, zmmword ptr [rdi + 1 * 64]",
     "vmovdqa32 zmm25, zmm17",
-    "vmovdqa32  zmm2, zmmword ptr [rdi + 9 * 64]",
+    "vmovdqa32  zmm2, zmmword ptr [rsi + 1 * 64]",
     "vpermt2d  zmm17, zmm0, zmm2",
     "vpermt2d  zmm25, zmm1, zmm2",
     "vmovdqa32 zmm18, zmmword ptr [rdi + 2 * 64]",
     "vmovdqa32 zmm26, zmm18",
-    "vmovdqa32  zmm2, zmmword ptr [rdi + 10 * 64]",
+    "vmovdqa32  zmm2, zmmword ptr [rsi + 2 * 64]",
     "vpermt2d  zmm18, zmm0, zmm2",
     "vpermt2d  zmm26, zmm1, zmm2",
     "vmovdqa32 zmm19, zmmword ptr [rdi + 3 * 64]",
     "vmovdqa32 zmm27, zmm19",
-    "vmovdqa32  zmm2, zmmword ptr [rdi + 11 * 64]",
+    "vmovdqa32  zmm2, zmmword ptr [rsi + 3 * 64]",
     "vpermt2d  zmm19, zmm0, zmm2",
     "vpermt2d  zmm27, zmm1, zmm2",
     "vmovdqa32 zmm20, zmmword ptr [rdi + 4 * 64]",
     "vmovdqa32 zmm28, zmm20",
-    "vmovdqa32  zmm2, zmmword ptr [rdi + 12 * 64]",
+    "vmovdqa32  zmm2, zmmword ptr [rsi + 4 * 64]",
     "vpermt2d  zmm20, zmm0, zmm2",
     "vpermt2d  zmm28, zmm1, zmm2",
     "vmovdqa32 zmm21, zmmword ptr [rdi + 5 * 64]",
     "vmovdqa32 zmm29, zmm21",
-    "vmovdqa32  zmm2, zmmword ptr [rdi + 13 * 64]",
+    "vmovdqa32  zmm2, zmmword ptr [rsi + 5 * 64]",
     "vpermt2d  zmm21, zmm0, zmm2",
     "vpermt2d  zmm29, zmm1, zmm2",
     "vmovdqa32 zmm22, zmmword ptr [rdi + 6 * 64]",
     "vmovdqa32 zmm30, zmm22",
-    "vmovdqa32  zmm2, zmmword ptr [rdi + 14 * 64]",
+    "vmovdqa32  zmm2, zmmword ptr [rsi + 6 * 64]",
     "vpermt2d  zmm22, zmm0, zmm2",
     "vpermt2d  zmm30, zmm1, zmm2",
     "vmovdqa32 zmm23, zmmword ptr [rdi + 7 * 64]",
     "vmovdqa32 zmm31, zmm23",
-    "vmovdqa32  zmm2, zmmword ptr [rdi + 15 * 64]",
+    "vmovdqa32  zmm2, zmmword ptr [rsi + 7 * 64]",
     "vpermt2d  zmm23, zmm0, zmm2",
     "vpermt2d  zmm31, zmm1, zmm2",
     // Broadcast the key into zmm0-zmm7.
-    "vpbroadcastd zmm0, dword ptr [rsi + 0 * 4]",
-    "vpbroadcastd zmm1, dword ptr [rsi + 1 * 4]",
-    "vpbroadcastd zmm2, dword ptr [rsi + 2 * 4]",
-    "vpbroadcastd zmm3, dword ptr [rsi + 3 * 4]",
-    "vpbroadcastd zmm4, dword ptr [rsi + 4 * 4]",
-    "vpbroadcastd zmm5, dword ptr [rsi + 5 * 4]",
-    "vpbroadcastd zmm6, dword ptr [rsi + 6 * 4]",
-    "vpbroadcastd zmm7, dword ptr [rsi + 7 * 4]",
+    "vpbroadcastd zmm0, dword ptr [rdx + 0 * 4]",
+    "vpbroadcastd zmm1, dword ptr [rdx + 1 * 4]",
+    "vpbroadcastd zmm2, dword ptr [rdx + 2 * 4]",
+    "vpbroadcastd zmm3, dword ptr [rdx + 3 * 4]",
+    "vpbroadcastd zmm4, dword ptr [rdx + 4 * 4]",
+    "vpbroadcastd zmm5, dword ptr [rdx + 5 * 4]",
+    "vpbroadcastd zmm6, dword ptr [rdx + 6 * 4]",
+    "vpbroadcastd zmm7, dword ptr [rdx + 7 * 4]",
     // Initialize the third and fourth rows of the state.
     "vmovdqa32  zmm8, zmmword ptr [BLAKE3_IV0_16 + rip]", // IV constants
     "vmovdqa32  zmm9, zmmword ptr [BLAKE3_IV1_16 + rip]",
@@ -1208,16 +1208,17 @@ pub unsafe fn chunks16(
 }
 
 pub unsafe fn parents16(
-    child_cvs: &[Words16; 16],
+    left_child_cvs: &[Words16; 8],
+    right_child_cvs: &[Words16; 8],
     key: &[u32; 8],
     flags: u32,
     out_ptr: *mut [Words16; 8],
 ) {
     asm!(
         "call blake3_avx512_parents_16",
-        inout("rdi") child_cvs => _,
-        inout("rsi") key => _,
-        out("rdx") _,
+        inout("rdi") left_child_cvs => _,
+        inout("rsi") right_child_cvs => _,
+        inout("rdx") key => _,
         out("ecx") _,
         inout("r8d") flags => _,
         inout("r9") out_ptr => _,
@@ -1298,7 +1299,8 @@ fn test_parents16() {
     }
 
     // 8 transposed left child CVs and 8 transposed right child CVs
-    let mut transposed_child_cvs = [Words16([0; 16]); 16];
+    let mut transposed_left_child_cvs = [Words16([0; 16]); 8];
+    let mut transposed_right_child_cvs = [Words16([0; 16]); 8];
     for child_i in 0..16 {
         for word_i in 0..8 {
             let word = u32::from_le_bytes(
@@ -1306,7 +1308,7 @@ fn test_parents16() {
                     .try_into()
                     .unwrap(),
             );
-            transposed_child_cvs[word_i].0[child_i] = word;
+            transposed_left_child_cvs[word_i].0[child_i] = word;
         }
     }
     for child_i in 16..32 {
@@ -1316,13 +1318,14 @@ fn test_parents16() {
                     .try_into()
                     .unwrap(),
             );
-            transposed_child_cvs[8 + word_i].0[child_i - 16] = word;
+            transposed_right_child_cvs[word_i].0[child_i - 16] = word;
         }
     }
     let mut found_out = [Words16([0; 16]); 8];
     unsafe {
         parents16(
-            &transposed_child_cvs,
+            &transposed_left_child_cvs,
+            &transposed_right_child_cvs,
             crate::IV,
             flags as u32,
             &mut found_out,

@@ -252,17 +252,26 @@ fn bench_many_parents_neon(b: &mut Bencher) {
 
 #[bench]
 fn bench_many_parents_kernel(b: &mut Bencher) {
-    let alignment = std::mem::align_of::<blake3::kernel::Words16>();
+    use blake3::kernel::Words16;
+    let size = 16 * std::mem::size_of::<Words16>();
+    let alignment = std::mem::align_of::<Words16>();
     assert_eq!(alignment, 64);
-    let mut input = RandomInput::new_aligned(b, 16 * 16 * 4, 64);
+    let mut input = RandomInput::new_aligned(b, size, alignment);
     for _ in 0..100 {
         assert_eq!(0, (input.get().as_ptr() as usize) % alignment);
     }
     let mut output = [blake3::kernel::Words16([0; 16]); 8];
     b.iter(|| unsafe {
-        let rand_bytes = input.get();
-        let rand_vectors = &*(rand_bytes.as_ptr() as *const [blake3::kernel::Words16; 16]);
-        blake3::kernel::parents16(&rand_vectors, &[0; 8], 0, &mut output);
+        let rand_ptr = input.get().as_ptr();
+        let rand_left_children = &*(rand_ptr as *const [Words16; 8]);
+        let rand_right_children = &*(rand_ptr.add(size / 2) as *const [Words16; 8]);
+        blake3::kernel::parents16(
+            &rand_left_children,
+            &rand_right_children,
+            &[0; 8],
+            0,
+            &mut output,
+        );
     });
 }
 
