@@ -572,3 +572,22 @@ fn bench_two_updates(b: &mut Bencher) {
         hasher.finalize()
     });
 }
+
+#[bench]
+fn bench_xof_kernel(b: &mut Bencher) {
+    let mut output = [0; 16 * 64];
+    b.bytes = output.len() as u64;
+    let message_words = [0; 16];
+    let key_words = [0; 8];
+    let flags = 1 | 2 | 16; // CHUNK_START | CHUNK_END | KEYED_HASH
+    b.iter(|| unsafe {
+        blake3::kernel::xof_stream16(&message_words, &key_words, 0, flags, &mut output);
+    });
+    // Double check that this output is reasonable.
+    let mut expected = [0; 16 * 64];
+    blake3::Hasher::new_keyed(&[0; 32])
+        .update(&[0; 64])
+        .finalize_xof()
+        .fill(&mut expected);
+    assert_eq!(expected, output);
+}
