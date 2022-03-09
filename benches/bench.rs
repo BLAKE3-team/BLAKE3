@@ -574,7 +574,7 @@ fn bench_two_updates(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_xof_kernel(b: &mut Bencher) {
+fn bench_xof_stream_kernel(b: &mut Bencher) {
     let mut output = [0; 16 * 64];
     b.bytes = output.len() as u64;
     let message_words = [0; 16];
@@ -598,4 +598,25 @@ fn bench_xof_kernel(b: &mut Bencher) {
         .finalize_xof()
         .fill(&mut expected);
     assert_eq!(expected, output);
+}
+
+#[bench]
+fn bench_xof_xor_kernel(b: &mut Bencher) {
+    let mut output = [0; 16 * 64];
+    b.bytes = output.len() as u64;
+    let message_words = [0; 16];
+    let key_words = [0; 8];
+    let counter = 0;
+    let block_length = 0;
+    let flags = 1 | 2 | 16; // CHUNK_START | CHUNK_END | KEYED_HASH
+    b.iter(|| unsafe {
+        blake3::kernel::xof_xor16(
+            &message_words,
+            &key_words,
+            counter,
+            block_length,
+            flags,
+            &mut output,
+        );
+    });
 }

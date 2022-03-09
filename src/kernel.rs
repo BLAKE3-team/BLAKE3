@@ -1362,6 +1362,209 @@ global_asm!(
     "vextracti32x4 xmmword ptr [r9 + 63 * 16], zmm15, 3",
     "vzeroupper",
     "ret",
+    //
+    // --------------------------------------------------------------------------------------------
+    // blake3_avx512_xof_xor_16
+    //
+    // zmm0-zmm31: [clobbered]
+    // rdi: pointer to the 16-word message block, 4-byte aligned
+    // rsi: pointer to the 8-word input CV, 4-byte aligned
+    // rdx: pointer to two 64-byte aligned vectors, counter-low followed by counter-high
+    // ecx: block length
+    // r8d: flags (other than ROOT)
+    //  r9: inout pointer to 16x64=1024 bytes, unaligned
+    //
+    // This routine performs the root compression for 16 consecutive output blocks and xor's 1024
+    // bytes of output into the inout pointer.
+    // --------------------------------------------------------------------------------------------
+    "blake3_avx512_xof_xor_16:",
+    // Broadcast the input CV into zmm0-zmm7, the first two rows of the state.
+    "vpbroadcastd zmm0, dword ptr [rsi + 0 * 4]",
+    "vpbroadcastd zmm1, dword ptr [rsi + 1 * 4]",
+    "vpbroadcastd zmm2, dword ptr [rsi + 2 * 4]",
+    "vpbroadcastd zmm3, dword ptr [rsi + 3 * 4]",
+    "vpbroadcastd zmm4, dword ptr [rsi + 4 * 4]",
+    "vpbroadcastd zmm5, dword ptr [rsi + 5 * 4]",
+    "vpbroadcastd zmm6, dword ptr [rsi + 6 * 4]",
+    "vpbroadcastd zmm7, dword ptr [rsi + 7 * 4]",
+    // Load the low and high counter words.
+    "vmovdqa32 zmm12, zmmword ptr [rdx + 64 * 0]", // counter low
+    "vmovdqa32 zmm13, zmmword ptr [rdx + 64 * 1]", // counter high
+    // Set the ROOT flag.
+    "or r8d, 8",
+    // Broadcast the message block into zmm16-zmm31
+    "vpbroadcastd zmm16, dword ptr [rdi + 0 * 4]",
+    "vpbroadcastd zmm17, dword ptr [rdi + 1 * 4]",
+    "vpbroadcastd zmm18, dword ptr [rdi + 2 * 4]",
+    "vpbroadcastd zmm19, dword ptr [rdi + 3 * 4]",
+    "vpbroadcastd zmm20, dword ptr [rdi + 4 * 4]",
+    "vpbroadcastd zmm21, dword ptr [rdi + 5 * 4]",
+    "vpbroadcastd zmm22, dword ptr [rdi + 6 * 4]",
+    "vpbroadcastd zmm23, dword ptr [rdi + 7 * 4]",
+    "vpbroadcastd zmm24, dword ptr [rdi + 8 * 4]",
+    "vpbroadcastd zmm25, dword ptr [rdi + 9 * 4]",
+    "vpbroadcastd zmm26, dword ptr [rdi + 10 * 4]",
+    "vpbroadcastd zmm27, dword ptr [rdi + 11 * 4]",
+    "vpbroadcastd zmm28, dword ptr [rdi + 12 * 4]",
+    "vpbroadcastd zmm29, dword ptr [rdi + 13 * 4]",
+    "vpbroadcastd zmm30, dword ptr [rdi + 14 * 4]",
+    "vpbroadcastd zmm31, dword ptr [rdi + 15 * 4]",
+    // Run the kernel.
+    "call blake3_avx512_kernel_16",
+    // Re-broadcast the input CV and feed it forward into the second half of the state.
+    "vpbroadcastd zmm16, dword ptr [rsi + 0 * 4]",
+    "vpxord zmm8, zmm8, zmm16",
+    "vpbroadcastd zmm17, dword ptr [rsi + 1 * 4]",
+    "vpxord zmm9, zmm9, zmm17",
+    "vpbroadcastd zmm18, dword ptr [rsi + 2 * 4]",
+    "vpxord zmm10, zmm10, zmm18",
+    "vpbroadcastd zmm19, dword ptr [rsi + 3 * 4]",
+    "vpxord zmm11, zmm11, zmm19",
+    "vpbroadcastd zmm20, dword ptr [rsi + 4 * 4]",
+    "vpxord zmm12, zmm12, zmm20",
+    "vpbroadcastd zmm21, dword ptr [rsi + 5 * 4]",
+    "vpxord zmm13, zmm13, zmm21",
+    "vpbroadcastd zmm22, dword ptr [rsi + 6 * 4]",
+    "vpxord zmm14, zmm14, zmm22",
+    "vpbroadcastd zmm23, dword ptr [rsi + 7 * 4]",
+    "vpxord zmm15, zmm15, zmm23",
+    // zmm0-zmm15 now contain the final extended state vectors, transposed. We need to un-transpose
+    // them before we write them out. Unlike blake3_avx512_xof_stream_16, we do a complete
+    // un-transpose here, to make the xor step easier.
+    //
+    // First interleave 32-bit words. This takes vectors like:
+    //
+    // a0, b0, c0, d0, e0, f0, g0, h0, i0, j0, k0, l0, m0, n0, o0, p0
+    //
+    // And produces vectors like:
+    //
+    // a0, a1, b0, b1, e0, e1, g0, g1, i0, i1, k0, k1, m0, m1, o0, o1
+    "vpunpckldq zmm16, zmm0, zmm1",
+    "vpunpckhdq zmm17, zmm0, zmm1",
+    "vpunpckldq zmm18, zmm2, zmm3",
+    "vpunpckhdq zmm19, zmm2, zmm3",
+    "vpunpckldq zmm20, zmm4, zmm5",
+    "vpunpckhdq zmm21, zmm4, zmm5",
+    "vpunpckldq zmm22, zmm6, zmm7",
+    "vpunpckhdq zmm23, zmm6, zmm7",
+    "vpunpckldq zmm24, zmm8, zmm9",
+    "vpunpckhdq zmm25, zmm8, zmm9",
+    "vpunpckldq zmm26, zmm10, zmm11",
+    "vpunpckhdq zmm27, zmm10, zmm11",
+    "vpunpckldq zmm28, zmm12, zmm13",
+    "vpunpckhdq zmm29, zmm12, zmm13",
+    "vpunpckldq zmm30, zmm14, zmm15",
+    "vpunpckhdq zmm31, zmm14, zmm15",
+    // Then interleave 64-bit words, producing vectors like:
+    //
+    // a0, a1, a2, a3, e0, e1, e2, e3, i0, i1, i2, i3, m0, m1, m2, m3
+    "vpunpcklqdq zmm0, zmm16, zmm18",
+    "vpunpckhqdq zmm1, zmm16, zmm18",
+    "vpunpcklqdq zmm2, zmm17, zmm19",
+    "vpunpckhqdq zmm3, zmm17, zmm19",
+    "vpunpcklqdq zmm4, zmm20, zmm22",
+    "vpunpckhqdq zmm5, zmm20, zmm22",
+    "vpunpcklqdq zmm6, zmm21, zmm23",
+    "vpunpckhqdq zmm7, zmm21, zmm23",
+    "vpunpcklqdq zmm8, zmm24, zmm26",
+    "vpunpckhqdq zmm9, zmm24, zmm26",
+    "vpunpcklqdq zmm10, zmm25, zmm27",
+    "vpunpckhqdq zmm11, zmm25, zmm27",
+    "vpunpcklqdq zmm12, zmm28, zmm30",
+    "vpunpckhqdq zmm13, zmm28, zmm30",
+    "vpunpcklqdq zmm14, zmm29, zmm31",
+    "vpunpckhqdq zmm15, zmm29, zmm31",
+    // Then interleave 128-bit lanes, producing vectors like:
+    //
+    // a0, a1, a2, a3, i0, i1, i2, i3, a4, a5, a6, a7, i4, i5, i6, i7
+    "vshufi32x4 zmm16, zmm0, zmm4, 0x88", // lo lanes: 0x88 = 0b10001000 = (0, 2, 0, 2)
+    "vshufi32x4 zmm17, zmm1, zmm5, 0x88",
+    "vshufi32x4 zmm18, zmm2, zmm6, 0x88",
+    "vshufi32x4 zmm19, zmm3, zmm7, 0x88",
+    "vshufi32x4 zmm20, zmm0, zmm4, 0xdd", // hi lanes: 0xdd = 0b11011101 = (1, 3, 1, 3)
+    "vshufi32x4 zmm21, zmm1, zmm5, 0xdd",
+    "vshufi32x4 zmm22, zmm2, zmm6, 0xdd",
+    "vshufi32x4 zmm23, zmm3, zmm7, 0xdd",
+    "vshufi32x4 zmm24, zmm8, zmm12, 0x88", // lo lanes
+    "vshufi32x4 zmm25, zmm9, zmm13, 0x88",
+    "vshufi32x4 zmm26, zmm10, zmm14, 0x88",
+    "vshufi32x4 zmm27, zmm11, zmm15, 0x88",
+    "vshufi32x4 zmm28, zmm8, zmm12, 0xdd", // hi lanes
+    "vshufi32x4 zmm29, zmm9, zmm13, 0xdd",
+    "vshufi32x4 zmm30, zmm10, zmm14, 0xdd",
+    "vshufi32x4 zmm31, zmm11, zmm15, 0xdd",
+    // Finally interleave 128-bit lanes again (the same permutation as the previous pass, but
+    // different inputs), producing vectors like:
+    //
+    // a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15
+    "vshufi32x4 zmm0, zmm16, zmm24, 0x88", // lo lanes
+    "vshufi32x4 zmm1, zmm17, zmm25, 0x88",
+    "vshufi32x4 zmm2, zmm18, zmm26, 0x88",
+    "vshufi32x4 zmm3, zmm19, zmm27, 0x88",
+    "vshufi32x4 zmm4, zmm20, zmm28, 0x88",
+    "vshufi32x4 zmm5, zmm21, zmm29, 0x88",
+    "vshufi32x4 zmm6, zmm22, zmm30, 0x88",
+    "vshufi32x4 zmm7, zmm23, zmm31, 0x88",
+    "vshufi32x4 zmm8, zmm16, zmm24, 0xdd", // hi lanes
+    "vshufi32x4 zmm9, zmm17, zmm25, 0xdd",
+    "vshufi32x4 zmm10, zmm18, zmm26, 0xdd",
+    "vshufi32x4 zmm11, zmm19, zmm27, 0xdd",
+    "vshufi32x4 zmm12, zmm20, zmm28, 0xdd",
+    "vshufi32x4 zmm13, zmm21, zmm29, 0xdd",
+    "vshufi32x4 zmm14, zmm22, zmm30, 0xdd",
+    "vshufi32x4 zmm15, zmm23, zmm31, 0xdd",
+    // zmm0-zmm15 now contain the fully un-transposed state words. Load each 64 block on input
+    // (unaligned), perform the xor, and write out the result (again unaligned).
+    "vmovdqu32 zmm16, zmmword ptr [r9 + 0 * 64]",
+    "vpxord zmm0, zmm0, zmm16",
+    "vmovdqu32 zmmword ptr [r9 + 0 * 64], zmm0",
+    "vmovdqu32 zmm17, zmmword ptr [r9 + 1 * 64]",
+    "vpxord zmm1, zmm1, zmm17",
+    "vmovdqu32 zmmword ptr [r9 + 1 * 64], zmm1",
+    "vmovdqu32 zmm18, zmmword ptr [r9 + 2 * 64]",
+    "vpxord zmm2, zmm2, zmm18",
+    "vmovdqu32 zmmword ptr [r9 + 2 * 64], zmm2",
+    "vmovdqu32 zmm19, zmmword ptr [r9 + 3 * 64]",
+    "vpxord zmm3, zmm3, zmm19",
+    "vmovdqu32 zmmword ptr [r9 + 3 * 64], zmm3",
+    "vmovdqu32 zmm20, zmmword ptr [r9 + 4 * 64]",
+    "vpxord zmm4, zmm4, zmm20",
+    "vmovdqu32 zmmword ptr [r9 + 4 * 64], zmm4",
+    "vmovdqu32 zmm21, zmmword ptr [r9 + 5 * 64]",
+    "vpxord zmm5, zmm5, zmm21",
+    "vmovdqu32 zmmword ptr [r9 + 5 * 64], zmm5",
+    "vmovdqu32 zmm22, zmmword ptr [r9 + 6 * 64]",
+    "vpxord zmm6, zmm6, zmm22",
+    "vmovdqu32 zmmword ptr [r9 + 6 * 64], zmm6",
+    "vmovdqu32 zmm23, zmmword ptr [r9 + 7 * 64]",
+    "vpxord zmm7, zmm7, zmm23",
+    "vmovdqu32 zmmword ptr [r9 + 7 * 64], zmm7",
+    "vmovdqu32 zmm24, zmmword ptr [r9 + 8 * 64]",
+    "vpxord zmm8, zmm8, zmm24",
+    "vmovdqu32 zmmword ptr [r9 + 8 * 64], zmm8",
+    "vmovdqu32 zmm25, zmmword ptr [r9 + 9 * 64]",
+    "vpxord zmm9, zmm9, zmm25",
+    "vmovdqu32 zmmword ptr [r9 + 9 * 64], zmm9",
+    "vmovdqu32 zmm26, zmmword ptr [r9 + 10 * 64]",
+    "vpxord zmm10, zmm10, zmm26",
+    "vmovdqu32 zmmword ptr [r9 + 10 * 64], zmm10",
+    "vmovdqu32 zmm27, zmmword ptr [r9 + 11 * 64]",
+    "vpxord zmm11, zmm11, zmm27",
+    "vmovdqu32 zmmword ptr [r9 + 11 * 64], zmm11",
+    "vmovdqu32 zmm28, zmmword ptr [r9 + 12 * 64]",
+    "vpxord zmm12, zmm12, zmm28",
+    "vmovdqu32 zmmword ptr [r9 + 12 * 64], zmm12",
+    "vmovdqu32 zmm29, zmmword ptr [r9 + 13 * 64]",
+    "vpxord zmm13, zmm13, zmm29",
+    "vmovdqu32 zmmword ptr [r9 + 13 * 64], zmm13",
+    "vmovdqu32 zmm30, zmmword ptr [r9 + 14 * 64]",
+    "vpxord zmm14, zmm14, zmm30",
+    "vmovdqu32 zmmword ptr [r9 + 14 * 64], zmm14",
+    "vmovdqu32 zmm31, zmmword ptr [r9 + 15 * 64]",
+    "vpxord zmm15, zmm15, zmm31",
+    "vmovdqu32 zmmword ptr [r9 + 15 * 64], zmm15",
+    "vzeroupper",
+    "ret",
 );
 
 #[repr(C, align(64))]
@@ -1442,6 +1645,39 @@ pub unsafe fn xof_stream16(
     }
     asm!(
         "call blake3_avx512_xof_stream_16",
+        inout("rdi") message_words => _,
+        inout("rsi") cv_words => _,
+        inout("rdx") &counter_vectors => _,
+        inout("ecx") block_len => _,
+        inout("r8d") flags => _,
+        inout("r9") out_ptr => _,
+        out("zmm0") _, out("zmm1") _, out("zmm2") _, out("zmm3") _,
+        out("zmm4") _, out("zmm5") _, out("zmm6") _, out("zmm7") _,
+        out("zmm8") _, out("zmm9") _, out("zmm10") _, out("zmm11") _,
+        out("zmm12") _, out("zmm13") _, out("zmm14") _, out("zmm15") _,
+        out("zmm16") _, out("zmm17") _, out("zmm18") _, out("zmm19") _,
+        out("zmm20") _, out("zmm21") _, out("zmm22") _, out("zmm23") _,
+        out("zmm24") _, out("zmm25") _, out("zmm26") _, out("zmm27") _,
+        out("zmm28") _, out("zmm29") _, out("zmm30") _, out("zmm31") _,
+    );
+}
+
+pub unsafe fn xof_xor16(
+    message_words: &[u32; 16],
+    cv_words: &[u32; 8],
+    counter: u64,
+    block_len: u32,
+    flags: u32,
+    out_ptr: &mut [u8; 16 * 64],
+) {
+    // Prepare the counter vectors, the low words and high words.
+    let mut counter_vectors = [Words16([0; 16]); 2];
+    for i in 0..16 {
+        counter_vectors[0].0[i] = (counter + i as u64) as u32;
+        counter_vectors[1].0[i] = ((counter + i as u64) >> 32) as u32;
+    }
+    asm!(
+        "call blake3_avx512_xof_xor_16",
         inout("rdi") message_words => _,
         inout("rsi") cv_words => _,
         inout("rdx") &counter_vectors => _,
@@ -1592,6 +1828,47 @@ fn test_xof_stream16() {
     assert_eq!(1, found.as_ptr() as usize % 4);
     unsafe {
         xof_stream16(
+            &block_words,
+            &key_words,
+            0,
+            block_len as u32,
+            flags as u32,
+            found,
+        );
+    }
+    assert_eq!(expected, *found);
+}
+
+#[test]
+fn test_xof_xor16() {
+    let mut padded_block = [0; 64];
+    let block_len = 53;
+    let block = &mut padded_block[..block_len];
+    let mut key = [0; 32];
+    crate::test::paint_test_input(block);
+    crate::test::paint_test_input(&mut key);
+    let mut expected = [0; 1024];
+    crate::Hasher::new_keyed(&key)
+        .update(block)
+        .finalize_xof()
+        .fill(&mut expected);
+    // xor in our regular input pattern manually.
+    for i in 0..expected.len() {
+        expected[i] ^= (i % 251) as u8;
+    }
+
+    let block_words = crate::platform::words_from_le_bytes_64(&padded_block);
+    let key_words = crate::platform::words_from_le_bytes_32(&key);
+    let flags = crate::KEYED_HASH | crate::CHUNK_START | crate::CHUNK_END;
+    let mut found_aligned = [0u32; 16 * 16 + 1];
+    assert!(std::mem::size_of_val(&found_aligned) > 1024);
+    let found: &mut [u8; 1024] =
+        unsafe { &mut *((found_aligned.as_mut_ptr() as *mut u8).add(1) as *mut _) };
+    assert_eq!(1, found.as_ptr() as usize % 4);
+    // Apply the regular input pattern to the output, so we'll xor on top of that.
+    crate::test::paint_test_input(found);
+    unsafe {
+        xof_xor16(
             &block_words,
             &key_words,
             0,
