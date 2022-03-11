@@ -844,6 +844,835 @@ global_asm!(
     "vpxord  zmm6, zmm6, zmm14",
     "vpxord  zmm7, zmm7, zmm15",
     "ret",
+    // --------------------------------------------------------------------------------------------
+    // blake3_avx512_kernel_8
+    //
+    //         ecx: block length
+    //         r8d: domain flags
+    //   ymm0-ymm7: transposed input CV (which may be the key or the IV)
+    //       ymm12: transposed lower order counter words
+    //       ymm13: transposed higher order counter words
+    //       ymm14: transposed block sizes (all 64)
+    //       ymm15: transposed flag words
+    // ymm16-ymm31: transposed message vectors
+    //
+    // This routine overwrites ymm8-ymm11 (the third row of the state) with IV bytes, broadcasts
+    // the block length into ymm14, and broadcasts the domain flags into ymm15. This completes the
+    // transposed state in ymm0-ymm15. It then executes all 7 rounds of compression, and performs
+    // the XOR of the upper half of the state into the lower half (but not the feed-forward). The
+    // result is left in ymm0-ymm7.
+    // --------------------------------------------------------------------------------------------
+    "blake3_avx512_kernel_8:",
+    // load IV constants into the third row
+    "vmovdqa32  ymm8, ymmword ptr [BLAKE3_IV0_16 + rip]",
+    "vmovdqa32  ymm9, ymmword ptr [BLAKE3_IV1_16 + rip]",
+    "vmovdqa32 ymm10, ymmword ptr [BLAKE3_IV2_16 + rip]",
+    "vmovdqa32 ymm11, ymmword ptr [BLAKE3_IV3_16 + rip]",
+    // broadcast the block length
+    "vpbroadcastd ymm14, ecx",
+    // broadcast the domain flags
+    "vpbroadcastd ymm15, r8d",
+    // round 1
+    "vpaddd  ymm0, ymm0, ymm16",
+    "vpaddd  ymm1, ymm1, ymm18",
+    "vpaddd  ymm2, ymm2, ymm20",
+    "vpaddd  ymm3, ymm3, ymm22",
+    "vpaddd  ymm0, ymm0, ymm4",
+    "vpaddd  ymm1, ymm1, ymm5",
+    "vpaddd  ymm2, ymm2, ymm6",
+    "vpaddd  ymm3, ymm3, ymm7",
+    "vpxord  ymm12, ymm12, ymm0",
+    "vpxord  ymm13, ymm13, ymm1",
+    "vpxord  ymm14, ymm14, ymm2",
+    "vpxord  ymm15, ymm15, ymm3",
+    "vprord  ymm12, ymm12, 16",
+    "vprord  ymm13, ymm13, 16",
+    "vprord  ymm14, ymm14, 16",
+    "vprord  ymm15, ymm15, 16",
+    "vpaddd  ymm8, ymm8, ymm12",
+    "vpaddd  ymm9, ymm9, ymm13",
+    "vpaddd  ymm10, ymm10, ymm14",
+    "vpaddd  ymm11, ymm11, ymm15",
+    "vpxord  ymm4, ymm4, ymm8",
+    "vpxord  ymm5, ymm5, ymm9",
+    "vpxord  ymm6, ymm6, ymm10",
+    "vpxord  ymm7, ymm7, ymm11",
+    "vprord  ymm4, ymm4, 12",
+    "vprord  ymm5, ymm5, 12",
+    "vprord  ymm6, ymm6, 12",
+    "vprord  ymm7, ymm7, 12",
+    "vpaddd  ymm0, ymm0, ymm17",
+    "vpaddd  ymm1, ymm1, ymm19",
+    "vpaddd  ymm2, ymm2, ymm21",
+    "vpaddd  ymm3, ymm3, ymm23",
+    "vpaddd  ymm0, ymm0, ymm4",
+    "vpaddd  ymm1, ymm1, ymm5",
+    "vpaddd  ymm2, ymm2, ymm6",
+    "vpaddd  ymm3, ymm3, ymm7",
+    "vpxord  ymm12, ymm12, ymm0",
+    "vpxord  ymm13, ymm13, ymm1",
+    "vpxord  ymm14, ymm14, ymm2",
+    "vpxord  ymm15, ymm15, ymm3",
+    "vprord  ymm12, ymm12, 8",
+    "vprord  ymm13, ymm13, 8",
+    "vprord  ymm14, ymm14, 8",
+    "vprord  ymm15, ymm15, 8",
+    "vpaddd  ymm8, ymm8, ymm12",
+    "vpaddd  ymm9, ymm9, ymm13",
+    "vpaddd  ymm10, ymm10, ymm14",
+    "vpaddd  ymm11, ymm11, ymm15",
+    "vpxord  ymm4, ymm4, ymm8",
+    "vpxord  ymm5, ymm5, ymm9",
+    "vpxord  ymm6, ymm6, ymm10",
+    "vpxord  ymm7, ymm7, ymm11",
+    "vprord  ymm4, ymm4, 7",
+    "vprord  ymm5, ymm5, 7",
+    "vprord  ymm6, ymm6, 7",
+    "vprord  ymm7, ymm7, 7",
+    "vpaddd  ymm0, ymm0, ymm24",
+    "vpaddd  ymm1, ymm1, ymm26",
+    "vpaddd  ymm2, ymm2, ymm28",
+    "vpaddd  ymm3, ymm3, ymm30",
+    "vpaddd  ymm0, ymm0, ymm5",
+    "vpaddd  ymm1, ymm1, ymm6",
+    "vpaddd  ymm2, ymm2, ymm7",
+    "vpaddd  ymm3, ymm3, ymm4",
+    "vpxord  ymm15, ymm15, ymm0",
+    "vpxord  ymm12, ymm12, ymm1",
+    "vpxord  ymm13, ymm13, ymm2",
+    "vpxord  ymm14, ymm14, ymm3",
+    "vprord  ymm15, ymm15, 16",
+    "vprord  ymm12, ymm12, 16",
+    "vprord  ymm13, ymm13, 16",
+    "vprord  ymm14, ymm14, 16",
+    "vpaddd  ymm10, ymm10, ymm15",
+    "vpaddd  ymm11, ymm11, ymm12",
+    "vpaddd  ymm8, ymm8, ymm13",
+    "vpaddd  ymm9, ymm9, ymm14",
+    "vpxord  ymm5, ymm5, ymm10",
+    "vpxord  ymm6, ymm6, ymm11",
+    "vpxord  ymm7, ymm7, ymm8",
+    "vpxord  ymm4, ymm4, ymm9",
+    "vprord  ymm5, ymm5, 12",
+    "vprord  ymm6, ymm6, 12",
+    "vprord  ymm7, ymm7, 12",
+    "vprord  ymm4, ymm4, 12",
+    "vpaddd  ymm0, ymm0, ymm25",
+    "vpaddd  ymm1, ymm1, ymm27",
+    "vpaddd  ymm2, ymm2, ymm29",
+    "vpaddd  ymm3, ymm3, ymm31",
+    "vpaddd  ymm0, ymm0, ymm5",
+    "vpaddd  ymm1, ymm1, ymm6",
+    "vpaddd  ymm2, ymm2, ymm7",
+    "vpaddd  ymm3, ymm3, ymm4",
+    "vpxord  ymm15, ymm15, ymm0",
+    "vpxord  ymm12, ymm12, ymm1",
+    "vpxord  ymm13, ymm13, ymm2",
+    "vpxord  ymm14, ymm14, ymm3",
+    "vprord  ymm15, ymm15, 8",
+    "vprord  ymm12, ymm12, 8",
+    "vprord  ymm13, ymm13, 8",
+    "vprord  ymm14, ymm14, 8",
+    "vpaddd  ymm10, ymm10, ymm15",
+    "vpaddd  ymm11, ymm11, ymm12",
+    "vpaddd  ymm8, ymm8, ymm13",
+    "vpaddd  ymm9, ymm9, ymm14",
+    "vpxord  ymm5, ymm5, ymm10",
+    "vpxord  ymm6, ymm6, ymm11",
+    "vpxord  ymm7, ymm7, ymm8",
+    "vpxord  ymm4, ymm4, ymm9",
+    "vprord  ymm5, ymm5, 7",
+    "vprord  ymm6, ymm6, 7",
+    "vprord  ymm7, ymm7, 7",
+    "vprord  ymm4, ymm4, 7",
+    // round 2
+    "vpaddd  ymm0, ymm0, ymm18",
+    "vpaddd  ymm1, ymm1, ymm19",
+    "vpaddd  ymm2, ymm2, ymm23",
+    "vpaddd  ymm3, ymm3, ymm20",
+    "vpaddd  ymm0, ymm0, ymm4",
+    "vpaddd  ymm1, ymm1, ymm5",
+    "vpaddd  ymm2, ymm2, ymm6",
+    "vpaddd  ymm3, ymm3, ymm7",
+    "vpxord  ymm12, ymm12, ymm0",
+    "vpxord  ymm13, ymm13, ymm1",
+    "vpxord  ymm14, ymm14, ymm2",
+    "vpxord  ymm15, ymm15, ymm3",
+    "vprord  ymm12, ymm12, 16",
+    "vprord  ymm13, ymm13, 16",
+    "vprord  ymm14, ymm14, 16",
+    "vprord  ymm15, ymm15, 16",
+    "vpaddd  ymm8, ymm8, ymm12",
+    "vpaddd  ymm9, ymm9, ymm13",
+    "vpaddd  ymm10, ymm10, ymm14",
+    "vpaddd  ymm11, ymm11, ymm15",
+    "vpxord  ymm4, ymm4, ymm8",
+    "vpxord  ymm5, ymm5, ymm9",
+    "vpxord  ymm6, ymm6, ymm10",
+    "vpxord  ymm7, ymm7, ymm11",
+    "vprord  ymm4, ymm4, 12",
+    "vprord  ymm5, ymm5, 12",
+    "vprord  ymm6, ymm6, 12",
+    "vprord  ymm7, ymm7, 12",
+    "vpaddd  ymm0, ymm0, ymm22",
+    "vpaddd  ymm1, ymm1, ymm26",
+    "vpaddd  ymm2, ymm2, ymm16",
+    "vpaddd  ymm3, ymm3, ymm29",
+    "vpaddd  ymm0, ymm0, ymm4",
+    "vpaddd  ymm1, ymm1, ymm5",
+    "vpaddd  ymm2, ymm2, ymm6",
+    "vpaddd  ymm3, ymm3, ymm7",
+    "vpxord  ymm12, ymm12, ymm0",
+    "vpxord  ymm13, ymm13, ymm1",
+    "vpxord  ymm14, ymm14, ymm2",
+    "vpxord  ymm15, ymm15, ymm3",
+    "vprord  ymm12, ymm12, 8",
+    "vprord  ymm13, ymm13, 8",
+    "vprord  ymm14, ymm14, 8",
+    "vprord  ymm15, ymm15, 8",
+    "vpaddd  ymm8, ymm8, ymm12",
+    "vpaddd  ymm9, ymm9, ymm13",
+    "vpaddd  ymm10, ymm10, ymm14",
+    "vpaddd  ymm11, ymm11, ymm15",
+    "vpxord  ymm4, ymm4, ymm8",
+    "vpxord  ymm5, ymm5, ymm9",
+    "vpxord  ymm6, ymm6, ymm10",
+    "vpxord  ymm7, ymm7, ymm11",
+    "vprord  ymm4, ymm4, 7",
+    "vprord  ymm5, ymm5, 7",
+    "vprord  ymm6, ymm6, 7",
+    "vprord  ymm7, ymm7, 7",
+    "vpaddd  ymm0, ymm0, ymm17",
+    "vpaddd  ymm1, ymm1, ymm28",
+    "vpaddd  ymm2, ymm2, ymm25",
+    "vpaddd  ymm3, ymm3, ymm31",
+    "vpaddd  ymm0, ymm0, ymm5",
+    "vpaddd  ymm1, ymm1, ymm6",
+    "vpaddd  ymm2, ymm2, ymm7",
+    "vpaddd  ymm3, ymm3, ymm4",
+    "vpxord  ymm15, ymm15, ymm0",
+    "vpxord  ymm12, ymm12, ymm1",
+    "vpxord  ymm13, ymm13, ymm2",
+    "vpxord  ymm14, ymm14, ymm3",
+    "vprord  ymm15, ymm15, 16",
+    "vprord  ymm12, ymm12, 16",
+    "vprord  ymm13, ymm13, 16",
+    "vprord  ymm14, ymm14, 16",
+    "vpaddd  ymm10, ymm10, ymm15",
+    "vpaddd  ymm11, ymm11, ymm12",
+    "vpaddd  ymm8, ymm8, ymm13",
+    "vpaddd  ymm9, ymm9, ymm14",
+    "vpxord  ymm5, ymm5, ymm10",
+    "vpxord  ymm6, ymm6, ymm11",
+    "vpxord  ymm7, ymm7, ymm8",
+    "vpxord  ymm4, ymm4, ymm9",
+    "vprord  ymm5, ymm5, 12",
+    "vprord  ymm6, ymm6, 12",
+    "vprord  ymm7, ymm7, 12",
+    "vprord  ymm4, ymm4, 12",
+    "vpaddd  ymm0, ymm0, ymm27",
+    "vpaddd  ymm1, ymm1, ymm21",
+    "vpaddd  ymm2, ymm2, ymm30",
+    "vpaddd  ymm3, ymm3, ymm24",
+    "vpaddd  ymm0, ymm0, ymm5",
+    "vpaddd  ymm1, ymm1, ymm6",
+    "vpaddd  ymm2, ymm2, ymm7",
+    "vpaddd  ymm3, ymm3, ymm4",
+    "vpxord  ymm15, ymm15, ymm0",
+    "vpxord  ymm12, ymm12, ymm1",
+    "vpxord  ymm13, ymm13, ymm2",
+    "vpxord  ymm14, ymm14, ymm3",
+    "vprord  ymm15, ymm15, 8",
+    "vprord  ymm12, ymm12, 8",
+    "vprord  ymm13, ymm13, 8",
+    "vprord  ymm14, ymm14, 8",
+    "vpaddd  ymm10, ymm10, ymm15",
+    "vpaddd  ymm11, ymm11, ymm12",
+    "vpaddd  ymm8, ymm8, ymm13",
+    "vpaddd  ymm9, ymm9, ymm14",
+    "vpxord  ymm5, ymm5, ymm10",
+    "vpxord  ymm6, ymm6, ymm11",
+    "vpxord  ymm7, ymm7, ymm8",
+    "vpxord  ymm4, ymm4, ymm9",
+    "vprord  ymm5, ymm5, 7",
+    "vprord  ymm6, ymm6, 7",
+    "vprord  ymm7, ymm7, 7",
+    "vprord  ymm4, ymm4, 7",
+    // round 3
+    "vpaddd  ymm0, ymm0, ymm19",
+    "vpaddd  ymm1, ymm1, ymm26",
+    "vpaddd  ymm2, ymm2, ymm29",
+    "vpaddd  ymm3, ymm3, ymm23",
+    "vpaddd  ymm0, ymm0, ymm4",
+    "vpaddd  ymm1, ymm1, ymm5",
+    "vpaddd  ymm2, ymm2, ymm6",
+    "vpaddd  ymm3, ymm3, ymm7",
+    "vpxord  ymm12, ymm12, ymm0",
+    "vpxord  ymm13, ymm13, ymm1",
+    "vpxord  ymm14, ymm14, ymm2",
+    "vpxord  ymm15, ymm15, ymm3",
+    "vprord  ymm12, ymm12, 16",
+    "vprord  ymm13, ymm13, 16",
+    "vprord  ymm14, ymm14, 16",
+    "vprord  ymm15, ymm15, 16",
+    "vpaddd  ymm8, ymm8, ymm12",
+    "vpaddd  ymm9, ymm9, ymm13",
+    "vpaddd  ymm10, ymm10, ymm14",
+    "vpaddd  ymm11, ymm11, ymm15",
+    "vpxord  ymm4, ymm4, ymm8",
+    "vpxord  ymm5, ymm5, ymm9",
+    "vpxord  ymm6, ymm6, ymm10",
+    "vpxord  ymm7, ymm7, ymm11",
+    "vprord  ymm4, ymm4, 12",
+    "vprord  ymm5, ymm5, 12",
+    "vprord  ymm6, ymm6, 12",
+    "vprord  ymm7, ymm7, 12",
+    "vpaddd  ymm0, ymm0, ymm20",
+    "vpaddd  ymm1, ymm1, ymm28",
+    "vpaddd  ymm2, ymm2, ymm18",
+    "vpaddd  ymm3, ymm3, ymm30",
+    "vpaddd  ymm0, ymm0, ymm4",
+    "vpaddd  ymm1, ymm1, ymm5",
+    "vpaddd  ymm2, ymm2, ymm6",
+    "vpaddd  ymm3, ymm3, ymm7",
+    "vpxord  ymm12, ymm12, ymm0",
+    "vpxord  ymm13, ymm13, ymm1",
+    "vpxord  ymm14, ymm14, ymm2",
+    "vpxord  ymm15, ymm15, ymm3",
+    "vprord  ymm12, ymm12, 8",
+    "vprord  ymm13, ymm13, 8",
+    "vprord  ymm14, ymm14, 8",
+    "vprord  ymm15, ymm15, 8",
+    "vpaddd  ymm8, ymm8, ymm12",
+    "vpaddd  ymm9, ymm9, ymm13",
+    "vpaddd  ymm10, ymm10, ymm14",
+    "vpaddd  ymm11, ymm11, ymm15",
+    "vpxord  ymm4, ymm4, ymm8",
+    "vpxord  ymm5, ymm5, ymm9",
+    "vpxord  ymm6, ymm6, ymm10",
+    "vpxord  ymm7, ymm7, ymm11",
+    "vprord  ymm4, ymm4, 7",
+    "vprord  ymm5, ymm5, 7",
+    "vprord  ymm6, ymm6, 7",
+    "vprord  ymm7, ymm7, 7",
+    "vpaddd  ymm0, ymm0, ymm22",
+    "vpaddd  ymm1, ymm1, ymm25",
+    "vpaddd  ymm2, ymm2, ymm27",
+    "vpaddd  ymm3, ymm3, ymm24",
+    "vpaddd  ymm0, ymm0, ymm5",
+    "vpaddd  ymm1, ymm1, ymm6",
+    "vpaddd  ymm2, ymm2, ymm7",
+    "vpaddd  ymm3, ymm3, ymm4",
+    "vpxord  ymm15, ymm15, ymm0",
+    "vpxord  ymm12, ymm12, ymm1",
+    "vpxord  ymm13, ymm13, ymm2",
+    "vpxord  ymm14, ymm14, ymm3",
+    "vprord  ymm15, ymm15, 16",
+    "vprord  ymm12, ymm12, 16",
+    "vprord  ymm13, ymm13, 16",
+    "vprord  ymm14, ymm14, 16",
+    "vpaddd  ymm10, ymm10, ymm15",
+    "vpaddd  ymm11, ymm11, ymm12",
+    "vpaddd  ymm8, ymm8, ymm13",
+    "vpaddd  ymm9, ymm9, ymm14",
+    "vpxord  ymm5, ymm5, ymm10",
+    "vpxord  ymm6, ymm6, ymm11",
+    "vpxord  ymm7, ymm7, ymm8",
+    "vpxord  ymm4, ymm4, ymm9",
+    "vprord  ymm5, ymm5, 12",
+    "vprord  ymm6, ymm6, 12",
+    "vprord  ymm7, ymm7, 12",
+    "vprord  ymm4, ymm4, 12",
+    "vpaddd  ymm0, ymm0, ymm21",
+    "vpaddd  ymm1, ymm1, ymm16",
+    "vpaddd  ymm2, ymm2, ymm31",
+    "vpaddd  ymm3, ymm3, ymm17",
+    "vpaddd  ymm0, ymm0, ymm5",
+    "vpaddd  ymm1, ymm1, ymm6",
+    "vpaddd  ymm2, ymm2, ymm7",
+    "vpaddd  ymm3, ymm3, ymm4",
+    "vpxord  ymm15, ymm15, ymm0",
+    "vpxord  ymm12, ymm12, ymm1",
+    "vpxord  ymm13, ymm13, ymm2",
+    "vpxord  ymm14, ymm14, ymm3",
+    "vprord  ymm15, ymm15, 8",
+    "vprord  ymm12, ymm12, 8",
+    "vprord  ymm13, ymm13, 8",
+    "vprord  ymm14, ymm14, 8",
+    "vpaddd  ymm10, ymm10, ymm15",
+    "vpaddd  ymm11, ymm11, ymm12",
+    "vpaddd  ymm8, ymm8, ymm13",
+    "vpaddd  ymm9, ymm9, ymm14",
+    "vpxord  ymm5, ymm5, ymm10",
+    "vpxord  ymm6, ymm6, ymm11",
+    "vpxord  ymm7, ymm7, ymm8",
+    "vpxord  ymm4, ymm4, ymm9",
+    "vprord  ymm5, ymm5, 7",
+    "vprord  ymm6, ymm6, 7",
+    "vprord  ymm7, ymm7, 7",
+    "vprord  ymm4, ymm4, 7",
+    // round 4
+    "vpaddd  ymm0, ymm0, ymm26",
+    "vpaddd  ymm1, ymm1, ymm28",
+    "vpaddd  ymm2, ymm2, ymm30",
+    "vpaddd  ymm3, ymm3, ymm29",
+    "vpaddd  ymm0, ymm0, ymm4",
+    "vpaddd  ymm1, ymm1, ymm5",
+    "vpaddd  ymm2, ymm2, ymm6",
+    "vpaddd  ymm3, ymm3, ymm7",
+    "vpxord  ymm12, ymm12, ymm0",
+    "vpxord  ymm13, ymm13, ymm1",
+    "vpxord  ymm14, ymm14, ymm2",
+    "vpxord  ymm15, ymm15, ymm3",
+    "vprord  ymm12, ymm12, 16",
+    "vprord  ymm13, ymm13, 16",
+    "vprord  ymm14, ymm14, 16",
+    "vprord  ymm15, ymm15, 16",
+    "vpaddd  ymm8, ymm8, ymm12",
+    "vpaddd  ymm9, ymm9, ymm13",
+    "vpaddd  ymm10, ymm10, ymm14",
+    "vpaddd  ymm11, ymm11, ymm15",
+    "vpxord  ymm4, ymm4, ymm8",
+    "vpxord  ymm5, ymm5, ymm9",
+    "vpxord  ymm6, ymm6, ymm10",
+    "vpxord  ymm7, ymm7, ymm11",
+    "vprord  ymm4, ymm4, 12",
+    "vprord  ymm5, ymm5, 12",
+    "vprord  ymm6, ymm6, 12",
+    "vprord  ymm7, ymm7, 12",
+    "vpaddd  ymm0, ymm0, ymm23",
+    "vpaddd  ymm1, ymm1, ymm25",
+    "vpaddd  ymm2, ymm2, ymm19",
+    "vpaddd  ymm3, ymm3, ymm31",
+    "vpaddd  ymm0, ymm0, ymm4",
+    "vpaddd  ymm1, ymm1, ymm5",
+    "vpaddd  ymm2, ymm2, ymm6",
+    "vpaddd  ymm3, ymm3, ymm7",
+    "vpxord  ymm12, ymm12, ymm0",
+    "vpxord  ymm13, ymm13, ymm1",
+    "vpxord  ymm14, ymm14, ymm2",
+    "vpxord  ymm15, ymm15, ymm3",
+    "vprord  ymm12, ymm12, 8",
+    "vprord  ymm13, ymm13, 8",
+    "vprord  ymm14, ymm14, 8",
+    "vprord  ymm15, ymm15, 8",
+    "vpaddd  ymm8, ymm8, ymm12",
+    "vpaddd  ymm9, ymm9, ymm13",
+    "vpaddd  ymm10, ymm10, ymm14",
+    "vpaddd  ymm11, ymm11, ymm15",
+    "vpxord  ymm4, ymm4, ymm8",
+    "vpxord  ymm5, ymm5, ymm9",
+    "vpxord  ymm6, ymm6, ymm10",
+    "vpxord  ymm7, ymm7, ymm11",
+    "vprord  ymm4, ymm4, 7",
+    "vprord  ymm5, ymm5, 7",
+    "vprord  ymm6, ymm6, 7",
+    "vprord  ymm7, ymm7, 7",
+    "vpaddd  ymm0, ymm0, ymm20",
+    "vpaddd  ymm1, ymm1, ymm27",
+    "vpaddd  ymm2, ymm2, ymm21",
+    "vpaddd  ymm3, ymm3, ymm17",
+    "vpaddd  ymm0, ymm0, ymm5",
+    "vpaddd  ymm1, ymm1, ymm6",
+    "vpaddd  ymm2, ymm2, ymm7",
+    "vpaddd  ymm3, ymm3, ymm4",
+    "vpxord  ymm15, ymm15, ymm0",
+    "vpxord  ymm12, ymm12, ymm1",
+    "vpxord  ymm13, ymm13, ymm2",
+    "vpxord  ymm14, ymm14, ymm3",
+    "vprord  ymm15, ymm15, 16",
+    "vprord  ymm12, ymm12, 16",
+    "vprord  ymm13, ymm13, 16",
+    "vprord  ymm14, ymm14, 16",
+    "vpaddd  ymm10, ymm10, ymm15",
+    "vpaddd  ymm11, ymm11, ymm12",
+    "vpaddd  ymm8, ymm8, ymm13",
+    "vpaddd  ymm9, ymm9, ymm14",
+    "vpxord  ymm5, ymm5, ymm10",
+    "vpxord  ymm6, ymm6, ymm11",
+    "vpxord  ymm7, ymm7, ymm8",
+    "vpxord  ymm4, ymm4, ymm9",
+    "vprord  ymm5, ymm5, 12",
+    "vprord  ymm6, ymm6, 12",
+    "vprord  ymm7, ymm7, 12",
+    "vprord  ymm4, ymm4, 12",
+    "vpaddd  ymm0, ymm0, ymm16",
+    "vpaddd  ymm1, ymm1, ymm18",
+    "vpaddd  ymm2, ymm2, ymm24",
+    "vpaddd  ymm3, ymm3, ymm22",
+    "vpaddd  ymm0, ymm0, ymm5",
+    "vpaddd  ymm1, ymm1, ymm6",
+    "vpaddd  ymm2, ymm2, ymm7",
+    "vpaddd  ymm3, ymm3, ymm4",
+    "vpxord  ymm15, ymm15, ymm0",
+    "vpxord  ymm12, ymm12, ymm1",
+    "vpxord  ymm13, ymm13, ymm2",
+    "vpxord  ymm14, ymm14, ymm3",
+    "vprord  ymm15, ymm15, 8",
+    "vprord  ymm12, ymm12, 8",
+    "vprord  ymm13, ymm13, 8",
+    "vprord  ymm14, ymm14, 8",
+    "vpaddd  ymm10, ymm10, ymm15",
+    "vpaddd  ymm11, ymm11, ymm12",
+    "vpaddd  ymm8, ymm8, ymm13",
+    "vpaddd  ymm9, ymm9, ymm14",
+    "vpxord  ymm5, ymm5, ymm10",
+    "vpxord  ymm6, ymm6, ymm11",
+    "vpxord  ymm7, ymm7, ymm8",
+    "vpxord  ymm4, ymm4, ymm9",
+    "vprord  ymm5, ymm5, 7",
+    "vprord  ymm6, ymm6, 7",
+    "vprord  ymm7, ymm7, 7",
+    "vprord  ymm4, ymm4, 7",
+    // round 5
+    "vpaddd  ymm0, ymm0, ymm28",
+    "vpaddd  ymm1, ymm1, ymm25",
+    "vpaddd  ymm2, ymm2, ymm31",
+    "vpaddd  ymm3, ymm3, ymm30",
+    "vpaddd  ymm0, ymm0, ymm4",
+    "vpaddd  ymm1, ymm1, ymm5",
+    "vpaddd  ymm2, ymm2, ymm6",
+    "vpaddd  ymm3, ymm3, ymm7",
+    "vpxord  ymm12, ymm12, ymm0",
+    "vpxord  ymm13, ymm13, ymm1",
+    "vpxord  ymm14, ymm14, ymm2",
+    "vpxord  ymm15, ymm15, ymm3",
+    "vprord  ymm12, ymm12, 16",
+    "vprord  ymm13, ymm13, 16",
+    "vprord  ymm14, ymm14, 16",
+    "vprord  ymm15, ymm15, 16",
+    "vpaddd  ymm8, ymm8, ymm12",
+    "vpaddd  ymm9, ymm9, ymm13",
+    "vpaddd  ymm10, ymm10, ymm14",
+    "vpaddd  ymm11, ymm11, ymm15",
+    "vpxord  ymm4, ymm4, ymm8",
+    "vpxord  ymm5, ymm5, ymm9",
+    "vpxord  ymm6, ymm6, ymm10",
+    "vpxord  ymm7, ymm7, ymm11",
+    "vprord  ymm4, ymm4, 12",
+    "vprord  ymm5, ymm5, 12",
+    "vprord  ymm6, ymm6, 12",
+    "vprord  ymm7, ymm7, 12",
+    "vpaddd  ymm0, ymm0, ymm29",
+    "vpaddd  ymm1, ymm1, ymm27",
+    "vpaddd  ymm2, ymm2, ymm26",
+    "vpaddd  ymm3, ymm3, ymm24",
+    "vpaddd  ymm0, ymm0, ymm4",
+    "vpaddd  ymm1, ymm1, ymm5",
+    "vpaddd  ymm2, ymm2, ymm6",
+    "vpaddd  ymm3, ymm3, ymm7",
+    "vpxord  ymm12, ymm12, ymm0",
+    "vpxord  ymm13, ymm13, ymm1",
+    "vpxord  ymm14, ymm14, ymm2",
+    "vpxord  ymm15, ymm15, ymm3",
+    "vprord  ymm12, ymm12, 8",
+    "vprord  ymm13, ymm13, 8",
+    "vprord  ymm14, ymm14, 8",
+    "vprord  ymm15, ymm15, 8",
+    "vpaddd  ymm8, ymm8, ymm12",
+    "vpaddd  ymm9, ymm9, ymm13",
+    "vpaddd  ymm10, ymm10, ymm14",
+    "vpaddd  ymm11, ymm11, ymm15",
+    "vpxord  ymm4, ymm4, ymm8",
+    "vpxord  ymm5, ymm5, ymm9",
+    "vpxord  ymm6, ymm6, ymm10",
+    "vpxord  ymm7, ymm7, ymm11",
+    "vprord  ymm4, ymm4, 7",
+    "vprord  ymm5, ymm5, 7",
+    "vprord  ymm6, ymm6, 7",
+    "vprord  ymm7, ymm7, 7",
+    "vpaddd  ymm0, ymm0, ymm23",
+    "vpaddd  ymm1, ymm1, ymm21",
+    "vpaddd  ymm2, ymm2, ymm16",
+    "vpaddd  ymm3, ymm3, ymm22",
+    "vpaddd  ymm0, ymm0, ymm5",
+    "vpaddd  ymm1, ymm1, ymm6",
+    "vpaddd  ymm2, ymm2, ymm7",
+    "vpaddd  ymm3, ymm3, ymm4",
+    "vpxord  ymm15, ymm15, ymm0",
+    "vpxord  ymm12, ymm12, ymm1",
+    "vpxord  ymm13, ymm13, ymm2",
+    "vpxord  ymm14, ymm14, ymm3",
+    "vprord  ymm15, ymm15, 16",
+    "vprord  ymm12, ymm12, 16",
+    "vprord  ymm13, ymm13, 16",
+    "vprord  ymm14, ymm14, 16",
+    "vpaddd  ymm10, ymm10, ymm15",
+    "vpaddd  ymm11, ymm11, ymm12",
+    "vpaddd  ymm8, ymm8, ymm13",
+    "vpaddd  ymm9, ymm9, ymm14",
+    "vpxord  ymm5, ymm5, ymm10",
+    "vpxord  ymm6, ymm6, ymm11",
+    "vpxord  ymm7, ymm7, ymm8",
+    "vpxord  ymm4, ymm4, ymm9",
+    "vprord  ymm5, ymm5, 12",
+    "vprord  ymm6, ymm6, 12",
+    "vprord  ymm7, ymm7, 12",
+    "vprord  ymm4, ymm4, 12",
+    "vpaddd  ymm0, ymm0, ymm18",
+    "vpaddd  ymm1, ymm1, ymm19",
+    "vpaddd  ymm2, ymm2, ymm17",
+    "vpaddd  ymm3, ymm3, ymm20",
+    "vpaddd  ymm0, ymm0, ymm5",
+    "vpaddd  ymm1, ymm1, ymm6",
+    "vpaddd  ymm2, ymm2, ymm7",
+    "vpaddd  ymm3, ymm3, ymm4",
+    "vpxord  ymm15, ymm15, ymm0",
+    "vpxord  ymm12, ymm12, ymm1",
+    "vpxord  ymm13, ymm13, ymm2",
+    "vpxord  ymm14, ymm14, ymm3",
+    "vprord  ymm15, ymm15, 8",
+    "vprord  ymm12, ymm12, 8",
+    "vprord  ymm13, ymm13, 8",
+    "vprord  ymm14, ymm14, 8",
+    "vpaddd  ymm10, ymm10, ymm15",
+    "vpaddd  ymm11, ymm11, ymm12",
+    "vpaddd  ymm8, ymm8, ymm13",
+    "vpaddd  ymm9, ymm9, ymm14",
+    "vpxord  ymm5, ymm5, ymm10",
+    "vpxord  ymm6, ymm6, ymm11",
+    "vpxord  ymm7, ymm7, ymm8",
+    "vpxord  ymm4, ymm4, ymm9",
+    "vprord  ymm5, ymm5, 7",
+    "vprord  ymm6, ymm6, 7",
+    "vprord  ymm7, ymm7, 7",
+    "vprord  ymm4, ymm4, 7",
+    // round 6
+    "vpaddd  ymm0, ymm0, ymm25",
+    "vpaddd  ymm1, ymm1, ymm27",
+    "vpaddd  ymm2, ymm2, ymm24",
+    "vpaddd  ymm3, ymm3, ymm31",
+    "vpaddd  ymm0, ymm0, ymm4",
+    "vpaddd  ymm1, ymm1, ymm5",
+    "vpaddd  ymm2, ymm2, ymm6",
+    "vpaddd  ymm3, ymm3, ymm7",
+    "vpxord  ymm12, ymm12, ymm0",
+    "vpxord  ymm13, ymm13, ymm1",
+    "vpxord  ymm14, ymm14, ymm2",
+    "vpxord  ymm15, ymm15, ymm3",
+    "vprord  ymm12, ymm12, 16",
+    "vprord  ymm13, ymm13, 16",
+    "vprord  ymm14, ymm14, 16",
+    "vprord  ymm15, ymm15, 16",
+    "vpaddd  ymm8, ymm8, ymm12",
+    "vpaddd  ymm9, ymm9, ymm13",
+    "vpaddd  ymm10, ymm10, ymm14",
+    "vpaddd  ymm11, ymm11, ymm15",
+    "vpxord  ymm4, ymm4, ymm8",
+    "vpxord  ymm5, ymm5, ymm9",
+    "vpxord  ymm6, ymm6, ymm10",
+    "vpxord  ymm7, ymm7, ymm11",
+    "vprord  ymm4, ymm4, 12",
+    "vprord  ymm5, ymm5, 12",
+    "vprord  ymm6, ymm6, 12",
+    "vprord  ymm7, ymm7, 12",
+    "vpaddd  ymm0, ymm0, ymm30",
+    "vpaddd  ymm1, ymm1, ymm21",
+    "vpaddd  ymm2, ymm2, ymm28",
+    "vpaddd  ymm3, ymm3, ymm17",
+    "vpaddd  ymm0, ymm0, ymm4",
+    "vpaddd  ymm1, ymm1, ymm5",
+    "vpaddd  ymm2, ymm2, ymm6",
+    "vpaddd  ymm3, ymm3, ymm7",
+    "vpxord  ymm12, ymm12, ymm0",
+    "vpxord  ymm13, ymm13, ymm1",
+    "vpxord  ymm14, ymm14, ymm2",
+    "vpxord  ymm15, ymm15, ymm3",
+    "vprord  ymm12, ymm12, 8",
+    "vprord  ymm13, ymm13, 8",
+    "vprord  ymm14, ymm14, 8",
+    "vprord  ymm15, ymm15, 8",
+    "vpaddd  ymm8, ymm8, ymm12",
+    "vpaddd  ymm9, ymm9, ymm13",
+    "vpaddd  ymm10, ymm10, ymm14",
+    "vpaddd  ymm11, ymm11, ymm15",
+    "vpxord  ymm4, ymm4, ymm8",
+    "vpxord  ymm5, ymm5, ymm9",
+    "vpxord  ymm6, ymm6, ymm10",
+    "vpxord  ymm7, ymm7, ymm11",
+    "vprord  ymm4, ymm4, 7",
+    "vprord  ymm5, ymm5, 7",
+    "vprord  ymm6, ymm6, 7",
+    "vprord  ymm7, ymm7, 7",
+    "vpaddd  ymm0, ymm0, ymm29",
+    "vpaddd  ymm1, ymm1, ymm16",
+    "vpaddd  ymm2, ymm2, ymm18",
+    "vpaddd  ymm3, ymm3, ymm20",
+    "vpaddd  ymm0, ymm0, ymm5",
+    "vpaddd  ymm1, ymm1, ymm6",
+    "vpaddd  ymm2, ymm2, ymm7",
+    "vpaddd  ymm3, ymm3, ymm4",
+    "vpxord  ymm15, ymm15, ymm0",
+    "vpxord  ymm12, ymm12, ymm1",
+    "vpxord  ymm13, ymm13, ymm2",
+    "vpxord  ymm14, ymm14, ymm3",
+    "vprord  ymm15, ymm15, 16",
+    "vprord  ymm12, ymm12, 16",
+    "vprord  ymm13, ymm13, 16",
+    "vprord  ymm14, ymm14, 16",
+    "vpaddd  ymm10, ymm10, ymm15",
+    "vpaddd  ymm11, ymm11, ymm12",
+    "vpaddd  ymm8, ymm8, ymm13",
+    "vpaddd  ymm9, ymm9, ymm14",
+    "vpxord  ymm5, ymm5, ymm10",
+    "vpxord  ymm6, ymm6, ymm11",
+    "vpxord  ymm7, ymm7, ymm8",
+    "vpxord  ymm4, ymm4, ymm9",
+    "vprord  ymm5, ymm5, 12",
+    "vprord  ymm6, ymm6, 12",
+    "vprord  ymm7, ymm7, 12",
+    "vprord  ymm4, ymm4, 12",
+    "vpaddd  ymm0, ymm0, ymm19",
+    "vpaddd  ymm1, ymm1, ymm26",
+    "vpaddd  ymm2, ymm2, ymm22",
+    "vpaddd  ymm3, ymm3, ymm23",
+    "vpaddd  ymm0, ymm0, ymm5",
+    "vpaddd  ymm1, ymm1, ymm6",
+    "vpaddd  ymm2, ymm2, ymm7",
+    "vpaddd  ymm3, ymm3, ymm4",
+    "vpxord  ymm15, ymm15, ymm0",
+    "vpxord  ymm12, ymm12, ymm1",
+    "vpxord  ymm13, ymm13, ymm2",
+    "vpxord  ymm14, ymm14, ymm3",
+    "vprord  ymm15, ymm15, 8",
+    "vprord  ymm12, ymm12, 8",
+    "vprord  ymm13, ymm13, 8",
+    "vprord  ymm14, ymm14, 8",
+    "vpaddd  ymm10, ymm10, ymm15",
+    "vpaddd  ymm11, ymm11, ymm12",
+    "vpaddd  ymm8, ymm8, ymm13",
+    "vpaddd  ymm9, ymm9, ymm14",
+    "vpxord  ymm5, ymm5, ymm10",
+    "vpxord  ymm6, ymm6, ymm11",
+    "vpxord  ymm7, ymm7, ymm8",
+    "vpxord  ymm4, ymm4, ymm9",
+    "vprord  ymm5, ymm5, 7",
+    "vprord  ymm6, ymm6, 7",
+    "vprord  ymm7, ymm7, 7",
+    "vprord  ymm4, ymm4, 7",
+    // round 7
+    "vpaddd  ymm0, ymm0, ymm27",
+    "vpaddd  ymm1, ymm1, ymm21",
+    "vpaddd  ymm2, ymm2, ymm17",
+    "vpaddd  ymm3, ymm3, ymm24",
+    "vpaddd  ymm0, ymm0, ymm4",
+    "vpaddd  ymm1, ymm1, ymm5",
+    "vpaddd  ymm2, ymm2, ymm6",
+    "vpaddd  ymm3, ymm3, ymm7",
+    "vpxord  ymm12, ymm12, ymm0",
+    "vpxord  ymm13, ymm13, ymm1",
+    "vpxord  ymm14, ymm14, ymm2",
+    "vpxord  ymm15, ymm15, ymm3",
+    "vprord  ymm12, ymm12, 16",
+    "vprord  ymm13, ymm13, 16",
+    "vprord  ymm14, ymm14, 16",
+    "vprord  ymm15, ymm15, 16",
+    "vpaddd  ymm8, ymm8, ymm12",
+    "vpaddd  ymm9, ymm9, ymm13",
+    "vpaddd  ymm10, ymm10, ymm14",
+    "vpaddd  ymm11, ymm11, ymm15",
+    "vpxord  ymm4, ymm4, ymm8",
+    "vpxord  ymm5, ymm5, ymm9",
+    "vpxord  ymm6, ymm6, ymm10",
+    "vpxord  ymm7, ymm7, ymm11",
+    "vprord  ymm4, ymm4, 12",
+    "vprord  ymm5, ymm5, 12",
+    "vprord  ymm6, ymm6, 12",
+    "vprord  ymm7, ymm7, 12",
+    "vpaddd  ymm0, ymm0, ymm31",
+    "vpaddd  ymm1, ymm1, ymm16",
+    "vpaddd  ymm2, ymm2, ymm25",
+    "vpaddd  ymm3, ymm3, ymm22",
+    "vpaddd  ymm0, ymm0, ymm4",
+    "vpaddd  ymm1, ymm1, ymm5",
+    "vpaddd  ymm2, ymm2, ymm6",
+    "vpaddd  ymm3, ymm3, ymm7",
+    "vpxord  ymm12, ymm12, ymm0",
+    "vpxord  ymm13, ymm13, ymm1",
+    "vpxord  ymm14, ymm14, ymm2",
+    "vpxord  ymm15, ymm15, ymm3",
+    "vprord  ymm12, ymm12, 8",
+    "vprord  ymm13, ymm13, 8",
+    "vprord  ymm14, ymm14, 8",
+    "vprord  ymm15, ymm15, 8",
+    "vpaddd  ymm8, ymm8, ymm12",
+    "vpaddd  ymm9, ymm9, ymm13",
+    "vpaddd  ymm10, ymm10, ymm14",
+    "vpaddd  ymm11, ymm11, ymm15",
+    "vpxord  ymm4, ymm4, ymm8",
+    "vpxord  ymm5, ymm5, ymm9",
+    "vpxord  ymm6, ymm6, ymm10",
+    "vpxord  ymm7, ymm7, ymm11",
+    "vprord  ymm4, ymm4, 7",
+    "vprord  ymm5, ymm5, 7",
+    "vprord  ymm6, ymm6, 7",
+    "vprord  ymm7, ymm7, 7",
+    "vpaddd  ymm0, ymm0, ymm30",
+    "vpaddd  ymm1, ymm1, ymm18",
+    "vpaddd  ymm2, ymm2, ymm19",
+    "vpaddd  ymm3, ymm3, ymm23",
+    "vpaddd  ymm0, ymm0, ymm5",
+    "vpaddd  ymm1, ymm1, ymm6",
+    "vpaddd  ymm2, ymm2, ymm7",
+    "vpaddd  ymm3, ymm3, ymm4",
+    "vpxord  ymm15, ymm15, ymm0",
+    "vpxord  ymm12, ymm12, ymm1",
+    "vpxord  ymm13, ymm13, ymm2",
+    "vpxord  ymm14, ymm14, ymm3",
+    "vprord  ymm15, ymm15, 16",
+    "vprord  ymm12, ymm12, 16",
+    "vprord  ymm13, ymm13, 16",
+    "vprord  ymm14, ymm14, 16",
+    "vpaddd  ymm10, ymm10, ymm15",
+    "vpaddd  ymm11, ymm11, ymm12",
+    "vpaddd  ymm8, ymm8, ymm13",
+    "vpaddd  ymm9, ymm9, ymm14",
+    "vpxord  ymm5, ymm5, ymm10",
+    "vpxord  ymm6, ymm6, ymm11",
+    "vpxord  ymm7, ymm7, ymm8",
+    "vpxord  ymm4, ymm4, ymm9",
+    "vprord  ymm5, ymm5, 12",
+    "vprord  ymm6, ymm6, 12",
+    "vprord  ymm7, ymm7, 12",
+    "vprord  ymm4, ymm4, 12",
+    "vpaddd  ymm0, ymm0, ymm26",
+    "vpaddd  ymm1, ymm1, ymm28",
+    "vpaddd  ymm2, ymm2, ymm20",
+    "vpaddd  ymm3, ymm3, ymm29",
+    "vpaddd  ymm0, ymm0, ymm5",
+    "vpaddd  ymm1, ymm1, ymm6",
+    "vpaddd  ymm2, ymm2, ymm7",
+    "vpaddd  ymm3, ymm3, ymm4",
+    "vpxord  ymm15, ymm15, ymm0",
+    "vpxord  ymm12, ymm12, ymm1",
+    "vpxord  ymm13, ymm13, ymm2",
+    "vpxord  ymm14, ymm14, ymm3",
+    "vprord  ymm15, ymm15, 8",
+    "vprord  ymm12, ymm12, 8",
+    "vprord  ymm13, ymm13, 8",
+    "vprord  ymm14, ymm14, 8",
+    "vpaddd  ymm10, ymm10, ymm15",
+    "vpaddd  ymm11, ymm11, ymm12",
+    "vpaddd  ymm8, ymm8, ymm13",
+    "vpaddd  ymm9, ymm9, ymm14",
+    "vpxord  ymm5, ymm5, ymm10",
+    "vpxord  ymm6, ymm6, ymm11",
+    "vpxord  ymm7, ymm7, ymm8",
+    "vpxord  ymm4, ymm4, ymm9",
+    "vprord  ymm5, ymm5, 7",
+    "vprord  ymm6, ymm6, 7",
+    "vprord  ymm7, ymm7, 7",
+    "vprord  ymm4, ymm4, 7",
+    // final xors
+    "vpxord  ymm0, ymm0, ymm8",
+    "vpxord  ymm1, ymm1, ymm9",
+    "vpxord  ymm2, ymm2, ymm10",
+    "vpxord  ymm3, ymm3, ymm11",
+    "vpxord  ymm4, ymm4, ymm12",
+    "vpxord  ymm5, ymm5, ymm13",
+    "vpxord  ymm6, ymm6, ymm14",
+    "vpxord  ymm7, ymm7, ymm15",
+    "ret",
     //
     // --------------------------------------------------------------------------------------------
     // blake3_avx512_blocks_16
@@ -990,6 +1819,118 @@ global_asm!(
     "ret",
     //
     // --------------------------------------------------------------------------------------------
+    // blake3_avx512_blocks_8
+    //
+    // ymm0-ymm7: incoming CV
+    // rdi: pointer to first message block in rdi, subsequent blocks offset by 1024 bytes each
+    // rsi: [unused]
+    // rdx: pointer to two 32-byte aligned vectors, counter-low followed by counter-high
+    // ecx: block len
+    // r8d: flags (other than CHUNK_START and CHUNK_END)
+    //
+    // This routine loads and transposes message words, populates the rest of the state registers,
+    // and invokes blake3_avx512_kernel_8.
+    // --------------------------------------------------------------------------------------------
+    "blake3_avx512_blocks_8:",
+    // Load and transpose the message words. Because operations that cross 128-bit lanes are
+    // relatively expensive, we split each 256-bit load into two 128-bit loads. This results in
+    // vectors like:
+    //
+    // a0, a1, a2, a3, e0, e1, e2, e3
+    //
+    // Here a, b, c and so on are the 1024-byte-strided blocks provided by the caller,
+    // and *0, *1, *2, and so on represent the consecutive 32-bit words of each block. Our goal in
+    // transposition is to produce the vectors (a0, b0, c0, ...), (a1, b1, c1, ...), and so on.
+    //
+    // After the loads, we need to do two interleaving passes. First we interleave 32-bit words.
+    // This produces vectors like:
+    //
+    // a0, b0, a1, b1, e0, f0, e1, f1
+    //
+    // Finally we interleave 64-bit words. This gives us our goal, which is vectors like:
+    //
+    // a0, b0, c0, d0, e0, f0, g0, h0
+    //
+    // The interleavings can be done mostly in place, but the first interleaving requires a single
+    // scratch vector, and the second interleaving requires two scratch vectors, for a total of
+    // three scratch vectors needed. Thus we load each of the message vectors three register
+    // positions "higher" than its final destination. We want the transposed results to reside in
+    // ymm16-ymm31, so we initially load into ymm19-"ymm34" (except ymm32-ymm34 don't exist, so we
+    // substitute ymm13-ymm15 for this range).
+    "vmovdqu32    xmm19,        xmmword ptr [rdi +  0 * 16 +  0 * 1024]",
+    "vinserti32x4 ymm19, ymm19, xmmword ptr [rdi +  0 * 16 +  4 * 1024], 1",
+    "vmovdqu32    xmm20,        xmmword ptr [rdi +  0 * 16 +  1 * 1024]",
+    "vinserti32x4 ymm20, ymm20, xmmword ptr [rdi +  0 * 16 +  5 * 1024], 1",
+    "vpunpckldq   ymm18, ymm19, ymm20",
+    "vpunpckhdq   ymm19, ymm19, ymm20",
+    "vmovdqu32    xmm21,        xmmword ptr [rdi +  0 * 16 +  2 * 1024]",
+    "vinserti32x4 ymm21, ymm21, xmmword ptr [rdi +  0 * 16 +  6 * 1024], 1",
+    "vmovdqu32    xmm22,        xmmword ptr [rdi +  0 * 16 +  3 * 1024]",
+    "vinserti32x4 ymm22, ymm22, xmmword ptr [rdi +  0 * 16 +  7 * 1024], 1",
+    "vpunpckldq   ymm20, ymm21, ymm22",
+    "vpunpckhdq   ymm21, ymm21, ymm22",
+    "vpunpcklqdq  ymm16, ymm18, ymm20",
+    "vpunpckhqdq  ymm17, ymm18, ymm20",
+    "vpunpcklqdq  ymm18, ymm19, ymm21",
+    "vpunpckhqdq  ymm19, ymm19, ymm21",
+    "vmovdqu32    xmm23,        xmmword ptr [rdi +  1 * 16 +  0 * 1024]",
+    "vinserti32x4 ymm23, ymm23, xmmword ptr [rdi +  1 * 16 +  4 * 1024], 1",
+    "vmovdqu32    xmm24,        xmmword ptr [rdi +  1 * 16 +  1 * 1024]",
+    "vinserti32x4 ymm24, ymm24, xmmword ptr [rdi +  1 * 16 +  5 * 1024], 1",
+    "vpunpckldq   ymm22, ymm23, ymm24",
+    "vpunpckhdq   ymm23, ymm23, ymm24",
+    "vmovdqu32    xmm25,        xmmword ptr [rdi +  1 * 16 +  2 * 1024]",
+    "vinserti32x4 ymm25, ymm25, xmmword ptr [rdi +  1 * 16 +  6 * 1024], 1",
+    "vmovdqu32    xmm26,        xmmword ptr [rdi +  1 * 16 +  3 * 1024]",
+    "vinserti32x4 ymm26, ymm26, xmmword ptr [rdi +  1 * 16 +  7 * 1024], 1",
+    "vpunpckldq   ymm24, ymm25, ymm26",
+    "vpunpckhdq   ymm25, ymm25, ymm26",
+    "vpunpcklqdq  ymm20, ymm22, ymm24",
+    "vpunpckhqdq  ymm21, ymm22, ymm24",
+    "vpunpcklqdq  ymm22, ymm23, ymm25",
+    "vpunpckhqdq  ymm23, ymm23, ymm25",
+    "vmovdqu32    xmm27,        xmmword ptr [rdi +  2 * 16 +  0 * 1024]",
+    "vinserti32x4 ymm27, ymm27, xmmword ptr [rdi +  2 * 16 +  4 * 1024], 1",
+    "vmovdqu32    xmm28,        xmmword ptr [rdi +  2 * 16 +  1 * 1024]",
+    "vinserti32x4 ymm28, ymm28, xmmword ptr [rdi +  2 * 16 +  5 * 1024], 1",
+    "vpunpckldq   ymm26, ymm27, ymm28",
+    "vpunpckhdq   ymm27, ymm27, ymm28",
+    "vmovdqu32    xmm29,        xmmword ptr [rdi +  2 * 16 +  2 * 1024]",
+    "vinserti32x4 ymm29, ymm29, xmmword ptr [rdi +  2 * 16 +  6 * 1024], 1",
+    "vmovdqu32    xmm30,        xmmword ptr [rdi +  2 * 16 +  3 * 1024]",
+    "vinserti32x4 ymm30, ymm30, xmmword ptr [rdi +  2 * 16 +  7 * 1024], 1",
+    "vpunpckldq   ymm28, ymm29, ymm30",
+    "vpunpckhdq   ymm29, ymm29, ymm30",
+    "vpunpcklqdq  ymm24, ymm26, ymm28",
+    "vpunpckhqdq  ymm25, ymm26, ymm28",
+    "vpunpcklqdq  ymm26, ymm27, ymm29",
+    "vpunpckhqdq  ymm27, ymm27, ymm29",
+    "vmovdqu32    xmm31,        xmmword ptr [rdi +  3 * 16 +  0 * 1024]",
+    "vinserti32x4 ymm31, ymm31, xmmword ptr [rdi +  3 * 16 +  4 * 1024], 1",
+    // There are no registers "above" ymm31, so for the next twenty operations we use ymm13-ymm15
+    // to stand in for ymm32-34, but otherwise the pattern is the same.
+    "vmovdqu32    xmm13,        xmmword ptr [rdi +  3 * 16 +  1 * 1024]",
+    "vinserti32x4 ymm13, ymm13, xmmword ptr [rdi +  3 * 16 +  5 * 1024], 1",
+    "vpunpckldq   ymm30, ymm31, ymm13",
+    "vpunpckhdq   ymm31, ymm31, ymm13",
+    "vmovdqu32    xmm14,        xmmword ptr [rdi +  3 * 16 +  2 * 1024]",
+    "vinserti32x4 ymm14, ymm14, xmmword ptr [rdi +  3 * 16 +  6 * 1024], 1",
+    "vmovdqu32    xmm15,        xmmword ptr [rdi +  3 * 16 +  3 * 1024]",
+    "vinserti32x4 ymm15, ymm15, xmmword ptr [rdi +  3 * 16 +  7 * 1024], 1",
+    "vpunpckldq   ymm13, ymm14, ymm15",
+    "vpunpckhdq   ymm14, ymm14, ymm15",
+    "vpunpcklqdq  ymm28, ymm30, ymm13",
+    "vpunpckhqdq  ymm29, ymm30, ymm13",
+    "vpunpcklqdq  ymm30, ymm31, ymm14",
+    "vpunpckhqdq  ymm31, ymm31, ymm14",
+    // Load the low and high counter words.
+    "vmovdqa32 ymm12, ymmword ptr [rdx]",      // counter low
+    "vmovdqa32 ymm13, ymmword ptr [rdx + 32]", // counter high
+    // Run the kernel and then exit.
+    "call blake3_avx512_kernel_8",
+    "ret",
+    //
+    // --------------------------------------------------------------------------------------------
     // blake3_avx512_chunks_16
     //
     // zmm0-zmm31: [clobbered]
@@ -1066,6 +2007,86 @@ global_asm!(
     "vmovdqa32 zmmword ptr [r9 + 5 * 64], zmm5",
     "vmovdqa32 zmmword ptr [r9 + 6 * 64], zmm6",
     "vmovdqa32 zmmword ptr [r9 + 7 * 64], zmm7",
+    "vzeroupper",
+    "ret",
+    //
+    // --------------------------------------------------------------------------------------------
+    // blake3_avx512_chunks_8
+    //
+    // ymm0-ymm31: [clobbered]
+    // rdi: pointer to 8 contiguous chunks of 1024 bytes each, unaligned
+    // rsi: pointer to the 8-word key, 4-byte aligned
+    // rdx: pointer to two 32-byte aligned vectors, counter-low followed by counter-high
+    // ecx: [clobbered]
+    // r8d: flags (other than CHUNK_START and CHUNK_END)
+    //  r9: out pointer to 8x32 bytes, 32-byte aligned
+    //
+    // This routine broadcasts the key and calls blake3_avx512_blocks_8 for each block, setting
+    // CHUNK_START and CHUNK_END for the first and last blocks respectively. The final transposed
+    // CVs in ymm0-ymm7 are written to the out pointer.
+    // --------------------------------------------------------------------------------------------
+    "blake3_avx512_chunks_8:",
+    // TODO: Prefetches
+    // Broadcast the key into ymm0-ymm7.
+    "vpbroadcastd ymm0, dword ptr [rsi + 0 * 4]",
+    "vpbroadcastd ymm1, dword ptr [rsi + 1 * 4]",
+    "vpbroadcastd ymm2, dword ptr [rsi + 2 * 4]",
+    "vpbroadcastd ymm3, dword ptr [rsi + 3 * 4]",
+    "vpbroadcastd ymm4, dword ptr [rsi + 4 * 4]",
+    "vpbroadcastd ymm5, dword ptr [rsi + 5 * 4]",
+    "vpbroadcastd ymm6, dword ptr [rsi + 6 * 4]",
+    "vpbroadcastd ymm7, dword ptr [rsi + 7 * 4]",
+    // The block length is always 64 here.
+    "mov ecx, 64",
+    // Set the CHUNK_START flag.
+    "or r8d, 1",
+    // Compress the first block.
+    "call blake3_avx512_blocks_8",
+    // Clear the CHUNK_START flag.
+    "and r8d, 0xFFFFFFFE",
+    // Compress the middle fourteen blocks.
+    "add rdi, 64",
+    "call blake3_avx512_blocks_8",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_8",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_8",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_8",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_8",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_8",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_8",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_8",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_8",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_8",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_8",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_8",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_8",
+    "add rdi, 64",
+    "call blake3_avx512_blocks_8",
+    // Set the CHUNK_END flag.
+    "or r8d, 2",
+    // Compress the last block.
+    "add rdi, 64",
+    "call blake3_avx512_blocks_8",
+    // Write the output in transposed form and exit.
+    "vmovdqa32 ymmword ptr [r9 + 0 * 32], ymm0",
+    "vmovdqa32 ymmword ptr [r9 + 1 * 32], ymm1",
+    "vmovdqa32 ymmword ptr [r9 + 2 * 32], ymm2",
+    "vmovdqa32 ymmword ptr [r9 + 3 * 32], ymm3",
+    "vmovdqa32 ymmword ptr [r9 + 4 * 32], ymm4",
+    "vmovdqa32 ymmword ptr [r9 + 5 * 32], ymm5",
+    "vmovdqa32 ymmword ptr [r9 + 6 * 32], ymm6",
+    "vmovdqa32 ymmword ptr [r9 + 7 * 32], ymm7",
     "vzeroupper",
     "ret",
     //
@@ -1177,6 +2198,112 @@ global_asm!(
     "vmovdqa32 zmmword ptr [r9 + 5 * 64], zmm5",
     "vmovdqa32 zmmword ptr [r9 + 6 * 64], zmm6",
     "vmovdqa32 zmmword ptr [r9 + 7 * 64], zmm7",
+    "vzeroupper",
+    "ret",
+    //
+    // --------------------------------------------------------------------------------------------
+    // blake3_avx512_parents_8
+    //
+    // ymm0-ymm31: [clobbered]
+    // rdi: pointer to the left child CVs, 8 transposed state vectors, 32-byte aligned
+    // rsi: pointer to the right child CVs, 8 transposed state vectors, 32-byte aligned
+    // rdx: pointer to the 8-word key, 4-byte aligned
+    // ecx: [clobbered]
+    // r8d: flags (other than PARENT)
+    //  r9: out pointer to 8x32 bytes, 32-byte aligned
+    //
+    // This routine interleaves the input state vectors into message block vectors for a parent
+    // compression, broadcasts the key, and calls blake3_avx512_kernel_8 with the PARENT flag set.
+    // Note that the input state vectors are in exactly the format produced by two calls to
+    // blake3_avx512_chunks_8, and the transposed output written to the out pointer is also in the
+    // same format. This keeps transposition overhead to a minimum as we work our way up the tree.
+    // --------------------------------------------------------------------------------------------
+    "blake3_avx512_parents_8:",
+    // The first 8 out of 16 input message vectors, which are the transposed CVs of the first 8
+    // children, come in looking like this:
+    //
+    // a0, b0, c0, d0, e0, f0, g0, h0
+    //
+    // Here, a and b are the chaining values of the leftmost two children. In this parent
+    // compression we're about to do, we're going to compress them together, and that means that we
+    // need to get a and b into different vector registers. In particular, all of a's words need to
+    // wind up in ymm16-ymm23 (the transposed left half of each message block) and all of b's words
+    // need to wind up in ymm24-ymm31 (the transposed right half of each message block). So for
+    // example we need ymm16 to look like this (where ' indicates the last 8 children):
+    //
+    // a0, c0, e0, g0, a'0, c'0, e'0, g'0
+    //
+    // Use ymm0 and ymm1 to hold the even and odd index values for vpermt2d, and use ymm2 as a
+    // scratch register.
+    "vmovdqa32 ymm0, ymmword ptr [rip + BLAKE3_AVX512_EVEN_INDEXES]",
+    "vmovdqa32 ymm1, ymmword ptr [rip + BLAKE3_AVX512_ODD_INDEXES]",
+    "vmovdqa32 ymm16, ymmword ptr [rdi + 0 * 32]",
+    "vmovdqa32 ymm24, ymm16",
+    "vmovdqa32  ymm2, ymmword ptr [rsi + 0 * 32]",
+    "vpermt2d  ymm16, ymm0, ymm2",
+    "vpermt2d  ymm24, ymm1, ymm2",
+    "vmovdqa32 ymm17, ymmword ptr [rdi + 1 * 32]",
+    "vmovdqa32 ymm25, ymm17",
+    "vmovdqa32  ymm2, ymmword ptr [rsi + 1 * 32]",
+    "vpermt2d  ymm17, ymm0, ymm2",
+    "vpermt2d  ymm25, ymm1, ymm2",
+    "vmovdqa32 ymm18, ymmword ptr [rdi + 2 * 32]",
+    "vmovdqa32 ymm26, ymm18",
+    "vmovdqa32  ymm2, ymmword ptr [rsi + 2 * 32]",
+    "vpermt2d  ymm18, ymm0, ymm2",
+    "vpermt2d  ymm26, ymm1, ymm2",
+    "vmovdqa32 ymm19, ymmword ptr [rdi + 3 * 32]",
+    "vmovdqa32 ymm27, ymm19",
+    "vmovdqa32  ymm2, ymmword ptr [rsi + 3 * 32]",
+    "vpermt2d  ymm19, ymm0, ymm2",
+    "vpermt2d  ymm27, ymm1, ymm2",
+    "vmovdqa32 ymm20, ymmword ptr [rdi + 4 * 32]",
+    "vmovdqa32 ymm28, ymm20",
+    "vmovdqa32  ymm2, ymmword ptr [rsi + 4 * 32]",
+    "vpermt2d  ymm20, ymm0, ymm2",
+    "vpermt2d  ymm28, ymm1, ymm2",
+    "vmovdqa32 ymm21, ymmword ptr [rdi + 5 * 32]",
+    "vmovdqa32 ymm29, ymm21",
+    "vmovdqa32  ymm2, ymmword ptr [rsi + 5 * 32]",
+    "vpermt2d  ymm21, ymm0, ymm2",
+    "vpermt2d  ymm29, ymm1, ymm2",
+    "vmovdqa32 ymm22, ymmword ptr [rdi + 6 * 32]",
+    "vmovdqa32 ymm30, ymm22",
+    "vmovdqa32  ymm2, ymmword ptr [rsi + 6 * 32]",
+    "vpermt2d  ymm22, ymm0, ymm2",
+    "vpermt2d  ymm30, ymm1, ymm2",
+    "vmovdqa32 ymm23, ymmword ptr [rdi + 7 * 32]",
+    "vmovdqa32 ymm31, ymm23",
+    "vmovdqa32  ymm2, ymmword ptr [rsi + 7 * 32]",
+    "vpermt2d  ymm23, ymm0, ymm2",
+    "vpermt2d  ymm31, ymm1, ymm2",
+    // Broadcast the key into ymm0-ymm7.
+    "vpbroadcastd ymm0, dword ptr [rdx + 0 * 4]",
+    "vpbroadcastd ymm1, dword ptr [rdx + 1 * 4]",
+    "vpbroadcastd ymm2, dword ptr [rdx + 2 * 4]",
+    "vpbroadcastd ymm3, dword ptr [rdx + 3 * 4]",
+    "vpbroadcastd ymm4, dword ptr [rdx + 4 * 4]",
+    "vpbroadcastd ymm5, dword ptr [rdx + 5 * 4]",
+    "vpbroadcastd ymm6, dword ptr [rdx + 6 * 4]",
+    "vpbroadcastd ymm7, dword ptr [rdx + 7 * 4]",
+    // Initialize the low and high counter words.
+    "vpxorq ymm12, ymm12, ymm12", // counter low, always zero for parents
+    "vpxorq ymm13, ymm13, ymm13", // counter high, always zero for parents
+    // The block length is always 64 for parents.
+    "mov ecx, 64",
+    // Set the PARENT flag.
+    "or r8d, 4",
+    // Run the kernel.
+    "call blake3_avx512_kernel_8",
+    // Write the output and exit.
+    "vmovdqa32 ymmword ptr [r9 + 0 * 32], ymm0",
+    "vmovdqa32 ymmword ptr [r9 + 1 * 32], ymm1",
+    "vmovdqa32 ymmword ptr [r9 + 2 * 32], ymm2",
+    "vmovdqa32 ymmword ptr [r9 + 3 * 32], ymm3",
+    "vmovdqa32 ymmword ptr [r9 + 4 * 32], ymm4",
+    "vmovdqa32 ymmword ptr [r9 + 5 * 32], ymm5",
+    "vmovdqa32 ymmword ptr [r9 + 6 * 32], ymm6",
+    "vmovdqa32 ymmword ptr [r9 + 7 * 32], ymm7",
     "vzeroupper",
     "ret",
     //
@@ -1571,6 +2698,10 @@ global_asm!(
 #[derive(Copy, Clone, Debug)]
 pub struct Words16(pub [u32; 16]);
 
+#[repr(C, align(32))]
+#[derive(Copy, Clone, Debug)]
+pub struct Words8(pub [u32; 8]);
+
 pub unsafe fn chunks16(
     message: &[u8; 16 * CHUNK_LEN],
     key: &[u32; 8],
@@ -1603,6 +2734,38 @@ pub unsafe fn chunks16(
     );
 }
 
+pub unsafe fn chunks8(
+    message: &[u8; 8 * CHUNK_LEN],
+    key: &[u32; 8],
+    counter: u64,
+    flags: u32,
+    out_ptr: *mut [Words8; 8],
+) {
+    // Prepare the counter vectors, the low words and high words.
+    let mut counter_vectors = [Words8([0; 8]); 2];
+    for i in 0..8 {
+        counter_vectors[0].0[i] = (counter + i as u64) as u32;
+        counter_vectors[1].0[i] = ((counter + i as u64) >> 32) as u32;
+    }
+    asm!(
+        "call blake3_avx512_chunks_8",
+        inout("rdi") message => _,
+        inout("rsi") key => _,
+        inout("rdx") &counter_vectors => _,
+        out("ecx") _,
+        inout("r8d") flags => _,
+        inout("r9") out_ptr => _,
+        out("ymm0") _, out("ymm1") _, out("ymm2") _, out("ymm3") _,
+        out("ymm4") _, out("ymm5") _, out("ymm6") _, out("ymm7") _,
+        out("ymm8") _, out("ymm9") _, out("ymm10") _, out("ymm11") _,
+        out("ymm12") _, out("ymm13") _, out("ymm14") _, out("ymm15") _,
+        out("ymm16") _, out("ymm17") _, out("ymm18") _, out("ymm19") _,
+        out("ymm20") _, out("ymm21") _, out("ymm22") _, out("ymm23") _,
+        out("ymm24") _, out("ymm25") _, out("ymm26") _, out("ymm27") _,
+        out("ymm28") _, out("ymm29") _, out("ymm30") _, out("ymm31") _,
+    );
+}
+
 pub unsafe fn parents16(
     left_child_cvs: &[Words16; 8],
     right_child_cvs: &[Words16; 8],
@@ -1626,6 +2789,32 @@ pub unsafe fn parents16(
         out("zmm20") _, out("zmm21") _, out("zmm22") _, out("zmm23") _,
         out("zmm24") _, out("zmm25") _, out("zmm26") _, out("zmm27") _,
         out("zmm28") _, out("zmm29") _, out("zmm30") _, out("zmm31") _,
+    );
+}
+
+pub unsafe fn parents8(
+    left_child_cvs: &[Words8; 8],
+    right_child_cvs: &[Words8; 8],
+    key: &[u32; 8],
+    flags: u32,
+    out_ptr: *mut [Words8; 8],
+) {
+    asm!(
+        "call blake3_avx512_parents_8",
+        inout("rdi") left_child_cvs => _,
+        inout("rsi") right_child_cvs => _,
+        inout("rdx") key => _,
+        out("ecx") _,
+        inout("r8d") flags => _,
+        inout("r9") out_ptr => _,
+        out("ymm0") _, out("ymm1") _, out("ymm2") _, out("ymm3") _,
+        out("ymm4") _, out("ymm5") _, out("ymm6") _, out("ymm7") _,
+        out("ymm8") _, out("ymm9") _, out("ymm10") _, out("ymm11") _,
+        out("ymm12") _, out("ymm13") _, out("ymm14") _, out("ymm15") _,
+        out("ymm16") _, out("ymm17") _, out("ymm18") _, out("ymm19") _,
+        out("ymm20") _, out("ymm21") _, out("ymm22") _, out("ymm23") _,
+        out("ymm24") _, out("ymm25") _, out("ymm26") _, out("ymm27") _,
+        out("ymm28") _, out("ymm29") _, out("ymm30") _, out("ymm31") _,
     );
 }
 
@@ -1736,6 +2925,46 @@ fn test_chunks16() {
 }
 
 #[test]
+fn test_chunks8() {
+    let mut message = [0u8; 8 * CHUNK_LEN];
+    crate::test::paint_test_input(&mut message);
+
+    let mut chunk_refs: Vec<&[u8; CHUNK_LEN]> = Vec::new();
+    for i in 0..8 {
+        chunk_refs.push(message[i * CHUNK_LEN..][..CHUNK_LEN].try_into().unwrap());
+    }
+    let counter = u32::MAX as u64; // a counter value that will overflow 32 bits
+    let flags = crate::KEYED_HASH;
+    let mut expected_out = [0u8; 32 * 8];
+    unsafe {
+        crate::avx512::hash_many(
+            chunk_refs[..].try_into().unwrap(),
+            crate::IV,
+            counter,
+            crate::IncrementCounter::Yes,
+            flags,
+            crate::CHUNK_START,
+            crate::CHUNK_END,
+            &mut expected_out,
+        );
+    }
+
+    let mut found_out = [Words8([0; 8]); 8];
+    unsafe {
+        chunks8(&message, crate::IV, counter, flags as u32, &mut found_out);
+    }
+    let mut found_out_transposed = [0; 8 * 8 * 4];
+    for vector_i in 0..8 {
+        for element_i in 0..8 {
+            let word = found_out[vector_i].0[element_i];
+            let word_start = 32 * element_i + 4 * vector_i;
+            found_out_transposed[word_start..][..4].copy_from_slice(&word.to_le_bytes());
+        }
+    }
+    assert_eq!(expected_out, found_out_transposed);
+}
+
+#[test]
 fn test_parents16() {
     // 16 left child CVs and 16 right child CVs, each 32 bytes long
     let mut child_cvs = [0u8; 2 * 16 * 32];
@@ -1796,6 +3025,75 @@ fn test_parents16() {
     let mut found_out_transposed = [0; 8 * 16 * 4];
     for vector_i in 0..8 {
         for element_i in 0..16 {
+            let word = found_out[vector_i].0[element_i];
+            let word_start = 32 * element_i + 4 * vector_i;
+            found_out_transposed[word_start..][..4].copy_from_slice(&word.to_le_bytes());
+        }
+    }
+    assert_eq!(expected_out, found_out_transposed);
+}
+
+#[test]
+fn test_parents8() {
+    // 8 left child CVs and 8 right child CVs, each 32 bytes long
+    let mut child_cvs = [0u8; 2 * 8 * 32];
+    crate::test::paint_test_input(&mut child_cvs);
+    let mut child_cv_refs = [&[0; 64]; 8]; // references to parent nodes
+    for i in 0..8 {
+        child_cv_refs[i] = (&child_cvs[i * 64..][..64]).try_into().unwrap();
+    }
+    // 8 output CVs of 32 bytes each.
+    let flags = crate::KEYED_HASH;
+    let mut expected_out = [0; 32 * 8];
+    unsafe {
+        crate::avx512::hash_many(
+            &child_cv_refs,
+            crate::IV,
+            0,
+            crate::IncrementCounter::No,
+            flags | crate::PARENT,
+            0,
+            0,
+            &mut expected_out,
+        );
+    }
+
+    // 8 transposed left child CVs and 8 transposed right child CVs
+    let mut transposed_left_child_cvs = [Words8([0; 8]); 8];
+    let mut transposed_right_child_cvs = [Words8([0; 8]); 8];
+    for child_i in 0..8 {
+        for word_i in 0..8 {
+            let word = u32::from_le_bytes(
+                child_cvs[child_i * 32 + word_i * 4..][..4]
+                    .try_into()
+                    .unwrap(),
+            );
+            transposed_left_child_cvs[word_i].0[child_i] = word;
+        }
+    }
+    for child_i in 8..16 {
+        for word_i in 0..8 {
+            let word = u32::from_le_bytes(
+                child_cvs[child_i * 32 + word_i * 4..][..4]
+                    .try_into()
+                    .unwrap(),
+            );
+            transposed_right_child_cvs[word_i].0[child_i - 8] = word;
+        }
+    }
+    let mut found_out = [Words8([0; 8]); 8];
+    unsafe {
+        parents8(
+            &transposed_left_child_cvs,
+            &transposed_right_child_cvs,
+            crate::IV,
+            flags as u32,
+            &mut found_out,
+        );
+    }
+    let mut found_out_transposed = [0; 8 * 8 * 4];
+    for vector_i in 0..8 {
+        for element_i in 0..8 {
             let word = found_out[vector_i].0[element_i];
             let word_start = 32 * element_i + 4 * vector_i;
             found_out_transposed[word_start..][..4].copy_from_slice(&word.to_le_bytes());
