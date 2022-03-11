@@ -1815,8 +1815,7 @@ global_asm!(
     "vmovdqa32 zmm12, zmmword ptr [rdx + 64 * 0]", // counter low
     "vmovdqa32 zmm13, zmmword ptr [rdx + 64 * 1]", // counter high
     // Run the kernel and then exit.
-    "call blake3_avx512_kernel_16",
-    "ret",
+    "jmp blake3_avx512_kernel_16",
     //
     // --------------------------------------------------------------------------------------------
     // blake3_avx512_blocks_8
@@ -1927,8 +1926,7 @@ global_asm!(
     "vmovdqa32 ymm12, ymmword ptr [rdx]",      // counter low
     "vmovdqa32 ymm13, ymmword ptr [rdx + 32]", // counter high
     // Run the kernel and then exit.
-    "call blake3_avx512_kernel_8",
-    "ret",
+    "jmp blake3_avx512_kernel_8",
     //
     // --------------------------------------------------------------------------------------------
     // blake3_avx512_chunks_16
