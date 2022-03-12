@@ -1,6 +1,91 @@
 use crate::CHUNK_LEN;
 use std::arch::{asm, global_asm};
 
+global_asm!(include_str!("../asm/out.S"));
+
+extern "C" {
+    pub fn blake3_sse2_compress(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+    );
+    pub fn blake3_sse41_compress(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+    );
+    pub fn blake3_avx512_compress(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+    );
+}
+
+pub type CompressionFn =
+    unsafe extern "C" fn(cv: &[u32; 8], block: &[u8; 64], counter: u64, block_len: u32, flags: u32);
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn test_compression_function(f: CompressionFn) {
+        let mut block = [0; 64];
+        let block_len = 53;
+        crate::test::paint_test_input(&mut block[..block_len]);
+        let counter = u64::MAX - 42;
+        let flags = crate::CHUNK_START | crate::CHUNK_END | crate::ROOT;
+
+        let mut expected = *crate::IV;
+        crate::platform::Platform::Portable.compress_in_place(
+            &mut expected,
+            &block,
+            block_len as u8,
+            counter,
+            flags,
+        );
+
+        let mut found = *crate::IV;
+        unsafe {
+            f(&mut found, &block, counter, block_len as u32, flags as u32);
+        }
+
+        assert_eq!(expected, found);
+    }
+
+    #[test]
+    #[cfg(target_arch = "x86_64")]
+    fn test_sse2_compress() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        test_compression_function(blake3_sse2_compress);
+    }
+
+    #[test]
+    #[cfg(target_arch = "x86_64")]
+    fn test_sse41_compress() {
+        if !is_x86_feature_detected!("sse4.1") {
+            return;
+        }
+        test_compression_function(blake3_sse41_compress);
+    }
+
+    #[test]
+    #[cfg(target_arch = "x86_64")]
+    fn test_avx512_compress() {
+        if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
+            return;
+        }
+        test_compression_function(blake3_avx512_compress);
+    }
+}
+
 global_asm!(
     // --------------------------------------------------------------------------------------------
     // blake3_avx512_kernel_16

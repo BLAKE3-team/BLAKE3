@@ -108,6 +108,40 @@ fn bench_single_compression_avx512(b: &mut Bencher) {
     }
 }
 
+fn bench_kernel_compression_fn(b: &mut Bencher, f: blake3::kernel::CompressionFn) {
+    let mut state = [1u32; 8];
+    let mut r = RandomInput::new(b, 64);
+    let input = array_ref!(r.get(), 0, 64);
+    b.iter(|| unsafe { f(&mut state, input, 64, 0, 0) });
+}
+
+#[bench]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn bench_kernel_compression_sse2(b: &mut Bencher) {
+    if !is_x86_feature_detected!("sse2") {
+        return;
+    }
+    bench_kernel_compression_fn(b, blake3::kernel::blake3_sse2_compress);
+}
+
+#[bench]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn bench_kernel_compression_sse41(b: &mut Bencher) {
+    if !is_x86_feature_detected!("sse4.1") {
+        return;
+    }
+    bench_kernel_compression_fn(b, blake3::kernel::blake3_sse41_compress);
+}
+
+#[bench]
+#[cfg(blake3_avx512_ffi)]
+fn bench_kernel_compression_avx512(b: &mut Bencher) {
+    if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
+        return;
+    }
+    bench_kernel_compression_fn(b, blake3::kernel::blake3_avx512_compress);
+}
+
 fn bench_many_chunks_fn(b: &mut Bencher, platform: Platform) {
     let degree = platform.simd_degree();
     let mut inputs = Vec::new();
