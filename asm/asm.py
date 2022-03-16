@@ -14,13 +14,8 @@ LINUX = "linux"
 
 @dataclass
 class Target:
-    # x86_64
-    arch: str  # "x86_64"
-
-    # sse2, sse41, avx2, avx512, neon
-    extension: str  # "sse41"
-
-    # unix, windows_msvc, windows_gnu
+    arch: str
+    extension: str
     os: str
 
     def arg32(self, index):
@@ -47,315 +42,495 @@ class Target:
         return "ret"
 
 
-def add_row(t, o, dest, src):
-    assert t.arch == X86_64
-    if t.extension == AVX512:
-        o.append(f"vpaddd xmm{dest}, xmm{dest}, xmm{src}")
-    elif t.extension in (SSE41, SSE2):
-        o.append(f"paddd xmm{dest}, xmm{src}")
+def add_row(target, output, degree, dest, src):
+    assert target.arch == X86_64
+    if target.extension == AVX512:
+        if degree == 1:
+            output.append(f"vpaddd xmm{dest}, xmm{dest}, xmm{src}")
+        elif degree == 2:
+            output.append(f"vpaddd ymm{dest}, ymm{dest}, ymm{src}")
+        elif degree == 4:
+            output.append(f"vpaddd zmm{dest}, zmm{dest}, zmm{src}")
+        else:
+            raise NotImplementedError
+    elif target.extension == AVX2:
+        assert degree == 2
+        output.append(f"vpaddd ymm{dest}, ymm{dest}, ymm{src}")
+    elif target.extension in (SSE41, SSE2):
+        assert degree == 1
+        output.append(f"paddd xmm{dest}, xmm{src}")
     else:
         raise NotImplementedError
 
 
-def xor_row(t, o, dest, src):
-    assert t.arch == X86_64
-    if t.extension == AVX512:
-        o.append(f"vpxord xmm{dest}, xmm{dest}, xmm{src}")
-    elif t.extension in (SSE41, SSE2):
-        o.append(f"pxor xmm{dest}, xmm{src}")
+def xor_row(target, output, degree, dest, src):
+    assert target.arch == X86_64
+    if target.extension == AVX512:
+        if degree == 1:
+            output.append(f"vpxord xmm{dest}, xmm{dest}, xmm{src}")
+        elif degree == 2:
+            output.append(f"vpxord ymm{dest}, ymm{dest}, ymm{src}")
+        elif degree == 4:
+            output.append(f"vpxord zmm{dest}, zmm{dest}, zmm{src}")
+        else:
+            raise NotImplementedError
+    elif target.extension == AVX2:
+        assert degree == 2
+        output.append(f"vpxord ymm{dest}, ymm{dest}, ymm{src}")
+    elif target.extension in (SSE41, SSE2):
+        assert degree == 1
+        output.append(f"pxor xmm{dest}, xmm{src}")
     else:
         raise NotImplementedError
 
 
 # This is the >>> operation in G, not state diagonalization or message permutation.
-def bitrotate_row(t, o, reg, bits):
-    assert t.arch == X86_64
-    if t.extension == AVX512:
-        o.append(f"vprord xmm{reg}, xmm{reg}, {bits}")
-    elif t.extension == SSE41:
+def bitrotate_row(target, output, degree, reg, bits):
+    assert target.arch == X86_64
+    if target.extension == AVX512:
+        if degree == 1:
+            output.append(f"vprord xmm{reg}, xmm{reg}, {bits}")
+        elif degree == 2:
+            output.append(f"vprord ymm{reg}, ymm{reg}, {bits}")
+        elif degree == 4:
+            output.append(f"vprord zmm{reg}, zmm{reg}, {bits}")
+        else:
+            raise NotImplementedError
+    elif target.extension == AVX2:
+        assert degree == 2
         if bits == 16:
-            # xmm15 is initialized at the top of kernel_1.
-            o.append(f"pshufb xmm{reg}, xmm15")
+            # ymm14 is initialized at the start of the kernel
+            output.append(f"vpshufb ymm{reg}, ymm{reg}, ymm14")
         elif bits == 8:
-            # xmm14 is initialized at the top of kernel_1.
-            o.append(f"pshufb xmm{reg}, xmm14")
+            # ymm15 is initialized at the start of the kernel
+            output.append(f"vpshufb ymm{reg}, ymm{reg}, ymm15")
         else:
-            # Do two bitshifts, using register 11 as temp.
-            o.append(f"movdqa xmm11, xmm{reg}")
-            o.append(f"pslld xmm{reg}, {32 - bits}")
-            o.append(f"psrld xmm11, {bits}")
-            o.append(f"por xmm{reg}, xmm11")
-    elif t.extension == SSE2:
+            # Do two bitshifts, using register 8 as temp.
+            output.append(f"vpsrld ymm8, ymm{reg}, {bits}")
+            output.append(f"vpslld ymm{reg}, ymm{reg}, {32 - bits}")
+            output.append(f"vpor ymm{reg}, ymm{reg}, ymm8")
+    elif target.extension == SSE41:
+        assert degree == 1
         if bits == 16:
-            o.append(f"pshuflw xmm{reg}, xmm{reg}, 0xB1")
-            o.append(f"pshufhw xmm{reg}, xmm{reg}, 0xB1")
+            # xmm15 is initialized at the start of the kernel
+            output.append(f"pshufb xmm{reg}, xmm15")
+        elif bits == 8:
+            # xmm14 is initialized at the start of the kernel
+            output.append(f"pshufb xmm{reg}, xmm14")
         else:
             # Do two bitshifts, using register 11 as temp.
-            o.append(f"movdqa xmm11, xmm{reg}")
-            o.append(f"pslld xmm{reg}, {32 - bits}")
-            o.append(f"psrld xmm11, {bits}")
-            o.append(f"por xmm{reg}, xmm11")
+            output.append(f"movdqa xmm11, xmm{reg}")
+            output.append(f"pslld xmm{reg}, {32 - bits}")
+            output.append(f"psrld xmm11, {bits}")
+            output.append(f"por xmm{reg}, xmm11")
+    elif target.extension == SSE2:
+        assert degree == 1
+        if bits == 16:
+            output.append(f"pshuflw xmm{reg}, xmm{reg}, 0xB1")
+            output.append(f"pshufhw xmm{reg}, xmm{reg}, 0xB1")
+        else:
+            # Do two bitshifts, using register 11 as temp.
+            output.append(f"movdqa xmm11, xmm{reg}")
+            output.append(f"pslld xmm{reg}, {32 - bits}")
+            output.append(f"psrld xmm11, {bits}")
+            output.append(f"por xmm{reg}, xmm11")
     else:
         raise NotImplementedError
 
 
-def diagonalize_state_rows(t, o):
-    if t.extension == AVX512:
-        o.append("vpshufd xmm0, xmm0, 0x93")
-        o.append("vpshufd xmm3, xmm3, 0x4E")
-        o.append("vpshufd xmm2, xmm2, 0x39")
-    elif t.extension in (SSE41, SSE2):
-        o.append("pshufd xmm0, xmm0, 0x93")
-        o.append("pshufd xmm3, xmm3, 0x4E")
-        o.append("pshufd xmm2, xmm2, 0x39")
+def diagonalize_state_rows(target, output, degree):
+    if target.extension == AVX512:
+        if degree == 1:
+            output.append("vpshufd xmm0, xmm0, 0x93")
+            output.append("vpshufd xmm3, xmm3, 0x4E")
+            output.append("vpshufd xmm2, xmm2, 0x39")
+        elif degree == 2:
+            output.append("vpshufd ymm0, ymm0, 0x93")
+            output.append("vpshufd ymm3, ymm3, 0x4E")
+            output.append("vpshufd ymm2, ymm2, 0x39")
+        elif degree == 4:
+            output.append("vpshufd zmm0, zmm0, 0x93")
+            output.append("vpshufd zmm3, zmm3, 0x4E")
+            output.append("vpshufd zmm2, zmm2, 0x39")
+        else:
+            raise NotImplementedError
+    elif target.extension == AVX2:
+        assert degree == 2
+        output.append("vpshufd ymm0, ymm0, 0x93")
+        output.append("vpshufd ymm3, ymm3, 0x4E")
+        output.append("vpshufd ymm2, ymm2, 0x39")
+    elif target.extension in (SSE41, SSE2):
+        assert degree == 1
+        output.append("pshufd xmm0, xmm0, 0x93")
+        output.append("pshufd xmm3, xmm3, 0x4E")
+        output.append("pshufd xmm2, xmm2, 0x39")
     else:
         raise NotImplementedError
 
 
-def undiagonalize_state_rows(t, o):
-    if t.extension == AVX512:
-        o.append("vpshufd xmm0, xmm0, 0x39")
-        o.append("vpshufd xmm3, xmm3, 0x4E")
-        o.append("vpshufd xmm2, xmm2, 0x93")
-    elif t.extension in (SSE41, SSE2):
-        o.append("pshufd xmm0, xmm0, 0x39")
-        o.append("pshufd xmm3, xmm3, 0x4E")
-        o.append("pshufd xmm2, xmm2, 0x93")
+def undiagonalize_state_rows(target, output, degree):
+    if target.extension == AVX512:
+        if degree == 1:
+            output.append("vpshufd xmm0, xmm0, 0x39")
+            output.append("vpshufd xmm3, xmm3, 0x4E")
+            output.append("vpshufd xmm2, xmm2, 0x93")
+        elif degree == 2:
+            output.append("vpshufd ymm0, ymm0, 0x39")
+            output.append("vpshufd ymm3, ymm3, 0x4E")
+            output.append("vpshufd ymm2, ymm2, 0x93")
+        elif degree == 4:
+            output.append("vpshufd zmm0, zmm0, 0x39")
+            output.append("vpshufd zmm3, zmm3, 0x4E")
+            output.append("vpshufd zmm2, zmm2, 0x93")
+        else:
+            raise NotImplementedError
+    elif target.extension == AVX2:
+        assert degree == 2
+        output.append("vpshufd ymm0, ymm0, 0x39")
+        output.append("vpshufd ymm3, ymm3, 0x4E")
+        output.append("vpshufd ymm2, ymm2, 0x93")
+    elif target.extension in (SSE41, SSE2):
+        assert degree == 1
+        output.append("pshufd xmm0, xmm0, 0x39")
+        output.append("pshufd xmm3, xmm3, 0x4E")
+        output.append("pshufd xmm2, xmm2, 0x93")
     else:
         raise NotImplementedError
 
 
-def permute_message_rows(t, o):
-    if t.extension == AVX512:
-        o.append("vshufps xmm8, xmm4, xmm5, 214")
-        o.append("vpshufd xmm9, xmm4, 0x0F")
-        o.append("vpshufd xmm4, xmm8, 0x39")
-        o.append("vshufps xmm8, xmm6, xmm7, 250")
-        o.append("vpblendd xmm9, xmm9, xmm8, 0xAA")
-        o.append("vpunpcklqdq xmm8, xmm7, xmm5")
-        o.append("vpblendd xmm8, xmm8, xmm6, 0x88")
-        o.append("vpshufd xmm8, xmm8, 0x78")
-        o.append("vpunpckhdq xmm5, xmm5, xmm7")
-        o.append("vpunpckldq xmm6, xmm6, xmm5")
-        o.append("vpshufd xmm7, xmm6, 0x1E")
-        o.append("vmovdqa xmm5, xmm9")
-        o.append("vmovdqa xmm6, xmm8")
-    elif t.extension == SSE41:
-        o.append("movdqa xmm8, xmm4")
-        o.append("shufps xmm8, xmm5, 214")
-        o.append("pshufd xmm9, xmm4, 0x0F")
-        o.append("pshufd xmm4, xmm8, 0x39")
-        o.append("movdqa xmm8, xmm6")
-        o.append("shufps xmm8, xmm7, 250")
-        o.append("pblendw xmm9, xmm8, 0xCC")
-        o.append("movdqa xmm8, xmm7")
-        o.append("punpcklqdq xmm8, xmm5")
-        o.append("pblendw xmm8, xmm6, 0xC0")
-        o.append("pshufd xmm8, xmm8, 0x78")
-        o.append("punpckhdq xmm5, xmm7")
-        o.append("punpckldq xmm6, xmm5")
-        o.append("pshufd xmm7, xmm6, 0x1E")
-        o.append("movdqa xmm5, xmm9")
-        o.append("movdqa xmm6, xmm8")
-    elif t.extension == SSE2:
-        o.append("movdqa xmm8, xmm4")
-        o.append("shufps xmm8, xmm5, 214")
-        o.append("pshufd xmm9, xmm4, 0x0F")
-        o.append("pshufd xmm4, xmm8, 0x39")
-        o.append("movdqa xmm8, xmm6")
-        o.append("shufps xmm8, xmm7, 250")
-        o.append("pand xmm9, xmmword ptr [PBLENDW_0x33_MASK+rip]")
-        o.append("pand xmm8, xmmword ptr [PBLENDW_0xCC_MASK+rip]")
-        o.append("por xmm9, xmm8")
-        o.append("movdqa xmm8, xmm7")
-        o.append("punpcklqdq xmm8, xmm5")
-        o.append("movdqa xmm10, xmm6")
-        o.append("pand xmm8, xmmword ptr [PBLENDW_0x3F_MASK+rip]")
-        o.append("pand xmm10, xmmword ptr [PBLENDW_0xC0_MASK+rip]")
-        o.append("por xmm8, xmm10")
-        o.append("pshufd xmm8, xmm8, 0x78")
-        o.append("punpckhdq xmm5, xmm7")
-        o.append("punpckldq xmm6, xmm5")
-        o.append("pshufd xmm7, xmm6, 0x1E")
-        o.append("movdqa xmm5, xmm9")
-        o.append("movdqa xmm6, xmm8")
+def permute_message_rows(target, output, degree):
+    if target.extension == AVX512:
+        if degree == 1:
+            output.append("vshufps xmm8, xmm4, xmm5, 214")
+            output.append("vpshufd xmm9, xmm4, 0x0F")
+            output.append("vpshufd xmm4, xmm8, 0x39")
+            output.append("vshufps xmm8, xmm6, xmm7, 250")
+            output.append("vpblendd xmm9, xmm9, xmm8, 0xAA")
+            output.append("vpunpcklqdq xmm8, xmm7, xmm5")
+            output.append("vpblendd xmm8, xmm8, xmm6, 0x88")
+            output.append("vpshufd xmm8, xmm8, 0x78")
+            output.append("vpunpckhdq xmm5, xmm5, xmm7")
+            output.append("vpunpckldq xmm6, xmm6, xmm5")
+            output.append("vpshufd xmm7, xmm6, 0x1E")
+            output.append("vmovdqa xmm5, xmm9")
+            output.append("vmovdqa xmm6, xmm8")
+        elif degree == 2:
+            output.append("vshufps ymm8, ymm4, ymm5, 214")
+            output.append("vpshufd ymm9, ymm4, 0x0F")
+            output.append("vpshufd ymm4, ymm8, 0x39")
+            output.append("vshufps ymm8, ymm6, ymm7, 250")
+            output.append("vpblendd ymm9, ymm9, ymm8, 0xAA")
+            output.append("vpunpcklqdq ymm8, ymm7, ymm5")
+            output.append("vpblendd ymm8, ymm8, ymm6, 0x88")
+            output.append("vpshufd ymm8, ymm8, 0x78")
+            output.append("vpunpckhdq ymm5, ymm5, ymm7")
+            output.append("vpunpckldq ymm6, ymm6, ymm5")
+            output.append("vpshufd ymm7, ymm6, 0x1E")
+            output.append("vmovdqa ymm5, ymm9")
+            output.append("vmovdqa ymm6, ymm8")
+        elif degree == 4:
+            output.append("vshufps zmm8, zmm4, zmm5, 214")
+            output.append("vpshufd zmm9, zmm4, 0x0F")
+            output.append("vpshufd zmm4, zmm8, 0x39")
+            output.append("vshufps zmm8, zmm6, zmm7, 250")
+            # k3 is initialized at the start of the kernel
+            output.append("vpblendmd zmm9 {k3}, zmm9, zmm8")
+            output.append("vpunpcklqdq zmm8, zmm7, zmm5")
+            # k4 is initialized at the start of the kernel
+            output.append("vpblendmd zmm8 {k4}, zmm8, zmm6")
+            output.append("vpshufd zmm8, zmm8, 0x78")
+            output.append("vpunpckhdq zmm5, zmm5, zmm7")
+            output.append("vpunpckldq zmm6, zmm6, zmm5")
+            output.append("vpshufd zmm7, zmm6, 0x1E")
+            output.append("vmovdqa32 zmm5, zmm9")
+            output.append("vmovdqa32 zmm6, zmm8")
+        else:
+            raise NotImplementedError
+    elif target.extension == AVX2:
+        assert degree == 2
+        output.append("vshufps ymm8, ymm4, ymm5, 214")
+        output.append("vpshufd ymm9, ymm4, 0x0F")
+        output.append("vpshufd ymm4, ymm8, 0x39")
+        output.append("vshufps ymm8, ymm6, ymm7, 250")
+        output.append("vpblendd ymm9, ymm9, ymm8, 0xAA")
+        output.append("vpunpcklqdq ymm8, ymm7, ymm5")
+        output.append("vpblendd ymm8, ymm8, ymm6, 0x88")
+        output.append("vpshufd ymm8, ymm8, 0x78")
+        output.append("vpunpckhdq ymm5, ymm5, ymm7")
+        output.append("vpunpckldq ymm6, ymm6, ymm5")
+        output.append("vpshufd ymm7, ymm6, 0x1E")
+        output.append("vmovdqa ymm5, ymm9")
+        output.append("vmovdqa ymm6, ymm8")
+    elif target.extension == SSE41:
+        assert degree == 1
+        output.append("movdqa xmm8, xmm4")
+        output.append("shufps xmm8, xmm5, 214")
+        output.append("pshufd xmm9, xmm4, 0x0F")
+        output.append("pshufd xmm4, xmm8, 0x39")
+        output.append("movdqa xmm8, xmm6")
+        output.append("shufps xmm8, xmm7, 250")
+        output.append("pblendw xmm9, xmm8, 0xCC")
+        output.append("movdqa xmm8, xmm7")
+        output.append("punpcklqdq xmm8, xmm5")
+        output.append("pblendw xmm8, xmm6, 0xC0")
+        output.append("pshufd xmm8, xmm8, 0x78")
+        output.append("punpckhdq xmm5, xmm7")
+        output.append("punpckldq xmm6, xmm5")
+        output.append("pshufd xmm7, xmm6, 0x1E")
+        output.append("movdqa xmm5, xmm9")
+        output.append("movdqa xmm6, xmm8")
+    elif target.extension == SSE2:
+        assert degree == 1
+        output.append("movdqa xmm8, xmm4")
+        output.append("shufps xmm8, xmm5, 214")
+        output.append("pshufd xmm9, xmm4, 0x0F")
+        output.append("pshufd xmm4, xmm8, 0x39")
+        output.append("movdqa xmm8, xmm6")
+        output.append("shufps xmm8, xmm7, 250")
+        output.append("pand xmm9, xmmword ptr [PBLENDW_0x33_MASK+rip]")
+        output.append("pand xmm8, xmmword ptr [PBLENDW_0xCC_MASK+rip]")
+        output.append("por xmm9, xmm8")
+        output.append("movdqa xmm8, xmm7")
+        output.append("punpcklqdq xmm8, xmm5")
+        output.append("movdqa xmm10, xmm6")
+        output.append("pand xmm8, xmmword ptr [PBLENDW_0x3F_MASK+rip]")
+        output.append("pand xmm10, xmmword ptr [PBLENDW_0xC0_MASK+rip]")
+        output.append("por xmm8, xmm10")
+        output.append("pshufd xmm8, xmm8, 0x78")
+        output.append("punpckhdq xmm5, xmm7")
+        output.append("punpckldq xmm6, xmm5")
+        output.append("pshufd xmm7, xmm6, 0x1E")
+        output.append("movdqa xmm5, xmm9")
+        output.append("movdqa xmm6, xmm8")
     else:
         raise NotImplementedError
 
 
-def kernel_1(t, o):
-    o.append(f"blake3_{t.extension}_kernel_1:")
-    if t.extension == SSE41:
-        o.append(f"movaps  xmm14, xmmword ptr [ROT8+rip]")
-        o.append(f"movaps  xmm15, xmmword ptr [ROT16+rip]")
+def kernel2d_name(target, degree):
+    return f"blake3_{target.extension}_kernel2d_{degree}"
+
+
+# The two-dimensional kernel packs one or more *rows* of the state into a
+# vector. For example, the AVX2 version of this kernel computes two inputs in
+# parallel, and the caller needs to arrange their extended state words like
+# this:
+#
+#     ymm0:  a0,  a1,  a2,  a3,  b0,  b1,  b2,  b3
+#     ymm1:  a4,  a5,  a6,  a7,  b4,  b5,  b6,  b7
+#     ymm2:  a8,  a9, a10, a11,  b8,  b9, b10, b11
+#     ymm3: a12, a13, a14, a15, b12, b13, b14, b15
+#
+# In this arrangement, the rows need to be diagonalized and undiagonalized
+# within in each round. There's an important optimization for this, which
+# applies to all ChaCha-derived functions. Intuitively, diagonalization in
+# ChaCha looks like this:
+#
+#  0  1  2  3  ------------ no change ----------->   0  1  2  3
+#  4  5  6  7  ---- rotate one position left ---->   5  6  7  4
+#  8  9 10 11  ---- rotate two positions left --->  10 11  8  9
+# 12 13 14 15  --- rotate three positions left -->  15 12 13 14
+#
+# However, there's a performance benefit to doing it this way instead:
+#
+#  0  1  2  3  --- rotate three positions left -->   3  0  1  2
+#  4  5  6  7  ------------ no change ----------->   4  5  6  7
+#  8  9 10 11  ---- rotate one position left ---->   9 10 11  8
+# 12 13 14 15  ---- rotate two positions left --->  14 15 12 13
+#
+# That is, rather than keeping the first row fixed, keep the second row fixed.
+# This gives the same columns, but in a different order. The second row is the
+# last one touched by the G function, so leaving it unrotated saves latency.
+# For more discussion, see: https://github.com/sneves/blake2-avx2/pull/4
+#
+# The message words need to be arranged to match the state words. Again using
+# AVX2 as an example, the caller needs to initially arrange the message words
+# like this:
+#
+#     ymm4:  a0,  a2,  a4,  a6,  b0,  b2,  b4,  b6
+#     ymm5:  a1,  a3,  a5,  a7,  b1,  b3,  b5,  b7
+#     ymm6: a14,  a8, a10, a12, b14,  b8, b10, b12
+#     ymm7: a15,  a9, a11, a13, b15,  b9, b11, b13
+def kernel2d(target, output, degree):
+    label = kernel2d_name(target, degree)
+    output.append(f"{label}:")
+    # vpshufb indexes
+    if target.extension == SSE41:
+        output.append(f"movaps xmm14, xmmword ptr [ROT8+rip]")
+        output.append(f"movaps xmm15, xmmword ptr [ROT16+rip]")
+    if target.extension == AVX2:
+        output.append("vbroadcasti128 ymm14, xmmword ptr [ROT16+rip]")
+        output.append("vbroadcasti128 ymm15, xmmword ptr [ROT8+rip]")
     for round_number in range(7):
         if round_number > 0:
             # Un-diagonalize and permute before each round except the first.
             # compress_finish() will also partially un-diagonalize.
-            permute_message_rows(t, o)
-        add_row(t, o, dest=0, src=4)
-        add_row(t, o, dest=0, src=1)
-        xor_row(t, o, dest=3, src=0)
-        bitrotate_row(t, o, reg=3, bits=16)
-        add_row(t, o, dest=2, src=3)
-        xor_row(t, o, dest=1, src=2)
-        bitrotate_row(t, o, reg=1, bits=12)
-        add_row(t, o, dest=0, src=5)
-        add_row(t, o, dest=0, src=1)
-        xor_row(t, o, dest=3, src=0)
-        bitrotate_row(t, o, reg=3, bits=8)
-        add_row(t, o, dest=2, src=3)
-        xor_row(t, o, dest=1, src=2)
-        bitrotate_row(t, o, reg=1, bits=7)
-        diagonalize_state_rows(t, o)
-        add_row(t, o, dest=0, src=6)
-        add_row(t, o, dest=0, src=1)
-        xor_row(t, o, dest=3, src=0)
-        bitrotate_row(t, o, reg=3, bits=16)
-        add_row(t, o, dest=2, src=3)
-        xor_row(t, o, dest=1, src=2)
-        bitrotate_row(t, o, reg=1, bits=12)
-        add_row(t, o, dest=0, src=7)
-        add_row(t, o, dest=0, src=1)
-        xor_row(t, o, dest=3, src=0)
-        bitrotate_row(t, o, reg=3, bits=8)
-        add_row(t, o, dest=2, src=3)
-        xor_row(t, o, dest=1, src=2)
-        bitrotate_row(t, o, reg=1, bits=7)
-        undiagonalize_state_rows(t, o)
-    # Xor the last two rows into the first two, but don't do the feed forward
+            permute_message_rows(target, output, degree)
+        add_row(target, output, degree, dest=0, src=4)
+        add_row(target, output, degree, dest=0, src=1)
+        xor_row(target, output, degree, dest=3, src=0)
+        bitrotate_row(target, output, degree, reg=3, bits=16)
+        add_row(target, output, degree, dest=2, src=3)
+        xor_row(target, output, degree, dest=1, src=2)
+        bitrotate_row(target, output, degree, reg=1, bits=12)
+        add_row(target, output, degree, dest=0, src=5)
+        add_row(target, output, degree, dest=0, src=1)
+        xor_row(target, output, degree, dest=3, src=0)
+        bitrotate_row(target, output, degree, reg=3, bits=8)
+        add_row(target, output, degree, dest=2, src=3)
+        xor_row(target, output, degree, dest=1, src=2)
+        bitrotate_row(target, output, degree, reg=1, bits=7)
+        diagonalize_state_rows(target, output, degree)
+        add_row(target, output, degree, dest=0, src=6)
+        add_row(target, output, degree, dest=0, src=1)
+        xor_row(target, output, degree, dest=3, src=0)
+        bitrotate_row(target, output, degree, reg=3, bits=16)
+        add_row(target, output, degree, dest=2, src=3)
+        xor_row(target, output, degree, dest=1, src=2)
+        bitrotate_row(target, output, degree, reg=1, bits=12)
+        add_row(target, output, degree, dest=0, src=7)
+        add_row(target, output, degree, dest=0, src=1)
+        xor_row(target, output, degree, dest=3, src=0)
+        bitrotate_row(target, output, degree, reg=3, bits=8)
+        add_row(target, output, degree, dest=2, src=3)
+        xor_row(target, output, degree, dest=1, src=2)
+        bitrotate_row(target, output, degree, reg=1, bits=7)
+        undiagonalize_state_rows(target, output, degree)
+    # Xor the last two rows into the first two, but don'target do the feed forward
     # here. That's only done in the XOF case.
-    xor_row(t, o, dest=0, src=2)
-    xor_row(t, o, dest=1, src=3)
-    o.append(t.ret())
+    xor_row(target, output, degree, dest=0, src=2)
+    xor_row(target, output, degree, dest=1, src=3)
+    output.append(target.ret())
 
 
-def compress_setup(t, o):
-    if t.extension == AVX512:
-        o.append(f"vmovdqu xmm0, xmmword ptr [{t.arg64(0)}]")
-        o.append(f"vmovdqu xmm1, xmmword ptr [{t.arg64(0)}+0x10]")
-        o.append(f"shl {t.arg64(4)}, 32")
-        o.append(f"mov {t.arg32(3)}, {t.arg32(3)}")
-        o.append(f"or {t.arg64(3)}, {t.arg64(4)}")
-        o.append(f"vmovq xmm3, {t.arg64(2)}")
-        o.append(f"vmovq xmm4, {t.arg64(3)}")
-        o.append(f"vpunpcklqdq xmm3, xmm3, xmm4")
-        o.append(f"vmovaps xmm2, xmmword ptr [BLAKE3_IV+rip]")
-        o.append(f"vmovups xmm8, xmmword ptr [{t.arg64(1)}]")
-        o.append(f"vmovups xmm9, xmmword ptr [{t.arg64(1)}+0x10]")
-        o.append(f"vshufps xmm4, xmm8, xmm9, 136")
-        o.append(f"vshufps xmm5, xmm8, xmm9, 221")
-        o.append(f"vmovups xmm8, xmmword ptr [{t.arg64(1)}+0x20]")
-        o.append(f"vmovups xmm9, xmmword ptr [{t.arg64(1)}+0x30]")
-        o.append(f"vshufps xmm6, xmm8, xmm9, 136")
-        o.append(f"vshufps xmm7, xmm8, xmm9, 221")
-        o.append(f"vpshufd xmm6, xmm6, 0x93")
-        o.append(f"vpshufd xmm7, xmm7, 0x93")
-    elif t.extension in (SSE41, SSE2):
-        o.append(f"movups  xmm0, xmmword ptr [{t.arg64(0)}]")
-        o.append(f"movups  xmm1, xmmword ptr [{t.arg64(0)}+0x10]")
-        o.append(f"movaps  xmm2, xmmword ptr [BLAKE3_IV+rip]")
-        o.append(f"shl {t.arg64(4)}, 32")
-        o.append(f"mov {t.arg32(3)}, {t.arg32(3)}")
-        o.append(f"or {t.arg64(3)}, {t.arg64(4)}")
-        o.append(f"vmovq xmm3, {t.arg64(2)}")
-        o.append(f"vmovq xmm4, {t.arg64(3)}")
-        o.append(f"punpcklqdq xmm3, xmm4")
-        o.append(f"movups  xmm4, xmmword ptr [{t.arg64(1)}]")
-        o.append(f"movups  xmm5, xmmword ptr [{t.arg64(1)}+0x10]")
-        o.append(f"movaps  xmm8, xmm4")
-        o.append(f"shufps  xmm4, xmm5, 136")
-        o.append(f"shufps  xmm8, xmm5, 221")
-        o.append(f"movaps  xmm5, xmm8")
-        o.append(f"movups  xmm6, xmmword ptr [{t.arg64(1)}+0x20]")
-        o.append(f"movups  xmm7, xmmword ptr [{t.arg64(1)}+0x30]")
-        o.append(f"movaps  xmm8, xmm6")
-        o.append(f"shufps  xmm6, xmm7, 136")
-        o.append(f"pshufd  xmm6, xmm6, 0x93")
-        o.append(f"shufps  xmm8, xmm7, 221")
-        o.append(f"pshufd  xmm7, xmm8, 0x93")
+def compress_setup(target, output):
+    if target.extension == AVX512:
+        output.append(f"vmovdqu xmm0, xmmword ptr [{target.arg64(0)}]")
+        output.append(f"vmovdqu xmm1, xmmword ptr [{target.arg64(0)}+0x10]")
+        output.append(f"shl {target.arg64(4)}, 32")
+        output.append(f"mov {target.arg32(3)}, {target.arg32(3)}")
+        output.append(f"or {target.arg64(3)}, {target.arg64(4)}")
+        output.append(f"vmovq xmm3, {target.arg64(2)}")
+        output.append(f"vmovq xmm4, {target.arg64(3)}")
+        output.append(f"vpunpcklqdq xmm3, xmm3, xmm4")
+        output.append(f"vmovaps xmm2, xmmword ptr [BLAKE3_IV+rip]")
+        output.append(f"vmovups xmm8, xmmword ptr [{target.arg64(1)}]")
+        output.append(f"vmovups xmm9, xmmword ptr [{target.arg64(1)}+0x10]")
+        output.append(f"vshufps xmm4, xmm8, xmm9, 136")
+        output.append(f"vshufps xmm5, xmm8, xmm9, 221")
+        output.append(f"vmovups xmm8, xmmword ptr [{target.arg64(1)}+0x20]")
+        output.append(f"vmovups xmm9, xmmword ptr [{target.arg64(1)}+0x30]")
+        output.append(f"vshufps xmm6, xmm8, xmm9, 136")
+        output.append(f"vshufps xmm7, xmm8, xmm9, 221")
+        output.append(f"vpshufd xmm6, xmm6, 0x93")
+        output.append(f"vpshufd xmm7, xmm7, 0x93")
+    elif target.extension in (SSE41, SSE2):
+        output.append(f"movups  xmm0, xmmword ptr [{target.arg64(0)}]")
+        output.append(f"movups  xmm1, xmmword ptr [{target.arg64(0)}+0x10]")
+        output.append(f"movaps  xmm2, xmmword ptr [BLAKE3_IV+rip]")
+        output.append(f"shl {target.arg64(4)}, 32")
+        output.append(f"mov {target.arg32(3)}, {target.arg32(3)}")
+        output.append(f"or {target.arg64(3)}, {target.arg64(4)}")
+        output.append(f"vmovq xmm3, {target.arg64(2)}")
+        output.append(f"vmovq xmm4, {target.arg64(3)}")
+        output.append(f"punpcklqdq xmm3, xmm4")
+        output.append(f"movups  xmm4, xmmword ptr [{target.arg64(1)}]")
+        output.append(f"movups  xmm5, xmmword ptr [{target.arg64(1)}+0x10]")
+        output.append(f"movaps  xmm8, xmm4")
+        output.append(f"shufps  xmm4, xmm5, 136")
+        output.append(f"shufps  xmm8, xmm5, 221")
+        output.append(f"movaps  xmm5, xmm8")
+        output.append(f"movups  xmm6, xmmword ptr [{target.arg64(1)}+0x20]")
+        output.append(f"movups  xmm7, xmmword ptr [{target.arg64(1)}+0x30]")
+        output.append(f"movaps  xmm8, xmm6")
+        output.append(f"shufps  xmm6, xmm7, 136")
+        output.append(f"pshufd  xmm6, xmm6, 0x93")
+        output.append(f"shufps  xmm8, xmm7, 221")
+        output.append(f"pshufd  xmm7, xmm8, 0x93")
     else:
         raise NotImplementedError
 
 
-def compress_finish(t, o):
-    if t.extension == AVX512:
-        o.append(f"vmovdqu xmmword ptr [{t.arg64(0)}], xmm0")
-        o.append(f"vmovdqu xmmword ptr [{t.arg64(0)}+0x10], xmm1")
-    elif t.extension in (SSE41, SSE2):
-        o.append(f"movups xmmword ptr [{t.arg64(0)}], xmm0")
-        o.append(f"movups xmmword ptr [{t.arg64(0)}+0x10], xmm1")
+def compress_finish(target, output):
+    if target.extension == AVX512:
+        output.append(f"vmovdqu xmmword ptr [{target.arg64(0)}], xmm0")
+        output.append(f"vmovdqu xmmword ptr [{target.arg64(0)}+0x10], xmm1")
+    elif target.extension in (SSE41, SSE2):
+        output.append(f"movups xmmword ptr [{target.arg64(0)}], xmm0")
+        output.append(f"movups xmmword ptr [{target.arg64(0)}+0x10], xmm1")
     else:
         raise NotImplementedError
 
 
-def compress(t, o):
-    name = f"blake3_{t.extension}_compress"
-    o.append(f".global {name}")
-    o.append(f"{name}:")
-    compress_setup(t, o)
-    o.append(f"call blake3_{t.extension}_kernel_1")
-    compress_finish(t, o)
-    o.append(t.ret())
+def compress(target, output):
+    label = f"blake3_{target.extension}_compress"
+    output.append(f".global {label}")
+    output.append(f"{label}:")
+    compress_setup(target, output)
+    output.append(f"call {kernel2d_name(target, 1)}")
+    compress_finish(target, output)
+    output.append(target.ret())
 
 
-def emit_prelude(t, o):
-    # o.append(".intel_syntax noprefix")
+def emit_prelude(target, output):
+    # output.append(".intel_syntax noprefix")
     pass
 
 
-def emit_sse2(t, o):
-    t = replace(t, extension=SSE2)
-    kernel_1(t, o)
-    compress(t, o)
-    o.append(".balign 16")
-    o.append("PBLENDW_0x33_MASK:")
-    o.append(".long 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF, 0x00000000")
-    o.append("PBLENDW_0xCC_MASK:")
-    o.append(".long 0x00000000, 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF")
-    o.append("PBLENDW_0x3F_MASK:")
-    o.append(".long 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000")
-    o.append("PBLENDW_0xC0_MASK:")
-    o.append(".long 0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFF")
+def emit_sse2(target, output):
+    target = replace(target, extension=SSE2)
+    kernel2d(target, output, 1)
+    compress(target, output)
+    output.append(".balign 16")
+    output.append("PBLENDW_0x33_MASK:")
+    output.append(".long 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF, 0x00000000")
+    output.append("PBLENDW_0xCC_MASK:")
+    output.append(".long 0x00000000, 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF")
+    output.append("PBLENDW_0x3F_MASK:")
+    output.append(".long 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000")
+    output.append("PBLENDW_0xC0_MASK:")
+    output.append(".long 0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFF")
 
 
-def emit_sse41(t, o):
-    t = replace(t, extension=SSE41)
-    kernel_1(t, o)
-    compress(t, o)
-    o.append(".balign 16")
-    o.append("ROT16:")
-    o.append(".byte  2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13")
-    o.append("ROT8:")
-    o.append(".byte  1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 12")
+def emit_sse41(target, output):
+    target = replace(target, extension=SSE41)
+    kernel2d(target, output, 1)
+    compress(target, output)
 
 
-def emit_avx2(t, o):
-    t = replace(t, extension=AVX2)
+def emit_avx2(target, output):
+    target = replace(target, extension=AVX2)
+    kernel2d(target, output, 2)
 
 
-def emit_avx512(t, o):
-    t = replace(t, extension=AVX512)
-    kernel_1(t, o)
-    compress(t, o)
+def emit_avx512(target, output):
+    target = replace(target, extension=AVX512)
+    kernel2d(target, output, 1)
+    kernel2d(target, output, 2)
+    kernel2d(target, output, 4)
+    compress(target, output)
 
 
-def emit_footer(t, o):
-    o.append(".balign 16")
-    o.append("BLAKE3_IV:")
-    o.append("BLAKE3_IV_0:")
-    o.append(".long 0x6A09E667")
-    o.append("BLAKE3_IV_1:")
-    o.append(".long 0xBB67AE85")
-    o.append("BLAKE3_IV_2:")
-    o.append(".long 0x3C6EF372")
-    o.append("BLAKE3_IV_3:")
-    o.append(".long 0xA54FF53A")
+def emit_footer(target, output):
+    output.append(".balign 16")
+    output.append("BLAKE3_IV:")
+    output.append("BLAKE3_IV_0:")
+    output.append(".long 0x6A09E667")
+    output.append("BLAKE3_IV_1:")
+    output.append(".long 0xBB67AE85")
+    output.append("BLAKE3_IV_2:")
+    output.append(".long 0x3C6EF372")
+    output.append("BLAKE3_IV_3:")
+    output.append(".long 0xA54FF53A")
+
+    output.append(".balign 16")
+    output.append("ROT16:")
+    output.append(".byte  2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13")
+    output.append("ROT8:")
+    output.append(".byte  1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 12")
 
 
 def format(output):
-    print("# DO NOT EDIT")
-    print("# This file is generated by asm.py.")
+    print("# This file is generated by asm.py. Don'target edit this file directly.")
     for item in output:
         if ":" in item or item[0] == ".":
             print(item)

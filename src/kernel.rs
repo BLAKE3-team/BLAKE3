@@ -1,7 +1,7 @@
 use crate::CHUNK_LEN;
 use std::arch::{asm, global_asm};
 
-global_asm!(include_str!("../asm/out.S"));
+global_asm!(include_str!("../asm/out.S"), options(raw));
 
 extern "C" {
     pub fn blake3_sse2_compress(
