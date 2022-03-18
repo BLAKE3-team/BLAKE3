@@ -138,12 +138,13 @@ def bitrotate_row(target, output, degree, reg, bits):
         raise NotImplementedError
 
 
+# See the comments above kernel2d().
 def diagonalize_state_rows(target, output, degree):
     if target.extension == AVX512:
         if degree == 1:
-            output.append("vpshufd xmm0, xmm0, 0x93")
-            output.append("vpshufd xmm3, xmm3, 0x4E")
-            output.append("vpshufd xmm2, xmm2, 0x39")
+            output.append("vpshufd xmm0, xmm0, 0x93")  # 3 0 1 2
+            output.append("vpshufd xmm3, xmm3, 0x4E")  # 2 3 0 1
+            output.append("vpshufd xmm2, xmm2, 0x39")  # 1 2 3 0
         elif degree == 2:
             output.append("vpshufd ymm0, ymm0, 0x93")
             output.append("vpshufd ymm3, ymm3, 0x4E")
@@ -168,12 +169,13 @@ def diagonalize_state_rows(target, output, degree):
         raise NotImplementedError
 
 
+# See the comments above kernel2d().
 def undiagonalize_state_rows(target, output, degree):
     if target.extension == AVX512:
         if degree == 1:
-            output.append("vpshufd xmm0, xmm0, 0x39")
-            output.append("vpshufd xmm3, xmm3, 0x4E")
-            output.append("vpshufd xmm2, xmm2, 0x93")
+            output.append("vpshufd xmm0, xmm0, 0x39")  # 1 2 3 0
+            output.append("vpshufd xmm3, xmm3, 0x4E")  # 2 3 0 1
+            output.append("vpshufd xmm2, xmm2, 0x93")  # 3 0 1 2
         elif degree == 2:
             output.append("vpshufd ymm0, ymm0, 0x39")
             output.append("vpshufd ymm3, ymm3, 0x4E")
@@ -198,6 +200,7 @@ def undiagonalize_state_rows(target, output, degree):
         raise NotImplementedError
 
 
+# See the comments above kernel2d().
 def permute_message_rows(target, output, degree):
     if target.extension == AVX512:
         if degree == 1:
@@ -320,10 +323,10 @@ def kernel2d_name(target, degree):
 #     ymm2:  a8,  a9, a10, a11,  b8,  b9, b10, b11
 #     ymm3: a12, a13, a14, a15, b12, b13, b14, b15
 #
-# In this arrangement, the rows need to be diagonalized and undiagonalized
-# within in each round. There's an important optimization for this, which
-# applies to all ChaCha-derived functions. Intuitively, diagonalization in
-# ChaCha looks like this:
+# In this arrangement, the rows need to be diagonalized and undiagonalized in
+# each round. There's an important optimization for this, which applies to all
+# ChaCha-derived functions. Intuitively, diagonalization in ChaCha looks like
+# this:
 #
 #  0  1  2  3  ------------ no change ----------->   0  1  2  3
 #  4  5  6  7  ---- rotate one position left ---->   5  6  7  4
@@ -395,7 +398,7 @@ def kernel2d(target, output, degree):
         xor_row(target, output, degree, dest=1, src=2)
         bitrotate_row(target, output, degree, reg=1, bits=7)
         undiagonalize_state_rows(target, output, degree)
-    # Xor the last two rows into the first two, but don'target do the feed forward
+    # Xor the last two rows into the first two, but don't do the feed forward
     # here. That's only done in the XOF case.
     xor_row(target, output, degree, dest=0, src=2)
     xor_row(target, output, degree, dest=1, src=3)
@@ -404,25 +407,32 @@ def kernel2d(target, output, degree):
 
 def compress_setup(target, output):
     if target.extension == AVX512:
+        # state words
         output.append(f"vmovdqu xmm0, xmmword ptr [{target.arg64(0)}]")
         output.append(f"vmovdqu xmm1, xmmword ptr [{target.arg64(0)}+0x10]")
+        # flags
         output.append(f"shl {target.arg64(4)}, 32")
+        # block length
         output.append(f"mov {target.arg32(3)}, {target.arg32(3)}")
         output.append(f"or {target.arg64(3)}, {target.arg64(4)}")
+        # counter
         output.append(f"vmovq xmm3, {target.arg64(2)}")
         output.append(f"vmovq xmm4, {target.arg64(3)}")
         output.append(f"vpunpcklqdq xmm3, xmm3, xmm4")
         output.append(f"vmovaps xmm2, xmmword ptr [BLAKE3_IV+rip]")
-        output.append(f"vmovups xmm8, xmmword ptr [{target.arg64(1)}]")
-        output.append(f"vmovups xmm9, xmmword ptr [{target.arg64(1)}+0x10]")
-        output.append(f"vshufps xmm4, xmm8, xmm9, 136")
-        output.append(f"vshufps xmm5, xmm8, xmm9, 221")
-        output.append(f"vmovups xmm8, xmmword ptr [{target.arg64(1)}+0x20]")
-        output.append(f"vmovups xmm9, xmmword ptr [{target.arg64(1)}+0x30]")
-        output.append(f"vshufps xmm6, xmm8, xmm9, 136")
-        output.append(f"vshufps xmm7, xmm8, xmm9, 221")
-        output.append(f"vpshufd xmm6, xmm6, 0x93")
-        output.append(f"vpshufd xmm7, xmm7, 0x93")
+        # message words
+        # fmt: off
+        output.append(f"vmovups xmm8, xmmword ptr [{target.arg64(1)}]")      # xmm8 = m0 m1 m2 m3
+        output.append(f"vmovups xmm9, xmmword ptr [{target.arg64(1)}+0x10]") # xmm9 = m4 m5 m6 m7
+        output.append(f"vshufps xmm4, xmm8, xmm9, 136")                      # xmm4 = m0 m2 m4 m6
+        output.append(f"vshufps xmm5, xmm8, xmm9, 221")                      # xmm5 = m1 m3 m5 m7
+        output.append(f"vmovups xmm8, xmmword ptr [{target.arg64(1)}+0x20]") # xmm8 = m8 m9 m10 m12
+        output.append(f"vmovups xmm9, xmmword ptr [{target.arg64(1)}+0x30]") # xmm9 = m12 m13 m14 m15
+        output.append(f"vshufps xmm6, xmm8, xmm9, 136")                      # xmm6 = m8 m10 m12 m14
+        output.append(f"vshufps xmm7, xmm8, xmm9, 221")                      # xmm7 = m9 m11 m13 m15
+        output.append(f"vpshufd xmm6, xmm6, 0x93")                           # xmm6 = m14 m8 m10 m12
+        output.append(f"vpshufd xmm7, xmm7, 0x93")                           # xmm7 = m15 m9 m11 m13
+        # fmt: on
     elif target.extension in (SSE41, SSE2):
         output.append(f"movups  xmm0, xmmword ptr [{target.arg64(0)}]")
         output.append(f"movups  xmm1, xmmword ptr [{target.arg64(0)}+0x10]")
@@ -530,7 +540,7 @@ def emit_footer(target, output):
 
 
 def format(output):
-    print("# This file is generated by asm.py. Don'target edit this file directly.")
+    print("# This file is generated by asm.py. Don't edit this file directly.")
     for item in output:
         if ":" in item or item[0] == ".":
             print(item)
