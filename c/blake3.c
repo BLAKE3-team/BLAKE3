@@ -254,7 +254,7 @@ INLINE size_t compress_parents_parallel(const uint8_t *child_chaining_values,
 // As a special case when the SIMD degree is 1, this function will still return
 // at least 2 outputs. This guarantees that this function doesn't perform the
 // root compression. (If it did, it would use the wrong flags, and also we
-// wouldn't be able to implement exendable ouput.) Note that this function is
+// wouldn't be able to implement exendable output.) Note that this function is
 // not used when the whole input is only 1 chunk long; that's a different
 // codepath.
 //
@@ -340,12 +340,18 @@ INLINE void compress_subtree_to_parent_node(
   uint8_t cv_array[MAX_SIMD_DEGREE_OR_2 * BLAKE3_OUT_LEN];
   size_t num_cvs = blake3_compress_subtree_wide(input, input_len, key,
                                                 chunk_counter, flags, cv_array);
+  assert(num_cvs <= MAX_SIMD_DEGREE_OR_2);
 
   // If MAX_SIMD_DEGREE is greater than 2 and there's enough input,
   // compress_subtree_wide() returns more than 2 chaining values. Condense
   // them into 2 by forming parent nodes repeatedly.
   uint8_t out_array[MAX_SIMD_DEGREE_OR_2 * BLAKE3_OUT_LEN / 2];
-  while (num_cvs > 2) {
+  // The second half of this loop condition is always true, and we just
+  // asserted it above. But GCC can't tell that it's always true, and if NDEBUG
+  // is set on platforms where MAX_SIMD_DEGREE_OR_2 == 2, GCC emits spurious
+  // warnings here. GCC 8.5 is particularly sensitive, so if you're changing
+  // this code, test it against that version.
+  while (num_cvs > 2 && num_cvs <= MAX_SIMD_DEGREE_OR_2) {
     num_cvs =
         compress_parents_parallel(cv_array, num_cvs, key, flags, out_array);
     memcpy(cv_array, out_array, num_cvs * BLAKE3_OUT_LEN);
@@ -602,4 +608,9 @@ void blake3_hasher_finalize_seek(const blake3_hasher *self, uint64_t seek,
     output = parent_output(parent_block, self->key, self->chunk.flags);
   }
   output_root_bytes(&output, seek, out, out_len);
+}
+
+void blake3_hasher_reset(blake3_hasher *self) {
+  chunk_state_reset(&self->chunk, self->key, 0);
+  self->cv_stack_len = 0;
 }

@@ -68,7 +68,7 @@ enum cpu_feature {
 };
 
 extern enum cpu_feature g_cpu_features;
-enum cpu_feature get_cpu_features();
+enum cpu_feature get_cpu_features(void);
 
 int main(int argc, char **argv) {
   size_t out_len = BLAKE3_OUT_LEN;
@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
       char *endptr = NULL;
       errno = 0;
       unsigned long long out_len_ll = strtoull(argv[2], &endptr, 10);
-      if (errno != 0 || out_len > SIZE_MAX || endptr == argv[2] ||
+      if (errno != 0 || out_len_ll > SIZE_MAX || endptr == argv[2] ||
           *endptr != 0) {
         fprintf(stderr, "Bad length argument.\n");
         return 1;

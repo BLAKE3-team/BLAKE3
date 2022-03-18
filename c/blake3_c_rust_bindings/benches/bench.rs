@@ -123,7 +123,7 @@ fn bench_many_chunks_fn(b: &mut Bencher, f: HashManyFn, degree: usize) {
         inputs.push(RandomInput::new(b, CHUNK_LEN));
     }
     b.iter(|| {
-        let input_arrays: ArrayVec<[&[u8; CHUNK_LEN]; MAX_SIMD_DEGREE]> = inputs
+        let input_arrays: ArrayVec<&[u8; CHUNK_LEN], MAX_SIMD_DEGREE> = inputs
             .iter_mut()
             .take(degree)
             .map(|i| array_ref!(i.get(), 0, CHUNK_LEN))
@@ -215,7 +215,7 @@ fn bench_many_parents_fn(b: &mut Bencher, f: HashManyFn, degree: usize) {
         inputs.push(RandomInput::new(b, BLOCK_LEN));
     }
     b.iter(|| {
-        let input_arrays: ArrayVec<[&[u8; BLOCK_LEN]; MAX_SIMD_DEGREE]> = inputs
+        let input_arrays: ArrayVec<&[u8; BLOCK_LEN], MAX_SIMD_DEGREE> = inputs
             .iter_mut()
             .take(degree)
             .map(|i| array_ref!(i.get(), 0, BLOCK_LEN))

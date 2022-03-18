@@ -1,5 +1,8 @@
 #include "blake3.h"
+#include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 int main() {
@@ -9,9 +12,16 @@ int main() {
 
   // Read input bytes from stdin.
   unsigned char buf[65536];
-  ssize_t n;
-  while ((n = read(STDIN_FILENO, buf, sizeof(buf))) > 0) {
-    blake3_hasher_update(&hasher, buf, n);
+  while (1) {
+    ssize_t n = read(STDIN_FILENO, buf, sizeof(buf));
+    if (n > 0) {
+      blake3_hasher_update(&hasher, buf, n);
+    } else if (n == 0) {
+      break; // end of file
+    } else {
+      fprintf(stderr, "read failed: %s\n", strerror(errno));
+      exit(1);
+    }
   }
 
   // Finalize the hash. BLAKE3_OUT_LEN is the default output length, 32 bytes.

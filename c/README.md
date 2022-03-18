@@ -7,7 +7,10 @@ result:
 
 ```c
 #include "blake3.h"
+#include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 int main() {
@@ -17,9 +20,16 @@ int main() {
 
   // Read input bytes from stdin.
   unsigned char buf[65536];
-  ssize_t n;
-  while ((n = read(STDIN_FILENO, buf, sizeof(buf))) > 0) {
-    blake3_hasher_update(&hasher, buf, n);
+  while (1) {
+    ssize_t n = read(STDIN_FILENO, buf, sizeof(buf));
+    if (n > 0) {
+      blake3_hasher_update(&hasher, buf, n);
+    } else if (n == 0) {
+      break; // end of file
+    } else {
+      fprintf(stderr, "read failed: %s\n", strerror(errno));
+      exit(1);
+    }
   }
 
   // Finalize the hash. BLAKE3_OUT_LEN is the default output length, 32 bytes.
@@ -92,10 +102,11 @@ void blake3_hasher_finalize(
   size_t out_len);
 ```
 
-Finalize the hasher and emit an output of any length. This doesn't
-modify the hasher itself, and it's possible to finalize again after
-adding more input. The constant `BLAKE3_OUT_LEN` provides the default
-output length, 32 bytes.
+Finalize the hasher and return an output of any length, given in bytes.
+This doesn't modify the hasher itself, and it's possible to finalize
+again after adding more input. The constant `BLAKE3_OUT_LEN` provides
+the default output length, 32 bytes, which is recommended for most
+callers. See the [Security Notes](#security-notes) below.
 
 ## Less Common API Functions
 
@@ -164,6 +175,37 @@ parameter for the starting byte position in the output stream. To
 efficiently stream a large output without allocating memory, call this
 function in a loop, incrementing `seek` by the output length each time.
 
+---
+
+```c
+void blake3_hasher_reset(
+  blake3_hasher *self);
+```
+
+Reset the hasher to its initial state, prior to any calls to
+`blake3_hasher_update`. Currently this is no different from calling
+`blake3_hasher_init` or similar again. However, if this implementation gains
+multithreading support in the future, and if `blake3_hasher` holds (optional)
+threading resources, this function will reuse those resources. Until then, this
+is mainly for feature compatibility with the Rust implementation.
+
+# Security Notes
+
+Outputs shorter than the default length of 32 bytes (256 bits) provide less security. An N-bit
+BLAKE3 output is intended to provide N bits of first and second preimage resistance and N/2
+bits of collision resistance, for any N up to 256. Longer outputs don't provide any additional
+security.
+
+Avoid relying on the secrecy of the output offset, that is, the number of output bytes read or
+the arguments to [`seek`](struct.OutputReader.html#method.seek) or
+[`set_position`](struct.OutputReader.html#method.set_position). [_Block-Cipher-Based Tree
+Hashing_ by Aldo Gunsing](https://eprint.iacr.org/2022/283) shows that an attacker who knows
+both the message and the key (if any) can easily determine the offset of an extended output.
+For comparison, AES-CTR has a similar property: if you know the key, you can decrypt a block
+from an unknown position in the output stream to recover its block index. Callers with strong
+secret keys aren't affected in practice, but secret offsets are a [design
+smell](https://en.wikipedia.org/wiki/Design_smell) in any case.
+
 # Building
 
 This implementation is just C and assembly files. It doesn't include a
@@ -229,13 +271,22 @@ gcc -shared -O3 -o libblake3.so -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_A
 
 ## ARM NEON
 
-The NEON implementation is not enabled by default on ARM, since not all
-ARM targets support it. To enable it, set `BLAKE3_USE_NEON=1`. Here's an
-example of building a shared library on ARM Linux with NEON support:
+The NEON implementation is enabled by default on AArch64, but not on
+other ARM targets, since not all of them support it. To enable it, set
+`BLAKE3_USE_NEON=1`. Here's an example of building a shared library on
+ARM Linux with NEON support:
 
 ```bash
-gcc -shared -O3 -o libblake3.so -DBLAKE3_USE_NEON blake3.c blake3_dispatch.c \
+gcc -shared -O3 -o libblake3.so -DBLAKE3_USE_NEON=1 blake3.c blake3_dispatch.c \
     blake3_portable.c blake3_neon.c
+```
+
+To explicitiy disable using NEON instructions on AArch64, set
+`BLAKE3_USE_NEON=0`.
+
+```bash
+gcc -shared -O3 -o libblake3.so -DBLAKE3_USE_NEON=0 blake3.c blake3_dispatch.c \
+    blake3_portable.c 
 ```
 
 Note that on some targets (ARMv7 in particular), extra flags may be

@@ -38,8 +38,12 @@ ASM_TARGETS += blake3_avx512_x86-64_unix.S
 endif
 
 ifdef BLAKE3_USE_NEON
-EXTRAFLAGS += -DBLAKE3_USE_NEON
+EXTRAFLAGS += -DBLAKE3_USE_NEON=1
 TARGETS += blake3_neon.o
+endif
+
+ifdef BLAKE3_NO_NEON
+EXTRAFLAGS += -DBLAKE3_USE_NEON=0
 endif
 
 all: blake3.c blake3_dispatch.c blake3_portable.c main.c $(TARGETS)

@@ -215,7 +215,7 @@ pub fn test_hash_many_fn(hash_many_fn: HashManyFn) {
     let counter = (1u64 << 32) - 1;
 
     // First hash chunks.
-    let mut chunks = ArrayVec::<[&[u8; CHUNK_LEN]; NUM_INPUTS]>::new();
+    let mut chunks = ArrayVec::<&[u8; CHUNK_LEN], NUM_INPUTS>::new();
     for i in 0..NUM_INPUTS {
         chunks.push(array_ref!(input_buf, i * CHUNK_LEN, CHUNK_LEN));
     }
@@ -259,7 +259,7 @@ pub fn test_hash_many_fn(hash_many_fn: HashManyFn) {
     }
 
     // Then hash parents.
-    let mut parents = ArrayVec::<[&[u8; 2 * OUT_LEN]; NUM_INPUTS]>::new();
+    let mut parents = ArrayVec::<&[u8; 2 * OUT_LEN], NUM_INPUTS>::new();
     for i in 0..NUM_INPUTS {
         parents.push(array_ref!(input_buf, i * 2 * OUT_LEN, 2 * OUT_LEN));
     }
@@ -507,5 +507,56 @@ fn test_finalize_seek() {
         dbg!(seek);
         test_hasher.finalize_seek(seek as u64, &mut out);
         assert_eq!(&expected[seek..][..out.len()], &out[..]);
+    }
+}
+
+#[test]
+fn test_reset() {
+    {
+        let mut hasher = crate::Hasher::new();
+        hasher.update(&[42; 3 * CHUNK_LEN + 7]);
+        hasher.reset();
+        hasher.update(&[42; CHUNK_LEN + 3]);
+        let mut output = [0; 32];
+        hasher.finalize(&mut output);
+
+        let mut reference_hasher = reference_impl::Hasher::new();
+        reference_hasher.update(&[42; CHUNK_LEN + 3]);
+        let mut reference_hash = [0; 32];
+        reference_hasher.finalize(&mut reference_hash);
+
+        assert_eq!(reference_hash, output);
+    }
+    {
+        let key = &[99; 32];
+        let mut hasher = crate::Hasher::new_keyed(key);
+        hasher.update(&[42; 3 * CHUNK_LEN + 7]);
+        hasher.reset();
+        hasher.update(&[42; CHUNK_LEN + 3]);
+        let mut output = [0; 32];
+        hasher.finalize(&mut output);
+
+        let mut reference_hasher = reference_impl::Hasher::new_keyed(key);
+        reference_hasher.update(&[42; CHUNK_LEN + 3]);
+        let mut reference_hash = [0; 32];
+        reference_hasher.finalize(&mut reference_hash);
+
+        assert_eq!(reference_hash, output);
+    }
+    {
+        let context = "BLAKE3 2020-02-12 10:20:58 reset test";
+        let mut hasher = crate::Hasher::new_derive_key(context);
+        hasher.update(&[42; 3 * CHUNK_LEN + 7]);
+        hasher.reset();
+        hasher.update(&[42; CHUNK_LEN + 3]);
+        let mut output = [0; 32];
+        hasher.finalize(&mut output);
+
+        let mut reference_hasher = reference_impl::Hasher::new_derive_key(context);
+        reference_hasher.update(&[42; CHUNK_LEN + 3]);
+        let mut reference_hash = [0; 32];
+        reference_hasher.finalize(&mut reference_hash);
+
+        assert_eq!(reference_hash, output);
     }
 }

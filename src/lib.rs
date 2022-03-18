@@ -25,7 +25,7 @@
 //! # }
 //!
 //! // Print a hash as hex.
-//! println!("{}", hash1.to_hex());
+//! println!("{}", hash1);
 //! # Ok(())
 //! # }
 //! ```
@@ -34,28 +34,27 @@
 //!
 //! The `std` feature (the only feature enabled by default) is required for
 //! implementations of the [`Write`] and [`Seek`] traits, and also for runtime
-//! CPU feature detection. If this feature is disabled, the only way to use the
-//! SIMD implementations in this crate is to enable the corresponding
-//! instruction sets globally, with e.g. `RUSTFLAGS="-C target-cpu=native"`. The
-//! resulting binary will not be portable to other machines.
+//! CPU feature detection on x86. If this feature is disabled, the only way to
+//! use the x86 SIMD implementations is to enable the corresponding instruction
+//! sets globally, with e.g. `RUSTFLAGS="-C target-cpu=native"`. The resulting
+//! binary will not be portable to other machines.
 //!
 //! The `rayon` feature (disabled by default, but enabled for [docs.rs]) adds
 //! the [`Hasher::update_rayon`] method, for multithreaded hashing. However,
 //! even if this feature is enabled, all other APIs remain single-threaded.
 //!
-//! The `neon` feature enables ARM NEON support. Currently there is no runtime
-//! CPU feature detection for NEON, so you must only enable this feature for
-//! targets that are known to have NEON support. In particular, some ARMv7
-//! targets support NEON, and some don't.
+//! The NEON implementation is enabled by default for AArch64 but requires the
+//! `neon` feature for other ARM targets. Not all ARMv7 CPUs support NEON, and
+//! enabling this feature will produce a binary that's not portable to CPUs
+//! without NEON support.
 //!
 //! The `traits-preview` feature enables implementations of traits from the
-//! RustCrypto [`digest`] and [`crypto-mac`] crates, and re-exports those crates
-//! as `traits::digest` and `traits::crypto_mac`. However, the traits aren't
-//! stable, and they're expected to change in incompatible ways before those
-//! crates reach 1.0. For that reason, this crate makes no SemVer guarantees for
-//! this feature, and callers who use it should expect breaking changes between
-//! patch versions. (The "-preview" feature name follows the conventions of the
-//! RustCrypto [`signature`] crate.)
+//! RustCrypto [`digest`] crate, and re-exports that crate as
+//! `traits::digest`. However, the traits aren't stable, and they're expected to
+//! change in incompatible ways before that crate reaches 1.0. For that reason,
+//! this crate makes no SemVer guarantees for this feature, and callers who use
+//! it should expect breaking changes between patch versions. (The "-preview"
+//! feature name follows the conventions of the RustCrypto [`signature`] crate.)
 //!
 //! [`Hasher::update_rayon`]: struct.Hasher.html#method.update_rayon
 //! [BLAKE3]: https://blake3.io
@@ -64,7 +63,6 @@
 //! [`Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
 //! [`Seek`]: https://doc.rust-lang.org/std/io/trait.Seek.html
 //! [`digest`]: https://crates.io/crates/digest
-//! [`crypto-mac`]: https://crates.io/crates/crypto-mac
 //! [`signature`]: https://crates.io/crates/signature
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -94,7 +92,7 @@ mod avx2;
 #[cfg(blake3_avx512_ffi)]
 #[path = "ffi_avx512.rs"]
 mod avx512;
-#[cfg(feature = "neon")]
+#[cfg(blake3_neon)]
 #[path = "ffi_neon.rs"]
 mod neon;
 mod portable;
@@ -218,7 +216,7 @@ impl Hash {
     /// type.
     ///
     /// [`ArrayString`]: https://docs.rs/arrayvec/0.5.1/arrayvec/struct.ArrayString.html
-    pub fn to_hex(&self) -> ArrayString<[u8; 2 * OUT_LEN]> {
+    pub fn to_hex(&self) -> ArrayString<{ 2 * OUT_LEN }> {
         let mut s = ArrayString::new();
         let table = b"0123456789abcdef";
         for &b in self.0.iter() {
@@ -584,7 +582,7 @@ fn compress_chunks_parallel(
     debug_assert!(input.len() <= MAX_SIMD_DEGREE * CHUNK_LEN);
 
     let mut chunks_exact = input.chunks_exact(CHUNK_LEN);
-    let mut chunks_array = ArrayVec::<[&[u8; CHUNK_LEN]; MAX_SIMD_DEGREE]>::new();
+    let mut chunks_array = ArrayVec::<&[u8; CHUNK_LEN], MAX_SIMD_DEGREE>::new();
     for chunk in &mut chunks_exact {
         chunks_array.push(array_ref!(chunk, 0, CHUNK_LEN));
     }
@@ -634,7 +632,7 @@ fn compress_parents_parallel(
     let mut parents_exact = child_chaining_values.chunks_exact(BLOCK_LEN);
     // Use MAX_SIMD_DEGREE_OR_2 rather than MAX_SIMD_DEGREE here, because of
     // the requirements of compress_subtree_wide().
-    let mut parents_array = ArrayVec::<[&[u8; BLOCK_LEN]; MAX_SIMD_DEGREE_OR_2]>::new();
+    let mut parents_array = ArrayVec::<&[u8; BLOCK_LEN], MAX_SIMD_DEGREE_OR_2>::new();
     for parent in &mut parents_exact {
         parents_array.push(array_ref!(parent, 0, BLOCK_LEN));
     }
@@ -669,7 +667,7 @@ fn compress_parents_parallel(
 // As a special case when the SIMD degree is 1, this function will still return
 // at least 2 outputs. This guarantees that this function doesn't perform the
 // root compression. (If it did, it would use the wrong flags, and also we
-// wouldn't be able to implement exendable ouput.) Note that this function is
+// wouldn't be able to implement exendable output.) Note that this function is
 // not used when the whole input is only 1 chunk long; that's a different
 // codepath.
 //
@@ -777,7 +775,6 @@ fn compress_subtree_to_parent_node<J: join::Join>(
 
 // Hash a complete input all at once. Unlike compress_subtree_wide() and
 // compress_subtree_to_parent_node(), this function handles the 1 chunk case.
-// Note that this we use SerialJoin here, so this is always single-threaded.
 fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8) -> Output {
     let platform = Platform::detect();
 
@@ -852,7 +849,8 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 /// another algorithm. You might need to do this if you're adding features to
 /// an existing application, which does not yet use key derivation internally.
 /// However, you still must not share key material with algorithms that forbid
-/// key reuse entirely, like a one-time pad.
+/// key reuse entirely, like a one-time pad. For more on this, see sections 6.2
+/// and 7.8 of the [BLAKE3 paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf).
 ///
 /// Note that BLAKE3 is not a password hash, and **`derive_key` should never be
 /// used with passwords.** Instead, use a dedicated password hash like
@@ -901,10 +899,9 @@ fn parent_node_output(
 ///
 /// When the `traits-preview` Cargo feature is enabled, this type implements
 /// several commonly used traits from the
-/// [`digest`](https://crates.io/crates/digest) and
-/// [`crypto_mac`](https://crates.io/crates/crypto-mac) crates. However, those
+/// [`digest`](https://crates.io/crates/digest) crate. However, those
 /// traits aren't stable, and they're expected to change in incompatible ways
-/// before those crates reach 1.0. For that reason, this crate makes no SemVer
+/// before that crate reaches 1.0. For that reason, this crate makes no SemVer
 /// guarantees for this feature, and callers who use it should expect breaking
 /// changes between patch versions.
 ///
@@ -947,7 +944,7 @@ pub struct Hasher {
     // requires a 4th entry, rather than merging everything down to 1, because
     // we don't know whether more input is coming. This is different from how
     // the reference implementation does things.
-    cv_stack: ArrayVec<[CVBytes; MAX_DEPTH + 1]>,
+    cv_stack: ArrayVec<CVBytes, { MAX_DEPTH + 1 }>,
 }
 
 impl Hasher {
@@ -1301,6 +1298,11 @@ impl Hasher {
     pub fn finalize_xof(&self) -> OutputReader {
         OutputReader::new(self.final_output())
     }
+
+    /// Return the total number of bytes hashed so far.
+    pub fn count(&self) -> u64 {
+        self.chunk_state.chunk_counter * CHUNK_LEN as u64 + self.chunk_state.len() as u64
+    }
 }
 
 // Don't derive(Debug), because the state may be secret.
@@ -1337,6 +1339,27 @@ impl std::io::Write for Hasher {
 
 /// An incremental reader for extended output, returned by
 /// [`Hasher::finalize_xof`](struct.Hasher.html#method.finalize_xof).
+///
+/// Shorter BLAKE3 outputs are prefixes of longer ones, and explicitly requesting a short output is
+/// equivalent to truncating the default-length output. Note that this is a difference between
+/// BLAKE2 and BLAKE3.
+///
+/// # Security notes
+///
+/// Outputs shorter than the default length of 32 bytes (256 bits) provide less security. An N-bit
+/// BLAKE3 output is intended to provide N bits of first and second preimage resistance and N/2
+/// bits of collision resistance, for any N up to 256. Longer outputs don't provide any additional
+/// security.
+///
+/// Avoid relying on the secrecy of the output offset, that is, the number of output bytes read or
+/// the arguments to [`seek`](struct.OutputReader.html#method.seek) or
+/// [`set_position`](struct.OutputReader.html#method.set_position). [_Block-Cipher-Based Tree
+/// Hashing_ by Aldo Gunsing](https://eprint.iacr.org/2022/283) shows that an attacker who knows
+/// both the message and the key (if any) can easily determine the offset of an extended output.
+/// For comparison, AES-CTR has a similar property: if you know the key, you can decrypt a block
+/// from an unknown position in the output stream to recover its block index. Callers with strong
+/// secret keys aren't affected in practice, but secret offsets are a [design
+/// smell](https://en.wikipedia.org/wiki/Design_smell) in any case.
 #[derive(Clone)]
 pub struct OutputReader {
     inner: Output,
@@ -1381,10 +1404,13 @@ impl OutputReader {
         }
     }
 
-    /// Return the current read position in the output stream. The position of
-    /// a new `OutputReader` starts at 0, and each call to [`fill`] or
-    /// [`Read::read`] moves the position forward by the number of bytes read.
+    /// Return the current read position in the output stream. This is
+    /// equivalent to [`Seek::stream_position`], except that it doesn't return
+    /// a `Result`. The position of a new `OutputReader` starts at 0, and each
+    /// call to [`fill`] or [`Read::read`] moves the position forward by the
+    /// number of bytes read.
     ///
+    /// [`Seek::stream_position`]: #method.stream_position
     /// [`fill`]: #method.fill
     /// [`Read::read`]: #method.read
     pub fn position(&self) -> u64 {

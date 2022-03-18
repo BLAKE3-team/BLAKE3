@@ -7,3 +7,8 @@ by running `cargo doc --open` in this directory.
 This implementation is a single file
 ([`reference_impl.rs`](reference_impl.rs)) with no dependencies. It is
 not optimized for performance.
+
+There are ports of this reference implementation to other languages:
+
+- [C](https://github.com/oconnor663/blake3_reference_impl_c)
+- [Python](https://github.com/oconnor663/pure_python_blake3)

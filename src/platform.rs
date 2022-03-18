@@ -10,7 +10,7 @@ cfg_if::cfg_if! {
                 pub const MAX_SIMD_DEGREE: usize = 8;
             }
         }
-    } else if #[cfg(feature = "neon")] {
+    } else if #[cfg(blake3_neon)] {
         pub const MAX_SIMD_DEGREE: usize = 4;
     } else {
         pub const MAX_SIMD_DEGREE: usize = 1;
@@ -30,7 +30,7 @@ cfg_if::cfg_if! {
                 pub const MAX_SIMD_DEGREE_OR_2: usize = 8;
             }
         }
-    } else if #[cfg(feature = "neon")] {
+    } else if #[cfg(blake3_neon)] {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 4;
     } else {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 2;
@@ -49,7 +49,7 @@ pub enum Platform {
     #[cfg(blake3_avx512_ffi)]
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     AVX512,
-    #[cfg(feature = "neon")]
+    #[cfg(blake3_neon)]
     NEON,
 }
 
@@ -76,7 +76,7 @@ impl Platform {
         }
         // We don't use dynamic feature detection for NEON. If the "neon"
         // feature is on, NEON is assumed to be supported.
-        #[cfg(feature = "neon")]
+        #[cfg(blake3_neon)]
         {
             return Platform::NEON;
         }
@@ -95,7 +95,7 @@ impl Platform {
             #[cfg(blake3_avx512_ffi)]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => 16,
-            #[cfg(feature = "neon")]
+            #[cfg(blake3_neon)]
             Platform::NEON => 4,
         };
         debug_assert!(degree <= MAX_SIMD_DEGREE);
@@ -129,7 +129,7 @@ impl Platform {
                 crate::avx512::compress_in_place(cv, block, block_len, counter, flags)
             },
             // No NEON compress_in_place() implementation yet.
-            #[cfg(feature = "neon")]
+            #[cfg(blake3_neon)]
             Platform::NEON => portable::compress_in_place(cv, block, block_len, counter, flags),
         }
     }
@@ -161,7 +161,7 @@ impl Platform {
                 crate::avx512::compress_xof(cv, block, block_len, counter, flags)
             },
             // No NEON compress_xof() implementation yet.
-            #[cfg(feature = "neon")]
+            #[cfg(blake3_neon)]
             Platform::NEON => portable::compress_xof(cv, block, block_len, counter, flags),
         }
     }
@@ -176,9 +176,9 @@ impl Platform {
     // after every block, there's a small but measurable performance loss.
     // Compressing chunks with a dedicated loop avoids this.
 
-    pub fn hash_many<A: arrayvec::Array<Item = u8>>(
+    pub fn hash_many<const N: usize>(
         &self,
-        inputs: &[&A],
+        inputs: &[&[u8; N]],
         key: &CVWords,
         counter: u64,
         increment_counter: IncrementCounter,
@@ -256,7 +256,7 @@ impl Platform {
                 )
             },
             // Assumed to be safe if the "neon" feature is on.
-            #[cfg(feature = "neon")]
+            #[cfg(blake3_neon)]
             Platform::NEON => unsafe {
                 crate::neon::hash_many(
                     inputs,
@@ -315,7 +315,7 @@ impl Platform {
         }
     }
 
-    #[cfg(feature = "neon")]
+    #[cfg(blake3_neon)]
     pub fn neon() -> Option<Self> {
         // Assumed to be safe if the "neon" feature is on.
         Some(Self::NEON)

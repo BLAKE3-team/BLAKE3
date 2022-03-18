@@ -44,6 +44,11 @@ jobs:
       working-directory: ./tools/instruction_set_support
     # Default tests plus Rayon and RustCrypto trait implementations.
     - run: cargo test --features=rayon,traits-preview
+    # Same but with only one thread in the Rayon pool. This can find deadlocks.
+    - name: "again with RAYON_NUM_THREADS=1"
+      run: cargo test --features=rayon,traits-preview
+      env:
+        RAYON_NUM_THREADS: 1
     # no_std tests.
     - run: cargo test --no-default-features
 
@@ -149,6 +154,9 @@ jobs:
     # Test the NEON implementation on ARM targets.
     - run: cross test --target ${{ matrix.arch }} --features=neon
       if: startsWith(matrix.arch, 'armv7-') || startsWith(matrix.arch, 'aarch64-')
+    # NEON is enabled by default on aarch64, disabling it through the no_neon feature.
+    - run: cross test --target ${{ matrix.arch }} --features=no_neon
+      if: startsWith(matrix.arch, 'aarch64-')
     # Test vectors. Note that this uses a hacky script due to path dependency limitations.
     - run: ./test_vectors/cross_test.sh --target ${{ matrix.arch }}
     # C code. Same issue with the hacky script.
@@ -206,3 +214,22 @@ jobs:
     # Build the example.
     - run: make -f Makefile.testing example
       working-directory: ./c
+
+  # Note that this jobs builds AArch64 binaries from an x86_64 host.
+  build_apple_silicon:
+    name: build for Apple Silicon
+    runs-on: macOS-latest
+    strategy:
+      fail-fast: false
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: aarch64-apple-darwin
+        override: true
+    - name: build blake3
+      run: cargo build --target aarch64-apple-darwin
+    - name: build b3sum
+      run: cargo build --target aarch64-apple-darwin
+      working-directory: ./b3sum

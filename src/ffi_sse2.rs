@@ -32,8 +32,8 @@ pub unsafe fn compress_xof(
 }
 
 // Unsafe because this may only be called on platforms supporting SSE2.
-pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
-    inputs: &[&A],
+pub unsafe fn hash_many<const N: usize>(
+    inputs: &[&[u8; N]],
     key: &CVWords,
     counter: u64,
     increment_counter: IncrementCounter,
@@ -49,7 +49,7 @@ pub unsafe fn hash_many<A: arrayvec::Array<Item = u8>>(
     ffi::blake3_hash_many_sse2(
         inputs.as_ptr() as *const *const u8,
         inputs.len(),
-        A::CAPACITY / BLOCK_LEN,
+        N / BLOCK_LEN,
         key.as_ptr(),
         counter,
         increment_counter.yes(),

@@ -93,6 +93,12 @@ impl Hasher {
             ffi::blake3_hasher_finalize_seek(&self.0, seek, output.as_mut_ptr(), output.len());
         }
     }
+
+    pub fn reset(&mut self) {
+        unsafe {
+            ffi::blake3_hasher_reset(&mut self.0);
+        }
+    }
 }
 
 pub mod ffi {
@@ -141,6 +147,7 @@ pub mod ffi {
             out: *mut u8,
             out_len: usize,
         );
+        pub fn blake3_hasher_reset(self_: *mut blake3_hasher);
 
         // portable low-level functions
         pub fn blake3_compress_in_place_portable(
