@@ -13,28 +13,28 @@ ifdef BLAKE3_NO_SSE2
 EXTRAFLAGS += -DBLAKE3_NO_SSE2
 else
 TARGETS += blake3_sse2.o
-ASM_TARGETS += blake3_sse2_x86-64_unix.S
+ASM_TARGETS += blake3_sse2_x86-64_unix.o
 endif
 
 ifdef BLAKE3_NO_SSE41
 EXTRAFLAGS += -DBLAKE3_NO_SSE41
 else
 TARGETS += blake3_sse41.o
-ASM_TARGETS += blake3_sse41_x86-64_unix.S
+ASM_TARGETS += blake3_sse41_x86-64_unix.o
 endif
 
 ifdef BLAKE3_NO_AVX2
 EXTRAFLAGS += -DBLAKE3_NO_AVX2
 else
 TARGETS += blake3_avx2.o
-ASM_TARGETS += blake3_avx2_x86-64_unix.S
+ASM_TARGETS += blake3_avx2_x86-64_unix.o
 endif
 
 ifdef BLAKE3_NO_AVX512
 EXTRAFLAGS += -DBLAKE3_NO_AVX512
 else
 TARGETS += blake3_avx512.o
-ASM_TARGETS += blake3_avx512_x86-64_unix.S
+ASM_TARGETS += blake3_avx512_x86-64_unix.o
 endif
 
 ifdef BLAKE3_USE_NEON
@@ -54,6 +54,9 @@ blake3_sse2.o: blake3_sse2.c
 
 blake3_sse41.o: blake3_sse41.c
 	$(CC) $(CFLAGS) $(EXTRAFLAGS) -c $^ -o $@ -msse4.1
+
+.S.o:
+	$(CC) $(CFLAGS) $(EXTRAFLAGS) -o $@ -c $<
 
 blake3_avx2.o: blake3_avx2.c
 	$(CC) $(CFLAGS) $(EXTRAFLAGS) -c $^ -o $@ -mavx2
