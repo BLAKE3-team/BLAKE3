@@ -49,23 +49,16 @@ endif
 all: blake3.c blake3_dispatch.c blake3_portable.c main.c $(TARGETS)
 	$(CC) $(CFLAGS) $(EXTRAFLAGS) $^ -o $(NAME) $(LDFLAGS)
 
-blake3_sse2.o: blake3_sse2.c
-	$(CC) $(CFLAGS) $(EXTRAFLAGS) -c $^ -o $@ -msse2
-
-blake3_sse41.o: blake3_sse41.c
-	$(CC) $(CFLAGS) $(EXTRAFLAGS) -c $^ -o $@ -msse4.1
+.c.o:
+	$(CC) $(CFLAGS) $(EXTRAFLAGS) $($@_CFLAGS) -o $@ -c $<
 
 .S.o:
 	$(CC) $(CFLAGS) $(EXTRAFLAGS) -o $@ -c $<
 
-blake3_avx2.o: blake3_avx2.c
-	$(CC) $(CFLAGS) $(EXTRAFLAGS) -c $^ -o $@ -mavx2
-
-blake3_avx512.o: blake3_avx512.c
-	$(CC) $(CFLAGS) $(EXTRAFLAGS) -c $^ -o $@ -mavx512f -mavx512vl
-
-blake3_neon.o: blake3_neon.c
-	$(CC) $(CFLAGS) $(EXTRAFLAGS) -c $^ -o $@
+blake3_sse2.o_CFLAGS = -msse2
+blake3_sse41.o_CFLAGS = -msse4.1
+blake3_avx2.o_CFLAGS = -mavx2
+blake3_avx512.o_CFLAGS = -mavx512f -mavx512vl
 
 test: CFLAGS += -DBLAKE3_TESTING -fsanitize=address,undefined
 test: all
