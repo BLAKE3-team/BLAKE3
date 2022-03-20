@@ -543,6 +543,37 @@ def xof_setup2d(target, output, degree):
             output.append(f"vpshufd ymm7, ymm7, 0x93")
         else:
             raise NotImplementedError
+    elif target.extension == AVX2:
+        # Load the state words.
+        output.append(f"vbroadcasti128 ymm0, xmmword ptr [{target.arg64(0)}]")
+        output.append(f"vbroadcasti128 ymm1, xmmword ptr [{target.arg64(0)}+0x10]")
+        # Load the counter increments.
+        output.append(f"vmovdqa ymm4, ymmword ptr [INCREMENT_2D+rip]")
+        # Load the IV constants.
+        output.append(f"vbroadcasti128 ymm2, xmmword ptr [BLAKE3_IV+rip]")
+        # Broadcast the counter.
+        output.append(f"vpbroadcastq ymm5, {target.arg64(2)}")
+        # Add the counter increments to the counter.
+        output.append(f"vpaddq ymm6, ymm4, ymm5")
+        # Combine the block length and flags into a 64-bit word.
+        output.append(f"shl {target.arg64(4)}, 32")
+        output.append(f"mov {target.arg32(3)}, {target.arg32(3)}")
+        output.append(f"or {target.arg64(3)}, {target.arg64(4)}")
+        # Broadcast the block length and flags.
+        output.append(f"vpbroadcastq ymm7, {target.arg64(3)}")
+        # Blend the counter, block length, and flags.
+        output.append(f"vpblendd ymm3, ymm6, ymm7, 0xCC")
+        # Load and permute the message words.
+        output.append(f"vbroadcasti128 ymm8, xmmword ptr [{target.arg64(1)}]")
+        output.append(f"vbroadcasti128 ymm9, xmmword ptr [{target.arg64(1)}+0x10]")
+        output.append(f"vshufps ymm4, ymm8, ymm9, 136")
+        output.append(f"vshufps ymm5, ymm8, ymm9, 221")
+        output.append(f"vbroadcasti128 ymm8, xmmword ptr [{target.arg64(1)}+0x20]")
+        output.append(f"vbroadcasti128 ymm9, xmmword ptr [{target.arg64(1)}+0x30]")
+        output.append(f"vshufps ymm6, ymm8, ymm9, 136")
+        output.append(f"vshufps ymm7, ymm8, ymm9, 221")
+        output.append(f"vpshufd ymm6, ymm6, 0x93")
+        output.append(f"vpshufd ymm7, ymm7, 0x93")
     elif target.extension in (SSE41, SSE2):
         assert degree == 1
         output.append(f"movups  xmm0, xmmword ptr [{target.arg64(0)}]")
@@ -603,6 +634,19 @@ def xof_stream_finish2d(target, output, degree):
             )
         else:
             raise NotImplementedError
+    elif target.extension == AVX2:
+        output.append(f"vbroadcasti128 ymm4, xmmword ptr [{target.arg64(0)}]")
+        output.append(f"vpxor ymm2, ymm2, ymm4")
+        output.append(f"vbroadcasti128 ymm5, xmmword ptr [{target.arg64(0)} + 16]")
+        output.append(f"vpxor ymm3, ymm3, ymm5")
+        output.append(f"vmovdqu xmmword ptr [{target.arg64(5)} + 0 * 16], xmm0")
+        output.append(f"vmovdqu xmmword ptr [{target.arg64(5)} + 1 * 16], xmm1")
+        output.append(f"vmovdqu xmmword ptr [{target.arg64(5)} + 2 * 16], xmm2")
+        output.append(f"vmovdqu xmmword ptr [{target.arg64(5)} + 3 * 16], xmm3")
+        output.append(f"vextracti128 xmmword ptr [{target.arg64(5)} + 4 * 16], ymm0, 1")
+        output.append(f"vextracti128 xmmword ptr [{target.arg64(5)} + 5 * 16], ymm1, 1")
+        output.append(f"vextracti128 xmmword ptr [{target.arg64(5)} + 6 * 16], ymm2, 1")
+        output.append(f"vextracti128 xmmword ptr [{target.arg64(5)} + 7 * 16], ymm3, 1")
     elif target.extension in (SSE41, SSE2):
         assert degree == 1
         output.append(f"movdqu xmm4, xmmword ptr [{target.arg64(0)}]")
@@ -628,6 +672,11 @@ def xof_stream(target, output, degree):
             xof_stream_finish2d(target, output, degree)
         else:
             raise NotImplementedError
+    elif target.extension == AVX2:
+        assert degree == 2
+        xof_setup2d(target, output, degree)
+        output.append(f"call {kernel2d_name(target, degree)}")
+        xof_stream_finish2d(target, output, degree)
     elif target.extension in (SSE41, SSE2):
         assert degree == 1
         xof_setup2d(target, output, degree)
@@ -669,6 +718,7 @@ def emit_sse41(target, output):
 def emit_avx2(target, output):
     target = replace(target, extension=AVX2)
     kernel2d(target, output, 2)
+    xof_stream(target, output, 2)
 
 
 def emit_avx512(target, output):

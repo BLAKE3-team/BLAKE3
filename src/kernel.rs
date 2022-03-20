@@ -49,6 +49,14 @@ extern "C" {
         flags: u32,
         out: *mut [u8; 64],
     );
+    pub fn blake3_avx2_xof_stream_2(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+        out: *mut [u8; 64 * 2],
+    );
     pub fn blake3_avx512_xof_stream_2(
         cv: &[u32; 8],
         block: &[u8; 64],
@@ -191,6 +199,15 @@ mod test {
             return;
         }
         test_xof_function(blake3_avx512_xof_stream_1);
+    }
+
+    #[test]
+    #[cfg(target_arch = "x86_64")]
+    fn test_avx2_xof_2() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        test_xof_function(blake3_avx2_xof_stream_2);
     }
 
     #[test]
