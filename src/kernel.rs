@@ -65,6 +65,14 @@ extern "C" {
         flags: u32,
         out: *mut [u8; 64 * 2],
     );
+    pub fn blake3_avx512_xof_stream_4(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+        out: *mut [u8; 64 * 4],
+    );
 }
 
 pub type CompressionFn =
@@ -138,7 +146,7 @@ mod test {
         let mut block = [0; 64];
         let block_len = 53;
         crate::test::paint_test_input(&mut block[..block_len]);
-        let counter = u64::MAX - 42;
+        let counter = u32::MAX as u64;
         let flags = crate::CHUNK_START | crate::CHUNK_END | crate::ROOT;
 
         let mut expected = [0; N];
@@ -217,6 +225,15 @@ mod test {
             return;
         }
         test_xof_function(blake3_avx512_xof_stream_2);
+    }
+
+    #[test]
+    #[cfg(target_arch = "x86_64")]
+    fn test_avx512_xof_4() {
+        if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
+            return;
+        }
+        test_xof_function(blake3_avx512_xof_stream_4);
     }
 }
 

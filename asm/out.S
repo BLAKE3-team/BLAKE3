@@ -2120,6 +2120,10 @@ blake3_avx512_kernel2d_2:
         vpxord ymm1, ymm1, ymm3
         ret
 blake3_avx512_kernel2d_4:
+        mov eax, 43690
+        kmovw k3, eax
+        mov eax, 34952
+        kmovw k4, eax
         vpaddd zmm0, zmm0, zmm4
         vpaddd zmm0, zmm0, zmm1
         vpxord zmm3, zmm3, zmm0
@@ -2529,6 +2533,53 @@ blake3_avx512_xof_stream_2:
         vextracti128 xmmword ptr [r9 + 5 * 16], ymm1, 1
         vextracti128 xmmword ptr [r9 + 6 * 16], ymm2, 1
         vextracti128 xmmword ptr [r9 + 7 * 16], ymm3, 1
+        ret
+.global blake3_avx512_xof_stream_4
+blake3_avx512_xof_stream_4:
+        vbroadcasti32x4 zmm0, xmmword ptr [rdi]
+        vbroadcasti32x4 zmm1, xmmword ptr [rdi+0x10]
+        vmovdqa32 zmm4, zmmword ptr [INCREMENT_2D+rip]
+        vbroadcasti32x4 zmm2, xmmword ptr [BLAKE3_IV+rip]
+        vpbroadcastq zmm5, rdx
+        vpaddq zmm6, zmm4, zmm5
+        shl r8, 32
+        mov ecx, ecx
+        or rcx, r8
+        vpbroadcastq zmm7, rcx
+        mov eax, 0xAA
+        kmovw k2, eax
+        vpblendmq zmm3 {k2}, zmm6, zmm7
+        vbroadcasti32x4 zmm8, xmmword ptr [rsi]
+        vbroadcasti32x4 zmm9, xmmword ptr [rsi+0x10]
+        vshufps zmm4, zmm8, zmm9, 136
+        vshufps zmm5, zmm8, zmm9, 221
+        vbroadcasti32x4 zmm8, xmmword ptr [rsi+0x20]
+        vbroadcasti32x4 zmm9, xmmword ptr [rsi+0x30]
+        vshufps zmm6, zmm8, zmm9, 136
+        vshufps zmm7, zmm8, zmm9, 221
+        vpshufd zmm6, zmm6, 0x93
+        vpshufd zmm7, zmm7, 0x93
+        call blake3_avx512_kernel2d_4
+        vbroadcasti32x4 zmm4, xmmword ptr [rdi]
+        vpxord zmm2, zmm2, zmm4
+        vbroadcasti32x4 zmm5, xmmword ptr [rdi + 16]
+        vpxord zmm3, zmm3, zmm5
+        vmovdqu xmmword ptr [r9 + 0 * 16], xmm0
+        vmovdqu xmmword ptr [r9 + 1 * 16], xmm1
+        vmovdqu xmmword ptr [r9 + 2 * 16], xmm2
+        vmovdqu xmmword ptr [r9 + 3 * 16], xmm3
+        vextracti32x4 xmmword ptr [r9 + 4 * 16], zmm0, 1
+        vextracti32x4 xmmword ptr [r9 + 5 * 16], zmm1, 1
+        vextracti32x4 xmmword ptr [r9 + 6 * 16], zmm2, 1
+        vextracti32x4 xmmword ptr [r9 + 7 * 16], zmm3, 1
+        vextracti32x4 xmmword ptr [r9 + 8 * 16], zmm0, 2
+        vextracti32x4 xmmword ptr [r9 + 9 * 16], zmm1, 2
+        vextracti32x4 xmmword ptr [r9 + 10 * 16], zmm2, 2
+        vextracti32x4 xmmword ptr [r9 + 11 * 16], zmm3, 2
+        vextracti32x4 xmmword ptr [r9 + 12 * 16], zmm0, 3
+        vextracti32x4 xmmword ptr [r9 + 13 * 16], zmm1, 3
+        vextracti32x4 xmmword ptr [r9 + 14 * 16], zmm2, 3
+        vextracti32x4 xmmword ptr [r9 + 15 * 16], zmm3, 3
         ret
 .balign 16
 BLAKE3_IV:

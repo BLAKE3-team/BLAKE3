@@ -361,8 +361,14 @@ def kernel2d(target, output, degree):
         output.append(f"movaps xmm14, xmmword ptr [ROT8+rip]")
         output.append(f"movaps xmm15, xmmword ptr [ROT16+rip]")
     if target.extension == AVX2:
-        output.append("vbroadcasti128 ymm14, xmmword ptr [ROT16+rip]")
-        output.append("vbroadcasti128 ymm15, xmmword ptr [ROT8+rip]")
+        output.append(f"vbroadcasti128 ymm14, xmmword ptr [ROT16+rip]")
+        output.append(f"vbroadcasti128 ymm15, xmmword ptr [ROT8+rip]")
+    if target.extension == AVX512:
+        if degree == 4:
+            output.append(f"mov {target.scratch32(0)}, 43690")
+            output.append(f"kmovw k3, {target.scratch32(0)}")
+            output.append(f"mov {target.scratch32(0)}, 34952")
+            output.append(f"kmovw k4, {target.scratch32(0)}")
     for round_number in range(7):
         if round_number > 0:
             # Un-diagonalize and permute before each round except the first.
@@ -541,6 +547,39 @@ def xof_setup2d(target, output, degree):
             output.append(f"vshufps ymm7, ymm8, ymm9, 221")
             output.append(f"vpshufd ymm6, ymm6, 0x93")
             output.append(f"vpshufd ymm7, ymm7, 0x93")
+        elif degree == 4:
+            # Load the state words.
+            output.append(f"vbroadcasti32x4 zmm0, xmmword ptr [{target.arg64(0)}]")
+            output.append(f"vbroadcasti32x4 zmm1, xmmword ptr [{target.arg64(0)}+0x10]")
+            # Load the counter increments.
+            output.append(f"vmovdqa32 zmm4, zmmword ptr [INCREMENT_2D+rip]")
+            # Load the IV constants.
+            output.append(f"vbroadcasti32x4 zmm2, xmmword ptr [BLAKE3_IV+rip]")
+            # Broadcast the counter.
+            output.append(f"vpbroadcastq zmm5, {target.arg64(2)}")
+            # Add the counter increments to the counter.
+            output.append(f"vpaddq zmm6, zmm4, zmm5")
+            # Combine the block length and flags into a 64-bit word.
+            output.append(f"shl {target.arg64(4)}, 32")
+            output.append(f"mov {target.arg32(3)}, {target.arg32(3)}")
+            output.append(f"or {target.arg64(3)}, {target.arg64(4)}")
+            # Broadcast the block length and flags.
+            output.append(f"vpbroadcastq zmm7, {target.arg64(3)}")
+            # Blend the counter, block length, and flags.
+            output.append(f"mov {target.scratch32(0)}, 0xAA")
+            output.append(f"kmovw k2, {target.scratch32(0)}")
+            output.append(f"vpblendmq zmm3 {{k2}}, zmm6, zmm7")
+            # Load and permute the message words.
+            output.append(f"vbroadcasti32x4 zmm8, xmmword ptr [{target.arg64(1)}]")
+            output.append(f"vbroadcasti32x4 zmm9, xmmword ptr [{target.arg64(1)}+0x10]")
+            output.append(f"vshufps zmm4, zmm8, zmm9, 136")
+            output.append(f"vshufps zmm5, zmm8, zmm9, 221")
+            output.append(f"vbroadcasti32x4 zmm8, xmmword ptr [{target.arg64(1)}+0x20]")
+            output.append(f"vbroadcasti32x4 zmm9, xmmword ptr [{target.arg64(1)}+0x30]")
+            output.append(f"vshufps zmm6, zmm8, zmm9, 136")
+            output.append(f"vshufps zmm7, zmm8, zmm9, 221")
+            output.append(f"vpshufd zmm6, zmm6, 0x93")
+            output.append(f"vpshufd zmm7, zmm7, 0x93")
         else:
             raise NotImplementedError
     elif target.extension == AVX2:
@@ -632,6 +671,20 @@ def xof_stream_finish2d(target, output, degree):
             output.append(
                 f"vextracti128 xmmword ptr [{target.arg64(5)} + 7 * 16], ymm3, 1"
             )
+        elif degree == 4:
+            output.append(f"vbroadcasti32x4 zmm4, xmmword ptr [{target.arg64(0)}]")
+            output.append(f"vpxord zmm2, zmm2, zmm4")
+            output.append(f"vbroadcasti32x4 zmm5, xmmword ptr [{target.arg64(0)} + 16]")
+            output.append(f"vpxord zmm3, zmm3, zmm5")
+            output.append(f"vmovdqu xmmword ptr [{target.arg64(5)} + 0 * 16], xmm0")
+            output.append(f"vmovdqu xmmword ptr [{target.arg64(5)} + 1 * 16], xmm1")
+            output.append(f"vmovdqu xmmword ptr [{target.arg64(5)} + 2 * 16], xmm2")
+            output.append(f"vmovdqu xmmword ptr [{target.arg64(5)} + 3 * 16], xmm3")
+            for i in range(1, 4):
+                for reg in range(0, 4):
+                    output.append(
+                        f"vextracti32x4 xmmword ptr [{target.arg64(5)} + {4*i+reg} * 16], zmm{reg}, {i}"
+                    )
         else:
             raise NotImplementedError
     elif target.extension == AVX2:
@@ -729,6 +782,7 @@ def emit_avx512(target, output):
     compress(target, output)
     xof_stream(target, output, 1)
     xof_stream(target, output, 2)
+    xof_stream(target, output, 4)
 
 
 def emit_footer(target, output):
