@@ -2456,6 +2456,43 @@ blake3_avx512_xof_stream_1:
         vmovdqu xmmword ptr [r9+0x20], xmm2
         vmovdqu xmmword ptr [r9+0x30], xmm3
         ret
+.global blake3_avx512_xof_stream_2
+blake3_avx512_xof_stream_2:
+        vbroadcasti128 ymm0, xmmword ptr [rdi]
+        vbroadcasti128 ymm1, xmmword ptr [rdi+0x10]
+        vmovdqa ymm4, ymmword ptr [INCREMENT_2D+rip]
+        vbroadcasti128 ymm2, xmmword ptr [BLAKE3_IV+rip]
+        vpbroadcastq ymm5, rdx
+        vpaddq ymm6, ymm4, ymm5
+        shl r8, 32
+        mov ecx, ecx
+        or rcx, r8
+        vpbroadcastq ymm7, rcx
+        vpblendd ymm3, ymm6, ymm7, 0xCC
+        vbroadcasti128 ymm8, xmmword ptr [rsi]
+        vbroadcasti128 ymm9, xmmword ptr [rsi+0x10]
+        vshufps ymm4, ymm8, ymm9, 136
+        vshufps ymm5, ymm8, ymm9, 221
+        vbroadcasti128 ymm8, xmmword ptr [rsi+0x20]
+        vbroadcasti128 ymm9, xmmword ptr [rsi+0x30]
+        vshufps ymm6, ymm8, ymm9, 136
+        vshufps ymm7, ymm8, ymm9, 221
+        vpshufd ymm6, ymm6, 0x93
+        vpshufd ymm7, ymm7, 0x93
+        call blake3_avx512_kernel2d_2
+        vbroadcasti128 ymm4, xmmword ptr [rdi]
+        vpxor ymm2, ymm2, ymm4
+        vbroadcasti128 ymm5, xmmword ptr [rdi + 16]
+        vpxor ymm3, ymm3, ymm5
+        vmovdqu xmmword ptr [r9 + 0 * 16], xmm0
+        vmovdqu xmmword ptr [r9 + 1 * 16], xmm1
+        vmovdqu xmmword ptr [r9 + 2 * 16], xmm2
+        vmovdqu xmmword ptr [r9 + 3 * 16], xmm3
+        vextracti128 xmmword ptr [r9 + 4 * 16], ymm0, 1
+        vextracti128 xmmword ptr [r9 + 5 * 16], ymm1, 1
+        vextracti128 xmmword ptr [r9 + 6 * 16], ymm2, 1
+        vextracti128 xmmword ptr [r9 + 7 * 16], ymm3, 1
+        ret
 .balign 16
 BLAKE3_IV:
 BLAKE3_IV_0:
@@ -2471,3 +2508,6 @@ ROT16:
 .byte  2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13
 ROT8:
 .byte  1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 12
+.balign 64
+INCREMENT_2D:
+.quad  0, 0, 1, 0, 2, 0, 3, 0

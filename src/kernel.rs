@@ -49,6 +49,14 @@ extern "C" {
         flags: u32,
         out: *mut [u8; 64],
     );
+    pub fn blake3_avx512_xof_stream_2(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+        out: *mut [u8; 64 * 2],
+    );
 }
 
 pub type CompressionFn =
@@ -170,7 +178,7 @@ mod test {
     #[test]
     #[cfg(target_arch = "x86_64")]
     fn test_sse41_xof_1() {
-        if !is_x86_feature_detected!("sse2") {
+        if !is_x86_feature_detected!("sse4.1") {
             return;
         }
         test_xof_function(blake3_sse41_xof_stream_1);
@@ -179,10 +187,19 @@ mod test {
     #[test]
     #[cfg(target_arch = "x86_64")]
     fn test_avx512_xof_1() {
-        if !is_x86_feature_detected!("sse2") {
+        if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
             return;
         }
         test_xof_function(blake3_avx512_xof_stream_1);
+    }
+
+    #[test]
+    #[cfg(target_arch = "x86_64")]
+    fn test_avx512_xof_2() {
+        if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
+            return;
+        }
+        test_xof_function(blake3_avx512_xof_stream_2);
     }
 }
 
