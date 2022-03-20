@@ -25,10 +25,43 @@ extern "C" {
         block_len: u32,
         flags: u32,
     );
+    pub fn blake3_sse2_xof_stream_1(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+        out: *mut [u8; 64],
+    );
+    pub fn blake3_sse41_xof_stream_1(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+        out: *mut [u8; 64],
+    );
+    pub fn blake3_avx512_xof_stream_1(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+        out: *mut [u8; 64],
+    );
 }
 
 pub type CompressionFn =
     unsafe extern "C" fn(cv: &[u32; 8], block: &[u8; 64], counter: u64, block_len: u32, flags: u32);
+
+pub type XofStreamFn<const N: usize> = unsafe extern "C" fn(
+    cv: &[u32; 8],
+    block: &[u8; 64],
+    counter: u64,
+    block_len: u32,
+    flags: u32,
+    out: *mut [u8; N],
+);
 
 #[cfg(test)]
 mod test {
@@ -83,6 +116,73 @@ mod test {
             return;
         }
         test_compression_function(blake3_avx512_compress);
+    }
+
+    fn test_xof_function<const N: usize>(f: XofStreamFn<N>) {
+        let mut block = [0; 64];
+        let block_len = 53;
+        crate::test::paint_test_input(&mut block[..block_len]);
+        let counter = u64::MAX - 42;
+        let flags = crate::CHUNK_START | crate::CHUNK_END | crate::ROOT;
+
+        let mut expected = [0; N];
+        let mut incrementing_counter = counter;
+        let mut i = 0;
+        assert_eq!(0, N % 64);
+        while i < N {
+            let out_block: &mut [u8; 64] = (&mut expected[i..][..64]).try_into().unwrap();
+            *out_block = crate::platform::Platform::Portable.compress_xof(
+                crate::IV,
+                &block,
+                block_len as u8,
+                incrementing_counter,
+                flags,
+            );
+            i += 64;
+            incrementing_counter += 1;
+        }
+        assert_eq!(incrementing_counter, counter + N as u64 / 64);
+
+        let mut found = [0; N];
+        unsafe {
+            f(
+                crate::IV,
+                &block,
+                counter,
+                block_len as u32,
+                flags as u32,
+                &mut found,
+            );
+        }
+
+        assert_eq!(expected, found);
+    }
+
+    #[test]
+    #[cfg(target_arch = "x86_64")]
+    fn test_sse2_xof_1() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        test_xof_function(blake3_sse2_xof_stream_1);
+    }
+
+    #[test]
+    #[cfg(target_arch = "x86_64")]
+    fn test_sse41_xof_1() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        test_xof_function(blake3_sse41_xof_stream_1);
+    }
+
+    #[test]
+    #[cfg(target_arch = "x86_64")]
+    fn test_avx512_xof_1() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        test_xof_function(blake3_avx512_xof_stream_1);
     }
 }
 

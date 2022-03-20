@@ -481,6 +481,111 @@ def compress(target, output):
     output.append(target.ret())
 
 
+def xof_setup2d(target, output, degree):
+    if target.extension == AVX512:
+        if degree == 1:
+            # state words
+            output.append(f"vmovdqu xmm0, xmmword ptr [{target.arg64(0)}]")
+            output.append(f"vmovdqu xmm1, xmmword ptr [{target.arg64(0)}+0x10]")
+            # flags
+            output.append(f"shl {target.arg64(4)}, 32")
+            # block length
+            output.append(f"mov {target.arg32(3)}, {target.arg32(3)}")
+            output.append(f"or {target.arg64(3)}, {target.arg64(4)}")
+            # counter
+            output.append(f"vmovq xmm3, {target.arg64(2)}")
+            output.append(f"vmovq xmm4, {target.arg64(3)}")
+            output.append(f"vpunpcklqdq xmm3, xmm3, xmm4")
+            output.append(f"vmovaps xmm2, xmmword ptr [BLAKE3_IV+rip]")
+            # message words
+            # fmt: off
+            output.append(f"vmovups xmm8, xmmword ptr [{target.arg64(1)}]")      # xmm8 = m0 m1 m2 m3
+            output.append(f"vmovups xmm9, xmmword ptr [{target.arg64(1)}+0x10]") # xmm9 = m4 m5 m6 m7
+            output.append(f"vshufps xmm4, xmm8, xmm9, 136")                      # xmm4 = m0 m2 m4 m6
+            output.append(f"vshufps xmm5, xmm8, xmm9, 221")                      # xmm5 = m1 m3 m5 m7
+            output.append(f"vmovups xmm8, xmmword ptr [{target.arg64(1)}+0x20]") # xmm8 = m8 m9 m10 m12
+            output.append(f"vmovups xmm9, xmmword ptr [{target.arg64(1)}+0x30]") # xmm9 = m12 m13 m14 m15
+            output.append(f"vshufps xmm6, xmm8, xmm9, 136")                      # xmm6 = m8 m10 m12 m14
+            output.append(f"vshufps xmm7, xmm8, xmm9, 221")                      # xmm7 = m9 m11 m13 m15
+            output.append(f"vpshufd xmm6, xmm6, 0x93")                           # xmm6 = m14 m8 m10 m12
+            output.append(f"vpshufd xmm7, xmm7, 0x93")                           # xmm7 = m15 m9 m11 m13
+            # fmt: on
+        else:
+            raise NotImplementedError
+    elif target.extension in (SSE41, SSE2):
+        assert degree == 1
+        output.append(f"movups  xmm0, xmmword ptr [{target.arg64(0)}]")
+        output.append(f"movups  xmm1, xmmword ptr [{target.arg64(0)}+0x10]")
+        output.append(f"movaps  xmm2, xmmword ptr [BLAKE3_IV+rip]")
+        output.append(f"shl {target.arg64(4)}, 32")
+        output.append(f"mov {target.arg32(3)}, {target.arg32(3)}")
+        output.append(f"or {target.arg64(3)}, {target.arg64(4)}")
+        output.append(f"vmovq xmm3, {target.arg64(2)}")
+        output.append(f"vmovq xmm4, {target.arg64(3)}")
+        output.append(f"punpcklqdq xmm3, xmm4")
+        output.append(f"movups  xmm4, xmmword ptr [{target.arg64(1)}]")
+        output.append(f"movups  xmm5, xmmword ptr [{target.arg64(1)}+0x10]")
+        output.append(f"movaps  xmm8, xmm4")
+        output.append(f"shufps  xmm4, xmm5, 136")
+        output.append(f"shufps  xmm8, xmm5, 221")
+        output.append(f"movaps  xmm5, xmm8")
+        output.append(f"movups  xmm6, xmmword ptr [{target.arg64(1)}+0x20]")
+        output.append(f"movups  xmm7, xmmword ptr [{target.arg64(1)}+0x30]")
+        output.append(f"movaps  xmm8, xmm6")
+        output.append(f"shufps  xmm6, xmm7, 136")
+        output.append(f"pshufd  xmm6, xmm6, 0x93")
+        output.append(f"shufps  xmm8, xmm7, 221")
+        output.append(f"pshufd  xmm7, xmm8, 0x93")
+    else:
+        raise NotImplementedError
+
+
+def xof_stream_finish2d(target, output, degree):
+    if target.extension == AVX512:
+        if degree == 1:
+            output.append(f"vpxor xmm2, xmm2, [{target.arg64(0)}]")
+            output.append(f"vpxor xmm3, xmm3, [{target.arg64(0)}+0x10]")
+            output.append(f"vmovdqu xmmword ptr [{target.arg64(5)}], xmm0")
+            output.append(f"vmovdqu xmmword ptr [{target.arg64(5)}+0x10], xmm1")
+            output.append(f"vmovdqu xmmword ptr [{target.arg64(5)}+0x20], xmm2")
+            output.append(f"vmovdqu xmmword ptr [{target.arg64(5)}+0x30], xmm3")
+        else:
+            raise NotImplementedError
+    elif target.extension in (SSE41, SSE2):
+        assert degree == 1
+        output.append(f"movdqu xmm4, xmmword ptr [{target.arg64(0)}]")
+        output.append(f"movdqu xmm5, xmmword ptr [{target.arg64(0)}+0x10]")
+        output.append(f"pxor xmm2, xmm4")
+        output.append(f"pxor xmm3, xmm5")
+        output.append(f"movups xmmword ptr [{target.arg64(5)}], xmm0")
+        output.append(f"movups xmmword ptr [{target.arg64(5)}+0x10], xmm1")
+        output.append(f"movups xmmword ptr [{target.arg64(5)}+0x20], xmm2")
+        output.append(f"movups xmmword ptr [{target.arg64(5)}+0x30], xmm3")
+    else:
+        raise NotImplementedError
+
+
+def xof_stream(target, output, degree):
+    label = f"blake3_{target.extension}_xof_stream_{degree}"
+    output.append(f".global {label}")
+    output.append(f"{label}:")
+    if target.extension == AVX512:
+        if degree == 1:
+            xof_setup2d(target, output, degree)
+            output.append(f"call {kernel2d_name(target, degree)}")
+            xof_stream_finish2d(target, output, degree)
+        else:
+            raise NotImplementedError
+    elif target.extension in (SSE41, SSE2):
+        assert degree == 1
+        xof_setup2d(target, output, degree)
+        output.append(f"call {kernel2d_name(target, degree)}")
+        xof_stream_finish2d(target, output, degree)
+    else:
+        raise NotImplementedError
+    output.append(target.ret())
+
+
 def emit_prelude(target, output):
     # output.append(".intel_syntax noprefix")
     pass
@@ -490,6 +595,7 @@ def emit_sse2(target, output):
     target = replace(target, extension=SSE2)
     kernel2d(target, output, 1)
     compress(target, output)
+    xof_stream(target, output, 1)
     output.append(".balign 16")
     output.append("PBLENDW_0x33_MASK:")
     output.append(".long 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF, 0x00000000")
@@ -505,6 +611,7 @@ def emit_sse41(target, output):
     target = replace(target, extension=SSE41)
     kernel2d(target, output, 1)
     compress(target, output)
+    xof_stream(target, output, 1)
 
 
 def emit_avx2(target, output):
@@ -518,6 +625,7 @@ def emit_avx512(target, output):
     kernel2d(target, output, 2)
     kernel2d(target, output, 4)
     compress(target, output)
+    xof_stream(target, output, 1)
 
 
 def emit_footer(target, output):
