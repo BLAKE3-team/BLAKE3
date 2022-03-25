@@ -659,18 +659,10 @@ def xof_stream_finish2d(target, output, degree):
             output.append(f"vmovdqu xmmword ptr [{target.arg64(5)} + 1 * 16], xmm1")
             output.append(f"vmovdqu xmmword ptr [{target.arg64(5)} + 2 * 16], xmm2")
             output.append(f"vmovdqu xmmword ptr [{target.arg64(5)} + 3 * 16], xmm3")
-            output.append(
-                f"vextracti128 xmmword ptr [{target.arg64(5)} + 4 * 16], ymm0, 1"
-            )
-            output.append(
-                f"vextracti128 xmmword ptr [{target.arg64(5)} + 5 * 16], ymm1, 1"
-            )
-            output.append(
-                f"vextracti128 xmmword ptr [{target.arg64(5)} + 6 * 16], ymm2, 1"
-            )
-            output.append(
-                f"vextracti128 xmmword ptr [{target.arg64(5)} + 7 * 16], ymm3, 1"
-            )
+            output.append(f"vextracti128 xmmword ptr [{target.arg64(5)}+4*16], ymm0, 1")
+            output.append(f"vextracti128 xmmword ptr [{target.arg64(5)}+5*16], ymm1, 1")
+            output.append(f"vextracti128 xmmword ptr [{target.arg64(5)}+6*16], ymm2, 1")
+            output.append(f"vextracti128 xmmword ptr [{target.arg64(5)}+7*16], ymm3, 1")
         elif degree == 4:
             output.append(f"vbroadcasti32x4 zmm4, xmmword ptr [{target.arg64(0)}]")
             output.append(f"vpxord zmm2, zmm2, zmm4")
@@ -714,27 +706,165 @@ def xof_stream_finish2d(target, output, degree):
         raise NotImplementedError
 
 
-def xof_stream(target, output, degree):
-    label = f"blake3_{target.extension}_xof_stream_{degree}"
+def xof_xor_finish2d(target, output, degree):
+    if target.extension == AVX512:
+        if degree == 1:
+            output.append(f"vpxor xmm2, xmm2, [{target.arg64(0)}]")
+            output.append(f"vpxor xmm3, xmm3, [{target.arg64(0)}+0x10]")
+            output.append(f"vpxor xmm0, xmm0, [{target.arg64(5)}]")
+            output.append(f"vpxor xmm1, xmm1, [{target.arg64(5)}+0x10]")
+            output.append(f"vpxor xmm2, xmm2, [{target.arg64(5)}+0x20]")
+            output.append(f"vpxor xmm3, xmm3, [{target.arg64(5)}+0x30]")
+            output.append(f"vmovdqu xmmword ptr [{target.arg64(5)}], xmm0")
+            output.append(f"vmovdqu xmmword ptr [{target.arg64(5)}+0x10], xmm1")
+            output.append(f"vmovdqu xmmword ptr [{target.arg64(5)}+0x20], xmm2")
+            output.append(f"vmovdqu xmmword ptr [{target.arg64(5)}+0x30], xmm3")
+        elif degree == 2:
+            output.append(f"vbroadcasti128 ymm4, xmmword ptr [{target.arg64(0)}]")
+            output.append(f"vpxor ymm2, ymm2, ymm4")
+            output.append(f"vbroadcasti128 ymm5, xmmword ptr [{target.arg64(0)} + 16]")
+            output.append(f"vpxor ymm3, ymm3, ymm5")
+            # Each vector now holds rows from two different states:
+            # ymm0:  a0,  a1,  a2,  a3,  b0,  b1,  b2,  b3
+            # ymm1:  a4,  a5,  a6,  a7,  b4,  b5,  b6,  b7
+            # ymm2:  a8,  a9, a10, a11,  b8,  b9, b10, b11
+            # ymm3: a12, a13, a14, a15, b12, b13, b14, b15
+            # We want to rearrange the 128-bit lanes like this, so we can load
+            # destination bytes and XOR them in directly.
+            # ymm4:  a0,  a1,  a2,  a3,  a4,  a5,  a6,  a7
+            # ymm5:  a8,  a9, a10, a11, a12, a13, a14, a15
+            # ymm6:  b0,  b1,  b2,  b3,  b4,  b5,  b6,  b7
+            # ymm7:  b8,  b9, b10, b11, b12, b13, b14, b15
+            output.append(f"vperm2f128 ymm4, ymm0, ymm1, {0b0010_0000}")  # lower 128
+            output.append(f"vperm2f128 ymm5, ymm2, ymm3, {0b0010_0000}")
+            output.append(f"vperm2f128 ymm6, ymm0, ymm1, {0b0011_0001}")  # upper 128
+            output.append(f"vperm2f128 ymm7, ymm2, ymm3, {0b0011_0001}")
+            # XOR in the bytes that are already in the destination.
+            output.append(f"vpxor ymm4, ymm4, ymmword ptr [{target.arg64(5)} + 0 * 32]")
+            output.append(f"vpxor ymm5, ymm5, ymmword ptr [{target.arg64(5)} + 1 * 32]")
+            output.append(f"vpxor ymm6, ymm6, ymmword ptr [{target.arg64(5)} + 2 * 32]")
+            output.append(f"vpxor ymm7, ymm7, ymmword ptr [{target.arg64(5)} + 3 * 32]")
+            # Write out the XOR results.
+            output.append(f"vmovdqu ymmword ptr [{target.arg64(5)} + 0 * 32], ymm4")
+            output.append(f"vmovdqu ymmword ptr [{target.arg64(5)} + 1 * 32], ymm5")
+            output.append(f"vmovdqu ymmword ptr [{target.arg64(5)} + 2 * 32], ymm6")
+            output.append(f"vmovdqu ymmword ptr [{target.arg64(5)} + 3 * 32], ymm7")
+        elif degree == 4:
+            output.append(f"vbroadcasti32x4 zmm4, xmmword ptr [{target.arg64(0)}]")
+            output.append(f"vpxord zmm2, zmm2, zmm4")
+            output.append(f"vbroadcasti32x4 zmm5, xmmword ptr [{target.arg64(0)} + 16]")
+            output.append(f"vpxord zmm3, zmm3, zmm5")
+            # Each vector now holds rows from four different states:
+            # zmm0:  a0,  a1,  a2,  a3,  b0,  b1,  b2,  b3,  c0,  c1,  c2,  c3,  d0,  d1,  d2,  d3
+            # zmm1:  a4,  a5,  a6,  a7,  b4,  b5,  b6,  b7,  c4,  c5,  c6,  c7,  d4,  d5,  d6,  d7
+            # zmm2:  a8,  a9, a10, a11,  b8,  b9, b10, b11,  c8,  c9, c10, c11,  d8,  d9, d10, d11
+            # zmm3: a12, a13, a14, a15, b12, b13, b14, b15, c12, c13, c14, c15, d12, d13, d14, d15
+            # We want to rearrange the 128-bit lanes like this, so we can load
+            # destination bytes and XOR them in directly.
+            # zmm0:  a0,  a1,  a2,  a3,  a4,  a5,  a6,  a7,  a8,  a9, a10, a11, a12, a13, a14, a15
+            # zmm1:  b0,  b1,  b2,  b3,  b4,  b5,  b6,  b7,  b8,  b9, b10, b11, b12, b13, b14, b15
+            # zmm2:  c0,  c1,  c2,  c3,  c4,  c5,  c6,  c7,  c8,  c9, c10, c11, c12, c13, c14, c15
+            # zmm3:  d0,  d1,  d2,  d3,  d4,  d5,  d6,  d7,  d8,  d9, d10, d11, d12, d13, d14, d15
+            #
+            # This first interleaving of 256-bit lanes produces vectors like:
+            # zmm4:  a0,  a1,  a2,  a3,  b0,  b1,  b2,  b3,  a4,  a5,  a6,  a7,  b4,  b5,  b6,  b7
+            output.append(f"vshufi32x4 zmm4, zmm0, zmm1, {0b0100_0100}")  # low 256
+            output.append(f"vshufi32x4 zmm5, zmm0, zmm1, {0b1110_1110}")  # high 256
+            output.append(f"vshufi32x4 zmm6, zmm2, zmm3, {0b0100_0100}")
+            output.append(f"vshufi32x4 zmm7, zmm2, zmm3, {0b1110_1110}")
+            # And this second interleaving of 128-bit lanes within each 256-bit
+            # lane produces the vectors we want.
+            output.append(f"vshufi32x4 zmm0, zmm4, zmm6, {0b1000_1000}")  # low 128
+            output.append(f"vshufi32x4 zmm1, zmm4, zmm6, {0b1101_1101}")  # high 128
+            output.append(f"vshufi32x4 zmm2, zmm5, zmm7, {0b1000_1000}")
+            output.append(f"vshufi32x4 zmm3, zmm5, zmm7, {0b1101_1101}")
+            # XOR in the bytes that are already in the destination.
+            output.append(f"vpxord zmm0, zmm0, zmmword ptr [{target.arg64(5)} + 0*64]")
+            output.append(f"vpxord zmm1, zmm1, zmmword ptr [{target.arg64(5)} + 1*64]")
+            output.append(f"vpxord zmm2, zmm2, zmmword ptr [{target.arg64(5)} + 2*64]")
+            output.append(f"vpxord zmm3, zmm3, zmmword ptr [{target.arg64(5)} + 3*64]")
+            # Write out the XOR results.
+            output.append(f"vmovdqu32 zmmword ptr [{target.arg64(5)} + 0*64], zmm0")
+            output.append(f"vmovdqu32 zmmword ptr [{target.arg64(5)} + 1*64], zmm1")
+            output.append(f"vmovdqu32 zmmword ptr [{target.arg64(5)} + 2*64], zmm2")
+            output.append(f"vmovdqu32 zmmword ptr [{target.arg64(5)} + 3*64], zmm3")
+        else:
+            raise NotImplementedError
+    elif target.extension == AVX2:
+        output.append(f"vbroadcasti128 ymm4, xmmword ptr [{target.arg64(0)}]")
+        output.append(f"vpxor ymm2, ymm2, ymm4")
+        output.append(f"vbroadcasti128 ymm5, xmmword ptr [{target.arg64(0)} + 16]")
+        output.append(f"vpxor ymm3, ymm3, ymm5")
+        # Each vector now holds rows from two different states:
+        # ymm0:  a0,  a1,  a2,  a3,  b0,  b1,  b2,  b3
+        # ymm1:  a4,  a5,  a6,  a7,  b4,  b5,  b6,  b7
+        # ymm2:  a8,  a9, a10, a11,  b8,  b9, b10, b11
+        # ymm3: a12, a13, a14, a15, b12, b13, b14, b15
+        # We want to rearrange the 128-bit lanes like this, so we can load
+        # destination bytes and XOR them in directly.
+        # ymm4:  a0,  a1,  a2,  a3,  a4,  a5,  a6,  a7
+        # ymm5:  a8,  a9, a10, a11, a12, a13, a14, a15
+        # ymm6:  b0,  b1,  b2,  b3,  b4,  b5,  b6,  b7
+        # ymm7:  b8,  b9, b10, b11, b12, b13, b14, b15
+        output.append(f"vperm2f128 ymm4, ymm0, ymm1, {0b0010_0000}")  # lower 128
+        output.append(f"vperm2f128 ymm5, ymm2, ymm3, {0b0010_0000}")
+        output.append(f"vperm2f128 ymm6, ymm0, ymm1, {0b0011_0001}")  # upper 128
+        output.append(f"vperm2f128 ymm7, ymm2, ymm3, {0b0011_0001}")
+        # XOR in the bytes that are already in the destination.
+        output.append(f"vpxor ymm4, ymm4, ymmword ptr [{target.arg64(5)} + 0 * 32]")
+        output.append(f"vpxor ymm5, ymm5, ymmword ptr [{target.arg64(5)} + 1 * 32]")
+        output.append(f"vpxor ymm6, ymm6, ymmword ptr [{target.arg64(5)} + 2 * 32]")
+        output.append(f"vpxor ymm7, ymm7, ymmword ptr [{target.arg64(5)} + 3 * 32]")
+        # Write out the XOR results.
+        output.append(f"vmovdqu ymmword ptr [{target.arg64(5)} + 0 * 32], ymm4")
+        output.append(f"vmovdqu ymmword ptr [{target.arg64(5)} + 1 * 32], ymm5")
+        output.append(f"vmovdqu ymmword ptr [{target.arg64(5)} + 2 * 32], ymm6")
+        output.append(f"vmovdqu ymmword ptr [{target.arg64(5)} + 3 * 32], ymm7")
+    elif target.extension in (SSE41, SSE2):
+        assert degree == 1
+        output.append(f"movdqu xmm4, xmmword ptr [{target.arg64(0)}]")
+        output.append(f"movdqu xmm5, xmmword ptr [{target.arg64(0)}+0x10]")
+        output.append(f"pxor xmm2, xmm4")
+        output.append(f"pxor xmm3, xmm5")
+        output.append(f"movdqu xmm4, [{target.arg64(5)}]")
+        output.append(f"movdqu xmm5, [{target.arg64(5)}+0x10]")
+        output.append(f"movdqu xmm6, [{target.arg64(5)}+0x20]")
+        output.append(f"movdqu xmm7, [{target.arg64(5)}+0x30]")
+        output.append(f"pxor xmm0, xmm4")
+        output.append(f"pxor xmm1, xmm5")
+        output.append(f"pxor xmm2, xmm6")
+        output.append(f"pxor xmm3, xmm7")
+        output.append(f"movups xmmword ptr [{target.arg64(5)}], xmm0")
+        output.append(f"movups xmmword ptr [{target.arg64(5)}+0x10], xmm1")
+        output.append(f"movups xmmword ptr [{target.arg64(5)}+0x20], xmm2")
+        output.append(f"movups xmmword ptr [{target.arg64(5)}+0x30], xmm3")
+    else:
+        raise NotImplementedError
+
+
+def xof_fn(target, output, degree, xor):
+    variant = "xor" if xor else "stream"
+    finish_fn_2d = xof_xor_finish2d if xor else xof_stream_finish2d
+    label = f"blake3_{target.extension}_xof_{variant}_{degree}"
     output.append(f".global {label}")
     output.append(f"{label}:")
     if target.extension == AVX512:
         if degree in (1, 2, 4):
             xof_setup2d(target, output, degree)
             output.append(f"call {kernel2d_name(target, degree)}")
-            xof_stream_finish2d(target, output, degree)
+            finish_fn_2d(target, output, degree)
         else:
             raise NotImplementedError
     elif target.extension == AVX2:
         assert degree == 2
         xof_setup2d(target, output, degree)
         output.append(f"call {kernel2d_name(target, degree)}")
-        xof_stream_finish2d(target, output, degree)
+        finish_fn_2d(target, output, degree)
     elif target.extension in (SSE41, SSE2):
         assert degree == 1
         xof_setup2d(target, output, degree)
         output.append(f"call {kernel2d_name(target, degree)}")
-        xof_stream_finish2d(target, output, degree)
+        finish_fn_2d(target, output, degree)
     else:
         raise NotImplementedError
     output.append(target.ret())
@@ -749,7 +879,8 @@ def emit_sse2(target, output):
     target = replace(target, extension=SSE2)
     kernel2d(target, output, 1)
     compress(target, output)
-    xof_stream(target, output, 1)
+    xof_fn(target, output, 1, xor=False)
+    xof_fn(target, output, 1, xor=True)
     output.append(".balign 16")
     output.append("PBLENDW_0x33_MASK:")
     output.append(".long 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF, 0x00000000")
@@ -765,13 +896,15 @@ def emit_sse41(target, output):
     target = replace(target, extension=SSE41)
     kernel2d(target, output, 1)
     compress(target, output)
-    xof_stream(target, output, 1)
+    xof_fn(target, output, 1, xor=False)
+    xof_fn(target, output, 1, xor=True)
 
 
 def emit_avx2(target, output):
     target = replace(target, extension=AVX2)
     kernel2d(target, output, 2)
-    xof_stream(target, output, 2)
+    xof_fn(target, output, 2, xor=False)
+    xof_fn(target, output, 2, xor=True)
 
 
 def emit_avx512(target, output):
@@ -780,9 +913,12 @@ def emit_avx512(target, output):
     kernel2d(target, output, 2)
     kernel2d(target, output, 4)
     compress(target, output)
-    xof_stream(target, output, 1)
-    xof_stream(target, output, 2)
-    xof_stream(target, output, 4)
+    xof_fn(target, output, 1, xor=False)
+    xof_fn(target, output, 1, xor=True)
+    xof_fn(target, output, 2, xor=False)
+    xof_fn(target, output, 2, xor=True)
+    xof_fn(target, output, 4, xor=False)
+    xof_fn(target, output, 4, xor=True)
 
 
 def emit_footer(target, output):

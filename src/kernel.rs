@@ -73,6 +73,54 @@ extern "C" {
         flags: u32,
         out: *mut [u8; 64 * 4],
     );
+    pub fn blake3_sse2_xof_xor_1(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+        out: &mut [u8; 64],
+    );
+    pub fn blake3_sse41_xof_xor_1(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+        out: &mut [u8; 64],
+    );
+    pub fn blake3_avx512_xof_xor_1(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+        out: &mut [u8; 64],
+    );
+    pub fn blake3_avx2_xof_xor_2(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+        out: &mut [u8; 64 * 2],
+    );
+    pub fn blake3_avx512_xof_xor_2(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+        out: &mut [u8; 64 * 2],
+    );
+    pub fn blake3_avx512_xof_xor_4(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+        out: &mut [u8; 64 * 4],
+    );
 }
 
 pub type CompressionFn =
@@ -85,6 +133,15 @@ pub type XofStreamFn<const N: usize> = unsafe extern "C" fn(
     block_len: u32,
     flags: u32,
     out: *mut [u8; N],
+);
+
+pub type XofXorFn<const N: usize> = unsafe extern "C" fn(
+    cv: &[u32; 8],
+    block: &[u8; 64],
+    counter: u64,
+    block_len: u32,
+    flags: u32,
+    out: &mut [u8; N],
 );
 
 #[cfg(test)]
@@ -142,13 +199,14 @@ mod test {
         test_compression_function(blake3_avx512_compress);
     }
 
-    fn test_xof_function<const N: usize>(f: XofStreamFn<N>) {
+    fn test_xof_functions<const N: usize>(stream_fn: XofStreamFn<N>, xor_fn: XofXorFn<N>) {
         let mut block = [0; 64];
         let block_len = 53;
         crate::test::paint_test_input(&mut block[..block_len]);
         let counter = u32::MAX as u64;
         let flags = crate::CHUNK_START | crate::CHUNK_END | crate::ROOT;
 
+        // First compute the expected stream.
         let mut expected = [0; N];
         let mut incrementing_counter = counter;
         let mut i = 0;
@@ -167,9 +225,11 @@ mod test {
         }
         assert_eq!(incrementing_counter, counter + N as u64 / 64);
 
-        let mut found = [0; N];
+        // And compare that to the stream under test. The 0x42 bytes are there to make sure we
+        // overwrite them.
+        let mut found = [0x42; N];
         unsafe {
-            f(
+            stream_fn(
                 crate::IV,
                 &block,
                 counter,
@@ -178,8 +238,24 @@ mod test {
                 &mut found,
             );
         }
-
         assert_eq!(expected, found);
+
+        // XOR 0x99 bytes into the found stream. Then run the xof_xor variant on that stream again.
+        // This should cancel out the original stream, leaving only the 0x99 bytes.
+        for b in &mut found {
+            *b ^= 0x99;
+        }
+        unsafe {
+            xor_fn(
+                crate::IV,
+                &block,
+                counter,
+                block_len as u32,
+                flags as u32,
+                &mut found,
+            );
+        }
+        assert_eq!([0x99; N], found);
     }
 
     #[test]
@@ -188,7 +264,7 @@ mod test {
         if !is_x86_feature_detected!("sse2") {
             return;
         }
-        test_xof_function(blake3_sse2_xof_stream_1);
+        test_xof_functions(blake3_sse2_xof_stream_1, blake3_sse2_xof_xor_1);
     }
 
     #[test]
@@ -197,7 +273,7 @@ mod test {
         if !is_x86_feature_detected!("sse4.1") {
             return;
         }
-        test_xof_function(blake3_sse41_xof_stream_1);
+        test_xof_functions(blake3_sse41_xof_stream_1, blake3_sse41_xof_xor_1);
     }
 
     #[test]
@@ -206,7 +282,7 @@ mod test {
         if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
             return;
         }
-        test_xof_function(blake3_avx512_xof_stream_1);
+        test_xof_functions(blake3_avx512_xof_stream_1, blake3_avx512_xof_xor_1);
     }
 
     #[test]
@@ -215,7 +291,7 @@ mod test {
         if !is_x86_feature_detected!("avx2") {
             return;
         }
-        test_xof_function(blake3_avx2_xof_stream_2);
+        test_xof_functions(blake3_avx2_xof_stream_2, blake3_avx2_xof_xor_2);
     }
 
     #[test]
@@ -224,7 +300,7 @@ mod test {
         if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
             return;
         }
-        test_xof_function(blake3_avx512_xof_stream_2);
+        test_xof_functions(blake3_avx512_xof_stream_2, blake3_avx512_xof_xor_2);
     }
 
     #[test]
@@ -233,7 +309,7 @@ mod test {
         if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
             return;
         }
-        test_xof_function(blake3_avx512_xof_stream_4);
+        test_xof_functions(blake3_avx512_xof_stream_4, blake3_avx512_xof_xor_4);
     }
 }
 
