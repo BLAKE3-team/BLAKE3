@@ -1,5 +1,5 @@
 use anyhow::{bail, ensure, Context, Result};
-use clap::{App, Arg};
+use clap::{Arg, Command};
 use std::cmp;
 use std::convert::TryInto;
 use std::fs::File;
@@ -31,7 +31,7 @@ struct Args {
 
 impl Args {
     fn parse() -> Result<Self> {
-        let inner = App::new(NAME)
+        let inner = Command::new(NAME)
             .version(env!("CARGO_PKG_VERSION"))
             .arg(
                 Arg::new(FILE_ARG)
