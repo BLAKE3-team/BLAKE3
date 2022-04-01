@@ -73,6 +73,14 @@ extern "C" {
         flags: u32,
         out: *mut [u8; 64 * 4],
     );
+    pub fn blake3_avx512_xof_stream_16(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+        out: *mut [u8; 64 * 16],
+    );
     pub fn blake3_sse2_xof_xor_1(
         cv: &[u32; 8],
         block: &[u8; 64],
@@ -120,6 +128,14 @@ extern "C" {
         block_len: u32,
         flags: u32,
         out: &mut [u8; 64 * 4],
+    );
+    pub fn blake3_avx512_xof_xor_16(
+        cv: &[u32; 8],
+        block: &[u8; 64],
+        counter: u64,
+        block_len: u32,
+        flags: u32,
+        out: &mut [u8; 64 * 16],
     );
 }
 
@@ -310,6 +326,15 @@ mod test {
             return;
         }
         test_xof_functions(blake3_avx512_xof_stream_4, blake3_avx512_xof_xor_4);
+    }
+
+    #[test]
+    #[cfg(target_arch = "x86_64")]
+    fn test_avx512_xof_16() {
+        if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
+            return;
+        }
+        test_xof_functions(blake3_avx512_xof_stream_16, blake3_avx512_xof_xor_16);
     }
 }
 
@@ -2618,7 +2643,7 @@ global_asm!(
     "ret",
     //
     // --------------------------------------------------------------------------------------------
-    // blake3_avx512_xof_stream_16
+    // blake3_avx512_xof_stream_16_ORIGINAL
     //
     // zmm0-zmm31: [clobbered]
     // rdi: pointer to the 16-word message block, 4-byte aligned
@@ -2631,7 +2656,7 @@ global_asm!(
     // This routine performs the root compression for 16 consecutive output blocks and writes 1024
     // bytes of output to the out pointer.
     // --------------------------------------------------------------------------------------------
-    "blake3_avx512_xof_stream_16:",
+    "blake3_avx512_xof_stream_16_ORIGINAL:",
     // Broadcast the input CV into zmm0-zmm7, the first two rows of the state.
     "vpbroadcastd zmm0, dword ptr [rsi + 0 * 4]",
     "vpbroadcastd zmm1, dword ptr [rsi + 1 * 4]",
@@ -2801,7 +2826,7 @@ global_asm!(
     "ret",
     //
     // --------------------------------------------------------------------------------------------
-    // blake3_avx512_xof_xor_16
+    // blake3_avx512_xof_xor_16_ORIGINAL
     //
     // zmm0-zmm31: [clobbered]
     // rdi: pointer to the 16-word message block, 4-byte aligned
@@ -2814,7 +2839,7 @@ global_asm!(
     // This routine performs the root compression for 16 consecutive output blocks and xor's 1024
     // bytes of output into the inout pointer.
     // --------------------------------------------------------------------------------------------
-    "blake3_avx512_xof_xor_16:",
+    "blake3_avx512_xof_xor_16_ORIGINAL:",
     // Broadcast the input CV into zmm0-zmm7, the first two rows of the state.
     "vpbroadcastd zmm0, dword ptr [rsi + 0 * 4]",
     "vpbroadcastd zmm1, dword ptr [rsi + 1 * 4]",
@@ -3143,7 +3168,7 @@ pub unsafe fn xof_stream16(
         counter_vectors[1].0[i] = ((counter + i as u64) >> 32) as u32;
     }
     asm!(
-        "call blake3_avx512_xof_stream_16",
+        "call blake3_avx512_xof_stream_16_ORIGINAL",
         inout("rdi") message_words => _,
         inout("rsi") cv_words => _,
         inout("rdx") &counter_vectors => _,
@@ -3176,7 +3201,7 @@ pub unsafe fn xof_xor16(
         counter_vectors[1].0[i] = ((counter + i as u64) >> 32) as u32;
     }
     asm!(
-        "call blake3_avx512_xof_xor_16",
+        "call blake3_avx512_xof_xor_16_ORIGINAL",
         inout("rdi") message_words => _,
         inout("rsi") cv_words => _,
         inout("rdx") &counter_vectors => _,
