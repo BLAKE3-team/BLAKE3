@@ -13,7 +13,7 @@ result:
 #include <string.h>
 #include <unistd.h>
 
-int main() {
+int main(void) {
   // Initialize the hasher.
   blake3_hasher hasher;
   blake3_hasher_init(&hasher);
