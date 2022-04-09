@@ -17,7 +17,7 @@
 #define MAYBE_UNUSED(x) (void)((x))
 
 #if defined(IS_X86)
-static uint64_t xgetbv() {
+static uint64_t xgetbv(void) {
 #if defined(_MSC_VER)
   return _xgetbv(0);
 #else
@@ -82,7 +82,7 @@ static /* Allow the variable to be controlled manually for testing */
 static
 #endif
     enum cpu_feature
-    get_cpu_features() {
+    get_cpu_features(void) {
 
   if (g_cpu_features != UNDEFINED) {
     return g_cpu_features;
