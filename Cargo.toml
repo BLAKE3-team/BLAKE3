@@ -23,7 +23,7 @@ neon = []
 # --no-default-features, the only way to use the SIMD implementations in this
 # crate is to enable the corresponding instruction sets statically for the
 # entire build, with e.g. RUSTFLAGS="-C target-cpu=native".
-std = ["digest/std"]
+std = ["digest?/std"]
 
 # The "rayon" feature (defined below as an optional dependency) enables the
 # `Hasher::update_rayon` method, for multithreaded hashing. However, even if
