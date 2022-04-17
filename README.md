@@ -196,6 +196,21 @@ is copyright Samuel Neves, 2019-2020.
 This work is released into the public domain with CC0 1.0.
 Alternatively, it is licensed under the Apache License 2.0.
 
+## Usage & deployment
+
+Here's a (non-exhaustive) list of protocols and software that use BLAKE3:
+
+* [Chia](https://github.com/Chia-Network/chia-blockchain/blob/main/CHANGELOG.md#10beta8-aka-beta-18---2020-07-16)
+* [IPFS](https://github.com/ipfs/go-verifcid/issues/13)
+* [LLVM](https://reviews.llvm.org/D121510)
+* [Nym](https://github.com/nymtech/nym/blob/59056a22c5e6b01a38da2124662bd1fa3c8abef2/common/nymsphinx/params/src/lib.rs#L5)
+* [OpenZFS](https://github.com/openzfs/zfs/pull/11897)
+* [Redox](https://www.redox-os.org/news/pkgar-introduction/)
+* [Skale](https://github.com/skalenetwork/skale-consensus/pull/284)
+* [Solana](https://docs.rs/solana-program/1.9.5/solana_program/blake3/index.html)
+* [Wasmer](https://github.com/wasmerio/wasmer/blob/4f935a8c162bf604df223003e434e4f7ca253688/lib/cache/src/hash.rs#L21)
+
+
 ## Miscellany
 
 - [@veorq](https://github.com/veorq) and
