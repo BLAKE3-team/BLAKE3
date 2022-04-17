@@ -196,7 +196,7 @@ is copyright Samuel Neves, 2019-2020.
 This work is released into the public domain with CC0 1.0.
 Alternatively, it is licensed under the Apache License 2.0.
 
-## Usage & deployment
+## Adoption & deployment
 
 Here's a (non-exhaustive) list of protocols and software that use BLAKE3:
 
