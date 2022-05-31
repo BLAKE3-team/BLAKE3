@@ -38,7 +38,7 @@ enum blake3_flags {
 #define IS_X86_32
 #endif
 
-#if defined(__aarch64__) || defined(_M_ARM64)
+#if defined(__aarch64__) || defined(_M_ARM64) || defined(__arm64__)
 #define IS_AARCH64
 #endif
 
