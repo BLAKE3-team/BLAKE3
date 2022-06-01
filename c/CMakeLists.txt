@@ -15,12 +15,14 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64)
   list(APPEND blake3_SOURCES
     blake3_avx2_x86-64_unix.S
     blake3_avx512_x86-64_unix.S
-    blake3_sse41_x86-64_unix.S)
+    blake3_sse41_x86-64_unix.S
+    blake3_sse2_x86-64_unix.S)
 elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL i686)
   list(APPEND blake3_SOURCES
     blake3_avx2.c
     blake3_avx512.c
-    blake3_sse41.c)
+    blake3_sse41.c
+    blake3_sse2.c)
   set_source_files_properties(blake3_avx2.c PROPERTIES COMPILE_FLAGS -mavx2)
   set_source_files_properties(blake3_avx512.c PROPERTIES COMPILE_FLAGS "-mavx512f -mavx512vl")
   set_source_files_properties(blake3_sse41.c PROPERTIES COMPILE_FLAGS -msse4.1)
@@ -39,7 +41,7 @@ add_library(blake3-shared SHARED ${blake3_SOURCES})
 set_target_properties(blake3-shared PROPERTIES VERSION ${PROJECT_VERSION})
 set_target_properties(blake3-shared PROPERTIES SOVERSION 0)
 set_target_properties(blake3-shared PROPERTIES PUBLIC_HEADER blake3.h)
-target_include_directories(blake3-shared PRIVATE .)
+target_include_directories(blake3-shared PUBLIC .)
 install(TARGETS blake3-shared
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
@@ -50,7 +52,7 @@ set_target_properties(blake3-static PROPERTIES VERSION ${PROJECT_VERSION})
 set_target_properties(blake3-static PROPERTIES SOVERSION 0)
 set_target_properties(blake3-static PROPERTIES PUBLIC_HEADER blake3.h)
 set_target_properties(blake3-static PROPERTIES COMPILE_FLAGS -fPIC)
-target_include_directories(blake3-static PRIVATE .)
+target_include_directories(blake3-static PUBLIC .)
 install(TARGETS blake3-static
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
