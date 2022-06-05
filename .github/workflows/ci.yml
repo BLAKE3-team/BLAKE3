@@ -233,3 +233,19 @@ jobs:
     - name: build b3sum
       run: cargo build --target aarch64-apple-darwin
       working-directory: ./b3sum
+
+  cmake_tests:
+    name: CMake ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "macOS-latest", "windows-latest"]
+    steps:
+    - uses: actions/checkout@v3
+    - name: CMake generate
+      run: cmake .
+      working-directory: ./c
+    - name: CMake build
+      run: cmake --build .
+      working-directory: ./c
