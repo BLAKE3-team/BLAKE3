@@ -15,22 +15,20 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64)
   list(APPEND blake3_SOURCES
     blake3_avx2_x86-64_unix.S
     blake3_avx512_x86-64_unix.S
-    blake3_sse41_x86-64_unix.S
-    blake3_sse2_x86-64_unix.S)
+    blake3_sse41_x86-64_unix.S)
 elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL i686)
   list(APPEND blake3_SOURCES
     blake3_avx2.c
     blake3_avx512.c
-    blake3_sse41.c
-    blake3_sse2.c)
+    blake3_sse41.c)
   set_source_files_properties(blake3_avx2.c PROPERTIES COMPILE_FLAGS -mavx2)
   set_source_files_properties(blake3_avx512.c PROPERTIES COMPILE_FLAGS "-mavx512f -mavx512vl")
   set_source_files_properties(blake3_sse41.c PROPERTIES COMPILE_FLAGS -msse4.1)
 elseif((ANDROID_ABI STREQUAL armeabi-v7a) OR
-       (CMAKE_SYSTEM_PROCESSOR STREQUAL aarch64))
+       (CMAKE_SYSTEM_PROCESSOR STREQUAL aarch64) OR (CMAKE_SYSTEM_PROCESSOR STREQUAL arm64))
   list(APPEND blake3_SOURCES blake3_neon.c)
-  set_source_files_properties(blake3_neon.c PROPERTIES COMPILE_FLAGS -mfpu=neon)
   set_source_files_properties(blake3_dispatch.c PROPERTIES COMPILE_FLAGS -DBLAKE3_USE_NEON=1)
+  set_source_files_properties(blake3_neon.c PROPERTIES COMPILE_FLAGS -mfpu=neon)
 endif()
 
 configure_file(libblake3.pc.in libblake3.pc @ONLY)
