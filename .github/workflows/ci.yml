@@ -275,3 +275,20 @@ jobs:
           curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
           cd /work
           ~/.cargo/bin/cargo test --features prefer_intrinsics
+
+  # CMake build test (Library only), current macOS/Linux only.
+  cmake_build:
+      name: CMake ${{ matrix.target.os }}
+      runs-on: ${{ matrix.target.os }}
+      strategy:
+        fail-fast: false
+        matrix:
+          os: ["ubuntu-latest", "macOS-latest"]
+      steps:
+      - uses: actions/checkout@v3
+      - name: CMake generation
+        run: cmake . -Bbuild
+        working-directory: ./c
+      - name: CMake build
+        run: cmake --build build/
+        working-directory: ./c
