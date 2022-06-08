@@ -21,7 +21,7 @@
 //! let mut output = [0; 1000];
 //! let mut output_reader = hasher.finalize_xof();
 //! output_reader.fill(&mut output);
-//! assert_eq!(&output[..32], hash1.as_bytes());
+//! assert_eq!(hash1, output[..32]);
 //! # }
 //!
 //! // Print a hash as hex.
