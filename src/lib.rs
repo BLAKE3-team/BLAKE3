@@ -939,6 +939,8 @@ fn parent_node_output(
 pub struct Hasher {
     key: CVWords,
     chunk_state: ChunkState,
+    // Always zero, unless you use guts::set_offset to change it.
+    initial_chunk_counter: u64,
     // The stack size is MAX_DEPTH + 1 because we do lazy merging. For example,
     // with 7 chunks, we have 3 entries in the stack. Adding an 8th chunk
     // requires a 4th entry, rather than merging everything down to 1, because
@@ -952,6 +954,7 @@ impl Hasher {
         Self {
             key: *key,
             chunk_state: ChunkState::new(key, 0, flags, Platform::detect()),
+            initial_chunk_counter: 0,
             cv_stack: ArrayVec::new(),
         }
     }
@@ -998,6 +1001,10 @@ impl Hasher {
         self
     }
 
+    fn chunks_in_cv_stack(&self) -> u64 {
+        self.chunk_state.chunk_counter - self.initial_chunk_counter
+    }
+
     // As described in push_cv() below, we do "lazy merging", delaying merges
     // until right before the next CV is about to be added. This is different
     // from the reference implementation. Another difference is that we aren't
@@ -1009,8 +1016,8 @@ impl Hasher {
     // the CV on top of the stack. The principle is the same: each CV that
     // should remain in the stack is represented by a 1-bit in the total number
     // of chunks (or bytes) so far.
-    fn merge_cv_stack(&mut self, total_len: u64) {
-        let post_merge_stack_len = total_len.count_ones() as usize;
+    fn merge_cv_stack(&mut self) {
+        let post_merge_stack_len = self.chunks_in_cv_stack().count_ones() as usize;
         while self.cv_stack.len() > post_merge_stack_len {
             let right_child = self.cv_stack.pop().unwrap();
             let left_child = self.cv_stack.pop().unwrap();
@@ -1058,9 +1065,10 @@ impl Hasher {
     // merging with each of them separately, so that the second CV will always
     // remain unmerged. (That also helps us support extendable output when
     // we're hashing an input all-at-once.)
-    fn push_cv(&mut self, new_cv: &CVBytes, chunk_counter: u64) {
-        self.merge_cv_stack(chunk_counter);
+    fn push_cv(&mut self, new_cv: &CVBytes, num_chunks: u64) {
+        self.merge_cv_stack();
         self.cv_stack.push(*new_cv);
+        self.chunk_state.chunk_counter += num_chunks;
     }
 
     /// Add input bytes to the hash state. You can call this any number of
@@ -1106,6 +1114,20 @@ impl Hasher {
     }
 
     fn update_with_join<J: join::Join>(&mut self, mut input: &[u8]) -> &mut Self {
+        // In debug mode, check that this update doesn't exceed the maximum size of the subtree.
+        // This is only relevant when the caller uses guts::set_offset to set a non-zero starting
+        // offset.
+        if self.initial_chunk_counter != 0 {
+            // For example, if the starting chunk counter is 13 (0b1101), then this subtree can
+            // only be a single chunk. But if it's 12 (0b1100), it can be up to four chunks. Note
+            // that this shift would overflow and panic if initial_chunk_counter was zero, and we
+            // rely on the if-condition above to prevent that.
+            let max_subtree_chunks = 1 << self.initial_chunk_counter.trailing_zeros();
+            let max_subtree_len = CHUNK_LEN as u64 * max_subtree_chunks;
+            let new_subtree_len = self.count() + input.len() as u64;
+            debug_assert!(new_subtree_len <= max_subtree_len);
+        }
+
         // If we have some partial chunk bytes in the internal chunk_state, we
         // need to finish that chunk first.
         if self.chunk_state.len() > 0 {
@@ -1119,10 +1141,10 @@ impl Hasher {
                 // Then we'll proceed to hashing whole chunks below.
                 debug_assert_eq!(self.chunk_state.len(), CHUNK_LEN);
                 let chunk_cv = self.chunk_state.output().chaining_value();
-                self.push_cv(&chunk_cv, self.chunk_state.chunk_counter);
+                self.push_cv(&chunk_cv, 1);
                 self.chunk_state = ChunkState::new(
                     &self.key,
-                    self.chunk_state.chunk_counter + 1,
+                    self.chunk_state.chunk_counter, // incremented in push_cv
                     self.chunk_state.flags,
                     self.chunk_state.platform,
                 );
@@ -1185,7 +1207,7 @@ impl Hasher {
                     .update(&input[..subtree_len])
                     .output()
                     .chaining_value(),
-                    self.chunk_state.chunk_counter,
+                    subtree_chunks,
                 );
             } else {
                 // This is the high-performance happy path, though getting here
@@ -1202,13 +1224,9 @@ impl Hasher {
                 // Push the two CVs we received into the CV stack in order. Because
                 // the stack merges lazily, this guarantees we aren't merging the
                 // root.
-                self.push_cv(left_cv, self.chunk_state.chunk_counter);
-                self.push_cv(
-                    right_cv,
-                    self.chunk_state.chunk_counter + (subtree_chunks / 2),
-                );
+                self.push_cv(left_cv, subtree_chunks / 2);
+                self.push_cv(right_cv, subtree_chunks / 2);
             }
-            self.chunk_state.chunk_counter += subtree_chunks;
             input = &input[subtree_len..];
         }
 
@@ -1219,7 +1237,7 @@ impl Hasher {
             // Having added some input to the chunk_state, we know what's in
             // the CV stack won't become the root node, and we can do an extra
             // merge. This simplifies finalize().
-            self.merge_cv_stack(self.chunk_state.chunk_counter);
+            self.merge_cv_stack();
         }
 
         self
@@ -1230,7 +1248,7 @@ impl Hasher {
         // also. Convert it directly into an Output. Otherwise, we need to
         // merge subtrees below.
         if self.cv_stack.is_empty() {
-            debug_assert_eq!(self.chunk_state.chunk_counter, 0);
+            debug_assert_eq!(self.chunks_in_cv_stack(), 0);
             return self.chunk_state.output();
         }
 
@@ -1251,8 +1269,8 @@ impl Hasher {
         if self.chunk_state.len() > 0 {
             debug_assert_eq!(
                 self.cv_stack.len(),
-                self.chunk_state.chunk_counter.count_ones() as usize,
-                "cv stack does not need a merge"
+                self.chunks_in_cv_stack().count_ones() as usize,
+                "cv stack should not need a merge"
             );
             output = self.chunk_state.output();
         } else {
@@ -1285,6 +1303,10 @@ impl Hasher {
     /// This method is idempotent. Calling it twice will give the same result.
     /// You can also add more input and finalize again.
     pub fn finalize(&self) -> Hash {
+        debug_assert_eq!(
+            0, self.initial_chunk_counter,
+            "the root subtree must start at offset 0",
+        );
         self.final_output().root_hash()
     }
 
@@ -1296,12 +1318,16 @@ impl Hasher {
     ///
     /// [`OutputReader`]: struct.OutputReader.html
     pub fn finalize_xof(&self) -> OutputReader {
+        debug_assert_eq!(
+            0, self.initial_chunk_counter,
+            "the root subtree must start at offset 0",
+        );
         OutputReader::new(self.final_output())
     }
 
     /// Return the total number of bytes hashed so far.
     pub fn count(&self) -> u64 {
-        self.chunk_state.chunk_counter * CHUNK_LEN as u64 + self.chunk_state.len() as u64
+        self.chunks_in_cv_stack() * CHUNK_LEN as u64 + self.chunk_state.len() as u64
     }
 }
 
