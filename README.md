@@ -45,7 +45,7 @@ This repository is the official implementation of BLAKE3. It includes:
 
 * The [C implementation](c), which like the Rust implementation includes
   SIMD code and runtime CPU feature detection on x86. Unlike the Rust
-  implementation, it's [not currently multithreaded](c/README.md#multithreading). See
+  implementation, it's [not currently multithreaded](c#multithreading). See
   [`c/README.md`](c/README.md).
 
 * The [Rust reference implementation](reference_impl/reference_impl.rs),
