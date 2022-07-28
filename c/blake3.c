@@ -246,7 +246,7 @@ INLINE size_t compress_parents_parallel(const uint8_t *child_chaining_values,
 
 // The wide helper function returns (writes out) an array of chaining values
 // and returns the length of that array. The number of chaining values returned
-// is the dyanmically detected SIMD degree, at most MAX_SIMD_DEGREE. Or fewer,
+// is the dynamically detected SIMD degree, at most MAX_SIMD_DEGREE. Or fewer,
 // if the input is shorter than that many chunks. The reason for maintaining a
 // wide array of chaining values going back up the tree, is to allow the
 // implementation to hash as many parents in parallel as possible.
