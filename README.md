@@ -200,6 +200,7 @@ Alternatively, it is licensed under the Apache License 2.0.
 
 Here's a (non-exhaustive) list of protocols and software that use BLAKE3:
 
+* [Alephium](https://github.com/alephium/alephium/blob/master/crypto/src/main/scala/org/alephium/crypto/Blake3.scala)
 * [Chia](https://github.com/Chia-Network/chia-blockchain/blob/main/CHANGELOG.md#10beta8-aka-beta-18---2020-07-16)
 * [IPFS](https://github.com/ipfs/go-verifcid/issues/13)
 * [LLVM](https://reviews.llvm.org/D121510)
