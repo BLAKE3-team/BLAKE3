@@ -22,7 +22,7 @@ OPTIONS:
         --keyed                   Uses the keyed mode. The secret key is read from standard
                                   input, and it must be exactly 32 raw bytes.
     -l, --length <LEN>            The number of output bytes, prior to hex
-                                  encoding (default 32)
+                                  encoding [default: 32]
         --no-mmap                 Disables memory mapping. Currently this also disables
                                   multithreading.
         --no-names                Omits filenames in the output

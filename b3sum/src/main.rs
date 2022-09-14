@@ -1,5 +1,5 @@
-use anyhow::{bail, ensure, Context, Result};
-use clap::{Arg, Command};
+use anyhow::{bail, ensure, Result};
+use clap::Parser;
 use std::cmp;
 use std::convert::TryInto;
 use std::fs::File;
@@ -12,124 +12,111 @@ mod unit_tests;
 
 const NAME: &str = "b3sum";
 
-const FILE_ARG: &str = "FILE";
 const DERIVE_KEY_ARG: &str = "derive-key";
 const KEYED_ARG: &str = "keyed";
 const LENGTH_ARG: &str = "length";
-const NO_MMAP_ARG: &str = "no-mmap";
 const NO_NAMES_ARG: &str = "no-names";
-const NUM_THREADS_ARG: &str = "num-threads";
 const RAW_ARG: &str = "raw";
 const CHECK_ARG: &str = "check";
-const QUIET_ARG: &str = "quiet";
+
+#[derive(Parser)]
+#[clap(version)]
+struct Inner {
+    /// Files to hash, or checkfiles to check. When no file is given,
+    /// or when - is given, read standard input.
+    #[clap(value_parser, verbatim_doc_comment)]
+    file: Vec<PathBuf>,
+
+    /// The number of output bytes, prior to hex
+    /// encoding
+    #[clap(
+        long,
+        short,
+        value_name("LEN"),
+        default_value_t = blake3::OUT_LEN as u64,
+        verbatim_doc_comment
+    )]
+    length: u64,
+
+    /// The maximum number of threads to use. By
+    /// default, this is the number of logical cores.
+    /// If this flag is omitted, or if its value is 0,
+    /// RAYON_NUM_THREADS is also respected.
+    #[clap(long, value_name("NUM"), verbatim_doc_comment)]
+    num_threads: Option<usize>,
+
+    /// Uses the keyed mode. The secret key is read from standard
+    /// input, and it must be exactly 32 raw bytes.
+    #[clap(long, requires("file"), verbatim_doc_comment)]
+    keyed: bool,
+
+    /// Uses the key derivation mode, with the given
+    /// context string. Cannot be used with --keyed.
+    #[clap(
+        long,
+        conflicts_with(KEYED_ARG),
+        value_name("CONTEXT"),
+        verbatim_doc_comment
+    )]
+    derive_key: Option<String>,
+
+    /// Disables memory mapping. Currently this also disables
+    /// multithreading.
+    #[clap(long, verbatim_doc_comment)]
+    no_mmap: bool,
+
+    /// Omits filenames in the output
+    #[clap(long)]
+    no_names: bool,
+
+    /// Writes raw output bytes to stdout, rather than hex.
+    /// --no-names is implied. In this case, only a single
+    /// input is allowed.
+    #[clap(long, verbatim_doc_comment)]
+    raw: bool,
+
+    /// Reads BLAKE3 sums from the [FILE]s and checks them
+    #[clap(
+        long,
+        short,
+        conflicts_with(DERIVE_KEY_ARG),
+        conflicts_with(KEYED_ARG),
+        conflicts_with(LENGTH_ARG),
+        conflicts_with(RAW_ARG),
+        conflicts_with(NO_NAMES_ARG)
+    )]
+    check: bool,
+
+    /// Skips printing OK for each successfully verified file.
+    /// Must be used with --check.
+    #[clap(long, requires(CHECK_ARG), verbatim_doc_comment)]
+    quiet: bool,
+}
 
 struct Args {
-    inner: clap::ArgMatches,
+    inner: Inner,
     file_args: Vec<PathBuf>,
     base_hasher: blake3::Hasher,
 }
 
 impl Args {
     fn parse() -> Result<Self> {
-        let inner = Command::new(NAME)
-            .version(env!("CARGO_PKG_VERSION"))
-            .arg(
-                Arg::new(FILE_ARG)
-                    .multiple_occurrences(true)
-                    .allow_invalid_utf8(true)
-                    .help(
-                        "Files to hash, or checkfiles to check. When no file is given,\n\
-                 or when - is given, read standard input.",
-                    ),
-            )
-            .arg(
-                Arg::new(LENGTH_ARG)
-                    .long(LENGTH_ARG)
-                    .short('l')
-                    .takes_value(true)
-                    .value_name("LEN")
-                    .help(
-                        "The number of output bytes, prior to hex\n\
-                         encoding (default 32)",
-                    ),
-            )
-            .arg(
-                Arg::new(NUM_THREADS_ARG)
-                    .long(NUM_THREADS_ARG)
-                    .takes_value(true)
-                    .value_name("NUM")
-                    .help(
-                        "The maximum number of threads to use. By\n\
-                         default, this is the number of logical cores.\n\
-                         If this flag is omitted, or if its value is 0,\n\
-                         RAYON_NUM_THREADS is also respected.",
-                    ),
-            )
-            .arg(Arg::new(KEYED_ARG).long(KEYED_ARG).requires(FILE_ARG).help(
-                "Uses the keyed mode. The secret key is read from standard\n\
-                         input, and it must be exactly 32 raw bytes.",
-            ))
-            .arg(
-                Arg::new(DERIVE_KEY_ARG)
-                    .long(DERIVE_KEY_ARG)
-                    .conflicts_with(KEYED_ARG)
-                    .takes_value(true)
-                    .value_name("CONTEXT")
-                    .help(
-                        "Uses the key derivation mode, with the given\n\
-                         context string. Cannot be used with --keyed.",
-                    ),
-            )
-            .arg(Arg::new(NO_MMAP_ARG).long(NO_MMAP_ARG).help(
-                "Disables memory mapping. Currently this also disables\n\
-                 multithreading.",
-            ))
-            .arg(
-                Arg::new(NO_NAMES_ARG)
-                    .long(NO_NAMES_ARG)
-                    .help("Omits filenames in the output"),
-            )
-            .arg(Arg::new(RAW_ARG).long(RAW_ARG).help(
-                "Writes raw output bytes to stdout, rather than hex.\n\
-                 --no-names is implied. In this case, only a single\n\
-                 input is allowed.",
-            ))
-            .arg(
-                Arg::new(CHECK_ARG)
-                    .long(CHECK_ARG)
-                    .short('c')
-                    .conflicts_with(DERIVE_KEY_ARG)
-                    .conflicts_with(KEYED_ARG)
-                    .conflicts_with(LENGTH_ARG)
-                    .conflicts_with(RAW_ARG)
-                    .conflicts_with(NO_NAMES_ARG)
-                    .help("Reads BLAKE3 sums from the [FILE]s and checks them"),
-            )
-            .arg(
-                Arg::new(QUIET_ARG)
-                    .long(QUIET_ARG)
-                    .requires(CHECK_ARG)
-                    .help(
-                        "Skips printing OK for each successfully verified file.\n\
-                         Must be used with --check.",
-                    ),
-            )
-            // wild::args_os() is equivalent to std::env::args_os() on Unix,
-            // but on Windows it adds support for globbing.
-            .get_matches_from(wild::args_os());
-        let file_args = if let Some(iter) = inner.values_of_os(FILE_ARG) {
-            iter.map(|s| s.into()).collect()
+        // wild::args_os() is equivalent to std::env::args_os() on Unix,
+        // but on Windows it adds support for globbing.
+        let inner = Inner::parse_from(wild::args_os());
+        let file_args = if !inner.file.is_empty() {
+            inner.file.clone()
         } else {
             vec!["-".into()]
         };
-        if inner.is_present(RAW_ARG) && file_args.len() > 1 {
+        if inner.raw && file_args.len() > 1 {
             bail!("Only one filename can be provided when using --raw");
         }
-        let base_hasher = if inner.is_present(KEYED_ARG) {
+        let base_hasher = if inner.keyed {
             // In keyed mode, since stdin is used for the key, we can't handle
             // `-` arguments. Input::open handles that case below.
             blake3::Hasher::new_keyed(&read_key_from_stdin()?)
-        } else if let Some(context) = inner.value_of(DERIVE_KEY_ARG) {
+        } else if let Some(ref context) = inner.derive_key {
             blake3::Hasher::new_derive_key(context)
         } else {
             blake3::Hasher::new()
@@ -141,48 +128,36 @@ impl Args {
         })
     }
 
-    fn num_threads(&self) -> Result<Option<usize>> {
-        if let Some(num_threads_str) = self.inner.value_of(NUM_THREADS_ARG) {
-            Ok(Some(
-                num_threads_str
-                    .parse()
-                    .context("Failed to parse num threads.")?,
-            ))
-        } else {
-            Ok(None)
-        }
+    fn num_threads(&self) -> Option<usize> {
+        self.inner.num_threads
     }
 
     fn check(&self) -> bool {
-        self.inner.is_present(CHECK_ARG)
+        self.inner.check
     }
 
     fn raw(&self) -> bool {
-        self.inner.is_present(RAW_ARG)
+        self.inner.raw
     }
 
     fn no_mmap(&self) -> bool {
-        self.inner.is_present(NO_MMAP_ARG)
+        self.inner.no_mmap
     }
 
     fn no_names(&self) -> bool {
-        self.inner.is_present(NO_NAMES_ARG)
+        self.inner.no_names
     }
 
-    fn len(&self) -> Result<u64> {
-        if let Some(length) = self.inner.value_of(LENGTH_ARG) {
-            length.parse::<u64>().context("Failed to parse length.")
-        } else {
-            Ok(blake3::OUT_LEN as u64)
-        }
+    fn len(&self) -> u64 {
+        self.inner.length
     }
 
     fn keyed(&self) -> bool {
-        self.inner.is_present(KEYED_ARG)
+        self.inner.keyed
     }
 
     fn quiet(&self) -> bool {
-        self.inner.is_present(QUIET_ARG)
+        self.inner.quiet
     }
 }
 
@@ -307,7 +282,7 @@ fn maybe_memmap_file(file: &File) -> Result<Option<memmap2::Mmap>> {
 
 fn write_hex_output(mut output: blake3::OutputReader, args: &Args) -> Result<()> {
     // Encoding multiples of the block size is most efficient.
-    let mut len = args.len()?;
+    let mut len = args.len();
     let mut block = [0; blake3::guts::BLOCK_LEN];
     while len > 0 {
         output.fill(&mut block);
@@ -320,7 +295,7 @@ fn write_hex_output(mut output: blake3::OutputReader, args: &Args) -> Result<()>
 }
 
 fn write_raw_output(output: blake3::OutputReader, args: &Args) -> Result<()> {
-    let mut output = output.take(args.len()?);
+    let mut output = output.take(args.len());
     let stdout = std::io::stdout();
     let mut handler = stdout.lock();
     std::io::copy(&mut output, &mut handler)?;
@@ -589,7 +564,7 @@ fn check_one_checkfile(path: &Path, args: &Args, some_file_failed: &mut bool) ->
 fn main() -> Result<()> {
     let args = Args::parse()?;
     let mut thread_pool_builder = rayon::ThreadPoolBuilder::new();
-    if let Some(num_threads) = args.num_threads()? {
+    if let Some(num_threads) = args.num_threads() {
         thread_pool_builder = thread_pool_builder.num_threads(num_threads);
     }
     let thread_pool = thread_pool_builder.build()?;
