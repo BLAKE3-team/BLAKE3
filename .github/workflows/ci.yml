@@ -233,3 +233,17 @@ jobs:
     - name: build b3sum
       run: cargo build --target aarch64-apple-darwin
       working-directory: ./b3sum
+
+  build_tinycc:
+    name: build with the Tiny C Compiler
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: install TCC
+      run: apt-get install -y tcc
+    - name: compile
+      run: >
+        tcc -shared -O3 -o libblake3.so \
+          -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 \
+          blake3.c blake3_dispatch.c blake3_portable.c
+      working-directory: ./c

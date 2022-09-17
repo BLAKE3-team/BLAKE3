@@ -46,7 +46,6 @@ enum blake3_flags {
 #if defined(_MSC_VER)
 #include <intrin.h>
 #endif
-#include <immintrin.h>
 #endif
 
 #if !defined(BLAKE3_USE_NEON) 
