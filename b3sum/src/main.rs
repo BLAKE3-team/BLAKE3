@@ -12,29 +12,29 @@ mod unit_tests;
 
 const NAME: &str = "b3sum";
 
-const DERIVE_KEY_ARG: &str = "derive-key";
+const DERIVE_KEY_ARG: &str = "derive_key";
 const KEYED_ARG: &str = "keyed";
 const LENGTH_ARG: &str = "length";
-const NO_NAMES_ARG: &str = "no-names";
+const NO_NAMES_ARG: &str = "no_names";
 const RAW_ARG: &str = "raw";
 const CHECK_ARG: &str = "check";
 
 #[derive(Parser)]
-#[clap(version)]
+#[command(version)]
 struct Inner {
     /// Files to hash, or checkfiles to check. When no file is given,
     /// or when - is given, read standard input.
-    #[clap(value_parser, verbatim_doc_comment)]
+    #[arg(verbatim_doc_comment)]
     file: Vec<PathBuf>,
 
     /// The number of output bytes, prior to hex
     /// encoding
-    #[clap(
-        long,
+    #[arg(
+        verbatim_doc_comment,
         short,
-        value_name("LEN"),
+        long,
         default_value_t = blake3::OUT_LEN as u64,
-        verbatim_doc_comment
+        value_name("LEN")
     )]
     length: u64,
 
@@ -42,43 +42,43 @@ struct Inner {
     /// default, this is the number of logical cores.
     /// If this flag is omitted, or if its value is 0,
     /// RAYON_NUM_THREADS is also respected.
-    #[clap(long, value_name("NUM"), verbatim_doc_comment)]
+    #[arg(verbatim_doc_comment, long, value_name("NUM"))]
     num_threads: Option<usize>,
 
     /// Uses the keyed mode. The secret key is read from standard
     /// input, and it must be exactly 32 raw bytes.
-    #[clap(long, requires("file"), verbatim_doc_comment)]
+    #[arg(verbatim_doc_comment, long, requires("file"))]
     keyed: bool,
 
     /// Uses the key derivation mode, with the given
     /// context string. Cannot be used with --keyed.
-    #[clap(
+    #[arg(
+        verbatim_doc_comment,
         long,
-        conflicts_with(KEYED_ARG),
         value_name("CONTEXT"),
-        verbatim_doc_comment
+        conflicts_with(KEYED_ARG)
     )]
     derive_key: Option<String>,
 
     /// Disables memory mapping. Currently this also disables
     /// multithreading.
-    #[clap(long, verbatim_doc_comment)]
+    #[arg(verbatim_doc_comment, long)]
     no_mmap: bool,
 
     /// Omits filenames in the output
-    #[clap(long)]
+    #[arg(long)]
     no_names: bool,
 
     /// Writes raw output bytes to stdout, rather than hex.
     /// --no-names is implied. In this case, only a single
     /// input is allowed.
-    #[clap(long, verbatim_doc_comment)]
+    #[arg(verbatim_doc_comment, long)]
     raw: bool,
 
     /// Reads BLAKE3 sums from the [FILE]s and checks them
-    #[clap(
-        long,
+    #[arg(
         short,
+        long,
         conflicts_with(DERIVE_KEY_ARG),
         conflicts_with(KEYED_ARG),
         conflicts_with(LENGTH_ARG),
@@ -89,7 +89,7 @@ struct Inner {
 
     /// Skips printing OK for each successfully verified file.
     /// Must be used with --check.
-    #[clap(long, requires(CHECK_ARG), verbatim_doc_comment)]
+    #[arg(verbatim_doc_comment, long, requires(CHECK_ARG))]
     quiet: bool,
 }
 
@@ -593,4 +593,14 @@ fn main() -> Result<()> {
         }
         std::process::exit(if some_file_failed { 1 } else { 0 });
     })
+}
+
+#[cfg(test)]
+mod test {
+    use clap::CommandFactory;
+
+    #[test]
+    fn test_args() {
+        crate::Inner::command().debug_assert();
+    }
 }

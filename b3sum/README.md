@@ -5,37 +5,34 @@ A command line utility for calculating
 Coreutils tools like `b2sum` or `md5sum`.
 
 ```
-b3sum 1.3.1
+Usage: b3sum [OPTIONS] [FILE]...
 
-USAGE:
-    b3sum [OPTIONS] [FILE]...
+Arguments:
+  [FILE]...  Files to hash, or checkfiles to check. When no file is given,
+             or when - is given, read standard input.
 
-ARGS:
-    <FILE>...    Files to hash, or checkfiles to check. When no file is given,
-                 or when - is given, read standard input.
-
-OPTIONS:
-    -c, --check                   Reads BLAKE3 sums from the [FILE]s and checks them
-        --derive-key <CONTEXT>    Uses the key derivation mode, with the given
-                                  context string. Cannot be used with --keyed.
-    -h, --help                    Print help information
-        --keyed                   Uses the keyed mode. The secret key is read from standard
-                                  input, and it must be exactly 32 raw bytes.
-    -l, --length <LEN>            The number of output bytes, prior to hex
-                                  encoding [default: 32]
-        --no-mmap                 Disables memory mapping. Currently this also disables
-                                  multithreading.
-        --no-names                Omits filenames in the output
-        --num-threads <NUM>       The maximum number of threads to use. By
-                                  default, this is the number of logical cores.
-                                  If this flag is omitted, or if its value is 0,
-                                  RAYON_NUM_THREADS is also respected.
-        --quiet                   Skips printing OK for each successfully verified file.
-                                  Must be used with --check.
-        --raw                     Writes raw output bytes to stdout, rather than hex.
-                                  --no-names is implied. In this case, only a single
-                                  input is allowed.
-    -V, --version                 Print version information
+Options:
+  -l, --length <LEN>          The number of output bytes, prior to hex
+                              encoding [default: 32]
+      --num-threads <NUM>     The maximum number of threads to use. By
+                              default, this is the number of logical cores.
+                              If this flag is omitted, or if its value is 0,
+                              RAYON_NUM_THREADS is also respected.
+      --keyed                 Uses the keyed mode. The secret key is read from standard
+                              input, and it must be exactly 32 raw bytes.
+      --derive-key <CONTEXT>  Uses the key derivation mode, with the given
+                              context string. Cannot be used with --keyed.
+      --no-mmap               Disables memory mapping. Currently this also disables
+                              multithreading.
+      --no-names              Omits filenames in the output
+      --raw                   Writes raw output bytes to stdout, rather than hex.
+                              --no-names is implied. In this case, only a single
+                              input is allowed.
+  -c, --check                 Reads BLAKE3 sums from the [FILE]s and checks them
+      --quiet                 Skips printing OK for each successfully verified file.
+                              Must be used with --check.
+  -h, --help                  Print help information
+  -V, --version               Print version information
 ```
 
 See also [this document about how the `--check` flag
