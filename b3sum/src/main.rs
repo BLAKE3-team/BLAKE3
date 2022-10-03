@@ -20,17 +20,15 @@ const RAW_ARG: &str = "raw";
 const CHECK_ARG: &str = "check";
 
 #[derive(Parser)]
-#[command(version)]
+#[command(version, max_term_width(80))]
 struct Inner {
-    /// Files to hash, or checkfiles to check. When no file is given,
-    /// or when - is given, read standard input.
-    #[arg(verbatim_doc_comment)]
+    /// Files to hash, or checkfiles to check.
+    ///
+    /// When no file is given, or when - is given, read standard input.
     file: Vec<PathBuf>,
 
-    /// The number of output bytes, prior to hex
-    /// encoding
+    /// The number of output bytes, prior to hex encoding.
     #[arg(
-        verbatim_doc_comment,
         short,
         long,
         default_value_t = blake3::OUT_LEN as u64,
@@ -38,44 +36,43 @@ struct Inner {
     )]
     length: u64,
 
-    /// The maximum number of threads to use. By
-    /// default, this is the number of logical cores.
-    /// If this flag is omitted, or if its value is 0,
-    /// RAYON_NUM_THREADS is also respected.
-    #[arg(verbatim_doc_comment, long, value_name("NUM"))]
+    /// The maximum number of threads to use.
+    ///
+    /// By default, this is the number of logical cores. If this flag is
+    /// omitted, or if its value is 0, RAYON_NUM_THREADS is also respected.
+    #[arg(long, value_name("NUM"))]
     num_threads: Option<usize>,
 
-    /// Uses the keyed mode. The secret key is read from standard
-    /// input, and it must be exactly 32 raw bytes.
-    #[arg(verbatim_doc_comment, long, requires("file"))]
+    /// Uses the keyed mode.
+    ///
+    /// The secret key is read from standard input, and it must be exactly 32
+    /// raw bytes.
+    #[arg(long, requires("file"))]
     keyed: bool,
 
-    /// Uses the key derivation mode, with the given
-    /// context string. Cannot be used with --keyed.
-    #[arg(
-        verbatim_doc_comment,
-        long,
-        value_name("CONTEXT"),
-        conflicts_with(KEYED_ARG)
-    )]
+    /// Uses the key derivation mode, with the given context string.
+    ///
+    /// Cannot be used with --keyed.
+    #[arg(long, value_name("CONTEXT"), conflicts_with(KEYED_ARG))]
     derive_key: Option<String>,
 
-    /// Disables memory mapping. Currently this also disables
-    /// multithreading.
-    #[arg(verbatim_doc_comment, long)]
+    /// Disables memory mapping.
+    ///
+    /// Currently this also disables multithreading.
+    #[arg(long)]
     no_mmap: bool,
 
-    /// Omits filenames in the output
+    /// Omits filenames in the output.
     #[arg(long)]
     no_names: bool,
 
     /// Writes raw output bytes to stdout, rather than hex.
-    /// --no-names is implied. In this case, only a single
-    /// input is allowed.
-    #[arg(verbatim_doc_comment, long)]
+    ///
+    /// --no-names is implied. In this case, only a single input is allowed.
+    #[arg(long)]
     raw: bool,
 
-    /// Reads BLAKE3 sums from the [FILE]s and checks them
+    /// Reads BLAKE3 sums from the [FILE]s and checks them.
     #[arg(
         short,
         long,
@@ -88,8 +85,9 @@ struct Inner {
     check: bool,
 
     /// Skips printing OK for each successfully verified file.
+    ///
     /// Must be used with --check.
-    #[arg(verbatim_doc_comment, long, requires(CHECK_ARG))]
+    #[arg(long, requires(CHECK_ARG))]
     quiet: bool,
 }
 

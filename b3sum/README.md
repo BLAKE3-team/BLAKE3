@@ -8,31 +8,31 @@ Coreutils tools like `b2sum` or `md5sum`.
 Usage: b3sum [OPTIONS] [FILE]...
 
 Arguments:
-  [FILE]...  Files to hash, or checkfiles to check. When no file is given,
-             or when - is given, read standard input.
+  [FILE]...  Files to hash, or checkfiles to check
 
 Options:
-  -l, --length <LEN>          The number of output bytes, prior to hex
-                              encoding [default: 32]
-      --num-threads <NUM>     The maximum number of threads to use. By
-                              default, this is the number of logical cores.
-                              If this flag is omitted, or if its value is 0,
-                              RAYON_NUM_THREADS is also respected.
-      --keyed                 Uses the keyed mode. The secret key is read from standard
-                              input, and it must be exactly 32 raw bytes.
-      --derive-key <CONTEXT>  Uses the key derivation mode, with the given
-                              context string. Cannot be used with --keyed.
-      --no-mmap               Disables memory mapping. Currently this also disables
-                              multithreading.
-      --no-names              Omits filenames in the output
-      --raw                   Writes raw output bytes to stdout, rather than hex.
-                              --no-names is implied. In this case, only a single
-                              input is allowed.
-  -c, --check                 Reads BLAKE3 sums from the [FILE]s and checks them
-      --quiet                 Skips printing OK for each successfully verified file.
-                              Must be used with --check.
-  -h, --help                  Print help information
-  -V, --version               Print version information
+  -l, --length <LEN>
+          The number of output bytes, prior to hex encoding [default: 32]
+      --num-threads <NUM>
+          The maximum number of threads to use
+      --keyed
+          Uses the keyed mode
+      --derive-key <CONTEXT>
+          Uses the key derivation mode, with the given context string
+      --no-mmap
+          Disables memory mapping
+      --no-names
+          Omits filenames in the output
+      --raw
+          Writes raw output bytes to stdout, rather than hex
+  -c, --check
+          Reads BLAKE3 sums from the [FILE]s and checks them
+      --quiet
+          Skips printing OK for each successfully verified file
+  -h, --help
+          Print help information (use `--help` for more detail)
+  -V, --version
+          Print version information
 ```
 
 See also [this document about how the `--check` flag
