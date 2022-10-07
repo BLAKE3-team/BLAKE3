@@ -65,6 +65,8 @@
 //! [`digest`]: https://crates.io/crates/digest
 //! [`signature`]: https://crates.io/crates/signature
 
+#![feature(avx512_target_feature)]
+#![feature(stdsimd)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
@@ -82,6 +84,7 @@ pub mod guts;
 pub mod platform;
 
 pub mod kernel;
+pub mod kernel2;
 
 // Platform-specific implementations of the compression function. These
 // BLAKE3-specific cfg flags are set in build.rs.
