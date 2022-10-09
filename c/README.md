@@ -319,7 +319,7 @@ cd vcpkg
 ./vcpkg integrate install
 ./vcpkg install blake3
 ```
-The `blake3` port in vcpkg is kept up to date by Microsoft team members and community contributors. If the version is out of date, please [create an issue or pull   request](https://github.com/Microsoft/vcpkg) on the vcpkg repository.
+The `blake3` port in vcpkg is kept up to date by Microsoft team members and community contributors. If the version is out of date, please [create an issue or pull request](https://github.com/Microsoft/vcpkg) on the vcpkg repository.
 
 # Multithreading
 
