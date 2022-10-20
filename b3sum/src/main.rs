@@ -2,7 +2,8 @@ use anyhow::{bail, ensure, Context, Result};
 use clap::{Arg, Command};
 use std::cmp;
 use std::convert::TryInto;
-use std::fs::File;
+use std::fs::{self, File};
+use std::fs::metadata;
 use std::io;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
@@ -22,6 +23,7 @@ const NUM_THREADS_ARG: &str = "num-threads";
 const RAW_ARG: &str = "raw";
 const CHECK_ARG: &str = "check";
 const QUIET_ARG: &str = "quiet";
+const RECURSE_ARG: &str = "recurse";
 
 struct Args {
     inner: clap::ArgMatches,
@@ -114,6 +116,14 @@ impl Args {
                          Must be used with --check.",
                     ),
             )
+            .arg(
+                Arg::with_name(RECURSE_ARG)
+                    .long(RECURSE_ARG)
+                    .short("r")
+                    .help(
+                        "Recurse through any directories supplied",
+                    ),
+            )
             // wild::args_os() is equivalent to std::env::args_os() on Unix,
             // but on Windows it adds support for globbing.
             .get_matches_from(wild::args_os());
@@ -183,6 +193,10 @@ impl Args {
 
     fn quiet(&self) -> bool {
         self.inner.is_present(QUIET_ARG)
+    }
+
+    fn recurse(&self) -> bool {
+        self.inner.is_present(RECURSE_ARG)
     }
 }
 
@@ -496,26 +510,43 @@ fn parse_check_line(mut line: &str) -> Result<ParsedCheckLine> {
 }
 
 fn hash_one_input(path: &Path, args: &Args) -> Result<()> {
-    let mut input = Input::open(path, args)?;
-    let output = input.hash(args)?;
-    if args.raw() {
-        write_raw_output(output, args)?;
-        return Ok(());
-    }
-    if args.no_names() {
+    let md = metadata(path).unwrap();
+    if md.is_dir() && args.recurse() {
+        let mut entries = fs::read_dir(path)?
+            .map(|res| res.map(|e| e.path()))
+            .collect::<Result<Vec<_>, io::Error>>()?;
+
+        //Sort the directory entries as the order they're returned is undefined
+        entries.sort();
+        for entry in entries {
+            let result = hash_one_input(&entry, &args);
+            if let Err(e) = result {
+                eprintln!("{}: {}: {}", NAME, path.to_string_lossy(), e);
+                return Err(e);
+            }
+        }
+    } else {
+        let mut input = Input::open(path, args)?;
+        let output = input.hash(args)?;
+        if args.raw() {
+            write_raw_output(output, args)?;
+            return Ok(());
+        }
+        if args.no_names() {
+            write_hex_output(output, args)?;
+            println!();
+            return Ok(());
+        }
+        let FilepathString {
+            filepath_string,
+            is_escaped,
+        } = filepath_to_string(path);
+        if is_escaped {
+            print!("\\");
+        }
         write_hex_output(output, args)?;
-        println!();
-        return Ok(());
+        println!("  {}", filepath_string);
     }
-    let FilepathString {
-        filepath_string,
-        is_escaped,
-    } = filepath_to_string(path);
-    if is_escaped {
-        print!("\\");
-    }
-    write_hex_output(output, args)?;
-    println!("  {}", filepath_string);
     Ok(())
 }
 
