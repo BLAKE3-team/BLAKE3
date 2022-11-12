@@ -315,8 +315,8 @@ impl PartialOrd for Hash {
 impl Ord for Hash {
     #[inline]
     fn cmp(&self, other: &Hash) -> std::cmp::Ordering {
-        let self32: [u32; 8] = as_u32s(self);
-        let other32: [u32; 8] = as_u32s(other);
+        let self32: [u32; 8] = platform::words_from_be_bytes_32(&self.0);
+        let other32: [u32; 8] = platform::words_from_be_bytes_32(&other.0);
         let mut acc: i32 = 0;
         for i in 0..self32.len() {
             // the left shift keeps earlier comparisons more significant than later ones
@@ -324,15 +324,6 @@ impl Ord for Hash {
         }
         acc.cmp(&0)
     }
-}
-
-/// Interpret a Hash as an array of big endian 32 bit unsigned integers.
-fn as_u32s(hash: &Hash) -> [u32; 8] {
-    let mut arr: [u32; 8] = [0; 8];
-    for i in 0..8 {
-        arr[i] = u32::from_be_bytes(*(array_ref!(hash.0, 4*i, 4)));
-    }
-    arr
 }
 
 /// Compares two items and returns -1 if Less, 0 if Equal, or 1 if Greater.
