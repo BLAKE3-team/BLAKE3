@@ -304,6 +304,46 @@ impl PartialEq<[u8]> for Hash {
 
 impl Eq for Hash {}
 
+/// This implementation is constant-time.
+impl PartialOrd for Hash {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// This implementation is constant-time.
+impl Ord for Hash {
+    #[inline]
+    fn cmp(&self, other: &Hash) -> std::cmp::Ordering {
+        let self32: [u32; 8] = as_u32s(self);
+        let other32: [u32; 8] = as_u32s(other);
+        let mut acc: i32 = 0;
+        for i in 0..self32.len() {
+            // the left shift keeps earlier comparisons more significant than later ones
+            acc = (acc<<1) + cmp_sign(&self32[i], &other32[i]);
+        }
+        acc.cmp(&0)
+    }
+}
+
+/// Interpret a Hash as an array of big endian 32 bit unsigned integers.
+fn as_u32s(hash: &Hash) -> [u32; 8] {
+    let mut arr: [u32; 8] = [0; 8];
+    for i in 0..8 {
+        arr[i] = u32::from_be_bytes(*(array_ref!(hash.0, 4*i, 4)));
+    }
+    arr
+}
+
+/// Compares two items and returns -1 if Less, 0 if Equal, or 1 if Greater.
+fn cmp_sign<T: Ord>(a: &T, b: &T) -> i32 {
+    match a.cmp(b) {
+        std::cmp::Ordering::Less => -1,
+        std::cmp::Ordering::Equal => 0,
+        std::cmp::Ordering::Greater => 1,
+    }
+}
+
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Formatting field as `&str` to reduce code size since the `Debug`
