@@ -20,14 +20,14 @@ const RAW_ARG: &str = "raw";
 const CHECK_ARG: &str = "check";
 
 #[derive(Parser)]
-#[command(version, max_term_width(80))]
+#[command(version, max_term_width(100))]
 struct Inner {
-    /// Files to hash, or checkfiles to check.
+    /// Files to hash, or checkfiles to check
     ///
     /// When no file is given, or when - is given, read standard input.
     file: Vec<PathBuf>,
 
-    /// The number of output bytes, prior to hex encoding.
+    /// The number of output bytes, before hex encoding
     #[arg(
         short,
         long,
@@ -36,43 +36,43 @@ struct Inner {
     )]
     length: u64,
 
-    /// The maximum number of threads to use.
+    /// The maximum number of threads to use
     ///
     /// By default, this is the number of logical cores. If this flag is
     /// omitted, or if its value is 0, RAYON_NUM_THREADS is also respected.
     #[arg(long, value_name("NUM"))]
     num_threads: Option<usize>,
 
-    /// Uses the keyed mode.
+    /// Use the keyed mode
     ///
     /// The secret key is read from standard input, and it must be exactly 32
     /// raw bytes.
     #[arg(long, requires("file"))]
     keyed: bool,
 
-    /// Uses the key derivation mode, with the given context string.
+    /// Use the key derivation mode, with the given context string
     ///
     /// Cannot be used with --keyed.
     #[arg(long, value_name("CONTEXT"), conflicts_with(KEYED_ARG))]
     derive_key: Option<String>,
 
-    /// Disables memory mapping.
+    /// Disable memory mapping
     ///
     /// Currently this also disables multithreading.
     #[arg(long)]
     no_mmap: bool,
 
-    /// Omits filenames in the output.
+    /// Omit filenames in the output
     #[arg(long)]
     no_names: bool,
 
-    /// Writes raw output bytes to stdout, rather than hex.
+    /// Write raw output bytes to stdout, rather than hex
     ///
     /// --no-names is implied. In this case, only a single input is allowed.
     #[arg(long)]
     raw: bool,
 
-    /// Reads BLAKE3 sums from the [FILE]s and checks them.
+    /// Read BLAKE3 sums from the [FILE]s and checks them
     #[arg(
         short,
         long,
@@ -84,7 +84,7 @@ struct Inner {
     )]
     check: bool,
 
-    /// Skips printing OK for each successfully verified file.
+    /// Skip printing OK for each successfully verified file
     ///
     /// Must be used with --check.
     #[arg(long, requires(CHECK_ARG))]
