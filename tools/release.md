@@ -4,7 +4,7 @@
 - Bump the version in the root Cargo.toml.
 - Bump the version in b3sum/Cargo.toml.
 - Delete b3sum/Cargo.lock and recreate it with `cargo build` or similar.
-- Update the `--help` output (including the version number) in b3sum/README.md.
+- Update the `--help` output in b3sum/README.md if it's changed.
 - Bump `BLAKE3_VERSION_STRING` in c/blake3.h.
 - Make a version bump commit with change notes.
 - `git push` and make sure CI is green.
