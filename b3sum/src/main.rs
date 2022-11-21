@@ -72,7 +72,7 @@ struct Inner {
     #[arg(long)]
     raw: bool,
 
-    /// Read BLAKE3 sums from the [FILE]s and checks them
+    /// Read BLAKE3 sums from the [FILE]s and check them
     #[arg(
         short,
         long,

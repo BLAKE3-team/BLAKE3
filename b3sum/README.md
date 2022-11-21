@@ -18,7 +18,7 @@ Options:
       --no-mmap               Disable memory mapping
       --no-names              Omit filenames in the output
       --raw                   Write raw output bytes to stdout, rather than hex
-  -c, --check                 Read BLAKE3 sums from the [FILE]s and checks them
+  -c, --check                 Read BLAKE3 sums from the [FILE]s and check them
       --quiet                 Skip printing OK for each successfully verified file
   -h, --help                  Print help information (use `--help` for more detail)
   -V, --version               Print version information
