@@ -848,6 +848,7 @@ unsafe fn load_transposed_16(input: *const u8) -> [__m512i; 16] {
     // Because operations that cross 128-bit lanes are relatively expensive, we split each 512-bit
     // load into four 128-bit loads. This results in vectors like:
     // a0, a1, a2, a3, e0, e1, e2, e3, i0, i1, i2, i3, m0, m1, m2, m3
+    #[inline(always)]
     unsafe fn load_4_lanes(input: *const u8) -> __m512i {
         let lane0 = _mm_loadu_epi32(input.add(0 * CHUNK_LEN) as *const i32);
         let lane1 = _mm_loadu_epi32(input.add(4 * CHUNK_LEN) as *const i32);
@@ -950,20 +951,20 @@ fn test_load_transpose_16() {
 
 #[target_feature(enable = "avx512f,avx512vl")]
 pub unsafe fn chunks_16(
-    message: &[u8; 16 * CHUNK_LEN],
-    key: &[u32; 8],
-    counter: u64,
-    flags: u32,
+    _message: &[u8; 16 * CHUNK_LEN],
+    _key: &[u32; 8],
+    _counter: u64,
+    _flags: u32,
 ) -> [__m512i; 8] {
     todo!();
 }
 
 #[target_feature(enable = "avx512f,avx512vl")]
 pub unsafe fn parents_16(
-    left_children: &[__m512i; 8],
-    right_children: &[__m512i; 8],
-    key: &[u32; 8],
-    flags: u32,
+    _left_children: &[__m512i; 8],
+    _right_children: &[__m512i; 8],
+    _key: &[u32; 8],
+    _flags: u32,
 ) -> [__m512i; 8] {
     todo!();
 }
@@ -1053,6 +1054,8 @@ unsafe fn xof_inner_16(
         state[i + 8] = _mm512_xor_si512(state[i + 8], _mm512_set1_epi32(cv[i] as i32));
     }
 
+    dbg!(std::mem::transmute::<_, [u8; 64]>(state[0]));
+
     // Partially untranspose the state vectors. We'll use the same trick here as with message
     // loading, where we avoid doing any relatively expensive cross-128-bit-lane operations, and
     // instead we delay reordering 128-bit lanes until the store step.
@@ -1076,7 +1079,7 @@ unsafe fn xof_inner_16(
     let abefijmn_ef = _mm512_unpacklo_epi32(state[14], state[15]);
     let cdghklop_ef = _mm512_unpackhi_epi32(state[14], state[15]);
 
-    // Finally, interleave 64-bit words. This gives us our intermediate goal, which is vectors like:
+    // Interleave 64-bit words. This gives us our intermediate goal, which is vectors like:
     // a0, a1, a2, a3, e0, e1, e2, e3, i0, i1, i2, i3, m0, m1, m2, m3
     [
         _mm512_unpacklo_epi64(abefijmn_01, abefijmn_23), // aeim_0123
@@ -1107,15 +1110,46 @@ pub unsafe fn xof_16(
     flags: u32,
     output: &mut [u8; BLOCK_LEN * 16],
 ) {
-    let vecs = xof_inner_16(block, cv, counter, block_len, flags);
-    for i in 0..vecs.len() {
-        let dest = output.as_mut_ptr().add(64 * i);
-        _mm512_storeu_si512(dest as *mut i32, vecs[i]);
+    unsafe fn write_4_lanes<const LANE: i32>(vecs: &[__m512i; 16], first_vec: usize, out: *mut u8) {
+        _mm_storeu_epi32(
+            out.add(0 * 16) as *mut i32,
+            _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 0]),
+        );
+        _mm_storeu_epi32(
+            out.add(1 * 16) as *mut i32,
+            _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 4]),
+        );
+        _mm_storeu_epi32(
+            out.add(2 * 16) as *mut i32,
+            _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 8]),
+        );
+        _mm_storeu_epi32(
+            out.add(3 * 16) as *mut i32,
+            _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 12]),
+        );
     }
+
+    let vecs = xof_inner_16(block, cv, counter, block_len, flags);
+    write_4_lanes::<0>(&vecs, 0, output.as_mut_ptr().add(0 * 64));
+    write_4_lanes::<0>(&vecs, 1, output.as_mut_ptr().add(1 * 64));
+    write_4_lanes::<0>(&vecs, 2, output.as_mut_ptr().add(2 * 64));
+    write_4_lanes::<0>(&vecs, 3, output.as_mut_ptr().add(3 * 64));
+    write_4_lanes::<1>(&vecs, 0, output.as_mut_ptr().add(4 * 64));
+    write_4_lanes::<1>(&vecs, 1, output.as_mut_ptr().add(5 * 64));
+    write_4_lanes::<1>(&vecs, 2, output.as_mut_ptr().add(6 * 64));
+    write_4_lanes::<1>(&vecs, 3, output.as_mut_ptr().add(7 * 64));
+    write_4_lanes::<2>(&vecs, 0, output.as_mut_ptr().add(8 * 64));
+    write_4_lanes::<2>(&vecs, 1, output.as_mut_ptr().add(9 * 64));
+    write_4_lanes::<2>(&vecs, 2, output.as_mut_ptr().add(10 * 64));
+    write_4_lanes::<2>(&vecs, 3, output.as_mut_ptr().add(11 * 64));
+    write_4_lanes::<3>(&vecs, 0, output.as_mut_ptr().add(12 * 64));
+    write_4_lanes::<3>(&vecs, 1, output.as_mut_ptr().add(13 * 64));
+    write_4_lanes::<3>(&vecs, 2, output.as_mut_ptr().add(14 * 64));
+    write_4_lanes::<3>(&vecs, 3, output.as_mut_ptr().add(15 * 64));
 }
 
 #[test]
-fn test_xor_16() {
+fn test_xof_16() {
     if !crate::platform::avx512_detected() {
         return;
     }
@@ -1128,18 +1162,18 @@ fn test_xor_16() {
     unsafe {
         xof_16(&block, IV, counter, block_len, flags, &mut output);
     }
+    dbg!(output);
 
-    let mut incrementing_counter = counter;
     for i in 0..16 {
+        dbg!(i);
         let expected = crate::portable::compress_xof(
             IV,
             &block,
             block_len as u8,
-            incrementing_counter,
+            counter + i as u64,
             flags as u8,
         );
         assert_eq!(expected, output[BLOCK_LEN * i..][..BLOCK_LEN]);
-        incrementing_counter += 1;
     }
 }
 
