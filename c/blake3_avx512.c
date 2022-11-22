@@ -1050,8 +1050,9 @@ INLINE void load_counters16(uint64_t counter, bool increment_counter,
   const __m512i add0 = _mm512_set_epi32(15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
   const __m512i add1 = _mm512_and_si512(mask, add0);
   __m512i l = _mm512_add_epi32(_mm512_set1_epi32((int32_t)counter), add1);
-  __mmask16 carry = _mm512_cmp_epu32_mask(l, add1, _MM_CMPINT_LT);
-  __m512i h = _mm512_mask_add_epi32(_mm512_set1_epi32((int32_t)(counter >> 32)), carry, _mm512_set1_epi32((int32_t)(counter >> 32)), _mm512_set1_epi32(1));
+  __m512i carry = _mm512_sub_epi32(l, add1);
+  carry = _mm512_srli_epi32(carry, 31); // 1 if less than
+  __m512i h = _mm512_add_epi32(_mm512_set1_epi32((int32_t)(counter >> 32)), carry);
   *out_lo = l;
   *out_hi = h;
 }
