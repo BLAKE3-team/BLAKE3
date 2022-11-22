@@ -257,3 +257,15 @@ jobs:
           -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 \
           blake3.c blake3_dispatch.c blake3_portable.c
       working-directory: ./c
+
+  # See https://github.com/BLAKE3-team/BLAKE3/issues/271 for why we test this.
+  gcc54:
+    name: "compile and test with GCC 5.4"
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: addnab/docker-run-action@v3
+      with:
+        image: gcc:5.4
+        options: -v ${{ github.workspace }}:/work
+        run: cat /proc/cpuinfo && cd /work && cargo test --features prefer_intrinsics
