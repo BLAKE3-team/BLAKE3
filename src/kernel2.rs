@@ -1207,11 +1207,94 @@ pub unsafe fn xof_xor_16(
     flags: u32,
     output: &mut [u8; BLOCK_LEN * 16],
 ) {
+    unsafe fn write_4_lanes<const LANE: i32>(vecs: &[__m512i; 16], first_vec: usize, out: *mut u8) {
+        _mm_storeu_epi32(
+            out.add(0 * 16) as *mut i32,
+            // TODO: Does using a VEX intrinsic make a difference here?
+            _mm_xor_epi32(
+                _mm_loadu_epi32(out.add(0 * 16) as *mut i32),
+                _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 0]),
+            ),
+        );
+        _mm_storeu_epi32(
+            out.add(1 * 16) as *mut i32,
+            _mm_xor_epi32(
+                _mm_loadu_epi32(out.add(1 * 16) as *mut i32),
+                _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 4]),
+            ),
+        );
+        _mm_storeu_epi32(
+            out.add(2 * 16) as *mut i32,
+            _mm_xor_epi32(
+                _mm_loadu_epi32(out.add(2 * 16) as *mut i32),
+                _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 8]),
+            ),
+        );
+        _mm_storeu_epi32(
+            out.add(3 * 16) as *mut i32,
+            _mm_xor_epi32(
+                _mm_loadu_epi32(out.add(3 * 16) as *mut i32),
+                _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 12]),
+            ),
+        );
+    }
+
     let vecs = xof_inner_16(block, cv, counter, block_len, flags);
-    for i in 0..vecs.len() {
-        let dest = output.as_mut_ptr().add(64 * i);
-        let contents = _mm512_loadu_si512(*dest as *const i32);
-        let xor = _mm512_xor_si512(vecs[i], contents);
-        _mm512_storeu_si512(*dest as *mut i32, xor);
+    write_4_lanes::<0>(&vecs, 0, output.as_mut_ptr().add(0 * 64));
+    write_4_lanes::<0>(&vecs, 1, output.as_mut_ptr().add(1 * 64));
+    write_4_lanes::<0>(&vecs, 2, output.as_mut_ptr().add(2 * 64));
+    write_4_lanes::<0>(&vecs, 3, output.as_mut_ptr().add(3 * 64));
+    write_4_lanes::<1>(&vecs, 0, output.as_mut_ptr().add(4 * 64));
+    write_4_lanes::<1>(&vecs, 1, output.as_mut_ptr().add(5 * 64));
+    write_4_lanes::<1>(&vecs, 2, output.as_mut_ptr().add(6 * 64));
+    write_4_lanes::<1>(&vecs, 3, output.as_mut_ptr().add(7 * 64));
+    write_4_lanes::<2>(&vecs, 0, output.as_mut_ptr().add(8 * 64));
+    write_4_lanes::<2>(&vecs, 1, output.as_mut_ptr().add(9 * 64));
+    write_4_lanes::<2>(&vecs, 2, output.as_mut_ptr().add(10 * 64));
+    write_4_lanes::<2>(&vecs, 3, output.as_mut_ptr().add(11 * 64));
+    write_4_lanes::<3>(&vecs, 0, output.as_mut_ptr().add(12 * 64));
+    write_4_lanes::<3>(&vecs, 1, output.as_mut_ptr().add(13 * 64));
+    write_4_lanes::<3>(&vecs, 2, output.as_mut_ptr().add(14 * 64));
+    write_4_lanes::<3>(&vecs, 3, output.as_mut_ptr().add(15 * 64));
+}
+
+#[test]
+fn test_xof_xor_16() {
+    if !crate::platform::avx512_detected() {
+        return;
+    }
+    let block_len = 63;
+    let mut block = [0; 64];
+    crate::test::paint_test_input(&mut block[..block_len as usize]); // all but last byte
+    let flags = (crate::CHUNK_START | crate::CHUNK_END | crate::ROOT) as u32;
+
+    // Test a few different initial counter values.
+    // - 0: The base case.
+    // - u32::MAX: The low word of the counter overflows for all inputs except the first.
+    // - i32::MAX: *No* overflow. But carry bugs in tricky SIMD code can screw this up, if you XOR
+    //   when you're supposed to ANDNOT...
+    let initial_counters = [0, u32::MAX as u64, i32::MAX as u64];
+    for counter in initial_counters {
+        dbg!(counter);
+        let mut initial_output_buffer = [0; BLOCK_LEN * 16];
+        crate::test::paint_test_input(&mut initial_output_buffer);
+        let mut output = initial_output_buffer;
+        unsafe {
+            xof_xor_16(&block, IV, counter, block_len, flags, &mut output);
+        }
+        for i in 0..16 {
+            dbg!(i);
+            let mut expected_block = crate::portable::compress_xof(
+                IV,
+                &block,
+                block_len as u8,
+                counter + i as u64,
+                flags as u8,
+            );
+            for j in 0..expected_block.len() {
+                expected_block[j] ^= initial_output_buffer[i * BLOCK_LEN + j];
+            }
+            assert_eq!(expected_block, output[BLOCK_LEN * i..][..BLOCK_LEN]);
+        }
     }
 }
