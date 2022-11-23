@@ -1,5 +1,8 @@
 use crate::{CVWords, IncrementCounter, BLOCK_LEN, OUT_LEN};
 
+#[cfg(blake3_avx2_asm)]
+core::arch::global_asm!(include_str!(concat!(env!("OUT_DIR"), "/blake3_avx2.S")));
+
 // Note that there is no AVX2 implementation of compress_in_place or
 // compress_xof.
 
@@ -33,7 +36,23 @@ pub unsafe fn hash_many<const N: usize>(
 }
 
 pub mod ffi {
+    #[cfg(not(blake3_avx2_asm))]
     extern "C" {
+        pub fn blake3_hash_many_avx2(
+            inputs: *const *const u8,
+            num_inputs: usize,
+            blocks: usize,
+            key: *const u32,
+            counter: u64,
+            increment_counter: bool,
+            flags: u8,
+            flags_start: u8,
+            flags_end: u8,
+            out: *mut u8,
+        );
+    }
+    #[cfg(blake3_avx2_asm)]
+    extern "win64" {
         pub fn blake3_hash_many_avx2(
             inputs: *const *const u8,
             num_inputs: usize,
