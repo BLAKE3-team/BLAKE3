@@ -111,89 +111,98 @@ pub fn test_hash_many_fn(
     hash_many_chunks_fn: HashManyFn<[u8; CHUNK_LEN]>,
     hash_many_parents_fn: HashManyFn<[u8; 2 * OUT_LEN]>,
 ) {
-    // 31 (16 + 8 + 4 + 2 + 1) inputs
-    const NUM_INPUTS: usize = 31;
-    let mut input_buf = [0; CHUNK_LEN * NUM_INPUTS];
-    crate::test::paint_test_input(&mut input_buf);
-    // A counter just prior to u32::MAX.
-    let counter = (1u64 << 32) - 1;
+    // Test a few different initial counter values.
+    // - 0: The base case.
+    // - u32::MAX: The low word of the counter overflows for all inputs except the first.
+    // - i32::MAX: *No* overflow. But carry bugs in tricky SIMD code can screw this up, if you XOR
+    //   when you're supposed to ANDNOT...
+    let initial_counters = [0, u32::MAX as u64, i32::MAX as u64];
+    for counter in initial_counters {
+        #[cfg(feature = "std")]
+        dbg!(counter);
 
-    // First hash chunks.
-    let mut chunks = ArrayVec::<&[u8; CHUNK_LEN], NUM_INPUTS>::new();
-    for i in 0..NUM_INPUTS {
-        chunks.push(array_ref!(input_buf, i * CHUNK_LEN, CHUNK_LEN));
-    }
-    let mut portable_chunks_out = [0; NUM_INPUTS * OUT_LEN];
-    crate::portable::hash_many(
-        &chunks,
-        &TEST_KEY_WORDS,
-        counter,
-        IncrementCounter::Yes,
-        crate::KEYED_HASH,
-        crate::CHUNK_START,
-        crate::CHUNK_END,
-        &mut portable_chunks_out,
-    );
+        // 31 (16 + 8 + 4 + 2 + 1) inputs
+        const NUM_INPUTS: usize = 31;
+        let mut input_buf = [0; CHUNK_LEN * NUM_INPUTS];
+        crate::test::paint_test_input(&mut input_buf);
 
-    let mut test_chunks_out = [0; NUM_INPUTS * OUT_LEN];
-    unsafe {
-        hash_many_chunks_fn(
-            &chunks[..],
+        // First hash chunks.
+        let mut chunks = ArrayVec::<&[u8; CHUNK_LEN], NUM_INPUTS>::new();
+        for i in 0..NUM_INPUTS {
+            chunks.push(array_ref!(input_buf, i * CHUNK_LEN, CHUNK_LEN));
+        }
+        let mut portable_chunks_out = [0; NUM_INPUTS * OUT_LEN];
+        crate::portable::hash_many(
+            &chunks,
             &TEST_KEY_WORDS,
             counter,
             IncrementCounter::Yes,
             crate::KEYED_HASH,
             crate::CHUNK_START,
             crate::CHUNK_END,
-            &mut test_chunks_out,
+            &mut portable_chunks_out,
         );
-    }
-    for n in 0..NUM_INPUTS {
-        #[cfg(feature = "std")]
-        dbg!(n);
-        assert_eq!(
-            &portable_chunks_out[n * OUT_LEN..][..OUT_LEN],
-            &test_chunks_out[n * OUT_LEN..][..OUT_LEN]
-        );
-    }
 
-    // Then hash parents.
-    let mut parents = ArrayVec::<&[u8; 2 * OUT_LEN], NUM_INPUTS>::new();
-    for i in 0..NUM_INPUTS {
-        parents.push(array_ref!(input_buf, i * 2 * OUT_LEN, 2 * OUT_LEN));
-    }
-    let mut portable_parents_out = [0; NUM_INPUTS * OUT_LEN];
-    crate::portable::hash_many(
-        &parents,
-        &TEST_KEY_WORDS,
-        counter,
-        IncrementCounter::No,
-        crate::KEYED_HASH | crate::PARENT,
-        0,
-        0,
-        &mut portable_parents_out,
-    );
+        let mut test_chunks_out = [0; NUM_INPUTS * OUT_LEN];
+        unsafe {
+            hash_many_chunks_fn(
+                &chunks[..],
+                &TEST_KEY_WORDS,
+                counter,
+                IncrementCounter::Yes,
+                crate::KEYED_HASH,
+                crate::CHUNK_START,
+                crate::CHUNK_END,
+                &mut test_chunks_out,
+            );
+        }
+        for n in 0..NUM_INPUTS {
+            #[cfg(feature = "std")]
+            dbg!(n);
+            assert_eq!(
+                &portable_chunks_out[n * OUT_LEN..][..OUT_LEN],
+                &test_chunks_out[n * OUT_LEN..][..OUT_LEN]
+            );
+        }
 
-    let mut test_parents_out = [0; NUM_INPUTS * OUT_LEN];
-    unsafe {
-        hash_many_parents_fn(
-            &parents[..],
+        // Then hash parents.
+        let mut parents = ArrayVec::<&[u8; 2 * OUT_LEN], NUM_INPUTS>::new();
+        for i in 0..NUM_INPUTS {
+            parents.push(array_ref!(input_buf, i * 2 * OUT_LEN, 2 * OUT_LEN));
+        }
+        let mut portable_parents_out = [0; NUM_INPUTS * OUT_LEN];
+        crate::portable::hash_many(
+            &parents,
             &TEST_KEY_WORDS,
             counter,
             IncrementCounter::No,
             crate::KEYED_HASH | crate::PARENT,
             0,
             0,
-            &mut test_parents_out,
+            &mut portable_parents_out,
         );
-    }
-    for n in 0..NUM_INPUTS {
-        #[cfg(feature = "std")]
-        dbg!(n);
-        assert_eq!(
-            &portable_parents_out[n * OUT_LEN..][..OUT_LEN],
-            &test_parents_out[n * OUT_LEN..][..OUT_LEN]
-        );
+
+        let mut test_parents_out = [0; NUM_INPUTS * OUT_LEN];
+        unsafe {
+            hash_many_parents_fn(
+                &parents[..],
+                &TEST_KEY_WORDS,
+                counter,
+                IncrementCounter::No,
+                crate::KEYED_HASH | crate::PARENT,
+                0,
+                0,
+                &mut test_parents_out,
+            );
+        }
+        for n in 0..NUM_INPUTS {
+            #[cfg(feature = "std")]
+            dbg!(n);
+            assert_eq!(
+                &portable_parents_out[n * OUT_LEN..][..OUT_LEN],
+                &test_parents_out[n * OUT_LEN..][..OUT_LEN]
+            );
+        }
     }
 }
 
