@@ -1,6 +1,7 @@
 use crate::{BLOCK_LEN, CHUNK_LEN, IV};
 use core::arch::x86_64::*;
 use core::arch::{asm, global_asm};
+use core::mem;
 
 global_asm!(
     // --------------------------------------------------------------------------------------------
@@ -969,6 +970,20 @@ pub unsafe fn parents_16(
     todo!();
 }
 
+// returns (low_words, high_words)
+#[inline]
+#[target_feature(enable = "avx512f,avx512vl")]
+unsafe fn incrementing_counter(initial_value: u64) -> (__m512i, __m512i) {
+    let mut values = [initial_value; 16];
+    for i in 0..16 {
+        // 64-bit overflow here is not supported and will panic in debug mode.
+        values[i] += i as u64;
+    }
+    let low_words: __m512i = mem::transmute(values.map(|v| v as u32));
+    let high_words: __m512i = mem::transmute(values.map(|v| (v >> 32) as u32));
+    (low_words, high_words)
+}
+
 #[inline]
 #[target_feature(enable = "avx512f,avx512vl")]
 unsafe fn xof_inner_16(
@@ -978,6 +993,7 @@ unsafe fn xof_inner_16(
     block_len: u32,
     flags: u32,
 ) -> [__m512i; 16] {
+    let (counters_low, counters_high) = incrementing_counter(counter);
     let mut state = [
         _mm512_set1_epi32(cv[0] as i32),
         _mm512_set1_epi32(cv[1] as i32),
@@ -991,8 +1007,8 @@ unsafe fn xof_inner_16(
         _mm512_set1_epi32(IV[1] as i32),
         _mm512_set1_epi32(IV[2] as i32),
         _mm512_set1_epi32(IV[3] as i32),
-        _mm512_set1_epi32(counter as i32),
-        _mm512_set1_epi32((counter >> 32) as i32),
+        counters_low,
+        counters_high,
         _mm512_set1_epi32(block_len as i32),
         _mm512_set1_epi32(flags as i32),
         _mm512_set1_epi32(i32::from_le_bytes(block[0..4].try_into().unwrap())),
@@ -1053,8 +1069,6 @@ unsafe fn xof_inner_16(
     for i in 0..8 {
         state[i + 8] = _mm512_xor_si512(state[i + 8], _mm512_set1_epi32(cv[i] as i32));
     }
-
-    dbg!(std::mem::transmute::<_, [u8; 64]>(state[0]));
 
     // Partially untranspose the state vectors. We'll use the same trick here as with message
     // loading, where we avoid doing any relatively expensive cross-128-bit-lane operations, and
@@ -1156,24 +1170,31 @@ fn test_xof_16() {
     let block_len = 63;
     let mut block = [0; 64];
     crate::test::paint_test_input(&mut block[..block_len as usize]); // all but last byte
-    let counter = (1 << 42) + 1;
     let flags = (crate::CHUNK_START | crate::CHUNK_END | crate::ROOT) as u32;
-    let mut output = [0; BLOCK_LEN * 16];
-    unsafe {
-        xof_16(&block, IV, counter, block_len, flags, &mut output);
-    }
-    dbg!(output);
 
-    for i in 0..16 {
-        dbg!(i);
-        let expected = crate::portable::compress_xof(
-            IV,
-            &block,
-            block_len as u8,
-            counter + i as u64,
-            flags as u8,
-        );
-        assert_eq!(expected, output[BLOCK_LEN * i..][..BLOCK_LEN]);
+    // Test a few different initial counter values.
+    // - 0: The base case.
+    // - u32::MAX: The low word of the counter overflows for all inputs except the first.
+    // - i32::MAX: *No* overflow. But carry bugs in tricky SIMD code can screw this up, if you XOR
+    //   when you're supposed to ANDNOT...
+    let initial_counters = [0, u32::MAX as u64, i32::MAX as u64];
+    for counter in initial_counters {
+        dbg!(counter);
+        let mut output = [0; BLOCK_LEN * 16];
+        unsafe {
+            xof_16(&block, IV, counter, block_len, flags, &mut output);
+        }
+        for i in 0..16 {
+            dbg!(i);
+            let expected = crate::portable::compress_xof(
+                IV,
+                &block,
+                block_len as u8,
+                counter + i as u64,
+                flags as u8,
+            );
+            assert_eq!(expected, output[BLOCK_LEN * i..][..BLOCK_LEN]);
+        }
     }
 }
 
