@@ -657,3 +657,51 @@ fn bench_xof_xor_kernel(b: &mut Bencher) {
         );
     });
 }
+
+#[bench]
+fn bench_xof_kernel2(b: &mut Bencher) {
+    let mut output = [0; 16 * 64];
+    b.bytes = output.len() as u64;
+    let block_bytes = [0; 64];
+    let key_words = [0; 8];
+    let counter = 0;
+    let block_length = 0;
+    let flags = 1 | 2 | 8 | 16; // CHUNK_START | CHUNK_END | ROOT | KEYED_HASH
+    b.iter(|| unsafe {
+        blake3::kernel2::xof_16(
+            &block_bytes,
+            &key_words,
+            counter,
+            block_length,
+            flags,
+            &mut output,
+        );
+    });
+    // Double check that this output is reasonable.
+    let mut expected = [0; 16 * 64];
+    blake3::Hasher::new_keyed(&[0; 32])
+        .finalize_xof()
+        .fill(&mut expected);
+    assert_eq!(expected, output);
+}
+
+#[bench]
+fn bench_xof_xor_kernel2(b: &mut Bencher) {
+    let mut output = [0; 16 * 64];
+    b.bytes = output.len() as u64;
+    let block_bytes = [0; 64];
+    let key_words = [0; 8];
+    let counter = 0;
+    let block_length = 0;
+    let flags = 1 | 2 | 8 | 16; // CHUNK_START | CHUNK_END | ROOT | KEYED_HASH
+    b.iter(|| unsafe {
+        blake3::kernel2::xof_xor_16(
+            &block_bytes,
+            &key_words,
+            counter,
+            block_length,
+            flags,
+            &mut output,
+        );
+    });
+}
