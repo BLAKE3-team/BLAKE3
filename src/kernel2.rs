@@ -971,8 +971,7 @@ pub unsafe fn parents_16(
 }
 
 // returns (low_words, high_words)
-#[inline]
-#[target_feature(enable = "avx512f,avx512vl")]
+#[inline(always)]
 unsafe fn incrementing_counter(initial_value: u64) -> (__m512i, __m512i) {
     let mut values = [initial_value; 16];
     for i in 0..16 {
@@ -1207,6 +1206,7 @@ pub unsafe fn xof_xor_16(
     flags: u32,
     output: &mut [u8; BLOCK_LEN * 16],
 ) {
+    #[inline(always)]
     unsafe fn write_4_lanes<const LANE: i32>(vecs: &[__m512i; 16], first_vec: usize, out: *mut u8) {
         _mm_storeu_epi32(
             out.add(0 * 16) as *mut i32,
