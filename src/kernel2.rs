@@ -1073,7 +1073,7 @@ unsafe fn xof_inner_16(
     // loading, where we avoid doing any relatively expensive cross-128-bit-lane operations, and
     // instead we delay reordering 128-bit lanes until the store step.
 
-    // Interleave 32-bit words. This results in vectors like:
+    // Interleave 32-bit words, producing vectors like:
     // a0, a1, b0, b1, e0, e1, f0, f1, i0, i1, j0, j1, m0, m1, n0, n1
     let abefijmn_01 = _mm512_unpacklo_epi32(state[0], state[1]);
     let cdghklop_01 = _mm512_unpackhi_epi32(state[0], state[1]);
@@ -1092,25 +1092,67 @@ unsafe fn xof_inner_16(
     let abefijmn_ef = _mm512_unpacklo_epi32(state[14], state[15]);
     let cdghklop_ef = _mm512_unpackhi_epi32(state[14], state[15]);
 
-    // Interleave 64-bit words. This gives us our intermediate goal, which is vectors like:
+    // Interleave 64-bit words, producing vectors like:
     // a0, a1, a2, a3, e0, e1, e2, e3, i0, i1, i2, i3, m0, m1, m2, m3
+    let aeim_0123 = _mm512_unpacklo_epi64(abefijmn_01, abefijmn_23);
+    let bfjn_0123 = _mm512_unpackhi_epi64(abefijmn_01, abefijmn_23);
+    let cgko_0123 = _mm512_unpacklo_epi64(cdghklop_01, cdghklop_23);
+    let dhlp_0123 = _mm512_unpackhi_epi64(cdghklop_01, cdghklop_23);
+    let aeim_4567 = _mm512_unpacklo_epi64(abefijmn_45, abefijmn_67);
+    let bfjn_4567 = _mm512_unpackhi_epi64(abefijmn_45, abefijmn_67);
+    let cgko_4567 = _mm512_unpacklo_epi64(cdghklop_45, cdghklop_67);
+    let dhlp_4567 = _mm512_unpackhi_epi64(cdghklop_45, cdghklop_67);
+    let aeim_89ab = _mm512_unpacklo_epi64(abefijmn_89, abefijmn_ab);
+    let bfjn_89ab = _mm512_unpackhi_epi64(abefijmn_89, abefijmn_ab);
+    let cgko_89ab = _mm512_unpacklo_epi64(cdghklop_89, cdghklop_ab);
+    let dhlp_89ab = _mm512_unpackhi_epi64(cdghklop_89, cdghklop_ab);
+    let aeim_cdef = _mm512_unpacklo_epi64(abefijmn_cd, abefijmn_ef);
+    let bfjn_cdef = _mm512_unpackhi_epi64(abefijmn_cd, abefijmn_ef);
+    let cgko_cdef = _mm512_unpacklo_epi64(cdghklop_cd, cdghklop_ef);
+    let dhlp_cdef = _mm512_unpackhi_epi64(cdghklop_cd, cdghklop_ef);
+
+    // Then interleave 128-bit lanes, producing vectors like:
+    // a0, a1, a2, a3, i0, i1, i2, i3, a4, a5, a6, a7, i4, i5, i6, i7
+    const LO_LANES: i32 = 0x88; // 0b10001000 = (0, 2, 0, 2)
+    const HI_LANES: i32 = 0xdd; // 0b11011101 = (1, 3, 1, 3)
+    let ai_01234567 = _mm512_shuffle_i32x4(aeim_0123, aeim_4567, LO_LANES);
+    let bj_01234567 = _mm512_shuffle_i32x4(bfjn_0123, bfjn_4567, LO_LANES);
+    let ck_01234567 = _mm512_shuffle_i32x4(cgko_0123, cgko_4567, LO_LANES);
+    let dl_01234567 = _mm512_shuffle_i32x4(dhlp_0123, dhlp_4567, LO_LANES);
+    let em_01234567 = _mm512_shuffle_i32x4(aeim_0123, aeim_4567, HI_LANES);
+    let fn_01234567 = _mm512_shuffle_i32x4(bfjn_0123, bfjn_4567, HI_LANES);
+    let go_01234567 = _mm512_shuffle_i32x4(cgko_0123, cgko_4567, HI_LANES);
+    let hp_01234567 = _mm512_shuffle_i32x4(dhlp_0123, dhlp_4567, HI_LANES);
+    let ai_89abcdef = _mm512_shuffle_i32x4(aeim_89ab, aeim_cdef, LO_LANES);
+    let bj_89abcdef = _mm512_shuffle_i32x4(bfjn_89ab, bfjn_cdef, LO_LANES);
+    let ck_89abcdef = _mm512_shuffle_i32x4(cgko_89ab, cgko_cdef, LO_LANES);
+    let dl_89abcdef = _mm512_shuffle_i32x4(dhlp_89ab, dhlp_cdef, LO_LANES);
+    let em_89abcdef = _mm512_shuffle_i32x4(aeim_89ab, aeim_cdef, HI_LANES);
+    let fn_89abcdef = _mm512_shuffle_i32x4(bfjn_89ab, bfjn_cdef, HI_LANES);
+    let go_89abcdef = _mm512_shuffle_i32x4(cgko_89ab, cgko_cdef, HI_LANES);
+    let hp_89abcdef = _mm512_shuffle_i32x4(dhlp_89ab, dhlp_cdef, HI_LANES);
+
+    // Finally interleave 128-bit lanes again (the same permutation as the previous pass, but
+    // different inputs), producing vectors like:
+    //
+    // a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15
     [
-        _mm512_unpacklo_epi64(abefijmn_01, abefijmn_23), // aeim_0123
-        _mm512_unpackhi_epi64(abefijmn_01, abefijmn_23), // bfjn_0123
-        _mm512_unpacklo_epi64(cdghklop_01, cdghklop_23), // cgko_0123
-        _mm512_unpackhi_epi64(cdghklop_01, cdghklop_23), // dhlp_0123
-        _mm512_unpacklo_epi64(abefijmn_45, abefijmn_67), // aeim_4567
-        _mm512_unpackhi_epi64(abefijmn_45, abefijmn_67), // bfjn_4567
-        _mm512_unpacklo_epi64(cdghklop_45, cdghklop_67), // cgko_4567
-        _mm512_unpackhi_epi64(cdghklop_45, cdghklop_67), // dhlp_4567
-        _mm512_unpacklo_epi64(abefijmn_89, abefijmn_ab), // aeim_89ab
-        _mm512_unpackhi_epi64(abefijmn_89, abefijmn_ab), // bfjn_89ab
-        _mm512_unpacklo_epi64(cdghklop_89, cdghklop_ab), // cgko_89ab
-        _mm512_unpackhi_epi64(cdghklop_89, cdghklop_ab), // dhlp_89ab
-        _mm512_unpacklo_epi64(abefijmn_cd, abefijmn_ef), // aeim_cdef
-        _mm512_unpackhi_epi64(abefijmn_cd, abefijmn_ef), // bfjn_cdef
-        _mm512_unpacklo_epi64(cdghklop_cd, cdghklop_ef), // cgko_cdef
-        _mm512_unpackhi_epi64(cdghklop_cd, cdghklop_ef), // dhlp_cdef
+        _mm512_shuffle_i32x4(ai_01234567, ai_89abcdef, LO_LANES), // a_0123456789abcdef
+        _mm512_shuffle_i32x4(bj_01234567, bj_89abcdef, LO_LANES), // b_0123456789abcdef
+        _mm512_shuffle_i32x4(ck_01234567, ck_89abcdef, LO_LANES), // c_0123456789abcdef
+        _mm512_shuffle_i32x4(dl_01234567, dl_89abcdef, LO_LANES), // d_0123456789abcdef
+        _mm512_shuffle_i32x4(em_01234567, em_89abcdef, LO_LANES), // e_0123456789abcdef
+        _mm512_shuffle_i32x4(fn_01234567, fn_89abcdef, LO_LANES), // f_0123456789abcdef
+        _mm512_shuffle_i32x4(go_01234567, go_89abcdef, LO_LANES), // g_0123456789abcdef
+        _mm512_shuffle_i32x4(hp_01234567, hp_89abcdef, LO_LANES), // h_0123456789abcdef
+        _mm512_shuffle_i32x4(ai_01234567, ai_89abcdef, HI_LANES), // i_0123456789abcdef
+        _mm512_shuffle_i32x4(bj_01234567, bj_89abcdef, HI_LANES), // j_0123456789abcdef
+        _mm512_shuffle_i32x4(ck_01234567, ck_89abcdef, HI_LANES), // k_0123456789abcdef
+        _mm512_shuffle_i32x4(dl_01234567, dl_89abcdef, HI_LANES), // l_0123456789abcdef
+        _mm512_shuffle_i32x4(em_01234567, em_89abcdef, HI_LANES), // m_0123456789abcdef
+        _mm512_shuffle_i32x4(fn_01234567, fn_89abcdef, HI_LANES), // n_0123456789abcdef
+        _mm512_shuffle_i32x4(go_01234567, go_89abcdef, HI_LANES), // o_0123456789abcdef
+        _mm512_shuffle_i32x4(hp_01234567, hp_89abcdef, HI_LANES), // p_0123456789abcdef
     ]
 }
 
@@ -1123,42 +1165,28 @@ pub unsafe fn xof_16(
     flags: u32,
     output: &mut [u8; BLOCK_LEN * 16],
 ) {
-    unsafe fn write_4_lanes<const LANE: i32>(vecs: &[__m512i; 16], first_vec: usize, out: *mut u8) {
-        _mm_storeu_epi32(
-            out.add(0 * 16) as *mut i32,
-            _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 0]),
-        );
-        _mm_storeu_epi32(
-            out.add(1 * 16) as *mut i32,
-            _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 4]),
-        );
-        _mm_storeu_epi32(
-            out.add(2 * 16) as *mut i32,
-            _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 8]),
-        );
-        _mm_storeu_epi32(
-            out.add(3 * 16) as *mut i32,
-            _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 12]),
-        );
-    }
-
     let vecs = xof_inner_16(block, cv, counter, block_len, flags);
-    write_4_lanes::<0>(&vecs, 0, output.as_mut_ptr().add(0 * 64));
-    write_4_lanes::<0>(&vecs, 1, output.as_mut_ptr().add(1 * 64));
-    write_4_lanes::<0>(&vecs, 2, output.as_mut_ptr().add(2 * 64));
-    write_4_lanes::<0>(&vecs, 3, output.as_mut_ptr().add(3 * 64));
-    write_4_lanes::<1>(&vecs, 0, output.as_mut_ptr().add(4 * 64));
-    write_4_lanes::<1>(&vecs, 1, output.as_mut_ptr().add(5 * 64));
-    write_4_lanes::<1>(&vecs, 2, output.as_mut_ptr().add(6 * 64));
-    write_4_lanes::<1>(&vecs, 3, output.as_mut_ptr().add(7 * 64));
-    write_4_lanes::<2>(&vecs, 0, output.as_mut_ptr().add(8 * 64));
-    write_4_lanes::<2>(&vecs, 1, output.as_mut_ptr().add(9 * 64));
-    write_4_lanes::<2>(&vecs, 2, output.as_mut_ptr().add(10 * 64));
-    write_4_lanes::<2>(&vecs, 3, output.as_mut_ptr().add(11 * 64));
-    write_4_lanes::<3>(&vecs, 0, output.as_mut_ptr().add(12 * 64));
-    write_4_lanes::<3>(&vecs, 1, output.as_mut_ptr().add(13 * 64));
-    write_4_lanes::<3>(&vecs, 2, output.as_mut_ptr().add(14 * 64));
-    write_4_lanes::<3>(&vecs, 3, output.as_mut_ptr().add(15 * 64));
+    #[inline(always)]
+    unsafe fn write_vec(vecs: &[__m512i; 16], out: *mut u8, i: usize) {
+        let addr = out.add(64 * i) as *mut i32;
+        _mm512_storeu_si512(addr, vecs[i]);
+    }
+    write_vec(&vecs, output.as_mut_ptr(), 0x0);
+    write_vec(&vecs, output.as_mut_ptr(), 0x1);
+    write_vec(&vecs, output.as_mut_ptr(), 0x2);
+    write_vec(&vecs, output.as_mut_ptr(), 0x3);
+    write_vec(&vecs, output.as_mut_ptr(), 0x4);
+    write_vec(&vecs, output.as_mut_ptr(), 0x5);
+    write_vec(&vecs, output.as_mut_ptr(), 0x6);
+    write_vec(&vecs, output.as_mut_ptr(), 0x7);
+    write_vec(&vecs, output.as_mut_ptr(), 0x8);
+    write_vec(&vecs, output.as_mut_ptr(), 0x9);
+    write_vec(&vecs, output.as_mut_ptr(), 0xa);
+    write_vec(&vecs, output.as_mut_ptr(), 0xb);
+    write_vec(&vecs, output.as_mut_ptr(), 0xc);
+    write_vec(&vecs, output.as_mut_ptr(), 0xd);
+    write_vec(&vecs, output.as_mut_ptr(), 0xe);
+    write_vec(&vecs, output.as_mut_ptr(), 0xf);
 }
 
 #[test]
@@ -1179,7 +1207,7 @@ fn test_xof_16() {
     let initial_counters = [0, u32::MAX as u64, i32::MAX as u64];
     for counter in initial_counters {
         dbg!(counter);
-        let mut output = [0; BLOCK_LEN * 16];
+        let mut output = [0xff; BLOCK_LEN * 16];
         unsafe {
             xof_16(&block, IV, counter, block_len, flags, &mut output);
         }
@@ -1206,56 +1234,28 @@ pub unsafe fn xof_xor_16(
     flags: u32,
     output: &mut [u8; BLOCK_LEN * 16],
 ) {
-    #[inline(always)]
-    unsafe fn write_4_lanes<const LANE: i32>(vecs: &[__m512i; 16], first_vec: usize, out: *mut u8) {
-        _mm_storeu_epi32(
-            out.add(0 * 16) as *mut i32,
-            // TODO: Does using a VEX intrinsic make a difference here?
-            _mm_xor_epi32(
-                _mm_loadu_epi32(out.add(0 * 16) as *mut i32),
-                _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 0]),
-            ),
-        );
-        _mm_storeu_epi32(
-            out.add(1 * 16) as *mut i32,
-            _mm_xor_epi32(
-                _mm_loadu_epi32(out.add(1 * 16) as *mut i32),
-                _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 4]),
-            ),
-        );
-        _mm_storeu_epi32(
-            out.add(2 * 16) as *mut i32,
-            _mm_xor_epi32(
-                _mm_loadu_epi32(out.add(2 * 16) as *mut i32),
-                _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 8]),
-            ),
-        );
-        _mm_storeu_epi32(
-            out.add(3 * 16) as *mut i32,
-            _mm_xor_epi32(
-                _mm_loadu_epi32(out.add(3 * 16) as *mut i32),
-                _mm512_extracti32x4_epi32::<LANE>(vecs[first_vec + 12]),
-            ),
-        );
-    }
-
     let vecs = xof_inner_16(block, cv, counter, block_len, flags);
-    write_4_lanes::<0>(&vecs, 0, output.as_mut_ptr().add(0 * 64));
-    write_4_lanes::<0>(&vecs, 1, output.as_mut_ptr().add(1 * 64));
-    write_4_lanes::<0>(&vecs, 2, output.as_mut_ptr().add(2 * 64));
-    write_4_lanes::<0>(&vecs, 3, output.as_mut_ptr().add(3 * 64));
-    write_4_lanes::<1>(&vecs, 0, output.as_mut_ptr().add(4 * 64));
-    write_4_lanes::<1>(&vecs, 1, output.as_mut_ptr().add(5 * 64));
-    write_4_lanes::<1>(&vecs, 2, output.as_mut_ptr().add(6 * 64));
-    write_4_lanes::<1>(&vecs, 3, output.as_mut_ptr().add(7 * 64));
-    write_4_lanes::<2>(&vecs, 0, output.as_mut_ptr().add(8 * 64));
-    write_4_lanes::<2>(&vecs, 1, output.as_mut_ptr().add(9 * 64));
-    write_4_lanes::<2>(&vecs, 2, output.as_mut_ptr().add(10 * 64));
-    write_4_lanes::<2>(&vecs, 3, output.as_mut_ptr().add(11 * 64));
-    write_4_lanes::<3>(&vecs, 0, output.as_mut_ptr().add(12 * 64));
-    write_4_lanes::<3>(&vecs, 1, output.as_mut_ptr().add(13 * 64));
-    write_4_lanes::<3>(&vecs, 2, output.as_mut_ptr().add(14 * 64));
-    write_4_lanes::<3>(&vecs, 3, output.as_mut_ptr().add(15 * 64));
+    #[inline(always)]
+    unsafe fn write_vec(vecs: &[__m512i; 16], out: *mut u8, i: usize) {
+        let addr = out.add(64 * i) as *mut i32;
+        _mm512_storeu_si512(addr, _mm512_xor_si512(vecs[i], _mm512_loadu_si512(addr)));
+    }
+    write_vec(&vecs, output.as_mut_ptr(), 0x0);
+    write_vec(&vecs, output.as_mut_ptr(), 0x1);
+    write_vec(&vecs, output.as_mut_ptr(), 0x2);
+    write_vec(&vecs, output.as_mut_ptr(), 0x3);
+    write_vec(&vecs, output.as_mut_ptr(), 0x4);
+    write_vec(&vecs, output.as_mut_ptr(), 0x5);
+    write_vec(&vecs, output.as_mut_ptr(), 0x6);
+    write_vec(&vecs, output.as_mut_ptr(), 0x7);
+    write_vec(&vecs, output.as_mut_ptr(), 0x8);
+    write_vec(&vecs, output.as_mut_ptr(), 0x9);
+    write_vec(&vecs, output.as_mut_ptr(), 0xa);
+    write_vec(&vecs, output.as_mut_ptr(), 0xb);
+    write_vec(&vecs, output.as_mut_ptr(), 0xc);
+    write_vec(&vecs, output.as_mut_ptr(), 0xd);
+    write_vec(&vecs, output.as_mut_ptr(), 0xe);
+    write_vec(&vecs, output.as_mut_ptr(), 0xf);
 }
 
 #[test]
