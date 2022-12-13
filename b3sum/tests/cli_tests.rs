@@ -113,6 +113,15 @@ fn test_keyed() {
         .read()
         .unwrap();
     assert_eq!(&*expected, &*output);
+
+    // Make sure that keys of the wrong length lead to errors.
+    for bad_length in [0, 1, blake3::KEY_LEN - 1, blake3::KEY_LEN + 1] {
+        dbg!(bad_length);
+        cmd!(b3sum_exe(), "--keyed", f.path())
+            .stdin_bytes(vec![0; bad_length])
+            .read()
+            .expect_err("a bad length key should fail");
+    }
 }
 
 #[test]
