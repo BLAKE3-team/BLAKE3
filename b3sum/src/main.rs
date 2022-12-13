@@ -43,10 +43,7 @@ struct Inner {
     #[arg(long, value_name("NUM"))]
     num_threads: Option<usize>,
 
-    /// Use the keyed mode
-    ///
-    /// The secret key is read from standard input, and it must be exactly 32
-    /// raw bytes.
+    /// Use the keyed mode, reading the 32-byte key from stdin
     #[arg(long, requires("file"))]
     keyed: bool,
 
