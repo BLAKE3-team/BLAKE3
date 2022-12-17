@@ -1,4 +1,5 @@
 #![feature(test)]
+#![feature(stdsimd)]
 
 extern crate test;
 
@@ -8,6 +9,7 @@ use blake3::guts::{BLOCK_LEN, CHUNK_LEN};
 use blake3::platform::{Platform, MAX_SIMD_DEGREE};
 use blake3::OUT_LEN;
 use rand::prelude::*;
+use std::mem;
 use test::Bencher;
 
 const KIB: usize = 1024;
@@ -293,8 +295,8 @@ fn bench_many_parents_kernel(b: &mut Bencher) {
         return;
     }
     use blake3::kernel::Words16;
-    let size = 16 * std::mem::size_of::<Words16>();
-    let alignment = std::mem::align_of::<Words16>();
+    let size = 16 * mem::size_of::<Words16>();
+    let alignment = mem::align_of::<Words16>();
     assert_eq!(alignment, 64);
     let mut input = RandomInput::new_aligned(b, size, alignment);
     for _ in 0..100 {
@@ -676,12 +678,39 @@ fn bench_chunks16_kernel2(b: &mut Bencher) {
         return;
     }
     let mut input = RandomInput::new(b, 16 * CHUNK_LEN);
-    let key_words = [0; 8];
+    let key_words = [42; 8];
     let counter = 0;
     let flags = 0;
     b.iter(|| unsafe {
         let message_array = &*(input.get().as_ptr() as *const [u8; 16 * CHUNK_LEN]);
         blake3::kernel2::chunks_16(message_array, &key_words, counter, flags);
+    });
+}
+
+#[bench]
+fn bench_parents16_kernel2(b: &mut Bencher) {
+    if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
+        return;
+    }
+    b.bytes = 16 * BLOCK_LEN as u64;
+    let mut random_parent_bytes = [0; 16 * 64];
+    let mut rng = rand::thread_rng();
+    rng.fill_bytes(&mut random_parent_bytes);
+    let left_parent_bytes: [u8; 16 * 32] = random_parent_bytes[..16 * 32].try_into().unwrap();
+    let right_parent_bytes: [u8; 16 * 32] = random_parent_bytes[16 * 32..].try_into().unwrap();
+    let left_parent_vectors: [core::arch::x86_64::__m512i; 8] =
+        unsafe { mem::transmute(left_parent_bytes) };
+    let right_parent_vectors: [core::arch::x86_64::__m512i; 8] =
+        unsafe { mem::transmute(right_parent_bytes) };
+    let key_words = [42; 8];
+    let flags = 0;
+    b.iter(|| unsafe {
+        blake3::kernel2::parents_16(
+            &left_parent_vectors,
+            &right_parent_vectors,
+            &key_words,
+            flags,
+        );
     });
 }
 

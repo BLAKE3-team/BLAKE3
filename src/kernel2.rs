@@ -1115,12 +1115,123 @@ fn test_chunks_16() {
 
 #[target_feature(enable = "avx512f,avx512vl")]
 pub unsafe fn parents_16(
-    _left_children: &[__m512i; 8],
-    _right_children: &[__m512i; 8],
-    _key: &[u32; 8],
-    _flags: u32,
+    left_children: &[__m512i; 8],
+    right_children: &[__m512i; 8],
+    key: &[u32; 8],
+    flags: u32,
 ) -> [__m512i; 8] {
-    todo!();
+    let even_indexes = _mm512_setr_epi32(0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30);
+    let odd_indexes = _mm512_setr_epi32(1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31);
+    let mut state_regs = [
+        _mm512_set1_epi32(key[0] as i32),
+        _mm512_set1_epi32(key[1] as i32),
+        _mm512_set1_epi32(key[2] as i32),
+        _mm512_set1_epi32(key[3] as i32),
+        _mm512_set1_epi32(key[4] as i32),
+        _mm512_set1_epi32(key[5] as i32),
+        _mm512_set1_epi32(key[6] as i32),
+        _mm512_set1_epi32(key[7] as i32),
+    ];
+    asm!(
+        "call blake3_avx512_kernel2_16",
+        inout("zmm0") state_regs[0],
+        inout("zmm1") state_regs[1],
+        inout("zmm2") state_regs[2],
+        inout("zmm3") state_regs[3],
+        inout("zmm4") state_regs[4],
+        inout("zmm5") state_regs[5],
+        inout("zmm6") state_regs[6],
+        inout("zmm7") state_regs[7],
+        in("zmm8") _mm512_set1_epi32(IV[0] as i32),
+        in("zmm9") _mm512_set1_epi32(IV[1] as i32),
+        in("zmm10") _mm512_set1_epi32(IV[2] as i32),
+        in("zmm11") _mm512_set1_epi32(IV[3] as i32),
+        in("zmm12") _mm512_set1_epi32(0),
+        in("zmm13") _mm512_set1_epi32(0),
+        in("zmm14") _mm512_set1_epi32(BLOCK_LEN as i32),
+        in("zmm15") _mm512_set1_epi32((flags | crate::PARENT as u32) as i32),
+        in("zmm16") _mm512_permutex2var_epi32(left_children[0], even_indexes, right_children[0]),
+        in("zmm17") _mm512_permutex2var_epi32(left_children[1], even_indexes, right_children[1]),
+        in("zmm18") _mm512_permutex2var_epi32(left_children[2], even_indexes, right_children[2]),
+        in("zmm19") _mm512_permutex2var_epi32(left_children[3], even_indexes, right_children[3]),
+        in("zmm20") _mm512_permutex2var_epi32(left_children[4], even_indexes, right_children[4]),
+        in("zmm21") _mm512_permutex2var_epi32(left_children[5], even_indexes, right_children[5]),
+        in("zmm22") _mm512_permutex2var_epi32(left_children[6], even_indexes, right_children[6]),
+        in("zmm23") _mm512_permutex2var_epi32(left_children[7], even_indexes, right_children[7]),
+        in("zmm24") _mm512_permutex2var_epi32(left_children[0], odd_indexes, right_children[0]),
+        in("zmm25") _mm512_permutex2var_epi32(left_children[1], odd_indexes, right_children[1]),
+        in("zmm26") _mm512_permutex2var_epi32(left_children[2], odd_indexes, right_children[2]),
+        in("zmm27") _mm512_permutex2var_epi32(left_children[3], odd_indexes, right_children[3]),
+        in("zmm28") _mm512_permutex2var_epi32(left_children[4], odd_indexes, right_children[4]),
+        in("zmm29") _mm512_permutex2var_epi32(left_children[5], odd_indexes, right_children[5]),
+        in("zmm30") _mm512_permutex2var_epi32(left_children[6], odd_indexes, right_children[6]),
+        in("zmm31") _mm512_permutex2var_epi32(left_children[7], odd_indexes, right_children[7]),
+    );
+    state_regs
+}
+
+#[test]
+fn test_parents_16() {
+    if !crate::platform::avx512_detected() {
+        return;
+    }
+
+    // the (untransposed) bytes of 32 concatenated child CVs
+    let mut child_bytes = [0; 32 * 32];
+    crate::test::paint_test_input(&mut child_bytes);
+    // the same bytes, reinterpreted as words
+    let child_words: [u32; 32 * 8] = core::array::from_fn(|word| {
+        u32::from_le_bytes(child_bytes[4 * word..][..4].try_into().unwrap())
+    });
+    // manually transpose the words into vector layout
+    let mut left_child_vecs = [[0u32; 16]; 8];
+    for cv in 0..16 {
+        for word in 0..8 {
+            left_child_vecs[word][cv] = child_words[8 * cv + word];
+        }
+    }
+    let mut right_child_vecs = [[0u32; 16]; 8];
+    for cv in 0..16 {
+        for word in 0..8 {
+            right_child_vecs[word][cv] = child_words[8 * (16 + cv) + word];
+        }
+    }
+
+    let left_children: [__m512i; 8] = unsafe { mem::transmute(left_child_vecs) };
+    let right_children: [__m512i; 8] = unsafe { mem::transmute(right_child_vecs) };
+    let key = [42, 43, 44, 45, 46, 47, 48, 49];
+    let outputs = unsafe {
+        parents_16(
+            &left_children,
+            &right_children,
+            &key,
+            crate::KEYED_HASH as u32,
+        )
+    };
+    let output_words: [[u32; 16]; 8] = unsafe { mem::transmute(outputs) };
+    let mut untransposed_output_words = [[0; 8]; 16];
+    for vec in 0..8 {
+        for word in 0..16 {
+            untransposed_output_words[word][vec] = output_words[vec][word];
+        }
+    }
+    let untransposed_output_bytes: [u8; 16 * 32] =
+        unsafe { mem::transmute(untransposed_output_words) };
+
+    let child_blocks: [&[u8; 64]; 16] =
+        core::array::from_fn(|block| child_bytes[64 * block..][..64].try_into().unwrap());
+    let mut expected = [0u8; 16 * 32];
+    crate::portable::hash_many(
+        &child_blocks,
+        &key,
+        0,
+        crate::IncrementCounter::No,
+        crate::PARENT | crate::KEYED_HASH,
+        0,
+        0,
+        &mut expected,
+    );
+    assert_eq!(expected, untransposed_output_bytes);
 }
 
 #[target_feature(enable = "avx512f,avx512vl")]

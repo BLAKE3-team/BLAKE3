@@ -2448,7 +2448,7 @@ global_asm!(
     "BLAKE3_AVX512_ODD_INDEXES:",
     ".long 1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31",
     "blake3_avx512_parents_16:",
-    // The first 8 out of 16 input message vectors, which are the transposed CVs of the first 8
+    // The first 8 out of 16 input message vectors, which are the transposed CVs of the first 16
     // children, come in looking like this:
     //
     // a0, b0, c0, d0, e0, f0, g0, h0, i0, j0, k0, l0, m0, n0, o0, p0
