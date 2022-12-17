@@ -936,7 +936,7 @@ fn test_load_transpose_16() {
     // Run the load-transpose and cast the vectors back to words.
     let transposed: [u32; 16 * 16] = unsafe {
         let vecs = load_transposed_16(input.as_ptr() as *const u8);
-        core::mem::transmute(vecs)
+        mem::transmute(vecs)
     };
     // Now check for the same incrementing counter as above, except we've swapped the inner and
     // outer loops to account for the transposition.
@@ -949,14 +949,168 @@ fn test_load_transpose_16() {
     }
 }
 
+// returns (low_words, high_words)
+#[inline(always)]
+unsafe fn incrementing_counter(initial_value: u64) -> (__m512i, __m512i) {
+    let increments = _mm512_setr_epi32(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+    let initial_low_words = _mm512_set1_epi32(initial_value as u32 as i32);
+    let low_words = _mm512_add_epi32(initial_low_words, increments);
+    let less_than_mask = _mm512_cmplt_epu32_mask(low_words, initial_low_words);
+    let initial_high_words = _mm512_set1_epi32((initial_value >> 32) as u32 as i32);
+    let high_words = _mm512_mask_add_epi32(
+        initial_high_words,
+        less_than_mask,
+        initial_high_words,
+        _mm512_set1_epi32(1),
+    );
+    (low_words, high_words)
+}
+
 #[target_feature(enable = "avx512f,avx512vl")]
 pub unsafe fn chunks_16(
-    _message: &[u8; 16 * CHUNK_LEN],
-    _key: &[u32; 8],
-    _counter: u64,
-    _flags: u32,
+    message: &[u8; 16 * CHUNK_LEN],
+    key: &[u32; 8],
+    counter: u64,
+    flags: u32,
 ) -> [__m512i; 8] {
-    todo!();
+    let (counters_low, counters_high) = incrementing_counter(counter);
+    let mut state_regs = [
+        _mm512_set1_epi32(key[0] as i32),
+        _mm512_set1_epi32(key[1] as i32),
+        _mm512_set1_epi32(key[2] as i32),
+        _mm512_set1_epi32(key[3] as i32),
+        _mm512_set1_epi32(key[4] as i32),
+        _mm512_set1_epi32(key[5] as i32),
+        _mm512_set1_epi32(key[6] as i32),
+        _mm512_set1_epi32(key[7] as i32),
+    ];
+    for block in 0..(CHUNK_LEN / BLOCK_LEN) {
+        let message_regs = load_transposed_16(message.as_ptr().add(BLOCK_LEN * block));
+        let mut block_flags = flags;
+        if block == 0 {
+            block_flags |= crate::CHUNK_START as u32;
+        }
+        if block == (CHUNK_LEN / BLOCK_LEN) - 1 {
+            block_flags |= crate::CHUNK_END as u32;
+        }
+        asm!(
+            "call blake3_avx512_kernel2_16",
+            inout("zmm0") state_regs[0],
+            inout("zmm1") state_regs[1],
+            inout("zmm2") state_regs[2],
+            inout("zmm3") state_regs[3],
+            inout("zmm4") state_regs[4],
+            inout("zmm5") state_regs[5],
+            inout("zmm6") state_regs[6],
+            inout("zmm7") state_regs[7],
+            in("zmm8") _mm512_set1_epi32(IV[0] as i32),
+            in("zmm9") _mm512_set1_epi32(IV[1] as i32),
+            in("zmm10") _mm512_set1_epi32(IV[2] as i32),
+            in("zmm11") _mm512_set1_epi32(IV[3] as i32),
+            in("zmm12") counters_low,
+            in("zmm13") counters_high,
+            in("zmm14") _mm512_set1_epi32(BLOCK_LEN as i32),
+            in("zmm15") _mm512_set1_epi32(block_flags as i32),
+            in("zmm16") message_regs[0],
+            in("zmm17") message_regs[1],
+            in("zmm18") message_regs[2],
+            in("zmm19") message_regs[3],
+            in("zmm20") message_regs[4],
+            in("zmm21") message_regs[5],
+            in("zmm22") message_regs[6],
+            in("zmm23") message_regs[7],
+            in("zmm24") message_regs[8],
+            in("zmm25") message_regs[9],
+            in("zmm26") message_regs[10],
+            in("zmm27") message_regs[11],
+            in("zmm28") message_regs[12],
+            in("zmm29") message_regs[13],
+            in("zmm30") message_regs[14],
+            in("zmm31") message_regs[15],
+        );
+    }
+    state_regs
+}
+
+pub fn portable_transpose<T, const N: usize>(words: &mut [[T; N]; N]) {
+    if N == 0 {
+        return;
+    }
+    for row in 0..(N - 1) {
+        for col in (row + 1)..N {
+            let (upper_rows, lower_rows) = words.split_at_mut(row + 1);
+            mem::swap(
+                &mut upper_rows[row][col],
+                &mut lower_rows[col - row - 1][row],
+            );
+        }
+    }
+}
+
+#[test]
+fn test_portable_transpose() {
+    let mut empty: [[u32; 0]; 0] = [];
+    portable_transpose(&mut empty);
+
+    let mut one = [[42u32]];
+    portable_transpose(&mut one);
+    assert_eq!(one[0][0], 42);
+
+    let mut two = [[0u32, 1], [2, 3]];
+    portable_transpose(&mut two);
+    assert_eq!(two, [[0, 2], [1, 3]]);
+
+    let mut three = [[0u32, 1, 2], [3, 4, 5], [6, 7, 8]];
+    portable_transpose(&mut three);
+    assert_eq!(three, [[0, 3, 6], [1, 4, 7], [2, 5, 8]]);
+
+    let mut painted_bytes = [0; 100];
+    crate::test::paint_test_input(&mut painted_bytes);
+    let painted_rows: [[u8; 10]; 10] = unsafe { mem::transmute(painted_bytes) };
+    let mut transposed_rows = painted_rows;
+    portable_transpose(&mut transposed_rows);
+    for row in 0..10 {
+        for col in 0..10 {
+            assert_eq!(painted_rows[row][col], transposed_rows[col][row]);
+        }
+    }
+}
+
+#[test]
+fn test_chunks_16() {
+    if !crate::platform::avx512_detected() {
+        return;
+    }
+    let mut chunks = [0; 16 * CHUNK_LEN];
+    crate::test::paint_test_input(&mut chunks);
+    let key = [42, 43, 44, 45, 46, 47, 48, 49];
+    let counter = (1 << 32) - 1;
+    let outputs: [__m512i; 8] =
+        unsafe { chunks_16(&chunks, &key, counter, crate::KEYED_HASH as u32) };
+
+    let separate_chunks: [&[u8; CHUNK_LEN]; 16] =
+        core::array::from_fn(|i| chunks[i * CHUNK_LEN..][..CHUNK_LEN].try_into().unwrap());
+    let mut expected = [0u8; 16 * 32];
+    crate::portable::hash_many(
+        &separate_chunks,
+        &key,
+        counter,
+        crate::IncrementCounter::Yes,
+        crate::KEYED_HASH,
+        crate::CHUNK_START,
+        crate::CHUNK_END,
+        &mut expected,
+    );
+
+    let outputs_u32: [[u32; 16]; 8] = unsafe { mem::transmute(outputs) };
+    let mut compare = [0u8; 16 * 32];
+    for vec in 0..8 {
+        for word in 0..16 {
+            compare[word * 32 + vec * 4..][..4]
+                .copy_from_slice(&outputs_u32[vec][word].to_le_bytes());
+        }
+    }
+    assert_eq!(expected, compare);
 }
 
 #[target_feature(enable = "avx512f,avx512vl")]
@@ -967,19 +1121,6 @@ pub unsafe fn parents_16(
     _flags: u32,
 ) -> [__m512i; 8] {
     todo!();
-}
-
-// returns (low_words, high_words)
-#[inline(always)]
-unsafe fn incrementing_counter(initial_value: u64) -> (__m512i, __m512i) {
-    let mut values = [initial_value; 16];
-    for i in 0..16 {
-        // 64-bit overflow here is not supported and will panic in debug mode.
-        values[i] += i as u64;
-    }
-    let low_words: __m512i = mem::transmute(values.map(|v| v as u32));
-    let high_words: __m512i = mem::transmute(values.map(|v| (v >> 32) as u32));
-    (low_words, high_words)
 }
 
 #[target_feature(enable = "avx512f,avx512vl")]

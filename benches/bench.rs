@@ -210,6 +210,9 @@ fn bench_many_chunks_neon(b: &mut Bencher) {
 
 #[bench]
 fn bench_many_chunks_kernel(b: &mut Bencher) {
+    if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
+        return;
+    }
     let mut input = RandomInput::new(b, 16 * CHUNK_LEN);
     let mut out = [blake3::kernel::Words16([0; 16]); 8];
     b.iter(|| unsafe {
@@ -286,6 +289,9 @@ fn bench_many_parents_neon(b: &mut Bencher) {
 
 #[bench]
 fn bench_many_parents_kernel(b: &mut Bencher) {
+    if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
+        return;
+    }
     use blake3::kernel::Words16;
     let size = 16 * std::mem::size_of::<Words16>();
     let alignment = std::mem::align_of::<Words16>();
@@ -612,6 +618,9 @@ fn bench_two_updates(b: &mut Bencher) {
 
 #[bench]
 fn bench_xof_stream_kernel(b: &mut Bencher) {
+    if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
+        return;
+    }
     let mut output = [0; 16 * 64];
     b.bytes = output.len() as u64;
     let message_words = [0; 16];
@@ -639,6 +648,9 @@ fn bench_xof_stream_kernel(b: &mut Bencher) {
 
 #[bench]
 fn bench_xof_xor_kernel(b: &mut Bencher) {
+    if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
+        return;
+    }
     let mut output = [0; 16 * 64];
     b.bytes = output.len() as u64;
     let message_words = [0; 16];
@@ -659,7 +671,25 @@ fn bench_xof_xor_kernel(b: &mut Bencher) {
 }
 
 #[bench]
+fn bench_chunks16_kernel2(b: &mut Bencher) {
+    if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
+        return;
+    }
+    let mut input = RandomInput::new(b, 16 * CHUNK_LEN);
+    let key_words = [0; 8];
+    let counter = 0;
+    let flags = 0;
+    b.iter(|| unsafe {
+        let message_array = &*(input.get().as_ptr() as *const [u8; 16 * CHUNK_LEN]);
+        blake3::kernel2::chunks_16(message_array, &key_words, counter, flags);
+    });
+}
+
+#[bench]
 fn bench_xof_kernel2(b: &mut Bencher) {
+    if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
+        return;
+    }
     let mut output = [0; 16 * 64];
     b.bytes = output.len() as u64;
     let block_bytes = [0; 64];
@@ -687,6 +717,9 @@ fn bench_xof_kernel2(b: &mut Bencher) {
 
 #[bench]
 fn bench_xof_xor_kernel2(b: &mut Bencher) {
+    if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
+        return;
+    }
     let mut output = [0; 16 * 64];
     b.bytes = output.len() as u64;
     let block_bytes = [0; 64];
@@ -708,6 +741,9 @@ fn bench_xof_xor_kernel2(b: &mut Bencher) {
 
 #[bench]
 fn bench_just_kernel2(b: &mut Bencher) {
+    if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512vl") {
+        return;
+    }
     b.bytes = 16 * 64;
     b.iter(|| unsafe {
         blake3::kernel2::just_kernel2();
