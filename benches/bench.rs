@@ -705,3 +705,11 @@ fn bench_xof_xor_kernel2(b: &mut Bencher) {
         );
     });
 }
+
+#[bench]
+fn bench_just_kernel2(b: &mut Bencher) {
+    b.bytes = 16 * 64;
+    b.iter(|| unsafe {
+        blake3::kernel2::just_kernel2();
+    });
+}

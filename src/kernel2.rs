@@ -815,8 +815,7 @@ global_asm!(
     "vprord  zmm6, zmm6, 7",
     "vprord  zmm7, zmm7, 7",
     "vprord  zmm4, zmm4, 7",
-    // lower half final xors
-    // NOTE: upper half final xors done by XOF callers
+    // final xors
     "vpxord  zmm0, zmm0, zmm8",
     "vpxord  zmm1, zmm1, zmm9",
     "vpxord  zmm2, zmm2, zmm10",
@@ -981,6 +980,45 @@ unsafe fn incrementing_counter(initial_value: u64) -> (__m512i, __m512i) {
     let low_words: __m512i = mem::transmute(values.map(|v| v as u32));
     let high_words: __m512i = mem::transmute(values.map(|v| (v >> 32) as u32));
     (low_words, high_words)
+}
+
+#[target_feature(enable = "avx512f,avx512vl")]
+pub unsafe fn just_kernel2() {
+    asm!(
+        "call blake3_avx512_kernel2_16",
+        in("zmm0") _mm512_set1_epi32(0),
+        in("zmm1") _mm512_set1_epi32(0),
+        in("zmm2") _mm512_set1_epi32(0),
+        in("zmm3") _mm512_set1_epi32(0),
+        in("zmm4") _mm512_set1_epi32(0),
+        in("zmm5") _mm512_set1_epi32(0),
+        in("zmm6") _mm512_set1_epi32(0),
+        in("zmm7") _mm512_set1_epi32(0),
+        in("zmm8") _mm512_set1_epi32(0),
+        in("zmm9") _mm512_set1_epi32(0),
+        in("zmm10") _mm512_set1_epi32(0),
+        in("zmm11") _mm512_set1_epi32(0),
+        in("zmm12") _mm512_set1_epi32(0),
+        in("zmm13") _mm512_set1_epi32(0),
+        in("zmm14") _mm512_set1_epi32(0),
+        in("zmm15") _mm512_set1_epi32(0),
+        in("zmm16") _mm512_set1_epi32(0),
+        in("zmm17") _mm512_set1_epi32(0),
+        in("zmm18") _mm512_set1_epi32(0),
+        in("zmm19") _mm512_set1_epi32(0),
+        in("zmm20") _mm512_set1_epi32(0),
+        in("zmm21") _mm512_set1_epi32(0),
+        in("zmm22") _mm512_set1_epi32(0),
+        in("zmm23") _mm512_set1_epi32(0),
+        in("zmm24") _mm512_set1_epi32(0),
+        in("zmm25") _mm512_set1_epi32(0),
+        in("zmm26") _mm512_set1_epi32(0),
+        in("zmm27") _mm512_set1_epi32(0),
+        in("zmm28") _mm512_set1_epi32(0),
+        in("zmm29") _mm512_set1_epi32(0),
+        in("zmm30") _mm512_set1_epi32(0),
+        in("zmm31") _mm512_set1_epi32(0),
+    );
 }
 
 #[inline]
