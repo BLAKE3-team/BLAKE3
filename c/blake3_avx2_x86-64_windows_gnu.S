@@ -36,15 +36,15 @@ blake3_hash_many_avx2:
         vmovd   xmm0, r9d
         vpbroadcastd ymm0, xmm0
         vmovdqa ymmword ptr [rsp+0x260], ymm0
-        vpand   ymm1, ymm0, ymmword ptr [ADD0+rip]
-        vpand   ymm2, ymm0, ymmword ptr [ADD1+rip]
+        vpand   ymm1, ymm0, ymmword ptr [AVX2_ADD0+rip]
+        vpand   ymm2, ymm0, ymmword ptr [AVX2_ADD1+rip]
         vmovdqa ymmword ptr [rsp+0x2A0], ymm2
         vmovd   xmm2, r8d
         vpbroadcastd ymm2, xmm2
         vpaddd  ymm2, ymm2, ymm1
         vmovdqa ymmword ptr [rsp+0x220], ymm2
-        vpxor   ymm1, ymm1, ymmword ptr [CMP_MSB_MASK+rip]
-        vpxor   ymm2, ymm2, ymmword ptr [CMP_MSB_MASK+rip]
+        vpxor   ymm1, ymm1, ymmword ptr [AVX2_CMP_MSB_MASK+rip]
+        vpxor   ymm2, ymm2, ymmword ptr [AVX2_CMP_MSB_MASK+rip]
         vpcmpgtd ymm2, ymm1, ymm2
         shr     r8, 32
         vmovd   xmm3, r8d
@@ -183,17 +183,17 @@ blake3_hash_many_avx2:
         vpaddd  ymm3, ymm3, ymm7
         vpxor   ymm12, ymm0, ymmword ptr [rsp+0x220]
         vpxor   ymm13, ymm1, ymmword ptr [rsp+0x240]
-        vpxor   ymm14, ymm2, ymmword ptr [BLAKE3_BLOCK_LEN+rip]
+        vpxor   ymm14, ymm2, ymmword ptr [AVX2_BLAKE3_BLOCK_LEN+rip]
         vpxor   ymm15, ymm3, ymm15
-        vbroadcasti128 ymm8, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
         vpshufb ymm14, ymm14, ymm8
         vpshufb ymm15, ymm15, ymm8
-        vpaddd  ymm8, ymm12, ymmword ptr [BLAKE3_IV_0+rip]
-        vpaddd  ymm9, ymm13, ymmword ptr [BLAKE3_IV_1+rip]
-        vpaddd  ymm10, ymm14, ymmword ptr [BLAKE3_IV_2+rip]
-        vpaddd  ymm11, ymm15, ymmword ptr [BLAKE3_IV_3+rip]
+        vpaddd  ymm8, ymm12, ymmword ptr [AVX2_BLAKE3_IV_0+rip]
+        vpaddd  ymm9, ymm13, ymmword ptr [AVX2_BLAKE3_IV_1+rip]
+        vpaddd  ymm10, ymm14, ymmword ptr [AVX2_BLAKE3_IV_2+rip]
+        vpaddd  ymm11, ymm15, ymmword ptr [AVX2_BLAKE3_IV_3+rip]
         vpxor   ymm4, ymm4, ymm8
         vpxor   ymm5, ymm5, ymm9
         vpxor   ymm6, ymm6, ymm10
@@ -223,7 +223,7 @@ blake3_hash_many_avx2:
         vpxor   ymm13, ymm13, ymm1
         vpxor   ymm14, ymm14, ymm2
         vpxor   ymm15, ymm15, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
         vpshufb ymm14, ymm14, ymm8
@@ -261,7 +261,7 @@ blake3_hash_many_avx2:
         vpxor   ymm12, ymm12, ymm1
         vpxor   ymm13, ymm13, ymm2
         vpxor   ymm14, ymm14, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm15, ymm15, ymm8
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
@@ -299,7 +299,7 @@ blake3_hash_many_avx2:
         vpxor   ymm12, ymm12, ymm1
         vpxor   ymm13, ymm13, ymm2
         vpxor   ymm14, ymm14, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm15, ymm15, ymm8
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
@@ -337,7 +337,7 @@ blake3_hash_many_avx2:
         vpxor   ymm13, ymm13, ymm1
         vpxor   ymm14, ymm14, ymm2
         vpxor   ymm15, ymm15, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
         vpshufb ymm14, ymm14, ymm8
@@ -375,7 +375,7 @@ blake3_hash_many_avx2:
         vpxor   ymm13, ymm13, ymm1
         vpxor   ymm14, ymm14, ymm2
         vpxor   ymm15, ymm15, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
         vpshufb ymm14, ymm14, ymm8
@@ -413,7 +413,7 @@ blake3_hash_many_avx2:
         vpxor   ymm12, ymm12, ymm1
         vpxor   ymm13, ymm13, ymm2
         vpxor   ymm14, ymm14, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm15, ymm15, ymm8
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
@@ -451,7 +451,7 @@ blake3_hash_many_avx2:
         vpxor   ymm12, ymm12, ymm1
         vpxor   ymm13, ymm13, ymm2
         vpxor   ymm14, ymm14, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm15, ymm15, ymm8
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
@@ -489,7 +489,7 @@ blake3_hash_many_avx2:
         vpxor   ymm13, ymm13, ymm1
         vpxor   ymm14, ymm14, ymm2
         vpxor   ymm15, ymm15, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
         vpshufb ymm14, ymm14, ymm8
@@ -527,7 +527,7 @@ blake3_hash_many_avx2:
         vpxor   ymm13, ymm13, ymm1
         vpxor   ymm14, ymm14, ymm2
         vpxor   ymm15, ymm15, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
         vpshufb ymm14, ymm14, ymm8
@@ -565,7 +565,7 @@ blake3_hash_many_avx2:
         vpxor   ymm12, ymm12, ymm1
         vpxor   ymm13, ymm13, ymm2
         vpxor   ymm14, ymm14, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm15, ymm15, ymm8
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
@@ -603,7 +603,7 @@ blake3_hash_many_avx2:
         vpxor   ymm12, ymm12, ymm1
         vpxor   ymm13, ymm13, ymm2
         vpxor   ymm14, ymm14, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm15, ymm15, ymm8
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
@@ -641,7 +641,7 @@ blake3_hash_many_avx2:
         vpxor   ymm13, ymm13, ymm1
         vpxor   ymm14, ymm14, ymm2
         vpxor   ymm15, ymm15, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
         vpshufb ymm14, ymm14, ymm8
@@ -679,7 +679,7 @@ blake3_hash_many_avx2:
         vpxor   ymm13, ymm13, ymm1
         vpxor   ymm14, ymm14, ymm2
         vpxor   ymm15, ymm15, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
         vpshufb ymm14, ymm14, ymm8
@@ -717,7 +717,7 @@ blake3_hash_many_avx2:
         vpxor   ymm12, ymm12, ymm1
         vpxor   ymm13, ymm13, ymm2
         vpxor   ymm14, ymm14, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm15, ymm15, ymm8
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
@@ -755,7 +755,7 @@ blake3_hash_many_avx2:
         vpxor   ymm12, ymm12, ymm1
         vpxor   ymm13, ymm13, ymm2
         vpxor   ymm14, ymm14, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm15, ymm15, ymm8
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
@@ -793,7 +793,7 @@ blake3_hash_many_avx2:
         vpxor   ymm13, ymm13, ymm1
         vpxor   ymm14, ymm14, ymm2
         vpxor   ymm15, ymm15, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
         vpshufb ymm14, ymm14, ymm8
@@ -831,7 +831,7 @@ blake3_hash_many_avx2:
         vpxor   ymm13, ymm13, ymm1
         vpxor   ymm14, ymm14, ymm2
         vpxor   ymm15, ymm15, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
         vpshufb ymm14, ymm14, ymm8
@@ -869,7 +869,7 @@ blake3_hash_many_avx2:
         vpxor   ymm12, ymm12, ymm1
         vpxor   ymm13, ymm13, ymm2
         vpxor   ymm14, ymm14, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm15, ymm15, ymm8
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
@@ -907,7 +907,7 @@ blake3_hash_many_avx2:
         vpxor   ymm12, ymm12, ymm1
         vpxor   ymm13, ymm13, ymm2
         vpxor   ymm14, ymm14, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm15, ymm15, ymm8
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
@@ -945,7 +945,7 @@ blake3_hash_many_avx2:
         vpxor   ymm13, ymm13, ymm1
         vpxor   ymm14, ymm14, ymm2
         vpxor   ymm15, ymm15, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
         vpshufb ymm14, ymm14, ymm8
@@ -983,7 +983,7 @@ blake3_hash_many_avx2:
         vpxor   ymm13, ymm13, ymm1
         vpxor   ymm14, ymm14, ymm2
         vpxor   ymm15, ymm15, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
         vpshufb ymm14, ymm14, ymm8
@@ -1021,7 +1021,7 @@ blake3_hash_many_avx2:
         vpxor   ymm12, ymm12, ymm1
         vpxor   ymm13, ymm13, ymm2
         vpxor   ymm14, ymm14, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm15, ymm15, ymm8
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
@@ -1059,7 +1059,7 @@ blake3_hash_many_avx2:
         vpxor   ymm12, ymm12, ymm1
         vpxor   ymm13, ymm13, ymm2
         vpxor   ymm14, ymm14, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm15, ymm15, ymm8
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
@@ -1097,7 +1097,7 @@ blake3_hash_many_avx2:
         vpxor   ymm13, ymm13, ymm1
         vpxor   ymm14, ymm14, ymm2
         vpxor   ymm15, ymm15, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
         vpshufb ymm14, ymm14, ymm8
@@ -1135,7 +1135,7 @@ blake3_hash_many_avx2:
         vpxor   ymm13, ymm13, ymm1
         vpxor   ymm14, ymm14, ymm2
         vpxor   ymm15, ymm15, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
         vpshufb ymm14, ymm14, ymm8
@@ -1173,7 +1173,7 @@ blake3_hash_many_avx2:
         vpxor   ymm12, ymm12, ymm1
         vpxor   ymm13, ymm13, ymm2
         vpxor   ymm14, ymm14, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm15, ymm15, ymm8
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
@@ -1211,7 +1211,7 @@ blake3_hash_many_avx2:
         vpxor   ymm12, ymm12, ymm1
         vpxor   ymm13, ymm13, ymm2
         vpxor   ymm14, ymm14, ymm3
-        vbroadcasti128 ymm8, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm8, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm15, ymm15, ymm8
         vpshufb ymm12, ymm12, ymm8
         vpshufb ymm13, ymm13, ymm8
@@ -1286,8 +1286,8 @@ blake3_hash_many_avx2:
         vmovdqa ymm0, ymmword ptr [rsp+0x2A0]
         vpaddd  ymm1, ymm0, ymmword ptr [rsp+0x220]
         vmovdqa ymmword ptr [rsp+0x220], ymm1
-        vpxor   ymm0, ymm0, ymmword ptr [CMP_MSB_MASK+rip]
-        vpxor   ymm2, ymm1, ymmword ptr [CMP_MSB_MASK+rip]
+        vpxor   ymm0, ymm0, ymmword ptr [AVX2_CMP_MSB_MASK+rip]
+        vpxor   ymm2, ymm1, ymmword ptr [AVX2_CMP_MSB_MASK+rip]
         vpcmpgtd ymm2, ymm0, ymm2
         vmovdqa ymm0, ymmword ptr [rsp+0x240]
         vpsubd  ymm2, ymm0, ymm2
@@ -1340,7 +1340,7 @@ blake3_hash_many_avx2:
         vpunpckhdq ymm15, ymm12, ymm13
         vpermq  ymm14, ymm14, 0x50
         vpermq  ymm15, ymm15, 0x50
-        vbroadcasti128 ymm12, xmmword ptr [BLAKE3_BLOCK_LEN+rip]
+        vbroadcasti128 ymm12, xmmword ptr [AVX2_BLAKE3_BLOCK_LEN+rip]
         vpblendd ymm14, ymm14, ymm12, 0x44
         vpblendd ymm15, ymm15, ymm12, 0x44
         vmovdqa ymmword ptr [rsp], ymm14
@@ -1393,7 +1393,7 @@ blake3_hash_many_avx2:
         vmovdqa ymm11, ymmword ptr [rsp+0x20]
         vpblendd ymm3, ymm3, ymm2, 0x88
         vpblendd ymm11, ymm11, ymm2, 0x88
-        vbroadcasti128 ymm2, xmmword ptr [BLAKE3_IV+rip]
+        vbroadcasti128 ymm2, xmmword ptr [AVX2_BLAKE3_IV+rip]
         vmovdqa ymm10, ymm2
         mov     al, 7
 9:
@@ -1407,7 +1407,7 @@ blake3_hash_many_avx2:
         vpaddd  ymm8, ymm8, ymm9
         vpxor   ymm3, ymm3, ymm0
         vpxor   ymm11, ymm11, ymm8
-        vbroadcasti128 ymm4, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm4, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm3, ymm3, ymm4
         vpshufb ymm11, ymm11, ymm4
         vpaddd  ymm2, ymm2, ymm3
@@ -1428,7 +1428,7 @@ blake3_hash_many_avx2:
         vmovdqa ymmword ptr [rsp+0xA0], ymm13
         vpxor   ymm3, ymm3, ymm0
         vpxor   ymm11, ymm11, ymm8
-        vbroadcasti128 ymm4, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm4, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm3, ymm3, ymm4
         vpshufb ymm11, ymm11, ymm4
         vpaddd  ymm2, ymm2, ymm3
@@ -1453,7 +1453,7 @@ blake3_hash_many_avx2:
         vpaddd  ymm8, ymm8, ymm9
         vpxor   ymm3, ymm3, ymm0
         vpxor   ymm11, ymm11, ymm8
-        vbroadcasti128 ymm4, xmmword ptr [ROT16+rip]
+        vbroadcasti128 ymm4, xmmword ptr [AVX2_ROT16+rip]
         vpshufb ymm3, ymm3, ymm4
         vpshufb ymm11, ymm11, ymm4
         vpaddd  ymm2, ymm2, ymm3
@@ -1472,7 +1472,7 @@ blake3_hash_many_avx2:
         vpaddd  ymm8, ymm8, ymm9
         vpxor   ymm3, ymm3, ymm0
         vpxor   ymm11, ymm11, ymm8
-        vbroadcasti128 ymm4, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm4, xmmword ptr [AVX2_ROT8+rip]
         vpshufb ymm3, ymm3, ymm4
         vpshufb ymm11, ymm11, ymm4
         vpaddd  ymm2, ymm2, ymm3
@@ -1561,13 +1561,13 @@ blake3_hash_many_avx2:
         vbroadcasti128 ymm1, xmmword ptr [rcx+0x10]
         vmovd   xmm13, dword ptr [rsp+0x220]
         vpinsrd xmm13, xmm13, dword ptr [rsp+0x240], 1
-        vpinsrd xmm13, xmm13, dword ptr [BLAKE3_BLOCK_LEN+rip], 2
+        vpinsrd xmm13, xmm13, dword ptr [AVX2_BLAKE3_BLOCK_LEN+rip], 2
         vmovd   xmm14, dword ptr [rsp+0x224]
         vpinsrd xmm14, xmm14, dword ptr [rsp+0x244], 1
-        vpinsrd xmm14, xmm14, dword ptr [BLAKE3_BLOCK_LEN+rip], 2
+        vpinsrd xmm14, xmm14, dword ptr [AVX2_BLAKE3_BLOCK_LEN+rip], 2
         vinserti128 ymm13, ymm13, xmm14, 0x01
-        vbroadcasti128 ymm14, xmmword ptr [ROT16+rip]
-        vbroadcasti128 ymm15, xmmword ptr [ROT8+rip]
+        vbroadcasti128 ymm14, xmmword ptr [AVX2_ROT16+rip]
+        vbroadcasti128 ymm15, xmmword ptr [AVX2_ROT8+rip]
         mov     r8, qword ptr [rdi]
         mov     r9, qword ptr [rdi+0x8]
         movzx   eax, byte ptr [rbp+0x80]
@@ -1581,7 +1581,7 @@ blake3_hash_many_avx2:
         cmp     rdx, r15
         cmovne  eax, r14d
         mov     dword ptr [rsp+0x200], eax
-        vbroadcasti128 ymm2, xmmword ptr [BLAKE3_IV+rip]
+        vbroadcasti128 ymm2, xmmword ptr [AVX2_BLAKE3_IV+rip]
         vpbroadcastd ymm8, dword ptr [rsp+0x200]
         vpblendd ymm3, ymm13, ymm8, 0x88
         vmovups ymm8, ymmword ptr [r8+rdx-0x40]
@@ -1687,9 +1687,9 @@ blake3_hash_many_avx2:
         vmovdqu xmm1, xmmword ptr [rcx+0x10]
         vmovd   xmm3, dword ptr [rsp+0x220]
         vpinsrd xmm3, xmm3, dword ptr [rsp+0x240], 1
-        vpinsrd xmm13, xmm3, dword ptr [BLAKE3_BLOCK_LEN+rip], 2
-        vmovdqa xmm14, xmmword ptr [ROT16+rip]
-        vmovdqa xmm15, xmmword ptr [ROT8+rip]
+        vpinsrd xmm13, xmm3, dword ptr [AVX2_BLAKE3_BLOCK_LEN+rip], 2
+        vmovdqa xmm14, xmmword ptr [AVX2_ROT16+rip]
+        vmovdqa xmm15, xmmword ptr [AVX2_ROT8+rip]
         mov     r8, qword ptr [rdi]
         movzx   eax, byte ptr [rbp+0x80]
         or      eax, r13d
@@ -1701,7 +1701,7 @@ blake3_hash_many_avx2:
         add     rdx, 64
         cmp     rdx, r15
         cmovne  eax, r14d
-        vmovdqa xmm2, xmmword ptr [BLAKE3_IV+rip]
+        vmovdqa xmm2, xmmword ptr [AVX2_BLAKE3_IV+rip]
         vmovdqa xmm3, xmm13
         vpinsrd xmm3, xmm3, eax, 3
         vmovups xmm8, xmmword ptr [r8+rdx-0x40]
@@ -1786,32 +1786,32 @@ blake3_hash_many_avx2:
 
 .section .rodata
 .p2align  6
-ADD0:
+AVX2_ADD0:
         .long  0, 1, 2, 3, 4, 5, 6, 7
-ADD1:
+AVX2_ADD1:
         .long  8, 8, 8, 8, 8, 8, 8, 8
-BLAKE3_IV_0:
+AVX2_BLAKE3_IV_0:
         .long  0x6A09E667, 0x6A09E667, 0x6A09E667, 0x6A09E667
         .long  0x6A09E667, 0x6A09E667, 0x6A09E667, 0x6A09E667
-BLAKE3_IV_1:
+AVX2_BLAKE3_IV_1:
         .long  0xBB67AE85, 0xBB67AE85, 0xBB67AE85, 0xBB67AE85
         .long  0xBB67AE85, 0xBB67AE85, 0xBB67AE85, 0xBB67AE85
-BLAKE3_IV_2:
+AVX2_BLAKE3_IV_2:
         .long  0x3C6EF372, 0x3C6EF372, 0x3C6EF372, 0x3C6EF372
         .long  0x3C6EF372, 0x3C6EF372, 0x3C6EF372, 0x3C6EF372
-BLAKE3_IV_3:
+AVX2_BLAKE3_IV_3:
         .long  0xA54FF53A, 0xA54FF53A, 0xA54FF53A, 0xA54FF53A
         .long  0xA54FF53A, 0xA54FF53A, 0xA54FF53A, 0xA54FF53A
-BLAKE3_BLOCK_LEN:
+AVX2_BLAKE3_BLOCK_LEN:
         .long  0x00000040, 0x00000040, 0x00000040, 0x00000040
         .long  0x00000040, 0x00000040, 0x00000040, 0x00000040
-ROT16:
+AVX2_ROT16:
         .byte  2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13
-ROT8:
+AVX2_ROT8:
         .byte  1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 12
-CMP_MSB_MASK:
+AVX2_CMP_MSB_MASK:
         .long  0x80000000, 0x80000000, 0x80000000, 0x80000000
         .long  0x80000000, 0x80000000, 0x80000000, 0x80000000
-BLAKE3_IV:
+AVX2_BLAKE3_IV:
         .long  0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A
 
