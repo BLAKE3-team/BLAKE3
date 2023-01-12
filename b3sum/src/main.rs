@@ -340,6 +340,9 @@ fn filepath_to_string(filepath: &Path) -> FilepathString {
         filepath_string = filepath_string.replace('\\', "\\\\").replace('\n', "\\n");
         is_escaped = true;
     }
+    if filepath_string.contains('�') {
+        eprintln!("{}: must be valid unicode and not contain '�' for --check", filepath_string);
+    }
     FilepathString {
         filepath_string,
         is_escaped,
