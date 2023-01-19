@@ -178,6 +178,8 @@ jobs:
   c_tests:
     name: C Makefile tests
     runs-on: ubuntu-latest
+    env:
+      CFLAGS: "-Wall -Wextra -pedantic -Werror -Wsign-conversion"
 
     steps:
     - uses: actions/checkout@v3
