@@ -537,7 +537,7 @@ fn check_one_line(line: &str, args: &Args) -> bool {
     }
 }
 
-fn check_one_checkfile(path: &Path, args: &Args, files_failed: &mut i64) -> Result<()> {
+fn check_one_checkfile(path: &Path, args: &Args, files_failed: &mut u64) -> Result<()> {
     let checkfile_input = Input::open(path, args)?;
     let mut bufreader = io::BufReader::new(checkfile_input);
     let mut line = String::new();
@@ -564,7 +564,7 @@ fn main() -> Result<()> {
     }
     let thread_pool = thread_pool_builder.build()?;
     thread_pool.install(|| {
-        let mut files_failed = 0i64;
+        let mut files_failed = 0u64;
         // Note that file_args automatically includes `-` if nothing is given.
         for path in &args.file_args {
             if args.check() {
