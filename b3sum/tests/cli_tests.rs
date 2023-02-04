@@ -420,7 +420,10 @@ fn test_check() {
         c/d: OK\n";
     assert!(!output.status.success());
     assert_eq!(expected_check_failure, stdout);
-    assert_eq!("b3sum: WARNING 1 computed checksum did NOT match\n", stderr);
+    assert_eq!(
+        "b3sum: WARNING: 1 computed checksum did NOT match\n",
+        stderr,
+    );
 
     // Delete one of the files and check again.
     fs::remove_file(dir.path().join("b")).unwrap();
@@ -442,7 +445,10 @@ fn test_check() {
     );
     assert!(!output.status.success());
     assert_eq!(expected_check_failure, stdout);
-    assert_eq!("b3sum: WARNING 1 computed checksum did NOT match\n", stderr);
+    assert_eq!(
+        "b3sum: WARNING: 1 computed checksum did NOT match\n",
+        stderr,
+    );
 
     // Confirm that --quiet suppresses the OKs but not the FAILEDs.
     let output = cmd!(b3sum_exe(), "--check", "--quiet", &checkfile_path)
@@ -457,7 +463,10 @@ fn test_check() {
     let expected_check_failure = format!("b: FAILED ({})\n", open_file_error);
     assert!(!output.status.success());
     assert_eq!(expected_check_failure, stdout);
-    assert_eq!("b3sum: WARNING 1 computed checksum did NOT match\n", stderr);
+    assert_eq!(
+        "b3sum: WARNING: 1 computed checksum did NOT match\n",
+        stderr,
+    );
 }
 
 #[test]
@@ -474,7 +483,7 @@ fn test_check_invalid_characters() {
     let stderr = std::str::from_utf8(&output.stderr).unwrap();
     let expected_stderr = "\
         b3sum: Null character in path\n\
-        b3sum: WARNING 1 computed checksum did NOT match\n";
+        b3sum: WARNING: 1 computed checksum did NOT match\n";
     assert!(!output.status.success());
     assert_eq!("", stdout);
     assert_eq!(expected_stderr, stderr);
@@ -491,7 +500,7 @@ fn test_check_invalid_characters() {
     let stderr = std::str::from_utf8(&output.stderr).unwrap();
     let expected_stderr = "\
         b3sum: Unicode replacement character in path\n\
-        b3sum: WARNING 1 computed checksum did NOT match\n";
+        b3sum: WARNING: 1 computed checksum did NOT match\n";
     assert!(!output.status.success());
     assert_eq!("", stdout);
     assert_eq!(expected_stderr, stderr);
@@ -508,7 +517,7 @@ fn test_check_invalid_characters() {
     let stderr = std::str::from_utf8(&output.stderr).unwrap();
     let expected_stderr = "\
         b3sum: Invalid backslash escape\n\
-        b3sum: WARNING 1 computed checksum did NOT match\n";
+        b3sum: WARNING: 1 computed checksum did NOT match\n";
     assert!(!output.status.success());
     assert_eq!("", stdout);
     assert_eq!(expected_stderr, stderr);
@@ -527,7 +536,7 @@ fn test_check_invalid_characters() {
         let stderr = std::str::from_utf8(&output.stderr).unwrap();
         let expected_stderr = "\
             b3sum: Backslash in path\n\
-            b3sum: WARNING 1 computed checksum did NOT match\n";
+            b3sum: WARNING: 1 computed checksum did NOT match\n";
         assert!(!output.status.success());
         assert_eq!("", stdout);
         assert_eq!(expected_stderr, stderr);

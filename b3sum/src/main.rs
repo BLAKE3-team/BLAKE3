@@ -585,7 +585,7 @@ fn main() -> Result<()> {
         }
         if args.check() && files_failed > 0 {
             eprintln!(
-                "{}: WARNING {} computed checksum{} did NOT match",
+                "{}: WARNING: {} computed checksum{} did NOT match",
                 NAME,
                 files_failed,
                 if files_failed == 1 { "" } else { "s" },
