@@ -578,7 +578,7 @@ fn main() -> Result<()> {
                 // errors we'll still return non-zero at the end.
                 let result = hash_one_input(path, &args);
                 if let Err(e) = result {
-                    files_failed += 1;
+                    files_failed = files_failed.saturating_add(1);
                     eprintln!("{}: {}: {}", NAME, path.to_string_lossy(), e);
                 }
             }
