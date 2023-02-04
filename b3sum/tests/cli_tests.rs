@@ -117,10 +117,18 @@ fn test_keyed() {
     // Make sure that keys of the wrong length lead to errors.
     for bad_length in [0, 1, blake3::KEY_LEN - 1, blake3::KEY_LEN + 1] {
         dbg!(bad_length);
-        cmd!(b3sum_exe(), "--keyed", f.path())
+        let output = cmd!(b3sum_exe(), "--keyed", f.path())
             .stdin_bytes(vec![0; bad_length])
-            .read()
-            .expect_err("a bad length key should fail");
+            .stdout_capture()
+            .stderr_capture()
+            .unchecked()
+            .run()
+            .unwrap();
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty());
+        // Make sure the error message is relevant.
+        let stderr = std::str::from_utf8(&output.stderr).unwrap();
+        assert!(stderr.contains("key bytes"));
     }
 }
 
