@@ -551,7 +551,9 @@ fn check_one_checkfile(path: &Path, args: &Args, files_failed: &mut u64) -> Resu
         // return, so it doesn't return a Result.
         let success = check_one_line(&line, args);
         if !success {
-            *files_failed += 1;
+            // We use `files_failed > 0` to indicate a mismatch, so it's important for correctness
+            // that it's impossible for this counter to overflow.
+            *files_failed = files_failed.saturating_add(1);
         }
     }
 }
@@ -582,7 +584,12 @@ fn main() -> Result<()> {
             }
         }
         if args.check() && files_failed > 0 {
-            eprintln!("{}: WARNING {} computed checksum{} did NOT match", NAME, files_failed, if files_failed == 1 {""} else {"s"});
+            eprintln!(
+                "{}: WARNING {} computed checksum{} did NOT match",
+                NAME,
+                files_failed,
+                if files_failed == 1 { "" } else { "s" },
+            );
         }
         std::process::exit(if files_failed > 0 { 1 } else { 0 });
     })
