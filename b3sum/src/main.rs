@@ -558,6 +558,60 @@ fn check_one_checkfile(path: &Path, args: &Args, files_failed: &mut u64) -> Resu
     }
 }
 
+fn do_hash(args: &Args) -> Result<()> {
+    let mut files_failed = 0u64;
+    let mut found_invalid_unicode = false;
+    let mut found_literal_replacement_char = false;
+    for path in &args.file_args {
+        // Errors encountered in hashing are tolerated and printed to
+        // stderr. This allows e.g. `b3sum *` to print errors for
+        // non-files and keep going. However, if we encounter any
+        // errors we'll still return non-zero at the end.
+        let result = hash_one_input(path, &args);
+        if let Err(e) = result {
+            files_failed = files_failed.saturating_add(1);
+            eprintln!("{}: {}: {}", NAME, path.to_string_lossy(), e);
+        }
+        match path.to_str() {
+            Some(s) => {
+                if s.contains('�') {
+                    found_literal_replacement_char = true;
+                }
+            }
+            None => found_invalid_unicode = true,
+        };
+    }
+    if found_invalid_unicode {
+        eprintln!(
+            "{}: WARNING: a filename contains invalid unicode, output is not checkable",
+            NAME,
+        );
+    }
+    if found_literal_replacement_char {
+        eprintln!(
+            "{}: WARNING: a filename contains a literal � character, output is not checkable",
+            NAME,
+        );
+    }
+    std::process::exit(if files_failed > 0 { 1 } else { 0 });
+}
+
+fn do_check(args: &Args) -> Result<()> {
+    let mut files_failed = 0u64;
+    for path in &args.file_args {
+        check_one_checkfile(path, &args, &mut files_failed)?;
+    }
+    if files_failed > 0 {
+        eprintln!(
+            "{}: WARNING: {} computed checksum{} did NOT match",
+            NAME,
+            files_failed,
+            if files_failed == 1 { "" } else { "s" },
+        );
+    }
+    std::process::exit(if files_failed > 0 { 1 } else { 0 });
+}
+
 fn main() -> Result<()> {
     let args = Args::parse()?;
     let mut thread_pool_builder = rayon::ThreadPoolBuilder::new();
@@ -566,32 +620,12 @@ fn main() -> Result<()> {
     }
     let thread_pool = thread_pool_builder.build()?;
     thread_pool.install(|| {
-        let mut files_failed = 0u64;
-        // Note that file_args automatically includes `-` if nothing is given.
-        for path in &args.file_args {
-            if args.check() {
-                check_one_checkfile(path, &args, &mut files_failed)?;
-            } else {
-                // Errors encountered in hashing are tolerated and printed to
-                // stderr. This allows e.g. `b3sum *` to print errors for
-                // non-files and keep going. However, if we encounter any
-                // errors we'll still return non-zero at the end.
-                let result = hash_one_input(path, &args);
-                if let Err(e) = result {
-                    files_failed = files_failed.saturating_add(1);
-                    eprintln!("{}: {}: {}", NAME, path.to_string_lossy(), e);
-                }
-            }
+        if args.check() {
+            do_check(&args)?;
+        } else {
+            do_hash(&args)?;
         }
-        if args.check() && files_failed > 0 {
-            eprintln!(
-                "{}: WARNING: {} computed checksum{} did NOT match",
-                NAME,
-                files_failed,
-                if files_failed == 1 { "" } else { "s" },
-            );
-        }
-        std::process::exit(if files_failed > 0 { 1 } else { 0 });
+        Ok(())
     })
 }
 
