@@ -2,7 +2,8 @@ This is the reference implementation of BLAKE3. It is used for testing and
 as a readable example of the algorithms involved. Section 5.1 of [the BLAKE3
 spec](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf)
 discusses this implementation. You can render docs for this implementation
-by running `cargo doc --open` in this directory.
+by running `cargo doc --open` in this directory or by visiting [docs.rs
+](https://docs.rs/blake3_reference).
 
 This implementation is a single file
 ([`reference_impl.rs`](reference_impl.rs)) with no dependencies. It is

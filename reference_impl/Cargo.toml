@@ -1,8 +1,13 @@
 [package]
-name = "reference_impl"
-version = "0.0.0"
+name = "blake3_reference"
+version = "1.0.0"
+authors = ["Jack O'Connor <oconnor663@gmail.com>", "Samuel Neves"]
+description = "reference implementation of the BLAKE3 hash function"
+repository = "https://github.com/BLAKE3-team/BLAKE3"
+license = "CC0-1.0 OR Apache-2.0"
+documentation = "https://docs.rs/blake3_reference"
+readme = "README.md"
 edition = "2018"
 
 [lib]
-name = "reference_impl"
 path = "reference_impl.rs"
