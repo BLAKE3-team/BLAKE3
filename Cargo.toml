@@ -77,6 +77,10 @@ no_avx2 = []
 no_avx512 = []
 no_neon = []
 
+# Enable support for serialization, and desrialization of
+# the `Hash` struct.
+serde = ["serde/derive"]
+
 [package.metadata.docs.rs]
 # Document Hasher::update_rayon on docs.rs.
 features = ["rayon"]
@@ -88,6 +92,7 @@ constant_time_eq = "0.2.4"
 rayon = { version = "1.2.1", optional = true }
 cfg-if = "1.0.0"
 digest = { version = "0.10.1", features = [ "mac" ], optional = true }
+serde = { version = "1.0.156", optional = true }
 
 [dev-dependencies]
 hex = "0.4.2"
