@@ -6,7 +6,7 @@ description = "a command line implementation of the BLAKE3 hash function"
 repository = "https://github.com/BLAKE3-team/BLAKE3"
 license = "CC0-1.0 OR Apache-2.0"
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 
 [features]
 neon = ["blake3/neon"]

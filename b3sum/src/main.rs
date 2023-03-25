@@ -1,7 +1,6 @@
 use anyhow::{bail, ensure, Result};
 use clap::Parser;
 use std::cmp;
-use std::convert::TryInto;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;

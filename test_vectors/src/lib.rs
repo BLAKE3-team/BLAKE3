@@ -142,7 +142,6 @@ pub fn parse_test_cases() -> Cases {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::convert::TryInto;
 
     fn test_reference_impl_all_at_once(
         key: &[u8; blake3::KEY_LEN],

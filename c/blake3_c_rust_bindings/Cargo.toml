@@ -7,7 +7,7 @@
 name = "blake3_c_rust_bindings"
 version = "0.0.0"
 description = "TESTING ONLY Rust bindings for the BLAKE3 C implementation"
-edition = "2018"
+edition = "2021"
 
 [features]
 # By default the x86-64 build uses assembly implementations. This feature makes

@@ -18,7 +18,6 @@
 //! ```
 
 use core::cmp::min;
-use core::convert::TryInto;
 
 const OUT_LEN: usize = 32;
 const KEY_LEN: usize = 32;
