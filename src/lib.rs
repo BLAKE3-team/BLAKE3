@@ -176,13 +176,13 @@ fn counter_high(counter: u64) -> u32 {
 /// An output of the default size, 32 bytes, which provides constant-time
 /// equality checking.
 ///
-/// `Hash` implements [`From`] and [`Into`] for `[u8; 32]`, and it provides an
-/// explicit [`as_bytes`] method returning `&[u8; 32]`. However, byte arrays
-/// and slices don't provide constant-time equality checking, which is often a
-/// security requirement in software that handles private data. `Hash` doesn't
-/// implement [`Deref`] or [`AsRef`], to avoid situations where a type
-/// conversion happens implicitly and the constant-time property is
-/// accidentally lost.
+/// `Hash` implements [`From`] and [`Into`] for `[u8; 32]`, and it provides
+/// explicit [`from_bytes`], and [`as_bytes`] for conversions between itself
+/// and `[u8; 32]`. However, byte arrays and slices don't provide constant-time
+/// equality checking, which is often a security requirement in software that
+/// handles private data. `Hash` doesn't implement [`Deref`] or [`AsRef`], to
+/// avoid situations where a type conversion happens implicitly and the
+/// constant-time property is accidentally lost.
 ///
 /// `Hash` provides the [`to_hex`] and [`from_hex`] methods for converting to
 /// and from hexadecimal. It also implements [`Display`] and [`FromStr`].
@@ -190,6 +190,7 @@ fn counter_high(counter: u64) -> u32 {
 /// [`From`]: https://doc.rust-lang.org/std/convert/trait.From.html
 /// [`Into`]: https://doc.rust-lang.org/std/convert/trait.Into.html
 /// [`as_bytes`]: #method.as_bytes
+/// [`from_bytes`]: #method.from_bytes
 /// [`Deref`]: https://doc.rust-lang.org/stable/std/ops/trait.Deref.html
 /// [`AsRef`]: https://doc.rust-lang.org/std/convert/trait.AsRef.html
 /// [`to_hex`]: #method.to_hex
@@ -206,6 +207,11 @@ impl Hash {
     #[inline]
     pub const fn as_bytes(&self) -> &[u8; OUT_LEN] {
         &self.0
+    }
+
+    /// Create a `Hash` from its raw bytes representation.
+    pub const fn from_bytes(bytes: [u8; OUT_LEN]) -> Self {
+        Self(bytes)
     }
 
     /// Encode a `Hash` in lowercase hexadecimal.
@@ -259,7 +265,7 @@ impl Hash {
 impl From<[u8; OUT_LEN]> for Hash {
     #[inline]
     fn from(bytes: [u8; OUT_LEN]) -> Self {
-        Self(bytes)
+        Self::from_bytes(bytes)
     }
 }
 
