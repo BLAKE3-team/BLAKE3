@@ -204,7 +204,7 @@ impl Hash {
     /// constant-time equality checking, so if  you need to compare hashes,
     /// prefer the `Hash` type.
     #[inline]
-    pub fn as_bytes(&self) -> &[u8; OUT_LEN] {
+    pub const fn as_bytes(&self) -> &[u8; OUT_LEN] {
         &self.0
     }
 
