@@ -9,8 +9,9 @@ import sys
 ROOT = Path(__file__).parent.parent.parent
 RUST_TARGET = sys.argv[1]
 
-subprocess.run(["cargo", "build", "--target", sys.argv[1], "--release"],
-               cwd=ROOT / "b3sum")
+subprocess.run(
+    ["cargo", "build", "--target", sys.argv[1], "--release"], cwd=ROOT / "b3sum"
+)
 
 if platform.system() == "Windows":
     original_exe_name = "b3sum.exe"

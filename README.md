@@ -45,7 +45,7 @@ This repository is the official implementation of BLAKE3. It includes:
 
 * The [C implementation](c), which like the Rust implementation includes
   SIMD code and runtime CPU feature detection on x86. Unlike the Rust
-  implementation, it's not currently multithreaded. See
+  implementation, it's [not currently multithreaded](c#multithreading). See
   [`c/README.md`](c/README.md).
 
 * The [Rust reference implementation](reference_impl/reference_impl.rs),
@@ -200,11 +200,12 @@ Alternatively, it is licensed under the Apache License 2.0.
 
 Here's a (non-exhaustive) list of protocols and software that use BLAKE3:
 
+* [Alephium](https://github.com/alephium/alephium/blob/master/crypto/src/main/scala/org/alephium/crypto/Blake3.scala)
 * [Chia](https://github.com/Chia-Network/chia-blockchain/blob/main/CHANGELOG.md#10beta8-aka-beta-18---2020-07-16)
 * [IPFS](https://github.com/ipfs/go-verifcid/issues/13)
 * [LLVM](https://reviews.llvm.org/D121510)
 * [Nym](https://github.com/nymtech/nym/blob/59056a22c5e6b01a38da2124662bd1fa3c8abef2/common/nymsphinx/params/src/lib.rs#L5)
-* [OpenZFS](https://github.com/openzfs/zfs/pull/11897)
+* [OpenZFS](https://github.com/openzfs/zfs/)
 * [Redox](https://www.redox-os.org/news/pkgar-introduction/)
 * [Skale](https://github.com/skalenetwork/skale-consensus/pull/284)
 * [Solana](https://docs.rs/solana-program/1.9.5/solana_program/blake3/index.html)

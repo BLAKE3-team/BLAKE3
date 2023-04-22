@@ -1047,13 +1047,26 @@ INLINE void transpose_msg_vecs16(const uint8_t *const *inputs,
 INLINE void load_counters16(uint64_t counter, bool increment_counter,
                             __m512i *out_lo, __m512i *out_hi) {
   const __m512i mask = _mm512_set1_epi32(-(int32_t)increment_counter);
-  const __m512i add0 = _mm512_set_epi32(15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
-  const __m512i add1 = _mm512_and_si512(mask, add0);
-  __m512i l = _mm512_add_epi32(_mm512_set1_epi32((int32_t)counter), add1);
-  __mmask16 carry = _mm512_cmp_epu32_mask(l, add1, _MM_CMPINT_LT);
-  __m512i h = _mm512_mask_add_epi32(_mm512_set1_epi32((int32_t)(counter >> 32)), carry, _mm512_set1_epi32((int32_t)(counter >> 32)), _mm512_set1_epi32(1));
-  *out_lo = l;
-  *out_hi = h;
+  const __m512i deltas = _mm512_set_epi32(15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
+  const __m512i masked_deltas = _mm512_and_si512(deltas, mask);
+  const __m512i low_words = _mm512_add_epi32(
+    _mm512_set1_epi32((int32_t)counter),
+    masked_deltas);
+  // The carry bit is 1 if the high bit of the word was 1 before addition and is
+  // 0 after.
+  // NOTE: It would be a bit more natural to use _mm512_cmp_epu32_mask to
+  // compute the carry bits here, and originally we did, but that intrinsic is
+  // broken under GCC 5.4. See https://github.com/BLAKE3-team/BLAKE3/issues/271.
+  const __m512i carries = _mm512_srli_epi32(
+    _mm512_andnot_si512(
+        low_words, // 0 after (gets inverted by andnot)
+        _mm512_set1_epi32((int32_t)counter)), // and 1 before
+    31);
+  const __m512i high_words = _mm512_add_epi32(
+    _mm512_set1_epi32((int32_t)(counter >> 32)),
+    carries);
+  *out_lo = low_words;
+  *out_hi = high_words;
 }
 
 static

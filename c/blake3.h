@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define BLAKE3_VERSION_STRING "1.3.1"
+#define BLAKE3_VERSION_STRING "1.3.3"
 #define BLAKE3_KEY_LEN 32
 #define BLAKE3_OUT_LEN 32
 #define BLAKE3_BLOCK_LEN 64
