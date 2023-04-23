@@ -415,6 +415,15 @@ pub fn sse2_detected() -> bool {
 }
 
 #[inline(always)]
+pub fn words_from_be_bytes_32(bytes: &[u8; 32]) -> [u32; 8] {
+    let mut out: [u32; 8] = [0; 8];
+    for i in 0..8 {
+        out[i] = u32::from_be_bytes(*(array_ref!(bytes, 4*i, 4)));
+    }
+    out
+}
+
+#[inline(always)]
 pub fn words_from_le_bytes_32(bytes: &[u8; 32]) -> [u32; 8] {
     let mut out = [0; 8];
     out[0] = u32::from_le_bytes(*array_ref!(bytes, 0 * 4, 4));

@@ -304,6 +304,37 @@ impl PartialEq<[u8]> for Hash {
 
 impl Eq for Hash {}
 
+/// This implementation is constant-time.
+impl PartialOrd for Hash {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// This implementation is constant-time.
+impl Ord for Hash {
+    #[inline]
+    fn cmp(&self, other: &Hash) -> cmp::Ordering {
+        let self32: [u32; 8] = platform::words_from_be_bytes_32(&self.0);
+        let other32: [u32; 8] = platform::words_from_be_bytes_32(&other.0);
+        let mut acc: i32 = 0;
+        for i in 0..self32.len() {
+            // the left shift keeps earlier comparisons more significant than later ones
+            acc = (acc<<1) + cmp_sign(&self32[i], &other32[i]);
+        }
+        acc.cmp(&0)
+    }
+}
+
+/// Compares two items and returns -1 if Less, 0 if Equal, or 1 if Greater.
+fn cmp_sign<T: Ord>(a: &T, b: &T) -> i32 {
+    match a.cmp(b) {
+        cmp::Ordering::Less => -1,
+        cmp::Ordering::Equal => 0,
+        cmp::Ordering::Greater => 1,
+    }
+}
+
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Formatting field as `&str` to reduce code size since the `Debug`

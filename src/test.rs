@@ -603,3 +603,14 @@ fn test_issue_206_windows_sse2() {
         assert_eq!(crate::Hasher::new().update(input).finalize(), expected_hash);
     }
 }
+
+#[test]
+#[cfg(feature = "std")]
+fn test_order_match() {
+	let hashes = [[0], [1], [2], [3]].map(|a| reference_hash(&a));
+	for i in 0..hashes.len() {
+		for j in 0..hashes.len() {
+			assert_eq!(hashes[i].cmp(&hashes[j]), hashes[i].0.cmp(&hashes[j].0));
+		}
+	}
+}
