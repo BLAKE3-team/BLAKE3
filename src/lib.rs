@@ -177,8 +177,8 @@ fn counter_high(counter: u64) -> u32 {
 /// equality checking.
 ///
 /// `Hash` implements [`From`] and [`Into`] for `[u8; 32]`, and it provides
-/// explicit [`from_bytes`], and [`as_bytes`] for conversions between itself
-/// and `[u8; 32]`. However, byte arrays and slices don't provide constant-time
+/// [`from_bytes`] and [`as_bytes`] for explicit conversions between itself and
+/// `[u8; 32]`. However, byte arrays and slices don't provide constant-time
 /// equality checking, which is often a security requirement in software that
 /// handles private data. `Hash` doesn't implement [`Deref`] or [`AsRef`], to
 /// avoid situations where a type conversion happens implicitly and the
