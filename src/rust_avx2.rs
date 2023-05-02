@@ -12,13 +12,13 @@ pub const DEGREE: usize = 8;
 
 #[inline(always)]
 unsafe fn loadu(src: *const u8) -> __m256i {
-    // This is an unaligned load, so the pointer cast is allowed.
+    //This is an unaligned load, so the pointer cast is allowed.
     _mm256_loadu_si256(src as *const __m256i)
 }
 
 #[inline(always)]
 unsafe fn storeu(src: __m256i, dest: *mut u8) {
-    // This is an unaligned store, so the pointer cast is allowed.
+    //This is an unaligned store, so the pointer cast is allowed.
     _mm256_storeu_si256(dest as *mut __m256i, src)
 }
 
@@ -44,13 +44,13 @@ unsafe fn set8(a: u32, b: u32, c: u32, d: u32, e: u32, f: u32, g: u32, h: u32) -
     )
 }
 
-// These rotations are the "simple/shifts version". For the
-// "complicated/shuffles version", see
-// https://github.com/sneves/blake2-avx2/blob/b3723921f668df09ece52dcd225a36d4a4eea1d9/blake2s-common.h#L63-L66.
-// For a discussion of the tradeoffs, see
-// https://github.com/sneves/blake2-avx2/pull/5. Due to an LLVM bug
-// (https://bugs.llvm.org/show_bug.cgi?id=44379), this version performs better
-// on recent x86 chips.
+//These rotations are the "simple/shifts version". For the
+//"complicated/shuffles version", see
+//https://github.com/sneves/blake2-avx2/blob/b3723921f668df09ece52dcd225a36d4a4eea1d9/blake2s-common.h#L63-L66.
+//For a discussion of the tradeoffs, see
+//https://github.com/sneves/blake2-avx2/pull/5. Due to an LLVM bug
+//(https://bugs.llvm.org/show_bug.cgi?id=44379), this version performs better
+//on recent x86 chips.
 
 #[inline(always)]
 unsafe fn rot16(x: __m256i) -> __m256i {
@@ -197,15 +197,15 @@ unsafe fn interleave128(a: __m256i, b: __m256i) -> (__m256i, __m256i) {
     )
 }
 
-// There are several ways to do a transposition. We could do it naively, with 8 separate
-// _mm256_set_epi32 instructions, referencing each of the 32 words explicitly. Or we could copy
-// the vecs into contiguous storage and then use gather instructions. This third approach is to use
-// a series of unpack instructions to interleave the vectors. In my benchmarks, interleaving is the
-// fastest approach. To test this, run `cargo +nightly bench --bench libtest load_8` in the
-// https://github.com/oconnor663/bao_experiments repo.
+//There are several ways to do a transposition. We could do it naively,with 8 separate
+//_mm256_set_epi32 instructions,referencing each of the 32 words explicitly.Or we could copy
+//the vecs into contiguous storage and then use gather instructions.This third approach is to use
+//a series of unpack instructions to interleave the vectors.In my benchmarks,interleaving is the
+//fastest approach.To test this,run `cargo +nightly bench --bench libtest load_8` in the
+//https://github.com/oconnor663/bao_experiments repo.
 #[inline(always)]
 unsafe fn transpose_vecs(vecs: &mut [__m256i; DEGREE]) {
-    // Interleave 32-bit lanes. The low unpack is lanes 00/11/44/55, and the high is 22/33/66/77.
+    //Interleave 32-bit lanes.The low unpack is lanes 00/11/44/55,and the high is 22/33/66/77.
     let ab_0145 = _mm256_unpacklo_epi32(vecs[0], vecs[1]);
     let ab_2367 = _mm256_unpackhi_epi32(vecs[0], vecs[1]);
     let cd_0145 = _mm256_unpacklo_epi32(vecs[2], vecs[3]);
@@ -215,7 +215,7 @@ unsafe fn transpose_vecs(vecs: &mut [__m256i; DEGREE]) {
     let gh_0145 = _mm256_unpacklo_epi32(vecs[6], vecs[7]);
     let gh_2367 = _mm256_unpackhi_epi32(vecs[6], vecs[7]);
 
-    // Interleave 64-bit lates. The low unpack is lanes 00/22 and the high is 11/33.
+    //Interleave 64-bit lanes.The low unpack is lanes 00/22 and the high is 11/33.
     let abcd_04 = _mm256_unpacklo_epi64(ab_0145, cd_0145);
     let abcd_15 = _mm256_unpackhi_epi64(ab_0145, cd_0145);
     let abcd_26 = _mm256_unpacklo_epi64(ab_2367, cd_2367);
@@ -225,7 +225,7 @@ unsafe fn transpose_vecs(vecs: &mut [__m256i; DEGREE]) {
     let efgh_26 = _mm256_unpacklo_epi64(ef_2367, gh_2367);
     let efgh_37 = _mm256_unpackhi_epi64(ef_2367, gh_2367);
 
-    // Interleave 128-bit lanes.
+    //Interleave 128-bit lanes.
     let (abcdefgh_0, abcdefgh_4) = interleave128(abcd_04, efgh_04);
     let (abcdefgh_1, abcdefgh_5) = interleave128(abcd_15, efgh_15);
     let (abcdefgh_2, abcdefgh_6) = interleave128(abcd_26, efgh_26);
@@ -326,14 +326,14 @@ pub unsafe fn hash8(
         if block + 1 == blocks {
             block_flags |= flags_end;
         }
-        let block_len_vec = set1(BLOCK_LEN as u32); // full blocks only
+        let block_len_vec = set1(BLOCK_LEN as u32); //full blocks only
         let block_flags_vec = set1(block_flags as u32);
         let msg_vecs = transpose_msg_vecs(inputs, block * BLOCK_LEN);
 
-        // The transposed compression function. Note that inlining this
-        // manually here improves compile times by a lot, compared to factoring
-        // it out into its own function and making it #[inline(always)]. Just
-        // guessing, it might have something to do with loop unrolling.
+        //The transposed compression function.Note that inlining this
+        //manually here improves compile times by a lot,compared to factoring
+        //it out into its own function and making it #[inline(always)].Just
+        //guessing,it might have something to do with loop unrolling.
         let mut v = [
             h_vecs[0],
             h_vecs[1],
@@ -395,8 +395,8 @@ pub unsafe fn hash_many<const N: usize>(
 ) {
     debug_assert!(out.len() >= inputs.len() * OUT_LEN, "out too short");
     while inputs.len() >= DEGREE && out.len() >= DEGREE * OUT_LEN {
-        // Safe because the layout of arrays is guaranteed, and because the
-        // `blocks` count is determined statically from the argument type.
+        //Safe because the layout of arrays is guaranteed,and because the
+        //`blocks` count is determined statically from the argument type.
         let input_ptrs: &[*const u8; DEGREE] = &*(inputs.as_ptr() as *const [*const u8; DEGREE]);
         let blocks = N / BLOCK_LEN;
         hash8(
@@ -458,7 +458,7 @@ mod test {
 
         for i in 0..DEGREE {
             for j in 0..DEGREE {
-                // Reversed indexes from above.
+                //Reversed indexes from above.
                 assert_eq!(matrix[j][i], (i * DEGREE + j) as u32);
             }
         }
