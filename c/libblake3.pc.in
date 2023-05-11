@@ -9,4 +9,4 @@ Version: @PROJECT_VERSION@
 
 Requires:
 Libs: -L${libdir} -lblake3
-Cflags: -I${includedir}
+Cflags: -I${includedir} @BLAKE3_PKGCONFIG_CFLAGS@

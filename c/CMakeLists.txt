@@ -35,10 +35,19 @@ add_library(blake3
 add_library(BLAKE3::blake3 ALIAS blake3)
 
 # library configuration
+set(BLAKE3_PKGCONFIG_CFLAGS)
+if (BUILD_SHARED_LIBS)
+  target_compile_definitions(blake3 
+    PUBLIC BLAKE3_DLL
+    PRIVATE BLAKE3_DLL_EXPORTS
+  )
+  list(APPEND BLAKE3_PKGCONFIG_CFLAGS -DBLAKE3_DLL)
+endif()
 target_include_directories(blake3 PUBLIC $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 set_target_properties(blake3 PROPERTIES
   VERSION ${PROJECT_VERSION}
   SOVERSION 0
+  C_VISIBILITY_PRESET hidden
 )
 
 # optional SIMD sources
