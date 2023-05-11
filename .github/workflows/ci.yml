@@ -278,17 +278,23 @@ jobs:
 
   # CMake build test (Library only), current macOS/Linux only.
   cmake_build:
-      name: CMake ${{ matrix.os }}
-      runs-on: ${{ matrix.os }}
-      strategy:
-        fail-fast: false
-        matrix:
-          os: ["ubuntu-latest", "macOS-latest"]
-      steps:
+    name: CMake ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "macOS-latest", "windows-latest"]
+        compiler: [gcc, clang, cl]
+        exclude:
+          - os: windows-latest
+            compiler: gcc
+          - os: ubuntu-latest
+            compiler: msvc
+          - os: macOS-latest
+            compiler: msvc
+    steps:
       - uses: actions/checkout@v3
       - name: CMake generation
-        run: cmake . -Bbuild
-        working-directory: ./c
-      - name: CMake build
-        run: cmake --build build/
-        working-directory: ./c
+        run: cmake -S c -B c/build -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/target
+      - name: CMake build / install
+        run: cmake --build c/build --target install
