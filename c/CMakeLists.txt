@@ -128,7 +128,7 @@ configure_package_config_file(blake3-config.cmake.in
 write_basic_package_version_file(
     "${CMAKE_CURRENT_BINARY_DIR}/blake3-config-version.cmake"
     VERSION ${libblake3_VERSION}
-    COMPATIBILITY SameMinorVersion # as long as libblake3_VERSION < 1.0.0
+    COMPATIBILITY SameMajorVersion
 )
 install(FILES
         "${CMAKE_CURRENT_BINARY_DIR}/blake3-config.cmake"
