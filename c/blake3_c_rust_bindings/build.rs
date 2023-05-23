@@ -110,7 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if is_windows_msvc() {
             // /arch:SSE2 is the default on x86 and undefined on x86_64:
             // https://docs.microsoft.com/en-us/cpp/build/reference/arch-x86
-            // It also includes SSE4.1 intrisincs:
+            // It also includes SSE4.1 intrinsics:
             // https://stackoverflow.com/a/32183222/823869
         } else {
             sse2_build.flag("-msse2");
@@ -122,7 +122,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if is_windows_msvc() {
             // /arch:SSE2 is the default on x86 and undefined on x86_64:
             // https://docs.microsoft.com/en-us/cpp/build/reference/arch-x86
-            // It also includes SSE4.1 intrisincs:
+            // It also includes SSE4.1 intrinsics:
             // https://stackoverflow.com/a/32183222/823869
         } else {
             sse41_build.flag("-msse4.1");

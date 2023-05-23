@@ -481,7 +481,7 @@ unsafe fn round(v: &mut [__m128i; 16], m: &[__m128i; 16], r: usize) {
 
 #[inline(always)]
 unsafe fn transpose_vecs(vecs: &mut [__m128i; DEGREE]) {
-    // Interleave 32-bit lates. The low unpack is lanes 00/11 and the high is
+    // Interleave 32-bit lanes. The low unpack is lanes 00/11 and the high is
     // 22/33. Note that this doesn't split the vector into two lanes, as the
     // AVX2 counterparts do.
     let ab_01 = _mm_unpacklo_epi32(vecs[0], vecs[1]);
