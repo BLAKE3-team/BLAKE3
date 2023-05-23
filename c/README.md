@@ -256,7 +256,7 @@ gcc -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c \
 Note above that building `blake3_avx512.c` requires both `-mavx512f` and
 `-mavx512vl` under GCC and Clang. Under MSVC, the single `/arch:AVX512`
 flag is sufficient. The MSVC equivalent of `-mavx2` is `/arch:AVX2`.
-MSVC enables SSE2 and SSE4.1 by defaut, and it doesn't have a
+MSVC enables SSE2 and SSE4.1 by default, and it doesn't have a
 corresponding flag.
 
 If you want to omit SIMD code entirely, you need to explicitly disable

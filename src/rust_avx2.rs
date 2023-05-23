@@ -215,7 +215,7 @@ unsafe fn transpose_vecs(vecs: &mut [__m256i; DEGREE]) {
     let gh_0145 = _mm256_unpacklo_epi32(vecs[6], vecs[7]);
     let gh_2367 = _mm256_unpackhi_epi32(vecs[6], vecs[7]);
 
-    // Interleave 64-bit lates. The low unpack is lanes 00/22 and the high is 11/33.
+    // Interleave 64-bit lanes. The low unpack is lanes 00/22 and the high is 11/33.
     let abcd_04 = _mm256_unpacklo_epi64(ab_0145, cd_0145);
     let abcd_15 = _mm256_unpackhi_epi64(ab_0145, cd_0145);
     let abcd_26 = _mm256_unpacklo_epi64(ab_2367, cd_2367);
