@@ -6,6 +6,7 @@ project(libblake3
   LANGUAGES C ASM
 )
 
+include(FeatureSummary)
 include(GNUInstallDirs)
 
 # default SIMD compiler flag configuration (can be overriden by toolchains or CLI)
@@ -56,12 +57,17 @@ set_target_properties(blake3 PROPERTIES
 
 # optional SIMD sources
 macro(BLAKE3_DISABLE_SIMD)
+  set(BLAKE3_SIMD_AMD64_ASM OFF)
+  set(BLAKE3_SIMD_X86_INTRINSICS OFF)
+  set(BLAKE3_SIMD_NEON_INTRINSICS OFF)
   set_source_files_properties(blake3_dispatch.c PROPERTIES 
     COMPILE_DEFINITIONS BLAKE3_USE_NEON=0;BLAKE3_NO_SSE2;BLAKE3_NO_SSE41;BLAKE3_NO_AVX2;BLAKE3_NO_AVX512
   )
 endmacro()
 
 if(CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_AMD64_NAMES OR BLAKE3_USE_AMD64_ASM)
+  set(BLAKE3_SIMD_AMD64_ASM ON)
+
   if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
     enable_language(ASM_MASM)
     target_sources(blake3 PRIVATE
@@ -103,6 +109,8 @@ elseif((CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_X86_NAMES OR BLAKE3_USE_X86_INTRIN
        AND DEFINED BLAKE3_CFLAGS_SSE4.1
        AND DEFINED BLAKE3_CFLAGS_AVX2
        AND DEFINED BLAKE3_CFLAGS_AVX512)
+  set(BLAKE3_SIMD_X86_INTRINSICS ON)
+
   target_sources(blake3 PRIVATE
     blake3_avx2.c
     blake3_avx512.c
@@ -118,6 +126,8 @@ elseif((ANDROID_ABI STREQUAL "armeabi-v7a"
           OR CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_ARM_NAMES
           OR BLAKE3_USE_NEON_INTRINSICS)
        AND DEFINED BLAKE3_CFLAGS_NEON)
+  set(BLAKE3_SIMD_NEON_INTRINSICS ON)
+
   target_sources(blake3 PRIVATE
     blake3_neon.c
   )
@@ -156,3 +166,9 @@ install(FILES
 configure_file(libblake3.pc.in libblake3.pc @ONLY)
 install(FILES "${CMAKE_BINARY_DIR}/libblake3.pc"
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
+
+# print feature summary
+add_feature_info("AMD64 assembly" BLAKE3_SIMD_AMD64_ASM "The library uses hand written amd64 SIMD assembly.")
+add_feature_info("x86 SIMD intrinsics" BLAKE3_SIMD_X86_INTRINSICS "The library uses x86 SIMD intrinsics.")
+add_feature_info("NEON SIMD intrinsics" BLAKE3_SIMD_NEON_INTRINSICS "The library uses NEON SIMD intrinsics.")
+feature_summary(WHAT ENABLED_FEATURES)
