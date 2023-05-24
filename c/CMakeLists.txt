@@ -25,6 +25,10 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU"
   set(BLAKE3_CFLAGS_AVX512 "-mavx512f -mavx512vl" CACHE STRING "the compiler flags to enable AVX512")
   set(BLAKE3_CFLAGS_NEON "-mfpu=neon" CACHE STRING "the compiler flags to enable NEON")
 endif()
+# architecture lists for which to enable assembly / SIMD sources
+set(BLAKE3_AMD64_NAMES amd64 AMD64 x86_64)
+set(BLAKE3_X86_NAMES i686 x86 X86)
+set(BLAKE3_ARM_NAMES aarch64 AArch64 arm64 ARM64 armv8 armv8a)
 
 # library target
 add_library(blake3
@@ -50,10 +54,8 @@ set_target_properties(blake3 PROPERTIES
   C_VISIBILITY_PRESET hidden
 )
 
-# optional SIMD sources
-if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64"
-   OR CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64")
-    if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
+if(CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_AMD64_NAMES OR BLAKE3_USE_AMD64_ASM)
+  if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
     enable_language(ASM_MASM)
     target_sources(blake3 PRIVATE
       blake3_avx2_x86-64_windows_msvc.asm
@@ -83,8 +85,7 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64"
     endif()
   endif()
 
-elseif((CMAKE_SYSTEM_PROCESSOR STREQUAL "i686"
-          OR CMAKE_SYSTEM_PROCESSOR STREQUAL "X86")
+elseif((CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_X86_NAMES OR BLAKE3_USE_X86_INTRINSICS)
        AND DEFINED BLAKE3_CFLAGS_SSE2
        AND DEFINED BLAKE3_CFLAGS_SSE4.1
        AND DEFINED BLAKE3_CFLAGS_AVX2
@@ -101,8 +102,8 @@ elseif((CMAKE_SYSTEM_PROCESSOR STREQUAL "i686"
   set_source_files_properties(blake3_sse41.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_SSE4.1}")
 
 elseif((ANDROID_ABI STREQUAL "armeabi-v7a"
-          OR CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64"
-          OR CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64") # For M1 macs
+          OR CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_ARM_NAMES
+          OR BLAKE3_USE_NEON_INTRINSICS)
        AND DEFINED BLAKE3_CFLAGS_NEON)
   target_sources(blake3 PRIVATE
     blake3_neon.c
