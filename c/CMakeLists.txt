@@ -54,6 +54,13 @@ set_target_properties(blake3 PROPERTIES
   C_VISIBILITY_PRESET hidden
 )
 
+# optional SIMD sources
+macro(BLAKE3_DISABLE_SIMD)
+  set_source_files_properties(blake3_dispatch.c PROPERTIES 
+    COMPILE_DEFINITIONS BLAKE3_USE_NEON=0;BLAKE3_NO_SSE2;BLAKE3_NO_SSE41;BLAKE3_NO_AVX2;BLAKE3_NO_AVX512
+  )
+endmacro()
+
 if(CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_AMD64_NAMES OR BLAKE3_USE_AMD64_ASM)
   if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
     enable_language(ASM_MASM)
@@ -82,7 +89,13 @@ if(CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_AMD64_NAMES OR BLAKE3_USE_AMD64_ASM)
         blake3_sse2_x86-64_unix.S
         blake3_sse41_x86-64_unix.S
       )
+
+    else()
+      BLAKE3_DISABLE_SIMD()
     endif()
+
+  else()  
+    BLAKE3_DISABLE_SIMD()
   endif()
 
 elseif((CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_X86_NAMES OR BLAKE3_USE_X86_INTRINSICS)
@@ -110,6 +123,9 @@ elseif((ANDROID_ABI STREQUAL "armeabi-v7a"
   )
   set_source_files_properties(blake3_dispatch.c PROPERTIES COMPILE_DEFINITIONS BLAKE3_USE_NEON=1)
   set_source_files_properties(blake3_neon.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_NEON}")
+
+else()
+  BLAKE3_DISABLE_SIMD()
 endif()
 
 # cmake install support
