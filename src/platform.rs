@@ -272,6 +272,26 @@ impl Platform {
         }
     }
 
+    pub fn xof_many(
+        &self,
+        cv: &CVWords,
+        block: &[u8; BLOCK_LEN],
+        block_len: u8,
+        counter: u64,
+        flags: u8,
+        out: &mut [u8],
+    ) {
+        match self {
+            // Safe because detect() checked for platform support.
+            #[cfg(blake3_avx512_ffi)]
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Platform::AVX512 => unsafe {
+                crate::avx512::xof_many(cv, block, block_len, counter, flags, out)
+            },
+            _ => crate::portable::xof_many(cv, block, block_len, counter, flags, out),
+        }
+    }
+
     // Explicit platform constructors, for benchmarks.
 
     pub fn portable() -> Self {

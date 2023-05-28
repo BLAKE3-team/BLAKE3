@@ -359,6 +359,81 @@ fn test_hash_many_neon() {
     test_hash_many_fn(crate::ffi::neon::blake3_hash_many_neon);
 }
 
+type XofManyFunction = unsafe extern "C" fn(
+    cv: *const u32,
+    block: *const u8,
+    block_len: u8,
+    counter: u64,
+    flags: u8,
+    out: *mut u8,
+    outblocks: usize,
+);
+
+// A shared helper function for platform-specific tests.
+pub fn test_xof_many_fn(xof_many_function: XofManyFunction) {
+    // Test a few different initial counter values.
+    // - 0: The base case.
+    // - u32::MAX: The low word of the counter overflows for all inputs except the first.
+    // - i32::MAX: *No* overflow. But carry bugs in tricky SIMD code can screw this up, if you XOR
+    //   when you're supposed to ANDNOT...
+    let initial_counters = [0, u32::MAX as u64, i32::MAX as u64];
+    for counter in initial_counters {
+        #[cfg(feature = "std")]
+        dbg!(counter);
+
+        let mut block = [0; BLOCK_LEN];
+        let block_len = 42;
+        crate::test::paint_test_input(&mut block[..block_len]);
+        let cv = [40, 41, 42, 43, 44, 45, 46, 47];
+        let flags = KEYED_HASH;
+        // 31 (16 + 8 + 4 + 2 + 1) outputs
+        const OUTPUT_SIZE: usize = 31 * BLOCK_LEN;
+
+        let mut portable_out = [0u8; OUTPUT_SIZE];
+        unsafe {
+            crate::ffi::blake3_xof_many_portable(
+                cv.as_ptr(),
+                block.as_ptr(),
+                block_len as u8,
+                counter,
+                flags,
+                portable_out.as_mut_ptr(),
+                OUTPUT_SIZE / BLOCK_LEN,
+            );
+        }
+
+        let mut test_out = [0u8; OUTPUT_SIZE];
+        unsafe {
+            xof_many_function(
+                cv.as_ptr(),
+                block.as_ptr(),
+                block_len as u8,
+                counter,
+                flags,
+                test_out.as_mut_ptr(),
+                OUTPUT_SIZE / BLOCK_LEN,
+            );
+        }
+
+        assert_eq!(portable_out, test_out);
+    }
+}
+
+// Testing the portable implementation against itself is circular, but why not.
+#[test]
+fn test_xof_many_portable() {
+    test_xof_many_fn(crate::ffi::blake3_xof_many_portable);
+}
+
+#[test]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn test_xof_many_avx512() {
+    if !crate::avx512_detected() {
+        return;
+    }
+    test_xof_many_fn(crate::ffi::x86::blake3_xof_many_avx512);
+}
+
 #[test]
 fn test_compare_reference_impl() {
     const OUT: usize = 303; // more than 64, not a multiple of 4
