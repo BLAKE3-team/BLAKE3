@@ -88,6 +88,9 @@ INLINE void output_chaining_value(const output_t *self, uint8_t cv[32]) {
 
 INLINE void output_root_bytes(const output_t *self, uint64_t seek, uint8_t *out,
                               size_t out_len) {
+  if (out_len == 0) {
+      return;
+  }
   uint64_t output_block_counter = seek / 64;
   size_t offset_within_block = seek % 64;
   uint8_t wide_buf[64];

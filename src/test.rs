@@ -206,6 +206,54 @@ pub fn test_hash_many_fn(
     }
 }
 
+type XofManyFunction = unsafe fn(
+    cv: &CVWords,
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    counter: u64,
+    flags: u8,
+    out: &mut [u8],
+);
+
+// A shared helper function for platform-specific tests.
+pub fn test_xof_many_fn(xof_many_function: XofManyFunction) {
+    // Test a few different initial counter values.
+    // - 0: The base case.
+    // - u32::MAX: The low word of the counter overflows for all inputs except the first.
+    // - i32::MAX: *No* overflow. But carry bugs in tricky SIMD code can screw this up, if you XOR
+    //   when you're supposed to ANDNOT...
+    let initial_counters = [0, u32::MAX as u64, i32::MAX as u64];
+    for counter in initial_counters {
+        #[cfg(feature = "std")]
+        dbg!(counter);
+
+        let mut block = [0; BLOCK_LEN];
+        let block_len = 42;
+        crate::test::paint_test_input(&mut block[..block_len]);
+        let cv = [40, 41, 42, 43, 44, 45, 46, 47];
+        let flags = crate::KEYED_HASH;
+        // 31 (16 + 8 + 4 + 2 + 1) outputs
+        const OUTPUT_SIZE: usize = 31 * BLOCK_LEN;
+
+        let mut portable_out = [0u8; OUTPUT_SIZE];
+        crate::portable::xof_many(
+            &cv,
+            &block,
+            block_len as u8,
+            counter,
+            flags,
+            &mut portable_out,
+        );
+
+        let mut test_out = [0u8; OUTPUT_SIZE];
+        unsafe {
+            xof_many_function(&cv, &block, block_len as u8, counter, flags, &mut test_out);
+        }
+
+        assert_eq!(portable_out, test_out);
+    }
+}
+
 #[test]
 fn test_key_bytes_equal_key_words() {
     assert_eq!(
@@ -371,6 +419,28 @@ fn test_compare_reference_impl() {
             assert_eq!(extended, expected_out);
         }
     }
+}
+
+#[test]
+fn test_xof_partial_blocks() {
+    const OUT_LEN: usize = 6 * BLOCK_LEN;
+    let mut reference_out = [0u8; OUT_LEN];
+    reference_impl::Hasher::new().finalize(&mut reference_out);
+
+    let mut all_at_once_out = [0u8; OUT_LEN];
+    crate::Hasher::new()
+        .finalize_xof()
+        .fill(&mut all_at_once_out);
+    assert_eq!(reference_out, all_at_once_out);
+
+    let mut partial_out = [0u8; OUT_LEN];
+    let partial_start = 32;
+    let partial_end = OUT_LEN - 32;
+    let mut xof = crate::Hasher::new().finalize_xof();
+    xof.fill(&mut partial_out[..partial_start]);
+    xof.fill(&mut partial_out[partial_start..partial_end]);
+    xof.fill(&mut partial_out[partial_end..]);
+    assert_eq!(reference_out, partial_out);
 }
 
 fn reference_hash(input: &[u8]) -> crate::Hash {

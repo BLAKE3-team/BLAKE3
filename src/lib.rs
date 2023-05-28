@@ -1634,6 +1634,21 @@ impl OutputReader {
         }
     }
 
+    // It would be more natural if this helper took &mut &mut [u8], but that doesn't seem to be allowed.
+    fn fill_one_block<'a>(&mut self, mut buf: &'a mut [u8]) -> &'a mut [u8] {
+        let block: [u8; BLOCK_LEN] = self.inner.root_output_block();
+        let output_bytes = &block[self.position_within_block as usize..];
+        let take = cmp::min(buf.len(), output_bytes.len());
+        buf[..take].copy_from_slice(&output_bytes[..take]);
+        buf = &mut buf[take..];
+        self.position_within_block += take as u8;
+        if self.position_within_block == BLOCK_LEN as u8 {
+            self.inner.counter += 1;
+            self.position_within_block = 0;
+        }
+        buf
+    }
+
     /// Fill a buffer with output bytes and advance the position of the
     /// `OutputReader`. This is equivalent to [`Read::read`], except that it
     /// doesn't return a `Result`. Both methods always fill the entire buffer.
@@ -1650,17 +1665,34 @@ impl OutputReader {
     ///
     /// [`Read::read`]: #method.read
     pub fn fill(&mut self, mut buf: &mut [u8]) {
-        while !buf.is_empty() {
-            let block: [u8; BLOCK_LEN] = self.inner.root_output_block();
-            let output_bytes = &block[self.position_within_block as usize..];
-            let take = cmp::min(buf.len(), output_bytes.len());
-            buf[..take].copy_from_slice(&output_bytes[..take]);
-            buf = &mut buf[take..];
-            self.position_within_block += take as u8;
-            if self.position_within_block == BLOCK_LEN as u8 {
-                self.inner.counter += 1;
-                self.position_within_block = 0;
-            }
+        if buf.is_empty() {
+            return;
+        }
+
+        // If we're partway through a block, try to get to a block boundary.
+        if self.position_within_block != 0 {
+            buf = self.fill_one_block(buf);
+        }
+
+        let full_blocks = buf.len() / BLOCK_LEN;
+        if full_blocks > 0 {
+            debug_assert_eq!(0, self.position_within_block);
+            self.inner.platform.xof_many(
+                &self.inner.input_chaining_value,
+                &self.inner.block,
+                self.inner.block_len,
+                self.inner.counter,
+                self.inner.flags | ROOT,
+                buf,
+            );
+            self.inner.counter += full_blocks as u64;
+            buf = &mut buf[full_blocks * BLOCK_LEN..];
+        }
+
+        if !buf.is_empty() {
+            debug_assert!(buf.len() < BLOCK_LEN);
+            buf = self.fill_one_block(buf);
+            debug_assert!(buf.is_empty());
         }
     }
 
