@@ -158,6 +158,13 @@ INLINE void load_key_words(const uint8_t key[BLAKE3_KEY_LEN],
   key_words[7] = load32(&key[7 * 4]);
 }
 
+INLINE void load_block_words(const uint8_t block[BLAKE3_BLOCK_LEN],
+                             uint32_t block_words[16]) {
+  for (size_t i = 0; i < 16; i++) {
+      block_words[i] = load32(&block[i * 4]);
+  }
+}
+
 INLINE void store32(void *dst, uint32_t w) {
   uint8_t *p = (uint8_t *)dst;
   p[0] = (uint8_t)(w >> 0);
@@ -275,7 +282,7 @@ void blake3_compress_xof_avx512(const uint32_t cv[8],
 void blake3_xof_many_avx512(const uint32_t cv[8],
                             const uint8_t block[BLAKE3_BLOCK_LEN],
                             uint8_t block_len, uint64_t counter, uint8_t flags,
-                            uint8_t out[64], size_t outblocks);
+                            uint8_t* out, size_t outblocks);
 
 void blake3_hash_many_avx512(const uint8_t *const *inputs, size_t num_inputs,
                              size_t blocks, const uint32_t key[8],

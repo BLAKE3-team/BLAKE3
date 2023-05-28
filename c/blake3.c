@@ -100,8 +100,9 @@ INLINE void output_root_bytes(const output_t *self, uint64_t seek, uint8_t *out,
     out_len -= bytes;
     output_block_counter += 1;
   }
-  if(out_len / 64)
+  if(out_len / 64) {
     blake3_xof_many(self->input_cv, self->block, self->block_len, output_block_counter, self->flags | ROOT, out, out_len / 64);
+  }
   output_block_counter += out_len / 64;
   out += out_len & -64;
   out_len -= out_len & -64;
