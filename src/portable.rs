@@ -1,8 +1,9 @@
 use crate::{
-    counter_high, counter_low, CVBytes, CVWords, IncrementCounter, BLOCK_LEN, IV, MSG_SCHEDULE,
-    OUT_LEN,
+    counter_high, counter_low, platform::TransposedVectors, CVBytes, CVWords, IncrementCounter,
+    BLOCK_LEN, CHUNK_LEN, IV, MSG_SCHEDULE, OUT_LEN,
 };
 use arrayref::{array_mut_ref, array_ref};
+use core::cmp;
 
 #[inline(always)]
 fn g(state: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize, x: u32, y: u32) {
@@ -177,14 +178,118 @@ pub fn hash_many<const N: usize>(
     }
 }
 
+pub fn hash_chunks(
+    input: &[u8],
+    key: &[u32; 8],
+    counter: u64,
+    flags: u8,
+    output: &mut TransposedVectors,
+    output_offset: usize,
+) {
+    const LAST_BLOCK_INDEX: usize = (CHUNK_LEN / BLOCK_LEN) - 1;
+    // There might be a partial chunk at the end. If so, we ignore it here, and the caller will
+    // hash it separately.
+    let num_chunks = input.len() / CHUNK_LEN;
+    for chunk_index in 0..num_chunks {
+        let mut cv = *key;
+        for block_index in 0..CHUNK_LEN / BLOCK_LEN {
+            compress_in_place(
+                &mut cv,
+                input[CHUNK_LEN * chunk_index + BLOCK_LEN * block_index..][..BLOCK_LEN]
+                    .try_into()
+                    .unwrap(),
+                BLOCK_LEN as u8,
+                counter + chunk_index as u64,
+                match block_index {
+                    0 => flags | crate::CHUNK_START,
+                    LAST_BLOCK_INDEX => flags | crate::CHUNK_END,
+                    _ => flags,
+                },
+            );
+        }
+        for word_index in 0..cv.len() {
+            output.0[word_index][output_offset + chunk_index] = cv[word_index];
+        }
+    }
+}
+
+pub fn hash_parents(cvs: &mut TransposedVectors, num_cvs: usize, key: &[u32; 8], flags: u8) {
+    // Note that there may be an odd number of children. If there's a leftover child, it gets
+    // appended to the outputs by the caller. We will not overwrite it.
+    let num_parents = num_cvs / 2;
+    todo!()
+}
+
+pub fn xof(
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    cv: &[u32; 8],
+    mut counter: u64,
+    flags: u8,
+    mut out: &mut [u8],
+) {
+    while !out.is_empty() {
+        let block_output = compress_xof(cv, block, block_len, counter, flags);
+        let take = cmp::min(BLOCK_LEN, out.len());
+        out[..take].copy_from_slice(&block_output[..take]);
+        out = &mut out[take..];
+        counter += 1;
+    }
+}
+
+pub fn xof_xor(
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    cv: &[u32; 8],
+    mut counter: u64,
+    flags: u8,
+    mut out: &mut [u8],
+) {
+    while !out.is_empty() {
+        let block_output = compress_xof(cv, block, block_len, counter, flags);
+        let take = cmp::min(BLOCK_LEN, out.len());
+        for i in 0..take {
+            out[i] ^= block_output[i];
+        }
+        out = &mut out[take..];
+        counter += 1;
+    }
+}
+
+pub fn universal_hash(mut input: &[u8], key: &[u32; 8], mut counter: u64) -> [u8; BLOCK_LEN] {
+    let flags = crate::KEYED_HASH | crate::CHUNK_START | crate::CHUNK_END | crate::ROOT;
+    let mut result = [0u8; BLOCK_LEN];
+    while input.len() > BLOCK_LEN {
+        let block_output = compress_xof(
+            key,
+            &input[..BLOCK_LEN].try_into().unwrap(),
+            BLOCK_LEN as u8,
+            counter,
+            flags,
+        );
+        for i in 0..BLOCK_LEN {
+            result[i] ^= block_output[i];
+        }
+        input = &input[BLOCK_LEN..];
+        counter += 1;
+    }
+    let mut final_block = [0u8; BLOCK_LEN];
+    final_block[..input.len()].copy_from_slice(input);
+    let final_output = compress_xof(key, &final_block, input.len() as u8, counter, flags);
+    for i in 0..BLOCK_LEN {
+        result[i] ^= final_output[i];
+    }
+    result
+}
+
 #[cfg(test)]
 pub mod test {
     use super::*;
 
-    // This is basically testing the portable implementation against itself,
-    // but it also checks that compress_in_place and compress_xof are
-    // consistent. And there are tests against the reference implementation and
-    // against hardcoded test vectors elsewhere.
+    // These are basically testing the portable implementation against itself, but we also check
+    // that compress_in_place and compress_xof are consistent. And there are tests against the
+    // reference implementation and against hardcoded test vectors elsewhere.
+
     #[test]
     fn test_compress() {
         crate::test::test_compress_fn(compress_in_place, compress_xof);
@@ -194,5 +299,15 @@ pub mod test {
     #[test]
     fn test_hash_many() {
         crate::test::test_hash_many_fn(hash_many, hash_many);
+    }
+
+    #[test]
+    fn test_xof_and_xor() {
+        crate::test::test_xof_and_xor_fns(xof, xof_xor);
+    }
+
+    #[test]
+    fn test_universal_hash() {
+        crate::test::test_universal_hash_fn(universal_hash);
     }
 }

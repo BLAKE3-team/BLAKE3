@@ -1,6 +1,7 @@
 use crate::{CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, OUT_LEN};
 use arrayref::array_ref;
 use arrayvec::ArrayVec;
+use core::cmp;
 use core::usize;
 use rand::prelude::*;
 
@@ -50,6 +51,13 @@ pub const TEST_KEY: CVBytes = *b"whats the Elvish word for friend";
 pub const TEST_KEY_WORDS: CVWords = [
     1952540791, 1752440947, 1816469605, 1752394102, 1919907616, 1868963940, 1919295602, 1684956521,
 ];
+
+// Test a few different initial counter values.
+// - 0: The base case.
+// - i32::MAX: *No* overflow. But carry bugs in tricky SIMD code can screw this up, if you XOR
+//   when you're supposed to ANDNOT...
+// - u32::MAX: The low word of the counter overflows for all inputs except the first.
+const INITIAL_COUNTERS: &[u64] = &[0, i32::MAX as u64, u32::MAX as u64];
 
 // Paint the input with a repeating byte pattern. We use a cycle length of 251,
 // because that's the largest prime number less than 256. This makes it
@@ -111,13 +119,7 @@ pub fn test_hash_many_fn(
     hash_many_chunks_fn: HashManyFn<[u8; CHUNK_LEN]>,
     hash_many_parents_fn: HashManyFn<[u8; 2 * OUT_LEN]>,
 ) {
-    // Test a few different initial counter values.
-    // - 0: The base case.
-    // - u32::MAX: The low word of the counter overflows for all inputs except the first.
-    // - i32::MAX: *No* overflow. But carry bugs in tricky SIMD code can screw this up, if you XOR
-    //   when you're supposed to ANDNOT...
-    let initial_counters = [0, u32::MAX as u64, i32::MAX as u64];
-    for counter in initial_counters {
+    for &counter in INITIAL_COUNTERS {
         #[cfg(feature = "std")]
         dbg!(counter);
 
@@ -203,6 +205,200 @@ pub fn test_hash_many_fn(
                 &test_parents_out[n * OUT_LEN..][..OUT_LEN]
             );
         }
+    }
+}
+
+// Both xof() and xof_xof() have this signature.
+type XofFn = unsafe fn(
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    cv: &[u32; 8],
+    counter: u64,
+    flags: u8,
+    out: &mut [u8],
+);
+
+pub fn test_xof_and_xor_fns(target_xof: XofFn, target_xof_xor: XofFn) {
+    // 31 (16 + 8 + 4 + 2 + 1) outputs
+    const NUM_OUTPUTS: usize = 31;
+    let different_flags = [
+        crate::CHUNK_START | crate::CHUNK_END | crate::ROOT,
+        crate::PARENT | crate::ROOT | crate::KEYED_HASH,
+    ];
+    for input_len in [0, 1, BLOCK_LEN] {
+        let mut input_block = [0u8; BLOCK_LEN];
+        crate::test::paint_test_input(&mut input_block[..input_len]);
+        for output_len in [0, 1, BLOCK_LEN, BLOCK_LEN + 1, BLOCK_LEN * NUM_OUTPUTS] {
+            let mut test_output_buf = [0xff; BLOCK_LEN * NUM_OUTPUTS];
+            for &counter in INITIAL_COUNTERS {
+                for flags in different_flags {
+                    let mut expected_output_buf = [0xff; BLOCK_LEN * NUM_OUTPUTS];
+                    crate::portable::xof(
+                        &input_block,
+                        input_len as u8,
+                        &TEST_KEY_WORDS,
+                        counter,
+                        flags,
+                        &mut expected_output_buf[..output_len],
+                    );
+
+                    unsafe {
+                        target_xof(
+                            &input_block,
+                            input_len as u8,
+                            &TEST_KEY_WORDS,
+                            counter,
+                            flags,
+                            &mut test_output_buf[..output_len],
+                        );
+                    }
+                    assert_eq!(
+                        expected_output_buf[..output_len],
+                        test_output_buf[..output_len],
+                    );
+                    // Make sure unsafe implementations don't overwrite. This shouldn't be possible in the
+                    // portable implementation, which is all safe code, but it could happen in others.
+                    assert!(test_output_buf[output_len..].iter().all(|&b| b == 0xff));
+
+                    // The first XOR cancels out the output.
+                    unsafe {
+                        target_xof_xor(
+                            &input_block,
+                            input_len as u8,
+                            &TEST_KEY_WORDS,
+                            counter,
+                            flags,
+                            &mut test_output_buf[..output_len],
+                        );
+                    }
+                    assert!(test_output_buf[..output_len].iter().all(|&b| b == 0));
+                    assert!(test_output_buf[output_len..].iter().all(|&b| b == 0xff));
+
+                    // The second XOR restores out the output.
+                    unsafe {
+                        target_xof_xor(
+                            &input_block,
+                            input_len as u8,
+                            &TEST_KEY_WORDS,
+                            counter,
+                            flags,
+                            &mut test_output_buf[..output_len],
+                        );
+                    }
+                    assert_eq!(
+                        expected_output_buf[..output_len],
+                        test_output_buf[..output_len],
+                    );
+                    assert!(test_output_buf[output_len..].iter().all(|&b| b == 0xff));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_compare_reference_impl_xof() {
+    const NUM_OUTPUTS: usize = 31;
+    let input = b"hello world";
+    let mut input_block = [0; BLOCK_LEN];
+    input_block[..input.len()].copy_from_slice(input);
+
+    let mut reference_output_buf = [0; BLOCK_LEN * NUM_OUTPUTS];
+    let mut reference_hasher = reference_impl::Hasher::new_keyed(&TEST_KEY);
+    reference_hasher.update(input);
+    reference_hasher.finalize(&mut reference_output_buf);
+
+    for output_len in [0, 1, BLOCK_LEN, BLOCK_LEN + 1, BLOCK_LEN * NUM_OUTPUTS] {
+        let mut test_output_buf = [0; BLOCK_LEN * NUM_OUTPUTS];
+        crate::platform::Platform::detect().xof(
+            &input_block,
+            input.len() as u8,
+            &TEST_KEY_WORDS,
+            0,
+            crate::KEYED_HASH | crate::CHUNK_START | crate::CHUNK_END | crate::ROOT,
+            &mut test_output_buf[..output_len],
+        );
+        assert_eq!(
+            reference_output_buf[..output_len],
+            test_output_buf[..output_len],
+        );
+
+        // Make sure unsafe implementations don't overwrite. This shouldn't be possible in the
+        // portable implementation, which is all safe code, but it could happen in others.
+        assert!(test_output_buf[output_len..].iter().all(|&b| b == 0));
+
+        // Do it again starting from block 1.
+        if output_len >= BLOCK_LEN {
+            crate::platform::Platform::detect().xof(
+                &input_block,
+                input.len() as u8,
+                &TEST_KEY_WORDS,
+                1,
+                crate::KEYED_HASH | crate::CHUNK_START | crate::CHUNK_END | crate::ROOT,
+                &mut test_output_buf[..output_len - BLOCK_LEN],
+            );
+            assert_eq!(
+                reference_output_buf[BLOCK_LEN..output_len],
+                test_output_buf[..output_len - BLOCK_LEN],
+            );
+        }
+    }
+}
+
+type UniversalHashFn = unsafe fn(input: &[u8], key: &[u32; 8], counter: u64) -> [u8; BLOCK_LEN];
+
+pub fn test_universal_hash_fn(target_fn: UniversalHashFn) {
+    // 31 (16 + 8 + 4 + 2 + 1) inputs
+    const NUM_INPUTS: usize = 31;
+    let mut input_buf = [0; BLOCK_LEN * NUM_INPUTS];
+    crate::test::paint_test_input(&mut input_buf);
+    for len in [0, 1, BLOCK_LEN, BLOCK_LEN + 1, input_buf.len()] {
+        for &counter in INITIAL_COUNTERS {
+            let portable_output =
+                crate::portable::universal_hash(&input_buf[..len], &TEST_KEY_WORDS, counter);
+            let test_output = unsafe { target_fn(&input_buf[..len], &TEST_KEY_WORDS, counter) };
+            assert_eq!(portable_output, test_output);
+        }
+    }
+}
+
+fn reference_impl_universal_hash(input: &[u8], key: &[u8; crate::KEY_LEN]) -> [u8; BLOCK_LEN] {
+    // The reference_impl doesn't support XOF seeking, so we have to materialize an entire extended
+    // output to seek to a block.
+    const MAX_BLOCKS: usize = 31;
+    assert!(input.len() / BLOCK_LEN <= MAX_BLOCKS);
+    let mut output_buffer: [u8; BLOCK_LEN * MAX_BLOCKS] = [0u8; BLOCK_LEN * MAX_BLOCKS];
+    let mut result = [0u8; BLOCK_LEN];
+    let mut i = 0;
+    while i == 0 || i < input.len() {
+        let block_len = cmp::min(input.len() - i, BLOCK_LEN);
+        let mut reference_hasher = reference_impl::Hasher::new_keyed(key);
+        reference_hasher.update(&input[i..i + block_len]);
+        reference_hasher.finalize(&mut output_buffer);
+        for (result_byte, output_byte) in result
+            .iter_mut()
+            .zip(output_buffer[i..i + BLOCK_LEN].iter())
+        {
+            *result_byte ^= *output_byte;
+        }
+        i += BLOCK_LEN;
+    }
+    result
+}
+
+#[test]
+fn test_compare_reference_impl_universal_hash() {
+    const NUM_INPUTS: usize = 31;
+    let mut input_buf = [0; BLOCK_LEN * NUM_INPUTS];
+    crate::test::paint_test_input(&mut input_buf);
+    for len in [0, 1, BLOCK_LEN, BLOCK_LEN + 1, input_buf.len()] {
+        let reference_output = reference_impl_universal_hash(&input_buf[..len], &TEST_KEY);
+        let test_output = crate::platform::Platform::detect().universal_hash(
+            &input_buf[..len],
+            &TEST_KEY_WORDS,
+            0,
+        );
+        assert_eq!(reference_output, test_output);
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::{portable, CVWords, IncrementCounter, BLOCK_LEN};
+use crate::{portable, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN};
 use arrayref::{array_mut_ref, array_ref};
 
 cfg_if::cfg_if! {
@@ -272,6 +272,73 @@ impl Platform {
         }
     }
 
+    // Hashes N=input.len()/CHUNK_LEN chunks and writes N transposed chunk CVs to the output,
+    // starting at the column given by num_cvs (i.e. appending to the transposed CVs already
+    // present). After returning, the total number of transposed CVs in the output will be
+    // num_cvs+N. N and num_cvs must both be less than or equal to simd_degree. Any partial chunk
+    // bytes in the input after the last complete chunk are ignored and need to be hashed
+    // separately by the caller. The counter argument is the value of the chunk counter for the
+    // first chunk, and it's incremented by 1 for each chunk after the first. The CHUNK_START and
+    // CHUNK_END flags are set internally.
+    pub fn hash_chunks(
+        &self,
+        input: &[u8],
+        key: &[u32; 8],
+        counter: u64,
+        flags: u8,
+        cvs_out: &mut TransposedVectors,
+        num_cvs: usize,
+    ) {
+        debug_assert!(input.len() / CHUNK_LEN <= self.simd_degree());
+        debug_assert!(num_cvs <= self.simd_degree());
+        portable::hash_chunks(input, key, counter, flags, cvs_out, num_cvs);
+        // XXX: should separate the thing that hashes the remainder from this interface
+    }
+
+    // Writes out N=num_cvs/2 transposed parent CVs in-place over the first N columns of the input
+    // CVs. Columns N and above are unmodified. N must be less than or equal to 2*simd_degree. If
+    // num_cvs is odd, the final input CV is ignored, and the caller should copy it from column
+    // 2N+1 to column N after this function returns. The PARENT flag is added internally.
+    pub fn hash_parents(
+        &self,
+        cvs: &mut TransposedVectors,
+        num_cvs: usize,
+        key: &[u32; 8],
+        flags: u8,
+    ) {
+        debug_assert!(num_cvs <= 2 * self.simd_degree());
+        portable::hash_parents(cvs, num_cvs, key, flags);
+        // XXX: should separate the thing that copies the last CV over from this interface
+    }
+
+    pub fn xof(
+        &self,
+        block: &[u8; BLOCK_LEN],
+        block_len: u8,
+        cv: &[u32; 8],
+        counter: u64,
+        flags: u8,
+        out: &mut [u8],
+    ) {
+        portable::xof(block, block_len, cv, counter, flags, out);
+    }
+
+    pub fn xof_xor(
+        &self,
+        block: &[u8; BLOCK_LEN],
+        block_len: u8,
+        cv: &[u32; 8],
+        counter: u64,
+        flags: u8,
+        out: &mut [u8],
+    ) {
+        portable::xof_xor(block, block_len, cv, counter, flags, out);
+    }
+
+    pub fn universal_hash(&self, input: &[u8], key: &[u32; 8], counter: u64) -> [u8; 64] {
+        portable::universal_hash(input, key, counter)
+    }
+
     // Explicit platform constructors, for benchmarks.
 
     pub fn portable() -> Self {
@@ -485,3 +552,8 @@ pub fn le_bytes_from_words_64(words: &[u32; 16]) -> [u8; 64] {
     *array_mut_ref!(out, 15 * 4, 4) = words[15].to_le_bytes();
     out
 }
+
+#[cfg_attr(any(target_arch = "x86", target_arch = "x86_64"), repr(C, align(64)))]
+pub struct TransposedVectors(pub [[u32; 2 * MAX_SIMD_DEGREE]; 8]);
+
+pub struct StridedOutput(*mut u32);
