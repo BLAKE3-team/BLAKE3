@@ -77,17 +77,20 @@ no_avx2 = []
 no_avx512 = []
 no_neon = []
 
+zeroize = ["zeroize_crate", "arrayvec/zeroize"]
+
 [package.metadata.docs.rs]
 # Document Hasher::update_rayon on docs.rs.
 features = ["rayon"]
 
 [dependencies]
 arrayref = "0.3.5"
-arrayvec = { version = "0.7.0", default-features = false }
+arrayvec = { version = "0.7.4", default-features = false }
 constant_time_eq = "0.3.0"
 rayon = { version = "1.2.1", optional = true }
 cfg-if = "1.0.0"
 digest = { version = "0.10.1", features = [ "mac" ], optional = true }
+zeroize_crate = { package = "zeroize", version = "1", default-features = false, features = ["zeroize_derive"], optional = true }
 
 [dev-dependencies]
 hex = "0.4.2"
