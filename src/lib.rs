@@ -67,6 +67,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "zeroize")]
+extern crate zeroize_crate as zeroize; // Needed because `zeroize::Zeroize` assumes the crate is named `zeroize`.
+
+
 #[cfg(test)]
 mod test;
 
@@ -197,6 +201,7 @@ fn counter_high(counter: u64) -> u32 {
 /// [`from_hex`]: #method.from_hex
 /// [`Display`]: https://doc.rust-lang.org/std/fmt/trait.Display.html
 /// [`FromStr`]: https://doc.rust-lang.org/std/str/trait.FromStr.html
+#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 #[derive(Clone, Copy, Hash)]
 pub struct Hash([u8; OUT_LEN]);
 
@@ -371,6 +376,7 @@ impl std::error::Error for HexError {}
 // Each chunk or parent node can produce either a 32-byte chaining value or, by
 // setting the ROOT flag, any number of final output bytes. The Output struct
 // captures the state just prior to choosing between those two possibilities.
+#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 #[derive(Clone)]
 struct Output {
     input_chaining_value: CVWords,
@@ -378,6 +384,7 @@ struct Output {
     block_len: u8,
     counter: u64,
     flags: u8,
+    #[cfg_attr(feature = "zeroize", zeroize(skip))]
     platform: Platform,
 }
 
@@ -414,6 +421,7 @@ impl Output {
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 struct ChunkState {
     cv: CVWords,
     chunk_counter: u64,
@@ -421,6 +429,7 @@ struct ChunkState {
     buf_len: u8,
     blocks_compressed: u8,
     flags: u8,
+    #[cfg_attr(feature = "zeroize", zeroize(skip))]
     platform: Platform,
 }
 
@@ -942,6 +951,7 @@ fn parent_node_output(
 /// # }
 /// ```
 #[derive(Clone)]
+#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 pub struct Hasher {
     key: CVWords,
     chunk_state: ChunkState,
@@ -1366,6 +1376,7 @@ impl std::io::Write for Hasher {
 /// from an unknown position in the output stream to recover its block index. Callers with strong
 /// secret keys aren't affected in practice, but secret offsets are a [design
 /// smell](https://en.wikipedia.org/wiki/Design_smell) in any case.
+#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 #[derive(Clone)]
 pub struct OutputReader {
     inner: Output,
