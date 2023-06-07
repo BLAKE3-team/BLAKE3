@@ -26,22 +26,6 @@ struct Inner {
     /// When no file is given, or when - is given, read standard input.
     file: Vec<PathBuf>,
 
-    /// The number of output bytes, before hex encoding
-    #[arg(
-        short,
-        long,
-        default_value_t = blake3::OUT_LEN as u64,
-        value_name("LEN")
-    )]
-    length: u64,
-
-    /// The maximum number of threads to use
-    ///
-    /// By default, this is the number of logical cores. If this flag is
-    /// omitted, or if its value is 0, RAYON_NUM_THREADS is also respected.
-    #[arg(long, value_name("NUM"))]
-    num_threads: Option<usize>,
-
     /// Use the keyed mode, reading the 32-byte key from stdin
     #[arg(long, requires("file"))]
     keyed: bool,
@@ -51,6 +35,26 @@ struct Inner {
     /// Cannot be used with --keyed.
     #[arg(long, value_name("CONTEXT"), conflicts_with(KEYED_ARG))]
     derive_key: Option<String>,
+
+    /// The number of output bytes, before hex encoding
+    #[arg(
+        short,
+        long,
+        default_value_t = blake3::OUT_LEN as u64,
+        value_name("LEN")
+    )]
+    length: u64,
+
+    /// The starting output byte offset, before hex encoding
+    #[arg(long, default_value_t = 0, value_name("SEEK"))]
+    seek: u64,
+
+    /// The maximum number of threads to use
+    ///
+    /// By default, this is the number of logical cores. If this flag is
+    /// omitted, or if its value is 0, RAYON_NUM_THREADS is also respected.
+    #[arg(long, value_name("NUM"))]
+    num_threads: Option<usize>,
 
     /// Disable memory mapping
     ///
@@ -80,7 +84,7 @@ struct Inner {
     )]
     check: bool,
 
-    /// Skip printing OK for each successfully verified file
+    /// Skip printing OK for each checked file
     ///
     /// Must be used with --check.
     #[arg(long, requires(CHECK_ARG))]
@@ -146,6 +150,10 @@ impl Args {
         self.inner.length
     }
 
+    fn seek(&self) -> u64 {
+        self.inner.seek
+    }
+
     fn keyed(&self) -> bool {
         self.inner.keyed
     }
@@ -208,7 +216,9 @@ impl Input {
                 copy_wide(lock, &mut hasher)?;
             }
         }
-        Ok(hasher.finalize_xof())
+        let mut output_reader = hasher.finalize_xof();
+        output_reader.set_position(args.seek());
+        Ok(output_reader)
     }
 }
 
@@ -275,7 +285,9 @@ fn maybe_memmap_file(file: &File) -> Result<Option<memmap2::Mmap>> {
 }
 
 fn write_hex_output(mut output: blake3::OutputReader, args: &Args) -> Result<()> {
-    // Encoding multiples of the block size is most efficient.
+    // Encoding multiples of the 64 bytes is most efficient.
+    // TODO: This computes each output block twice when the --seek argument isn't a multiple of 64.
+    // We'll refactor all of this soon anyway, once SIMD optimizations are available for the XOF.
     let mut len = args.len();
     let mut block = [0; blake3::guts::BLOCK_LEN];
     while len > 0 {

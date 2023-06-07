@@ -87,18 +87,43 @@ fn test_missing_files() {
 }
 
 #[test]
-fn test_hash_length() {
-    let mut buf = [0; 100];
+fn test_hash_length_and_seek() {
+    let mut expected = [0; 100];
     blake3::Hasher::new()
         .update(b"foo")
         .finalize_xof()
-        .fill(&mut buf);
-    let expected = format!("{}  -", hex::encode(&buf[..]));
-    let output = cmd!(b3sum_exe(), "--length=100")
+        .fill(&mut expected);
+    let output = cmd!(b3sum_exe(), "--raw", "--length=100")
         .stdin_bytes("foo")
-        .read()
-        .unwrap();
-    assert_eq!(&*expected, &*output);
+        .stdout_capture()
+        .run()
+        .unwrap()
+        .stdout;
+    assert_eq!(expected[..], output);
+
+    let short_output = cmd!(b3sum_exe(), "--raw", "--length=99")
+        .stdin_bytes("foo")
+        .stdout_capture()
+        .run()
+        .unwrap()
+        .stdout;
+    assert_eq!(expected[..99], short_output);
+
+    let seek1_output = cmd!(b3sum_exe(), "--raw", "--length=99", "--seek=1")
+        .stdin_bytes("foo")
+        .stdout_capture()
+        .run()
+        .unwrap()
+        .stdout;
+    assert_eq!(expected[1..], seek1_output);
+
+    let seek99_output = cmd!(b3sum_exe(), "--raw", "--length=1", "--seek=99")
+        .stdin_bytes("foo")
+        .stdout_capture()
+        .run()
+        .unwrap()
+        .stdout;
+    assert_eq!(expected[99..], seek99_output);
 }
 
 #[test]
