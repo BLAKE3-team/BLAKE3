@@ -11,17 +11,18 @@ Arguments:
   [FILE]...  Files to hash, or checkfiles to check
 
 Options:
-  -l, --length <LEN>          The number of output bytes, before hex encoding [default: 32]
-      --num-threads <NUM>     The maximum number of threads to use
-      --keyed                 Use the keyed mode
+      --keyed                 Use the keyed mode, reading the 32-byte key from stdin
       --derive-key <CONTEXT>  Use the key derivation mode, with the given context string
+  -l, --length <LEN>          The number of output bytes, before hex encoding [default: 32]
+      --seek <SEEK>           The starting output byte offset, before hex encoding [default: 0]
+      --num-threads <NUM>     The maximum number of threads to use
       --no-mmap               Disable memory mapping
       --no-names              Omit filenames in the output
       --raw                   Write raw output bytes to stdout, rather than hex
   -c, --check                 Read BLAKE3 sums from the [FILE]s and check them
-      --quiet                 Skip printing OK for each successfully verified file
-  -h, --help                  Print help information (use `--help` for more detail)
-  -V, --version               Print version information
+      --quiet                 Skip printing OK for each checked file
+  -h, --help                  Print help (see more with '--help')
+  -V, --version               Print version
 ```
 
 See also [this document about how the `--check` flag
