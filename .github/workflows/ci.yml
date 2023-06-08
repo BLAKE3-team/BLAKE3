@@ -13,7 +13,7 @@ env:
   RUST_BACKTRACE: "1"
 
 jobs:
-  cargo_tests:
+  library_tests:
     name: ${{ matrix.target.name }} ${{ matrix.channel }}
     runs-on: ${{ matrix.target.os }}
     strategy:
@@ -117,13 +117,6 @@ jobs:
     - name: test vectors pure
       run: cargo test --features=pure
       working-directory: ./test_vectors
-    # Test b3sum.
-    - name: test b3sum
-      run: cargo test
-      working-directory: ./b3sum
-    - name: test b3sum --no-default-features
-      run: cargo test --no-default-features
-      working-directory: ./b3sum
     # Test C code.
     - name: cargo test C bindings assembly
       run: cargo test
@@ -135,6 +128,43 @@ jobs:
     - name: reference impl doc test
       run: cargo test
       working-directory: ./reference_impl
+
+  b3sum_tests:
+    name: b3sum ${{ matrix.target.name }} ${{ matrix.channel }}
+    runs-on: ${{ matrix.target.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [
+          { "os": "ubuntu-latest",  "toolchain": "x86_64-unknown-linux-gnu", "name": "Linux GNU" },
+          { "os": "macOS-latest",   "toolchain": "x86_64-apple-darwin",      "name": "macOS" },
+          { "os": "windows-latest", "toolchain": "x86_64-pc-windows-msvc",   "name": "Windows MSVC" },
+          { "os": "windows-latest", "toolchain": "x86_64-pc-windows-gnu",    "name": "Windows GNU" }
+        ]
+        channel: [
+          "stable",
+          "beta",
+          "nightly",
+          # The b3sum MSRV is typically higher than the blake3 crate's, because
+          # b3sum depends on Clap. We check in the b3sum Cargo.lock, so Clap
+          # update shouldn't randomly break us here.
+          "1.64.0",
+        ]
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ format('{0}-{1}', matrix.channel, matrix.target.toolchain) }}
+        profile: minimal
+        override: true
+    # Test b3sum.
+    - name: test b3sum
+      run: cargo test
+      working-directory: ./b3sum
+    - name: test b3sum --no-default-features
+      run: cargo test --no-default-features
+      working-directory: ./b3sum
 
   cross_tests:
     name: cross ${{ matrix.arch }}
