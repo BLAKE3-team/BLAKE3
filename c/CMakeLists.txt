@@ -1,11 +1,3 @@
-cmake_minimum_required(VERSION 3.9)
-
-project(libblake3
-  VERSION 1.5.0
-  DESCRIPTION "BLAKE3 C implementation"
-  LANGUAGES C ASM
-)
-
 include(FeatureSummary)
 include(GNUInstallDirs)
 
@@ -167,7 +159,7 @@ install(FILES
 )
 
 configure_file(libblake3.pc.in libblake3.pc @ONLY)
-install(FILES "${CMAKE_BINARY_DIR}/libblake3.pc"
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libblake3.pc"
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
 
 # print feature summary
