@@ -1,4 +1,4 @@
-use crate::{portable, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN};
+use crate::{portable, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, UNIVERSAL_HASH_LEN};
 use arrayref::{array_mut_ref, array_ref};
 
 cfg_if::cfg_if! {
@@ -335,7 +335,12 @@ impl Platform {
         portable::xof_xor(block, block_len, cv, counter, flags, out);
     }
 
-    pub fn universal_hash(&self, input: &[u8], key: &[u32; 8], counter: u64) -> [u8; 64] {
+    pub fn universal_hash(
+        &self,
+        input: &[u8],
+        key: &[u32; 8],
+        counter: u64,
+    ) -> [u8; UNIVERSAL_HASH_LEN] {
         portable::universal_hash(input, key, counter)
     }
 

@@ -1,4 +1,6 @@
-use crate::{CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, OUT_LEN};
+use crate::{
+    CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, OUT_LEN, UNIVERSAL_HASH_LEN,
+};
 use arrayref::array_ref;
 use arrayvec::ArrayVec;
 use core::cmp;
@@ -345,7 +347,8 @@ fn test_compare_reference_impl_xof() {
     }
 }
 
-type UniversalHashFn = unsafe fn(input: &[u8], key: &[u32; 8], counter: u64) -> [u8; BLOCK_LEN];
+type UniversalHashFn =
+    unsafe fn(input: &[u8], key: &[u32; 8], counter: u64) -> [u8; UNIVERSAL_HASH_LEN];
 
 pub fn test_universal_hash_fn(target_fn: UniversalHashFn) {
     // 31 (16 + 8 + 4 + 2 + 1) inputs
@@ -362,13 +365,16 @@ pub fn test_universal_hash_fn(target_fn: UniversalHashFn) {
     }
 }
 
-fn reference_impl_universal_hash(input: &[u8], key: &[u8; crate::KEY_LEN]) -> [u8; BLOCK_LEN] {
+fn reference_impl_universal_hash(
+    input: &[u8],
+    key: &[u8; crate::KEY_LEN],
+) -> [u8; UNIVERSAL_HASH_LEN] {
     // The reference_impl doesn't support XOF seeking, so we have to materialize an entire extended
     // output to seek to a block.
     const MAX_BLOCKS: usize = 31;
     assert!(input.len() / BLOCK_LEN <= MAX_BLOCKS);
     let mut output_buffer: [u8; BLOCK_LEN * MAX_BLOCKS] = [0u8; BLOCK_LEN * MAX_BLOCKS];
-    let mut result = [0u8; BLOCK_LEN];
+    let mut result = [0u8; UNIVERSAL_HASH_LEN];
     let mut i = 0;
     while i == 0 || i < input.len() {
         let block_len = cmp::min(input.len() - i, BLOCK_LEN);
@@ -377,7 +383,7 @@ fn reference_impl_universal_hash(input: &[u8], key: &[u8; crate::KEY_LEN]) -> [u
         reference_hasher.finalize(&mut output_buffer);
         for (result_byte, output_byte) in result
             .iter_mut()
-            .zip(output_buffer[i..i + BLOCK_LEN].iter())
+            .zip(output_buffer[i..i + UNIVERSAL_HASH_LEN].iter())
         {
             *result_byte ^= *output_byte;
         }

@@ -1,6 +1,6 @@
 use crate::{
     counter_high, counter_low, platform::TransposedVectors, CVBytes, CVWords, IncrementCounter,
-    BLOCK_LEN, CHUNK_LEN, IV, MSG_SCHEDULE, OUT_LEN,
+    BLOCK_LEN, CHUNK_LEN, IV, MSG_SCHEDULE, OUT_LEN, UNIVERSAL_HASH_LEN,
 };
 use arrayref::{array_mut_ref, array_ref};
 use core::cmp;
@@ -256,9 +256,13 @@ pub fn xof_xor(
     }
 }
 
-pub fn universal_hash(mut input: &[u8], key: &[u32; 8], mut counter: u64) -> [u8; BLOCK_LEN] {
+pub fn universal_hash(
+    mut input: &[u8],
+    key: &[u32; 8],
+    mut counter: u64,
+) -> [u8; UNIVERSAL_HASH_LEN] {
     let flags = crate::KEYED_HASH | crate::CHUNK_START | crate::CHUNK_END | crate::ROOT;
-    let mut result = [0u8; BLOCK_LEN];
+    let mut result = [0u8; UNIVERSAL_HASH_LEN];
     while input.len() > BLOCK_LEN {
         let block_output = compress_xof(
             key,
@@ -267,7 +271,7 @@ pub fn universal_hash(mut input: &[u8], key: &[u32; 8], mut counter: u64) -> [u8
             counter,
             flags,
         );
-        for i in 0..BLOCK_LEN {
+        for i in 0..UNIVERSAL_HASH_LEN {
             result[i] ^= block_output[i];
         }
         input = &input[BLOCK_LEN..];
@@ -276,7 +280,7 @@ pub fn universal_hash(mut input: &[u8], key: &[u32; 8], mut counter: u64) -> [u8
     let mut final_block = [0u8; BLOCK_LEN];
     final_block[..input.len()].copy_from_slice(input);
     let final_output = compress_xof(key, &final_block, input.len() as u8, counter, flags);
-    for i in 0..BLOCK_LEN {
+    for i in 0..UNIVERSAL_HASH_LEN {
         result[i] ^= final_output[i];
     }
     result
