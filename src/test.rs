@@ -224,37 +224,38 @@ type HashChunksFn = unsafe fn(
 
 pub fn test_hash_chunks_fn(target_fn: HashChunksFn, degree: usize) {
     assert!(degree <= MAX_SIMD_DEGREE);
-    let mut input = [0u8; MAX_SIMD_DEGREE * CHUNK_LEN];
+    let mut input = [0u8; 2 * MAX_SIMD_DEGREE * CHUNK_LEN];
     paint_test_input(&mut input);
     for test_degree in 1..=degree {
-        for &counter in INITIAL_COUNTERS {
+        for &initial_counter in INITIAL_COUNTERS {
             // Make two calls, to test the output_column parameter.
             let mut test_output = TransposedVectors::default();
             unsafe {
                 target_fn(
                     &input[..test_degree * CHUNK_LEN],
                     TEST_KEY_WORDS,
-                    counter,
+                    initial_counter,
                     crate::KEYED_HASH,
                     &mut test_output,
                     0,
                 );
                 target_fn(
-                    &input[..test_degree * CHUNK_LEN],
+                    &input[test_degree * CHUNK_LEN..][..test_degree * CHUNK_LEN],
                     TEST_KEY_WORDS,
-                    counter + test_degree as u64,
+                    initial_counter + test_degree as u64,
                     crate::KEYED_HASH,
                     &mut test_output,
                     test_degree,
                 );
             }
 
+            // Here always hash one chunk at a time, even though portable::DEGREE is 2.
             let mut portable_output = TransposedVectors::default();
-            for i in 0..2 * test_degree {
+            for i in 0..(2 * test_degree) {
                 crate::portable::hash_chunks(
-                    &input[..test_degree * CHUNK_LEN],
+                    &input[i * CHUNK_LEN..][..CHUNK_LEN],
                     TEST_KEY_WORDS,
-                    counter + i as u64,
+                    initial_counter + i as u64,
                     crate::KEYED_HASH,
                     &mut portable_output,
                     i,
@@ -359,6 +360,145 @@ pub fn test_hash_parents_fn(target_fn: HashParentsFn, degree: usize) {
 
             assert_eq!(portable_output.0, test_io.0);
         }
+    }
+}
+
+fn hash_with_chunks_and_parents_recurse(
+    chunks_fn: HashChunksFn,
+    parents_fn: HashParentsFn,
+    degree: usize,
+    input: &[u8],
+    counter: u64,
+    output: &mut TransposedVectors,
+    output_column: usize,
+) -> usize {
+    // TODO: hash partial chunks?
+    assert_eq!(input.len() % CHUNK_LEN, 0);
+    assert_eq!(degree.count_ones(), 1, "power of 2");
+    if input.len() <= degree * CHUNK_LEN {
+        unsafe {
+            chunks_fn(input, crate::IV, counter, 0, output, output_column);
+        }
+        input.len() / CHUNK_LEN
+    } else {
+        let mut child_output = TransposedVectors::default();
+        let (left_input, right_input) = input.split_at(crate::left_len(input.len()));
+        let mut children = hash_with_chunks_and_parents_recurse(
+            chunks_fn,
+            parents_fn,
+            degree,
+            left_input,
+            counter,
+            &mut child_output,
+            0,
+        );
+        assert_eq!(children, degree);
+        children += hash_with_chunks_and_parents_recurse(
+            chunks_fn,
+            parents_fn,
+            degree,
+            right_input,
+            counter + (left_input.len() / CHUNK_LEN) as u64,
+            &mut child_output,
+            children,
+        );
+        unsafe {
+            parents_fn(
+                ParentInOut::Separate {
+                    input: &child_output,
+                    num_parents: children / 2,
+                    output,
+                    output_column,
+                },
+                crate::IV,
+                crate::PARENT,
+            );
+        }
+        // If there's an odd child left over, copy it to the output.
+        if children % 2 == 0 {
+            children / 2
+        } else {
+            for i in 0..8 {
+                output[i][output_column + (children / 2)] = child_output[i][children - 1];
+            }
+            (children / 2) + 1
+        }
+    }
+}
+
+fn root_hash_with_chunks_and_parents(
+    chunks_fn: HashChunksFn,
+    parents_fn: HashParentsFn,
+    degree: usize,
+    input: &[u8],
+) -> [u8; 32] {
+    // TODO: handle the 1-chunk case?
+    assert!(input.len() >= 2 * CHUNK_LEN);
+    // TODO: hash partial chunks?
+    assert_eq!(input.len() % CHUNK_LEN, 0);
+    let mut cvs = TransposedVectors::default();
+    let mut num_cvs =
+        hash_with_chunks_and_parents_recurse(chunks_fn, parents_fn, degree, input, 0, &mut cvs, 0);
+    while num_cvs > 2 {
+        unsafe {
+            parents_fn(
+                ParentInOut::InPlace {
+                    in_out: &mut cvs,
+                    num_parents: num_cvs / 2,
+                },
+                crate::IV,
+                crate::PARENT,
+            );
+        }
+        if num_cvs % 2 == 0 {
+            num_cvs = num_cvs / 2;
+        } else {
+            for i in 0..8 {
+                cvs[i][num_cvs / 2] = cvs[i][num_cvs - 1];
+            }
+            num_cvs = (num_cvs / 2) + 1;
+        }
+    }
+    unsafe {
+        parents_fn(
+            ParentInOut::InPlace {
+                in_out: &mut cvs,
+                num_parents: 1,
+            },
+            crate::IV,
+            crate::PARENT | crate::ROOT,
+        );
+    }
+    let mut ret = [0u8; 32];
+    for i in 0..8 {
+        ret[4 * i..][..4].copy_from_slice(&cvs[i][0].to_le_bytes());
+    }
+    ret
+}
+
+#[test]
+pub fn test_compare_reference_impl_chunks_and_hashes() {
+    // 31 (16 + 8 + 4 + 2 + 1) chunks
+    const MAX_CHUNKS: usize = 31;
+    let mut input = [0u8; MAX_CHUNKS * CHUNK_LEN];
+    paint_test_input(&mut input);
+    for num_chunks in 2..=MAX_CHUNKS {
+        #[cfg(feature = "std")]
+        dbg!(num_chunks);
+
+        let test_output = root_hash_with_chunks_and_parents(
+            crate::portable::hash_chunks,
+            crate::portable::hash_parents,
+            crate::portable::DEGREE,
+            &input[..num_chunks * CHUNK_LEN],
+        );
+
+        let mut reference_output = [0u8; 32];
+        let mut reference_hasher = reference_impl::Hasher::new();
+        reference_hasher.update(&input[..num_chunks * CHUNK_LEN]);
+        reference_hasher.finalize(&mut reference_output);
+
+        assert_eq!(reference_output, test_output);
     }
 }
 

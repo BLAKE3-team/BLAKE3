@@ -179,6 +179,11 @@ pub fn hash_many<const N: usize>(
     }
 }
 
+// Using DEGREE=2 instead of DEGREE=1 here (and so guaranteeing that all vectorized implementations
+// have DEGREE>=2) makes it easier to avoid screwing up the root parent node in a recursive hash.
+#[cfg(test)]
+pub const DEGREE: usize = 2;
+
 /// General contract:
 /// - `input` is N chunks, each exactly 1 KiB, 1 <= N <= DEGREE
 /// - `output_column` is a multiple of DEGREE.
@@ -186,7 +191,8 @@ pub fn hash_many<const N: usize>(
 /// from `output_column` to `output_column+N-1`. Columns prior to `output_column` must be
 /// unmodified.
 ///
-/// The DEGREE of this portable implementation is 1, so the input here is always exactly 1 KiB.
+/// The DEGREE of this portable implementation is 2, so the input here is either exactly 1 KiB or
+/// exactly 2 KiB.
 pub fn hash_chunks(
     input: &[u8],
     key: &[u32; 8],
@@ -195,26 +201,29 @@ pub fn hash_chunks(
     output: &mut TransposedVectors,
     output_column: usize,
 ) {
-    debug_assert_eq!(CHUNK_LEN, input.len());
-    let mut cv = *key;
-    for block_index in 0..16 {
-        let block_flags = match block_index {
-            0 => flags | crate::CHUNK_START,
-            15 => flags | crate::CHUNK_END,
-            _ => flags,
-        };
-        compress_in_place(
-            &mut cv,
-            input[BLOCK_LEN * block_index..][..BLOCK_LEN]
-                .try_into()
-                .unwrap(),
-            BLOCK_LEN as u8,
-            counter as u64,
-            block_flags,
-        );
-    }
-    for word_index in 0..cv.len() {
-        output[word_index][output_column] = cv[word_index];
+    debug_assert!(input.len() == CHUNK_LEN || input.len() == 2 * CHUNK_LEN);
+    let num_chunks = input.len() / CHUNK_LEN;
+    for chunk_index in 0..num_chunks {
+        let mut cv = *key;
+        for block_index in 0..16 {
+            let block_flags = match block_index {
+                0 => flags | crate::CHUNK_START,
+                15 => flags | crate::CHUNK_END,
+                _ => flags,
+            };
+            compress_in_place(
+                &mut cv,
+                input[CHUNK_LEN * chunk_index + BLOCK_LEN * block_index..][..BLOCK_LEN]
+                    .try_into()
+                    .unwrap(),
+                BLOCK_LEN as u8,
+                counter + chunk_index as u64,
+                block_flags,
+            );
+        }
+        for word_index in 0..cv.len() {
+            output[word_index][output_column + chunk_index] = cv[word_index];
+        }
     }
 }
 
@@ -225,21 +234,24 @@ pub fn hash_chunks(
 /// `PARENT` in `flags`). Writes `num_parents` transposed parent CVs to the output, starting at
 /// column 0.
 ///
-/// The DEGREE of this portable implementation is 1, so the input here is always exactly 2 CVs
-/// (num_parents == 1).
+/// The DEGREE of this portable implementation is 2, so num_parents is either 1 or 2.
 pub fn hash_parents(mut in_out: ParentInOut, key: &[u32; 8], flags: u8) {
-    let (input, num_parents) = in_out.input();
-    debug_assert_eq!(num_parents, 1);
-    let mut block = [0u8; BLOCK_LEN];
-    for i in 0..8 {
-        block[4 * i..][..4].copy_from_slice(&input[i][0].to_le_bytes());
-        block[4 * (i + 8)..][..4].copy_from_slice(&input[i][1].to_le_bytes());
-    }
-    let mut cv = *key;
-    compress_in_place(&mut cv, &block, BLOCK_LEN as u8, 0, flags);
-    let (output, output_column) = in_out.output();
-    for i in 0..8 {
-        output[i][output_column] = cv[i];
+    let (_, num_parents) = in_out.input();
+    debug_assert!(num_parents == 1 || num_parents == 2);
+    for parent_index in 0..num_parents {
+        let (input, _) = in_out.input();
+        let mut block = [0u8; BLOCK_LEN];
+        for i in 0..8 {
+            block[4 * i..][..4].copy_from_slice(&input[i][2 * parent_index].to_le_bytes());
+            block[4 * (i + 8)..][..4]
+                .copy_from_slice(&input[i][2 * parent_index + 1].to_le_bytes());
+        }
+        let mut cv = *key;
+        compress_in_place(&mut cv, &block, BLOCK_LEN as u8, 0, flags);
+        let (output, output_column) = in_out.output();
+        for i in 0..8 {
+            output[i][output_column + parent_index] = cv[i];
+        }
     }
 }
 
@@ -312,8 +324,6 @@ pub fn universal_hash(
 #[cfg(test)]
 pub mod test {
     use super::*;
-
-    const DEGREE: usize = 1;
 
     // These are basically testing the portable implementation against itself, but we also check
     // that compress_in_place and compress_xof are consistent. And there are tests against the

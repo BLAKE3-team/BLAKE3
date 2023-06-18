@@ -273,14 +273,6 @@ impl Platform {
         }
     }
 
-    // Hashes N=input.len()/CHUNK_LEN chunks and writes N transposed chunk CVs to the output,
-    // starting at the column given by num_cvs (i.e. appending to the transposed CVs already
-    // present). After returning, the total number of transposed CVs in the output will be
-    // num_cvs+N. N and num_cvs must both be less than or equal to simd_degree. Any partial chunk
-    // bytes in the input after the last complete chunk are ignored and need to be hashed
-    // separately by the caller. The counter argument is the value of the chunk counter for the
-    // first chunk, and it's incremented by 1 for each chunk after the first. The CHUNK_START and
-    // CHUNK_END flags are set internally.
     pub fn hash_chunks(
         &self,
         input: &[u8],
@@ -290,10 +282,11 @@ impl Platform {
         cvs_out: &mut TransposedVectors,
         num_cvs: usize,
     ) {
+        // TODO: Handle partial chunks?
+        debug_assert_eq!(input.len() % CHUNK_LEN, 0);
         debug_assert!(input.len() / CHUNK_LEN <= self.simd_degree());
         debug_assert!(num_cvs <= self.simd_degree());
         portable::hash_chunks(input, key, counter, flags, cvs_out, num_cvs);
-        // XXX: should separate the thing that hashes the remainder from this interface
     }
 
     pub fn hash_parents(&self, in_out: ParentInOut, key: &[u32; 8], flags: u8) {
