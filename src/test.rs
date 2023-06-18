@@ -1,6 +1,8 @@
+use crate::platform::{ParentInOut, TransposedVectors, MAX_SIMD_DEGREE};
 use crate::{
     CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, OUT_LEN, UNIVERSAL_HASH_LEN,
 };
+
 use arrayref::array_ref;
 use arrayvec::ArrayVec;
 use core::cmp;
@@ -49,8 +51,8 @@ pub const TEST_CASES: &[usize] = &[
 pub const TEST_CASES_MAX: usize = 100 * CHUNK_LEN;
 
 // There's a test to make sure these two are equal below.
-pub const TEST_KEY: CVBytes = *b"whats the Elvish word for friend";
-pub const TEST_KEY_WORDS: CVWords = [
+pub const TEST_KEY: &CVBytes = b"whats the Elvish word for friend";
+pub const TEST_KEY_WORDS: &CVWords = &[
     1952540791, 1752440947, 1816469605, 1752394102, 1919907616, 1868963940, 1919295602, 1684956521,
 ];
 
@@ -84,7 +86,7 @@ type CompressXofFn = unsafe fn(
 
 // A shared helper function for platform-specific tests.
 pub fn test_compress_fn(compress_in_place_fn: CompressInPlaceFn, compress_xof_fn: CompressXofFn) {
-    let initial_state = TEST_KEY_WORDS;
+    let initial_state = *TEST_KEY_WORDS;
     let block_len: u8 = 61;
     let mut block = [0; BLOCK_LEN];
     paint_test_input(&mut block[..block_len as usize]);
@@ -128,7 +130,7 @@ pub fn test_hash_many_fn(
         // 31 (16 + 8 + 4 + 2 + 1) inputs
         const NUM_INPUTS: usize = 31;
         let mut input_buf = [0; CHUNK_LEN * NUM_INPUTS];
-        crate::test::paint_test_input(&mut input_buf);
+        paint_test_input(&mut input_buf);
 
         // First hash chunks.
         let mut chunks = ArrayVec::<&[u8; CHUNK_LEN], NUM_INPUTS>::new();
@@ -138,7 +140,7 @@ pub fn test_hash_many_fn(
         let mut portable_chunks_out = [0; NUM_INPUTS * OUT_LEN];
         crate::portable::hash_many(
             &chunks,
-            &TEST_KEY_WORDS,
+            TEST_KEY_WORDS,
             counter,
             IncrementCounter::Yes,
             crate::KEYED_HASH,
@@ -151,7 +153,7 @@ pub fn test_hash_many_fn(
         unsafe {
             hash_many_chunks_fn(
                 &chunks[..],
-                &TEST_KEY_WORDS,
+                TEST_KEY_WORDS,
                 counter,
                 IncrementCounter::Yes,
                 crate::KEYED_HASH,
@@ -177,7 +179,7 @@ pub fn test_hash_many_fn(
         let mut portable_parents_out = [0; NUM_INPUTS * OUT_LEN];
         crate::portable::hash_many(
             &parents,
-            &TEST_KEY_WORDS,
+            TEST_KEY_WORDS,
             counter,
             IncrementCounter::No,
             crate::KEYED_HASH | crate::PARENT,
@@ -190,7 +192,7 @@ pub fn test_hash_many_fn(
         unsafe {
             hash_many_parents_fn(
                 &parents[..],
-                &TEST_KEY_WORDS,
+                TEST_KEY_WORDS,
                 counter,
                 IncrementCounter::No,
                 crate::KEYED_HASH | crate::PARENT,
@@ -206,6 +208,156 @@ pub fn test_hash_many_fn(
                 &portable_parents_out[n * OUT_LEN..][..OUT_LEN],
                 &test_parents_out[n * OUT_LEN..][..OUT_LEN]
             );
+        }
+    }
+}
+
+// Both xof() and xof_xof() have this signature.
+type HashChunksFn = unsafe fn(
+    input: &[u8],
+    key: &[u32; 8],
+    counter: u64,
+    flags: u8,
+    output: &mut TransposedVectors,
+    output_column: usize,
+);
+
+pub fn test_hash_chunks_fn(target_fn: HashChunksFn, degree: usize) {
+    assert!(degree <= MAX_SIMD_DEGREE);
+    let mut input = [0u8; MAX_SIMD_DEGREE * CHUNK_LEN];
+    paint_test_input(&mut input);
+    for test_degree in 1..=degree {
+        for &counter in INITIAL_COUNTERS {
+            // Make two calls, to test the output_column parameter.
+            let mut test_output = TransposedVectors::default();
+            unsafe {
+                target_fn(
+                    &input[..test_degree * CHUNK_LEN],
+                    TEST_KEY_WORDS,
+                    counter,
+                    crate::KEYED_HASH,
+                    &mut test_output,
+                    0,
+                );
+                target_fn(
+                    &input[..test_degree * CHUNK_LEN],
+                    TEST_KEY_WORDS,
+                    counter + test_degree as u64,
+                    crate::KEYED_HASH,
+                    &mut test_output,
+                    test_degree,
+                );
+            }
+
+            let mut portable_output = TransposedVectors::default();
+            for i in 0..2 * test_degree {
+                crate::portable::hash_chunks(
+                    &input[..test_degree * CHUNK_LEN],
+                    TEST_KEY_WORDS,
+                    counter + i as u64,
+                    crate::KEYED_HASH,
+                    &mut portable_output,
+                    i,
+                );
+            }
+
+            assert_eq!(portable_output.0, test_output.0);
+        }
+    }
+}
+
+fn paint_transposed_input(input: &mut TransposedVectors) {
+    let mut val = 0;
+    for row in 0..8 {
+        for col in 0..2 * MAX_SIMD_DEGREE {
+            input[row][col] = val;
+            val += 1;
+        }
+    }
+}
+
+// Both xof() and xof_xof() have this signature.
+type HashParentsFn = unsafe fn(in_out: ParentInOut, key: &[u32; 8], flags: u8);
+
+pub fn test_hash_parents_fn(target_fn: HashParentsFn, degree: usize) {
+    assert!(degree <= MAX_SIMD_DEGREE);
+    for test_degree in 1..=degree {
+        // separate
+        {
+            let mut input = TransposedVectors::default();
+            paint_transposed_input(&mut input);
+            let mut test_output = TransposedVectors(input.0);
+            unsafe {
+                target_fn(
+                    ParentInOut::Separate {
+                        input: &input,
+                        num_parents: test_degree,
+                        output: &mut test_output,
+                        output_column: 0,
+                    },
+                    TEST_KEY_WORDS,
+                    crate::KEYED_HASH | crate::PARENT,
+                );
+            }
+
+            let mut portable_output = TransposedVectors(input.0);
+            for i in 0..test_degree {
+                for row in 0..8 {
+                    input[row][0] = input[row][2 * i];
+                    input[row][1] = input[row][2 * i + 1];
+                }
+                crate::portable::hash_parents(
+                    ParentInOut::Separate {
+                        input: &input,
+                        num_parents: 1,
+                        output: &mut portable_output,
+                        output_column: i,
+                    },
+                    TEST_KEY_WORDS,
+                    crate::KEYED_HASH | crate::PARENT,
+                );
+            }
+
+            assert_eq!(portable_output.0, test_output.0);
+        }
+
+        // in-place
+        {
+            let mut test_io = TransposedVectors::default();
+            paint_transposed_input(&mut test_io);
+            unsafe {
+                target_fn(
+                    ParentInOut::InPlace {
+                        in_out: &mut test_io,
+                        num_parents: test_degree,
+                    },
+                    TEST_KEY_WORDS,
+                    crate::KEYED_HASH | crate::PARENT,
+                );
+            }
+
+            let mut portable_input = TransposedVectors::default();
+            let mut portable_output = TransposedVectors::default();
+            paint_transposed_input(&mut portable_input);
+            paint_transposed_input(&mut portable_output);
+            for i in 0..test_degree {
+                for row in 0..8 {
+                    portable_input[row][0] = portable_input[row][2 * i];
+                    portable_input[row][1] = portable_input[row][2 * i + 1];
+                }
+                crate::portable::hash_parents(
+                    ParentInOut::Separate {
+                        input: &portable_input,
+                        num_parents: 1,
+                        output: &mut portable_output,
+                        output_column: i,
+                    },
+                    TEST_KEY_WORDS,
+                    crate::KEYED_HASH | crate::PARENT,
+                );
+            }
+
+            assert_eq!(portable_output.0, test_io.0);
         }
     }
 }
@@ -229,7 +381,7 @@ pub fn test_xof_and_xor_fns(target_xof: XofFn, target_xof_xor: XofFn) {
     ];
     for input_len in [0, 1, BLOCK_LEN] {
         let mut input_block = [0u8; BLOCK_LEN];
-        crate::test::paint_test_input(&mut input_block[..input_len]);
+        paint_test_input(&mut input_block[..input_len]);
         for output_len in [0, 1, BLOCK_LEN, BLOCK_LEN + 1, BLOCK_LEN * NUM_OUTPUTS] {
             let mut test_output_buf = [0xff; BLOCK_LEN * NUM_OUTPUTS];
             for &counter in INITIAL_COUNTERS {
@@ -238,7 +390,7 @@ pub fn test_xof_and_xor_fns(target_xof: XofFn, target_xof_xor: XofFn) {
                     crate::portable::xof(
                         &input_block,
                         input_len as u8,
-                        &TEST_KEY_WORDS,
+                        TEST_KEY_WORDS,
                         counter,
                         flags,
                         &mut expected_output_buf[..output_len],
@@ -248,7 +400,7 @@ pub fn test_xof_and_xor_fns(target_xof: XofFn, target_xof_xor: XofFn) {
                         target_xof(
                             &input_block,
                             input_len as u8,
-                            &TEST_KEY_WORDS,
+                            TEST_KEY_WORDS,
                             counter,
                             flags,
                             &mut test_output_buf[..output_len],
@@ -267,7 +419,7 @@ pub fn test_xof_and_xor_fns(target_xof: XofFn, target_xof_xor: XofFn) {
                         target_xof_xor(
                             &input_block,
                             input_len as u8,
-                            &TEST_KEY_WORDS,
+                            TEST_KEY_WORDS,
                             counter,
                             flags,
                             &mut test_output_buf[..output_len],
@@ -281,7 +433,7 @@ pub fn test_xof_and_xor_fns(target_xof: XofFn, target_xof_xor: XofFn) {
                         target_xof_xor(
                             &input_block,
                             input_len as u8,
-                            &TEST_KEY_WORDS,
+                            TEST_KEY_WORDS,
                             counter,
                             flags,
                             &mut test_output_buf[..output_len],
@@ -306,7 +458,7 @@ fn test_compare_reference_impl_xof() {
     input_block[..input.len()].copy_from_slice(input);
 
     let mut reference_output_buf = [0; BLOCK_LEN * NUM_OUTPUTS];
-    let mut reference_hasher = reference_impl::Hasher::new_keyed(&TEST_KEY);
+    let mut reference_hasher = reference_impl::Hasher::new_keyed(TEST_KEY);
     reference_hasher.update(input);
     reference_hasher.finalize(&mut reference_output_buf);
 
@@ -315,7 +467,7 @@ fn test_compare_reference_impl_xof() {
         crate::platform::Platform::detect().xof(
             &input_block,
             input.len() as u8,
-            &TEST_KEY_WORDS,
+            TEST_KEY_WORDS,
             0,
             crate::KEYED_HASH | crate::CHUNK_START | crate::CHUNK_END | crate::ROOT,
             &mut test_output_buf[..output_len],
@@ -334,7 +486,7 @@ fn test_compare_reference_impl_xof() {
             crate::platform::Platform::detect().xof(
                 &input_block,
                 input.len() as u8,
-                &TEST_KEY_WORDS,
+                TEST_KEY_WORDS,
                 1,
                 crate::KEYED_HASH | crate::CHUNK_START | crate::CHUNK_END | crate::ROOT,
                 &mut test_output_buf[..output_len - BLOCK_LEN],
@@ -354,12 +506,12 @@ pub fn test_universal_hash_fn(target_fn: UniversalHashFn) {
     // 31 (16 + 8 + 4 + 2 + 1) inputs
     const NUM_INPUTS: usize = 31;
     let mut input_buf = [0; BLOCK_LEN * NUM_INPUTS];
-    crate::test::paint_test_input(&mut input_buf);
+    paint_test_input(&mut input_buf);
     for len in [0, 1, BLOCK_LEN, BLOCK_LEN + 1, input_buf.len()] {
         for &counter in INITIAL_COUNTERS {
             let portable_output =
-                crate::portable::universal_hash(&input_buf[..len], &TEST_KEY_WORDS, counter);
-            let test_output = unsafe { target_fn(&input_buf[..len], &TEST_KEY_WORDS, counter) };
+                crate::portable::universal_hash(&input_buf[..len], TEST_KEY_WORDS, counter);
+            let test_output = unsafe { target_fn(&input_buf[..len], TEST_KEY_WORDS, counter) };
             assert_eq!(portable_output, test_output);
         }
     }
@@ -396,12 +548,12 @@ fn reference_impl_universal_hash(
 fn test_compare_reference_impl_universal_hash() {
     const NUM_INPUTS: usize = 31;
     let mut input_buf = [0; BLOCK_LEN * NUM_INPUTS];
-    crate::test::paint_test_input(&mut input_buf);
+    paint_test_input(&mut input_buf);
     for len in [0, 1, BLOCK_LEN, BLOCK_LEN + 1, input_buf.len()] {
-        let reference_output = reference_impl_universal_hash(&input_buf[..len], &TEST_KEY);
+        let reference_output = reference_impl_universal_hash(&input_buf[..len], TEST_KEY);
         let test_output = crate::platform::Platform::detect().universal_hash(
             &input_buf[..len],
-            &TEST_KEY_WORDS,
+            TEST_KEY_WORDS,
             0,
         );
         assert_eq!(reference_output, test_output);
@@ -412,7 +564,7 @@ fn test_compare_reference_impl_universal_hash() {
 fn test_key_bytes_equal_key_words() {
     assert_eq!(
         TEST_KEY_WORDS,
-        crate::platform::words_from_le_bytes_32(&TEST_KEY),
+        &crate::platform::words_from_le_bytes_32(TEST_KEY),
     );
 }
 
@@ -516,23 +668,23 @@ fn test_compare_reference_impl() {
 
         // keyed
         {
-            let mut reference_hasher = reference_impl::Hasher::new_keyed(&TEST_KEY);
+            let mut reference_hasher = reference_impl::Hasher::new_keyed(TEST_KEY);
             reference_hasher.update(input);
             let mut expected_out = [0; OUT];
             reference_hasher.finalize(&mut expected_out);
 
             // all at once
-            let test_out = crate::keyed_hash(&TEST_KEY, input);
+            let test_out = crate::keyed_hash(TEST_KEY, input);
             assert_eq!(test_out, *array_ref!(expected_out, 0, 32));
             // incremental
-            let mut hasher = crate::Hasher::new_keyed(&TEST_KEY);
+            let mut hasher = crate::Hasher::new_keyed(TEST_KEY);
             hasher.update(input);
             assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
             assert_eq!(hasher.finalize(), test_out);
             // incremental (rayon)
             #[cfg(feature = "rayon")]
             {
-                let mut hasher = crate::Hasher::new_keyed(&TEST_KEY);
+                let mut hasher = crate::Hasher::new_keyed(TEST_KEY);
                 hasher.update_rayon(input);
                 assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
                 assert_eq!(hasher.finalize(), test_out);

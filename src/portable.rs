@@ -1,6 +1,7 @@
+use crate::platform::{ParentInOut, TransposedVectors};
 use crate::{
-    counter_high, counter_low, platform::TransposedVectors, CVBytes, CVWords, IncrementCounter,
-    BLOCK_LEN, CHUNK_LEN, IV, MSG_SCHEDULE, OUT_LEN, UNIVERSAL_HASH_LEN,
+    counter_high, counter_low, CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, IV,
+    MSG_SCHEDULE, OUT_LEN, UNIVERSAL_HASH_LEN,
 };
 use arrayref::{array_mut_ref, array_ref};
 use core::cmp;
@@ -178,46 +179,68 @@ pub fn hash_many<const N: usize>(
     }
 }
 
+/// General contract:
+/// - `input` is N chunks, each exactly 1 KiB, 1 <= N <= DEGREE
+/// - `output_column` is a multiple of DEGREE.
+/// The CHUNK_START and CHUNK_END flags are set internally. Writes N transposed CVs to the output,
+/// from `output_column` to `output_column+N-1`. Columns prior to `output_column` must be
+/// unmodified.
+///
+/// The DEGREE of this portable implementation is 1, so the input here is always exactly 1 KiB.
 pub fn hash_chunks(
     input: &[u8],
     key: &[u32; 8],
     counter: u64,
     flags: u8,
     output: &mut TransposedVectors,
-    output_offset: usize,
+    output_column: usize,
 ) {
-    const LAST_BLOCK_INDEX: usize = (CHUNK_LEN / BLOCK_LEN) - 1;
-    // There might be a partial chunk at the end. If so, we ignore it here, and the caller will
-    // hash it separately.
-    let num_chunks = input.len() / CHUNK_LEN;
-    for chunk_index in 0..num_chunks {
-        let mut cv = *key;
-        for block_index in 0..CHUNK_LEN / BLOCK_LEN {
-            compress_in_place(
-                &mut cv,
-                input[CHUNK_LEN * chunk_index + BLOCK_LEN * block_index..][..BLOCK_LEN]
-                    .try_into()
-                    .unwrap(),
-                BLOCK_LEN as u8,
-                counter + chunk_index as u64,
-                match block_index {
-                    0 => flags | crate::CHUNK_START,
-                    LAST_BLOCK_INDEX => flags | crate::CHUNK_END,
-                    _ => flags,
-                },
-            );
-        }
-        for word_index in 0..cv.len() {
-            output.0[word_index][output_offset + chunk_index] = cv[word_index];
-        }
+    debug_assert_eq!(CHUNK_LEN, input.len());
+    let mut cv = *key;
+    for block_index in 0..16 {
+        let block_flags = match block_index {
+            0 => flags | crate::CHUNK_START,
+            15 => flags | crate::CHUNK_END,
+            _ => flags,
+        };
+        compress_in_place(
+            &mut cv,
+            input[BLOCK_LEN * block_index..][..BLOCK_LEN]
+                .try_into()
+                .unwrap(),
+            BLOCK_LEN as u8,
+            counter as u64,
+            block_flags,
+        );
+    }
+    for word_index in 0..cv.len() {
+        output[word_index][output_column] = cv[word_index];
     }
 }
 
-pub fn hash_parents(cvs: &mut TransposedVectors, num_cvs: usize, key: &[u32; 8], flags: u8) {
-    // Note that there may be an odd number of children. If there's a leftover child, it gets
-    // appended to the outputs by the caller. We will not overwrite it.
-    let num_parents = num_cvs / 2;
-    todo!()
+/// General contract:
+/// - `cvs` contains `2*num_parents` transposed CVs, 1 <= num_parents <= DEGREE, starting at column 0
+/// There may be additional CVs present beyond the `2*num_parents` CVs indicated, but this function
+/// isn't aware of them and must not modify them. No flags are set internally (the caller must set
+/// `PARENT` in `flags`). Writes `num_parents` transposed parent CVs to the output, starting at
+/// column 0.
+///
+/// The DEGREE of this portable implementation is 1, so the input here is always exactly 2 CVs
+/// (num_parents == 1).
+pub fn hash_parents(mut in_out: ParentInOut, key: &[u32; 8], flags: u8) {
+    let (input, num_parents) = in_out.input();
+    debug_assert_eq!(num_parents, 1);
+    let mut block = [0u8; BLOCK_LEN];
+    for i in 0..8 {
+        block[4 * i..][..4].copy_from_slice(&input[i][0].to_le_bytes());
+        block[4 * (i + 8)..][..4].copy_from_slice(&input[i][1].to_le_bytes());
+    }
+    let mut cv = *key;
+    compress_in_place(&mut cv, &block, BLOCK_LEN as u8, 0, flags);
+    let (output, output_column) = in_out.output();
+    for i in 0..8 {
+        output[i][output_column] = cv[i];
+    }
 }
 
 pub fn xof(
@@ -290,6 +313,8 @@ pub fn universal_hash(
 pub mod test {
     use super::*;
 
+    const DEGREE: usize = 1;
+
     // These are basically testing the portable implementation against itself, but we also check
     // that compress_in_place and compress_xof are consistent. And there are tests against the
     // reference implementation and against hardcoded test vectors elsewhere.
@@ -303,6 +328,16 @@ pub mod test {
     #[test]
     fn test_hash_many() {
         crate::test::test_hash_many_fn(hash_many, hash_many);
+    }
+
+    #[test]
+    fn test_hash_chunks() {
+        crate::test::test_hash_chunks_fn(hash_chunks, DEGREE);
+    }
+
+    #[test]
+    fn test_hash_parents() {
+        crate::test::test_hash_parents_fn(hash_parents, DEGREE);
     }
 
     #[test]

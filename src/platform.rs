@@ -1,5 +1,6 @@
 use crate::{portable, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, UNIVERSAL_HASH_LEN};
 use arrayref::{array_mut_ref, array_ref};
+use core::ops::{Deref, DerefMut};
 
 cfg_if::cfg_if! {
     if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
@@ -295,19 +296,10 @@ impl Platform {
         // XXX: should separate the thing that hashes the remainder from this interface
     }
 
-    // Writes out N=num_cvs/2 transposed parent CVs in-place over the first N columns of the input
-    // CVs. Columns N and above are unmodified. N must be less than or equal to 2*simd_degree. If
-    // num_cvs is odd, the final input CV is ignored, and the caller should copy it from column
-    // 2N+1 to column N after this function returns. The PARENT flag is added internally.
-    pub fn hash_parents(
-        &self,
-        cvs: &mut TransposedVectors,
-        num_cvs: usize,
-        key: &[u32; 8],
-        flags: u8,
-    ) {
-        debug_assert!(num_cvs <= 2 * self.simd_degree());
-        portable::hash_parents(cvs, num_cvs, key, flags);
+    pub fn hash_parents(&self, in_out: ParentInOut, key: &[u32; 8], flags: u8) {
+        let (_, num_parents) = in_out.input();
+        debug_assert!(num_parents <= self.simd_degree());
+        portable::hash_parents(in_out, key, flags);
         // XXX: should separate the thing that copies the last CV over from this interface
     }
 
@@ -559,6 +551,58 @@ pub fn le_bytes_from_words_64(words: &[u32; 16]) -> [u8; 64] {
 }
 
 #[cfg_attr(any(target_arch = "x86", target_arch = "x86_64"), repr(C, align(64)))]
+#[derive(Default)]
 pub struct TransposedVectors(pub [[u32; 2 * MAX_SIMD_DEGREE]; 8]);
 
-pub struct StridedOutput(*mut u32);
+impl Deref for TransposedVectors {
+    type Target = [[u32; 2 * MAX_SIMD_DEGREE]; 8];
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for TransposedVectors {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+pub enum ParentInOut<'a> {
+    InPlace {
+        in_out: &'a mut TransposedVectors,
+        num_parents: usize,
+    },
+    Separate {
+        input: &'a TransposedVectors,
+        num_parents: usize,
+        output: &'a mut TransposedVectors,
+        output_column: usize,
+    },
+}
+
+impl<'a> ParentInOut<'a> {
+    // (vectors, num_parents)
+    pub fn input(&self) -> (&TransposedVectors, usize) {
+        match self {
+            ParentInOut::InPlace {
+                in_out,
+                num_parents,
+            } => (in_out, *num_parents),
+            ParentInOut::Separate {
+                input, num_parents, ..
+            } => (input, *num_parents),
+        }
+    }
+
+    // (vectors, output_column)
+    pub fn output(&mut self) -> (&mut TransposedVectors, usize) {
+        match self {
+            ParentInOut::InPlace { in_out, .. } => (in_out, 0),
+            ParentInOut::Separate {
+                output,
+                output_column,
+                ..
+            } => (output, *output_column),
+        }
+    }
+}
