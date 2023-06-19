@@ -1,4 +1,4 @@
-use crate::platform::{ParentInOut, TransposedVectors};
+use crate::platform::{ParentInOut, TransposedVectors, MAX_SIMD_DEGREE};
 use crate::{
     counter_high, counter_low, CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, IV,
     MSG_SCHEDULE, OUT_LEN, UNIVERSAL_HASH_LEN,
@@ -179,11 +179,6 @@ pub fn hash_many<const N: usize>(
     }
 }
 
-// Using DEGREE=2 instead of DEGREE=1 here (and so guaranteeing that all vectorized implementations
-// have DEGREE>=2) makes it easier to avoid screwing up the root parent node in a recursive hash.
-#[cfg(test)]
-pub const DEGREE: usize = 2;
-
 /// General contract:
 /// - `input` is N chunks, each exactly 1 KiB, 1 <= N <= DEGREE
 /// - `output_column` is a multiple of DEGREE.
@@ -191,8 +186,8 @@ pub const DEGREE: usize = 2;
 /// from `output_column` to `output_column+N-1`. Columns prior to `output_column` must be
 /// unmodified.
 ///
-/// The DEGREE of this portable implementation is 2, so the input here is either exactly 1 KiB or
-/// exactly 2 KiB.
+/// This portable implementation has no particular DEGREE. It will accept any number of chunks up
+/// to MAX_SIMD_DEGREE.
 pub fn hash_chunks(
     input: &[u8],
     key: &[u32; 8],
@@ -201,8 +196,9 @@ pub fn hash_chunks(
     output: &mut TransposedVectors,
     output_column: usize,
 ) {
-    debug_assert!(input.len() == CHUNK_LEN || input.len() == 2 * CHUNK_LEN);
+    debug_assert_eq!(input.len() % CHUNK_LEN, 0);
     let num_chunks = input.len() / CHUNK_LEN;
+    debug_assert!(num_chunks <= MAX_SIMD_DEGREE);
     for chunk_index in 0..num_chunks {
         let mut cv = *key;
         for block_index in 0..16 {
@@ -230,14 +226,15 @@ pub fn hash_chunks(
 /// General contract:
 /// - `cvs` contains `2*num_parents` transposed CVs, 1 <= num_parents <= DEGREE, starting at column 0
 /// There may be additional CVs present beyond the `2*num_parents` CVs indicated, but this function
-/// isn't aware of them and must not modify them. No flags are set internally (the caller must set
-/// `PARENT` in `flags`). Writes `num_parents` transposed parent CVs to the output, starting at
-/// column 0.
+/// isn't aware of them and must not modify them. (The caller will take care of an odd remaining
+/// CV, if any.) No flags are set internally. (The caller must set `PARENT` in `flags`). Writes
+/// `num_parents` transposed parent CVs to the output, starting at column 0.
 ///
-/// The DEGREE of this portable implementation is 2, so num_parents is either 1 or 2.
+/// This portable implementation has no particular DEGREE. It will accept any number of parents up
+/// to MAX_SIMD_DEGREE.
 pub fn hash_parents(mut in_out: ParentInOut, key: &[u32; 8], flags: u8) {
     let (_, num_parents) = in_out.input();
-    debug_assert!(num_parents == 1 || num_parents == 2);
+    debug_assert!(num_parents <= MAX_SIMD_DEGREE);
     for parent_index in 0..num_parents {
         let (input, _) = in_out.input();
         let mut block = [0u8; BLOCK_LEN];
@@ -340,14 +337,20 @@ pub mod test {
         crate::test::test_hash_many_fn(hash_many, hash_many);
     }
 
+    // The portable implementations of the vectorized APIs aren't actually vectorized and don't
+    // have any inherent DEGREE. They loop internally over any number of inputs. Here we
+    // arbitrarily pick degree 4 to test them (against themselves, so not an especially interesting
+    // test).
+    const TEST_DEGREE: usize = 4;
+
     #[test]
     fn test_hash_chunks() {
-        crate::test::test_hash_chunks_fn(hash_chunks, DEGREE);
+        crate::test::test_hash_chunks_fn(hash_chunks, TEST_DEGREE);
     }
 
     #[test]
     fn test_hash_parents() {
-        crate::test::test_hash_parents_fn(hash_parents, DEGREE);
+        crate::test::test_hash_parents_fn(hash_parents, TEST_DEGREE);
     }
 
     #[test]

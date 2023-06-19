@@ -249,18 +249,23 @@ pub fn test_hash_chunks_fn(target_fn: HashChunksFn, degree: usize) {
                 );
             }
 
-            // Here always hash one chunk at a time, even though portable::DEGREE is 2.
             let mut portable_output = TransposedVectors::default();
-            for i in 0..(2 * test_degree) {
-                crate::portable::hash_chunks(
-                    &input[i * CHUNK_LEN..][..CHUNK_LEN],
-                    TEST_KEY_WORDS,
-                    initial_counter + i as u64,
-                    crate::KEYED_HASH,
-                    &mut portable_output,
-                    i,
-                );
-            }
+            crate::portable::hash_chunks(
+                &input[..test_degree * CHUNK_LEN],
+                TEST_KEY_WORDS,
+                initial_counter,
+                crate::KEYED_HASH,
+                &mut portable_output,
+                0,
+            );
+            crate::portable::hash_chunks(
+                &input[test_degree * CHUNK_LEN..][..test_degree * CHUNK_LEN],
+                TEST_KEY_WORDS,
+                initial_counter + test_degree as u64,
+                crate::KEYED_HASH,
+                &mut portable_output,
+                test_degree,
+            );
 
             assert_eq!(portable_output.0, test_output.0);
         }
@@ -302,22 +307,16 @@ pub fn test_hash_parents_fn(target_fn: HashParentsFn, degree: usize) {
             }
 
             let mut portable_output = TransposedVectors(input.0);
-            for i in 0..test_degree {
-                for row in 0..8 {
-                    input[row][0] = input[row][2 * i];
-                    input[row][1] = input[row][2 * i + 1];
-                }
-                crate::portable::hash_parents(
-                    ParentInOut::Separate {
-                        input: &input,
-                        num_parents: 1,
-                        output: &mut portable_output,
-                        output_column: i,
-                    },
-                    TEST_KEY_WORDS,
-                    crate::KEYED_HASH | crate::PARENT,
-                );
-            }
+            crate::portable::hash_parents(
+                ParentInOut::Separate {
+                    input: &input,
+                    num_parents: test_degree,
+                    output: &mut portable_output,
+                    output_column: 0,
+                },
+                TEST_KEY_WORDS,
+                crate::KEYED_HASH | crate::PARENT,
+            );
 
             assert_eq!(portable_output.0, test_output.0);
         }
@@ -337,28 +336,18 @@ pub fn test_hash_parents_fn(target_fn: HashParentsFn, degree: usize) {
                 );
             }
 
-            let mut portable_input = TransposedVectors::default();
-            let mut portable_output = TransposedVectors::default();
-            paint_transposed_input(&mut portable_input);
-            paint_transposed_input(&mut portable_output);
-            for i in 0..test_degree {
-                for row in 0..8 {
-                    portable_input[row][0] = portable_input[row][2 * i];
-                    portable_input[row][1] = portable_input[row][2 * i + 1];
-                }
-                crate::portable::hash_parents(
-                    ParentInOut::Separate {
-                        input: &portable_input,
-                        num_parents: 1,
-                        output: &mut portable_output,
-                        output_column: i,
-                    },
-                    TEST_KEY_WORDS,
-                    crate::KEYED_HASH | crate::PARENT,
-                );
-            }
+            let mut portable_io = TransposedVectors::default();
+            paint_transposed_input(&mut portable_io);
+            crate::portable::hash_parents(
+                ParentInOut::InPlace {
+                    in_out: &mut portable_io,
+                    num_parents: test_degree,
+                },
+                TEST_KEY_WORDS,
+                crate::KEYED_HASH | crate::PARENT,
+            );
 
-            assert_eq!(portable_output.0, test_io.0);
+            assert_eq!(portable_io.0, test_io.0);
         }
     }
 }
@@ -432,6 +421,7 @@ fn root_hash_with_chunks_and_parents(
     degree: usize,
     input: &[u8],
 ) -> [u8; 32] {
+    assert_eq!(degree.count_ones(), 1, "power of 2");
     // TODO: handle the 1-chunk case?
     assert!(input.len() >= 2 * CHUNK_LEN);
     // TODO: hash partial chunks?
@@ -486,19 +476,20 @@ pub fn test_compare_reference_impl_chunks_and_hashes() {
         #[cfg(feature = "std")]
         dbg!(num_chunks);
 
-        let test_output = root_hash_with_chunks_and_parents(
-            crate::portable::hash_chunks,
-            crate::portable::hash_parents,
-            crate::portable::DEGREE,
-            &input[..num_chunks * CHUNK_LEN],
-        );
-
         let mut reference_output = [0u8; 32];
         let mut reference_hasher = reference_impl::Hasher::new();
         reference_hasher.update(&input[..num_chunks * CHUNK_LEN]);
         reference_hasher.finalize(&mut reference_output);
 
-        assert_eq!(reference_output, test_output);
+        for test_degree in [2, 4, 8, 16] {
+            let test_output = root_hash_with_chunks_and_parents(
+                crate::portable::hash_chunks,
+                crate::portable::hash_parents,
+                test_degree,
+                &input[..num_chunks * CHUNK_LEN],
+            );
+            assert_eq!(reference_output, test_output);
+        }
     }
 }
 
