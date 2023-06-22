@@ -214,12 +214,13 @@ pub fn test_hash_many_fn(
 
 // Both xof() and xof_xof() have this signature.
 type HashChunksFn = unsafe fn(
-    input: &[u8],
-    key: &[u32; 8],
-    counter: u64,
-    flags: u8,
-    output: &mut TransposedVectors,
-    output_column: usize,
+    input: *const u8,
+    input_len: usize,
+    key: *const u32,
+    initial_counter: u64,
+    counter_group: u64,
+    flags: u32,
+    transposed_output: *mut u32,
 );
 
 pub fn test_hash_chunks_fn(target_fn: HashChunksFn, degree: usize) {
@@ -227,47 +228,55 @@ pub fn test_hash_chunks_fn(target_fn: HashChunksFn, degree: usize) {
     let mut input = [0u8; 2 * MAX_SIMD_DEGREE * CHUNK_LEN];
     paint_test_input(&mut input);
     for test_degree in 1..=degree {
+        let input1 = &input[..test_degree * CHUNK_LEN];
+        let input2 = &input[test_degree * CHUNK_LEN..][..test_degree * CHUNK_LEN];
         for &initial_counter in INITIAL_COUNTERS {
             // Make two calls, to test the output_column parameter.
             let mut test_output = TransposedVectors::default();
             unsafe {
                 target_fn(
-                    &input[..test_degree * CHUNK_LEN],
-                    TEST_KEY_WORDS,
+                    input1.as_ptr(),
+                    input1.len(),
+                    TEST_KEY_WORDS.as_ptr(),
                     initial_counter,
-                    crate::KEYED_HASH,
-                    &mut test_output,
                     0,
+                    crate::KEYED_HASH as u32,
+                    test_output[0].as_mut_ptr(),
                 );
                 target_fn(
-                    &input[test_degree * CHUNK_LEN..][..test_degree * CHUNK_LEN],
-                    TEST_KEY_WORDS,
+                    input2.as_ptr(),
+                    input2.len(),
+                    TEST_KEY_WORDS.as_ptr(),
                     initial_counter + test_degree as u64,
-                    crate::KEYED_HASH,
-                    &mut test_output,
-                    test_degree,
+                    0,
+                    crate::KEYED_HASH as u32,
+                    test_output[0].as_mut_ptr().add(test_degree),
                 );
             }
 
             let mut portable_output = TransposedVectors::default();
-            crate::portable::hash_chunks(
-                &input[..test_degree * CHUNK_LEN],
-                TEST_KEY_WORDS,
-                initial_counter,
-                crate::KEYED_HASH,
-                &mut portable_output,
-                0,
-            );
-            crate::portable::hash_chunks(
-                &input[test_degree * CHUNK_LEN..][..test_degree * CHUNK_LEN],
-                TEST_KEY_WORDS,
-                initial_counter + test_degree as u64,
-                crate::KEYED_HASH,
-                &mut portable_output,
-                test_degree,
-            );
+            unsafe {
+                crate::portable::hash_chunks(
+                    input1.as_ptr(),
+                    input1.len(),
+                    TEST_KEY_WORDS.as_ptr(),
+                    initial_counter,
+                    0,
+                    crate::KEYED_HASH as u32,
+                    test_output[0].as_mut_ptr(),
+                );
+                crate::portable::hash_chunks(
+                    input2.as_ptr(),
+                    input2.len(),
+                    TEST_KEY_WORDS.as_ptr(),
+                    initial_counter + test_degree as u64,
+                    0,
+                    crate::KEYED_HASH as u32,
+                    test_output[0].as_mut_ptr().add(test_degree),
+                );
+            }
 
-            assert_eq!(portable_output.0, test_output.0);
+            assert_eq!(portable_output, test_output);
         }
     }
 }
@@ -283,7 +292,13 @@ fn paint_transposed_input(input: &mut TransposedVectors) {
 }
 
 // Both xof() and xof_xof() have this signature.
-type HashParentsFn = unsafe fn(in_out: ParentInOut, key: &[u32; 8], flags: u8);
+type HashParentsFn = unsafe fn(
+    transposed_input: *const u32,
+    num_parents: usize,
+    key: *const u32,
+    flags: u32,
+    transposed_output: *mut u32, // may overlap the input
+);
 
 pub fn test_hash_parents_fn(target_fn: HashParentsFn, degree: usize) {
     assert!(degree <= MAX_SIMD_DEGREE);
@@ -292,7 +307,7 @@ pub fn test_hash_parents_fn(target_fn: HashParentsFn, degree: usize) {
         {
             let mut input = TransposedVectors::default();
             paint_transposed_input(&mut input);
-            let mut test_output = TransposedVectors(input.0);
+            let mut test_output = input.clone();
             unsafe {
                 target_fn(
                     ParentInOut::Separate {

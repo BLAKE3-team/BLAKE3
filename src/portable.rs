@@ -1,10 +1,10 @@
-use crate::platform::{ParentInOut, TransposedVectors, MAX_SIMD_DEGREE};
 use crate::{
-    counter_high, counter_low, CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, IV,
-    MSG_SCHEDULE, OUT_LEN, UNIVERSAL_HASH_LEN,
+    counter_high, counter_low, CVBytes, CVWords, IncrementCounter, BLOCK_LEN, IV, MSG_SCHEDULE,
+    OUT_LEN,
 };
 use arrayref::{array_mut_ref, array_ref};
-use core::cmp;
+
+const WORD_SIZE: usize = 4;
 
 #[inline(always)]
 fn g(state: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize, x: u32, y: u32) {
@@ -179,143 +179,115 @@ pub fn hash_many<const N: usize>(
     }
 }
 
-/// General contract:
-/// - `input` is N chunks, each exactly 1 KiB, 1 <= N <= DEGREE
-/// - `output_column` is a multiple of DEGREE.
-/// The CHUNK_START and CHUNK_END flags are set internally. Writes N transposed CVs to the output,
-/// from `output_column` to `output_column+N-1`. Columns prior to `output_column` must be
-/// unmodified.
-///
-/// This portable implementation has no particular DEGREE. It will accept any number of chunks up
-/// to MAX_SIMD_DEGREE.
-pub fn hash_chunks(
-    input: &[u8],
-    key: &[u32; 8],
+pub unsafe extern "C" fn compress(
+    block: *const [u8; 64],
+    block_len: u32,
+    cv: *const [u32; 8],
     counter: u64,
-    flags: u8,
-    output: &mut TransposedVectors,
-    output_column: usize,
+    flags: u32,
+    out: *mut [u32; 16],
 ) {
-    debug_assert_eq!(input.len() % CHUNK_LEN, 0);
-    let num_chunks = input.len() / CHUNK_LEN;
-    debug_assert!(num_chunks <= MAX_SIMD_DEGREE);
-    for chunk_index in 0..num_chunks {
-        let mut cv = *key;
-        for block_index in 0..16 {
-            let block_flags = match block_index {
-                0 => flags | crate::CHUNK_START,
-                15 => flags | crate::CHUNK_END,
-                _ => flags,
-            };
-            compress_in_place(
-                &mut cv,
-                input[CHUNK_LEN * chunk_index + BLOCK_LEN * block_index..][..BLOCK_LEN]
-                    .try_into()
-                    .unwrap(),
-                BLOCK_LEN as u8,
-                counter + chunk_index as u64,
-                block_flags,
-            );
-        }
-        for word_index in 0..cv.len() {
-            output[word_index][output_column + chunk_index] = cv[word_index];
-        }
+    let block_words = crate::platform::words_from_le_bytes_64(&*block);
+    let mut state = [
+        (*cv)[0],
+        (*cv)[1],
+        (*cv)[2],
+        (*cv)[3],
+        (*cv)[4],
+        (*cv)[5],
+        (*cv)[6],
+        (*cv)[7],
+        IV[0],
+        IV[1],
+        IV[2],
+        IV[3],
+        counter_low(counter),
+        counter_high(counter),
+        block_len as u32,
+        flags as u32,
+    ];
+    for round_number in 0..7 {
+        round(&mut state, &block_words, round_number);
     }
+    for i in 0..8 {
+        state[i] ^= state[i + 8];
+        state[i + 8] ^= (*cv)[i];
+    }
+    *out = state;
 }
 
-/// General contract:
-/// - `cvs` contains `2*num_parents` transposed CVs, 1 <= num_parents <= DEGREE, starting at column 0
-/// There may be additional CVs present beyond the `2*num_parents` CVs indicated, but this function
-/// isn't aware of them and must not modify them. (The caller will take care of an odd remaining
-/// CV, if any.) No flags are set internally. (The caller must set `PARENT` in `flags`). Writes
-/// `num_parents` transposed parent CVs to the output, starting at column 0.
-///
-/// This portable implementation has no particular DEGREE. It will accept any number of parents up
-/// to MAX_SIMD_DEGREE.
-pub fn hash_parents(mut in_out: ParentInOut, key: &[u32; 8], flags: u8) {
-    let (_, num_parents) = in_out.input();
-    debug_assert!(num_parents <= MAX_SIMD_DEGREE);
-    for parent_index in 0..num_parents {
-        let (input, _) = in_out.input();
-        let mut block = [0u8; BLOCK_LEN];
-        for i in 0..8 {
-            block[4 * i..][..4].copy_from_slice(&input[i][2 * parent_index].to_le_bytes());
-            block[4 * (i + 8)..][..4]
-                .copy_from_slice(&input[i][2 * parent_index + 1].to_le_bytes());
-        }
-        let mut cv = *key;
-        compress_in_place(&mut cv, &block, BLOCK_LEN as u8, 0, flags);
-        let (output, output_column) = in_out.output();
-        for i in 0..8 {
-            output[i][output_column + parent_index] = cv[i];
-        }
-    }
-}
-
-pub fn xof(
-    block: &[u8; BLOCK_LEN],
-    block_len: u8,
-    cv: &[u32; 8],
-    mut counter: u64,
-    flags: u8,
-    mut out: &mut [u8],
+pub unsafe extern "C" fn hash_chunks(
+    input: *const u8,
+    input_len: usize,
+    key: *const [u32; 8],
+    counter: u64,
+    flags: u32,
+    transposed_output: *mut u32,
 ) {
-    while !out.is_empty() {
-        let block_output = compress_xof(cv, block, block_len, counter, flags);
-        let take = cmp::min(BLOCK_LEN, out.len());
-        out[..take].copy_from_slice(&block_output[..take]);
-        out = &mut out[take..];
-        counter += 1;
-    }
+    crate::platform::hash_chunks_using_compress(
+        compress,
+        input,
+        input_len,
+        key,
+        counter,
+        flags,
+        transposed_output,
+    )
 }
 
-pub fn xof_xor(
-    block: &[u8; BLOCK_LEN],
-    block_len: u8,
-    cv: &[u32; 8],
-    mut counter: u64,
-    flags: u8,
-    mut out: &mut [u8],
+pub unsafe extern "C" fn hash_parents(
+    transposed_input: *const u32,
+    num_parents: usize,
+    key: *const [u32; 8],
+    flags: u32,
+    transposed_output: *mut u32, // may overlap the input
 ) {
-    while !out.is_empty() {
-        let block_output = compress_xof(cv, block, block_len, counter, flags);
-        let take = cmp::min(BLOCK_LEN, out.len());
-        for i in 0..take {
-            out[i] ^= block_output[i];
-        }
-        out = &mut out[take..];
-        counter += 1;
-    }
+    crate::platform::hash_parents_using_compress(
+        compress,
+        transposed_input,
+        num_parents,
+        key,
+        flags,
+        transposed_output,
+    )
 }
 
-pub fn universal_hash(
-    mut input: &[u8],
-    key: &[u32; 8],
-    mut counter: u64,
-) -> [u8; UNIVERSAL_HASH_LEN] {
-    let flags = crate::KEYED_HASH | crate::CHUNK_START | crate::CHUNK_END | crate::ROOT;
-    let mut result = [0u8; UNIVERSAL_HASH_LEN];
-    while input.len() > BLOCK_LEN {
-        let block_output = compress_xof(
-            key,
-            &input[..BLOCK_LEN].try_into().unwrap(),
-            BLOCK_LEN as u8,
-            counter,
-            flags,
-        );
-        for i in 0..UNIVERSAL_HASH_LEN {
-            result[i] ^= block_output[i];
-        }
-        input = &input[BLOCK_LEN..];
-        counter += 1;
-    }
-    let mut final_block = [0u8; BLOCK_LEN];
-    final_block[..input.len()].copy_from_slice(input);
-    let final_output = compress_xof(key, &final_block, input.len() as u8, counter, flags);
-    for i in 0..UNIVERSAL_HASH_LEN {
-        result[i] ^= final_output[i];
-    }
-    result
+pub unsafe extern "C" fn xof(
+    block: *const [u8; 64],
+    block_len: u32,
+    cv: *const [u32; 8],
+    counter: u64,
+    flags: u32,
+    out: *mut u8,
+    out_len: usize,
+) {
+    crate::platform::xof_using_compress(
+        compress, block, block_len, cv, counter, flags, out, out_len,
+    )
+}
+
+pub unsafe extern "C" fn xof_xor(
+    block: *const [u8; 64],
+    block_len: u32,
+    cv: *const [u32; 8],
+    counter: u64,
+    flags: u32,
+    out: *mut u8,
+    out_len: usize,
+) {
+    crate::platform::xof_xor_using_compress(
+        compress, block, block_len, cv, counter, flags, out, out_len,
+    )
+}
+
+pub unsafe extern "C" fn universal_hash(
+    input: *const u8,
+    input_len: usize,
+    key: *const [u32; 8],
+    counter: u64,
+    out: *mut [u8; 16],
+) {
+    crate::platform::universal_hash_using_compress(compress, input, input_len, key, counter, out)
 }
 
 #[cfg(test)]
