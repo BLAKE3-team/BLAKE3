@@ -36,7 +36,7 @@ INLINE uint32x4_t set4(uint32_t a, uint32_t b, uint32_t c, uint32_t d) {
 }
 
 INLINE uint32x4_t rot16_128(uint32x4_t x) {
-  return vorrq_u32(vshrq_n_u32(x, 16), vshlq_n_u32(x, 32 - 16));
+  return vreinterpretq_u32_u16(vrev32q_u16(vreinterpretq_u16_u32(x)));
 }
 
 INLINE uint32x4_t rot12_128(uint32x4_t x) {
@@ -44,7 +44,7 @@ INLINE uint32x4_t rot12_128(uint32x4_t x) {
 }
 
 INLINE uint32x4_t rot8_128(uint32x4_t x) {
-  return vorrq_u32(vshrq_n_u32(x, 8), vshlq_n_u32(x, 32 - 8));
+  return vreinterpretq_u32_u8(__builtin_shufflevector(vreinterpretq_u8_u32(x), vreinterpretq_u8_u32(x), 1,2,3,0,5,6,7,4,9,10,11,8,13,14,15,12));
 }
 
 INLINE uint32x4_t rot7_128(uint32x4_t x) {
