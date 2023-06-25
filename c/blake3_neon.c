@@ -40,7 +40,7 @@ INLINE uint32x4_t rot16_128(uint32x4_t x) {
 }
 
 INLINE uint32x4_t rot12_128(uint32x4_t x) {
-  return vorrq_u32(vshrq_n_u32(x, 12), vshlq_n_u32(x, 32 - 12));
+  return vsriq_n_u32(vshlq_n_u32(x, 32-12), x, 12);
 }
 
 INLINE uint32x4_t rot8_128(uint32x4_t x) {
@@ -55,7 +55,7 @@ INLINE uint32x4_t rot8_128(uint32x4_t x) {
 }
 
 INLINE uint32x4_t rot7_128(uint32x4_t x) {
-  return vorrq_u32(vshrq_n_u32(x, 7), vshlq_n_u32(x, 32 - 7));
+  return vsriq_n_u32(vshlq_n_u32(x, 32-7), x, 7);
 }
 
 // TODO: compress_neon
