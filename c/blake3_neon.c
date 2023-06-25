@@ -44,7 +44,14 @@ INLINE uint32x4_t rot12_128(uint32x4_t x) {
 }
 
 INLINE uint32x4_t rot8_128(uint32x4_t x) {
+#if defined(__clang__)
   return vreinterpretq_u32_u8(__builtin_shufflevector(vreinterpretq_u8_u32(x), vreinterpretq_u8_u32(x), 1,2,3,0,5,6,7,4,9,10,11,8,13,14,15,12));
+#elif __GNUC__ * 10000 + __GNUC_MINOR__ * 100 >=40700
+  static const uint8x16_t r8 = {1,2,3,0,5,6,7,4,9,10,11,8,13,14,15,12};
+  return vreinterpretq_u32_u8(__builtin_shuffle(vreinterpretq_u8_u32(x), vreinterpretq_u8_u32(x), r8));
+#else 
+  return vsriq_n_u32(vshlq_n_u32(x, 32-8), x, 8);
+#endif
 }
 
 INLINE uint32x4_t rot7_128(uint32x4_t x) {
