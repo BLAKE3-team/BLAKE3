@@ -113,6 +113,10 @@ mod sse41;
 #[path = "ffi_sse41.rs"]
 mod sse41;
 
+#[doc(hidden)]
+pub mod guts2;
+mod portable2;
+
 #[cfg(feature = "traits-preview")]
 pub mod traits;
 
@@ -129,8 +133,6 @@ pub const OUT_LEN: usize = 32;
 
 /// The number of bytes in a key, 32.
 pub const KEY_LEN: usize = 32;
-
-const UNIVERSAL_HASH_LEN: usize = 16;
 
 const MAX_DEPTH: usize = 54; // 2^54 * CHUNK_LEN = 2^64
 use guts::{BLOCK_LEN, CHUNK_LEN};

@@ -4,8 +4,6 @@ use crate::{
 };
 use arrayref::{array_mut_ref, array_ref};
 
-const WORD_SIZE: usize = 4;
-
 #[inline(always)]
 fn g(state: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize, x: u32, y: u32) {
     state[a] = state[a].wrapping_add(state[b]).wrapping_add(x);
@@ -179,117 +177,6 @@ pub fn hash_many<const N: usize>(
     }
 }
 
-pub unsafe extern "C" fn compress(
-    block: *const [u8; 64],
-    block_len: u32,
-    cv: *const [u32; 8],
-    counter: u64,
-    flags: u32,
-    out: *mut [u32; 16],
-) {
-    let block_words = crate::platform::words_from_le_bytes_64(&*block);
-    let mut state = [
-        (*cv)[0],
-        (*cv)[1],
-        (*cv)[2],
-        (*cv)[3],
-        (*cv)[4],
-        (*cv)[5],
-        (*cv)[6],
-        (*cv)[7],
-        IV[0],
-        IV[1],
-        IV[2],
-        IV[3],
-        counter_low(counter),
-        counter_high(counter),
-        block_len as u32,
-        flags as u32,
-    ];
-    for round_number in 0..7 {
-        round(&mut state, &block_words, round_number);
-    }
-    for i in 0..8 {
-        state[i] ^= state[i + 8];
-        state[i + 8] ^= (*cv)[i];
-    }
-    *out = state;
-}
-
-pub unsafe extern "C" fn hash_chunks(
-    input: *const u8,
-    input_len: usize,
-    key: *const [u32; 8],
-    counter: u64,
-    flags: u32,
-    transposed_output: *mut u32,
-) {
-    crate::platform::hash_chunks_using_compress(
-        compress,
-        input,
-        input_len,
-        key,
-        counter,
-        flags,
-        transposed_output,
-    )
-}
-
-pub unsafe extern "C" fn hash_parents(
-    transposed_input: *const u32,
-    num_parents: usize,
-    key: *const [u32; 8],
-    flags: u32,
-    transposed_output: *mut u32, // may overlap the input
-) {
-    crate::platform::hash_parents_using_compress(
-        compress,
-        transposed_input,
-        num_parents,
-        key,
-        flags,
-        transposed_output,
-    )
-}
-
-pub unsafe extern "C" fn xof(
-    block: *const [u8; 64],
-    block_len: u32,
-    cv: *const [u32; 8],
-    counter: u64,
-    flags: u32,
-    out: *mut u8,
-    out_len: usize,
-) {
-    crate::platform::xof_using_compress(
-        compress, block, block_len, cv, counter, flags, out, out_len,
-    )
-}
-
-pub unsafe extern "C" fn xof_xor(
-    block: *const [u8; 64],
-    block_len: u32,
-    cv: *const [u32; 8],
-    counter: u64,
-    flags: u32,
-    out: *mut u8,
-    out_len: usize,
-) {
-    crate::platform::xof_xor_using_compress(
-        compress, block, block_len, cv, counter, flags, out, out_len,
-    )
-}
-
-pub unsafe extern "C" fn universal_hash(
-    input: *const u8,
-    input_len: usize,
-    key: *const [u32; 8],
-    counter: u64,
-    out: *mut [u8; 16],
-) {
-    crate::platform::universal_hash_using_compress(compress, input, input_len, key, counter, out)
-}
-
 #[cfg(test)]
 pub mod test {
     use super::*;
@@ -307,31 +194,5 @@ pub mod test {
     #[test]
     fn test_hash_many() {
         crate::test::test_hash_many_fn(hash_many, hash_many);
-    }
-
-    // The portable implementations of the vectorized APIs aren't actually vectorized and don't
-    // have any inherent DEGREE. They loop internally over any number of inputs. Here we
-    // arbitrarily pick degree 4 to test them (against themselves, so not an especially interesting
-    // test).
-    const TEST_DEGREE: usize = 4;
-
-    #[test]
-    fn test_hash_chunks() {
-        crate::test::test_hash_chunks_fn(hash_chunks, TEST_DEGREE);
-    }
-
-    #[test]
-    fn test_hash_parents() {
-        crate::test::test_hash_parents_fn(hash_parents, TEST_DEGREE);
-    }
-
-    #[test]
-    fn test_xof_and_xor() {
-        crate::test::test_xof_and_xor_fns(xof, xof_xor);
-    }
-
-    #[test]
-    fn test_universal_hash() {
-        crate::test::test_universal_hash_fn(universal_hash);
     }
 }
