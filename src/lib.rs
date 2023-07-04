@@ -113,10 +113,6 @@ mod sse41;
 #[path = "ffi_sse41.rs"]
 mod sse41;
 
-#[doc(hidden)]
-pub mod guts2;
-mod portable2;
-
 #[cfg(feature = "traits-preview")]
 pub mod traits;
 
