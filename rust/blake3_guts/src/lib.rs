@@ -1,4 +1,5 @@
 use core::cmp;
+use core::marker::PhantomData;
 use core::mem;
 use core::ptr;
 use core::sync::atomic::{AtomicPtr, Ordering::Relaxed};
@@ -43,14 +44,26 @@ cfg_if::cfg_if! {
 }
 
 #[inline]
-pub fn compress_in_place(
+pub fn degree() -> usize {
+    DETECTED_IMPL.degree()
+}
+
+#[inline]
+pub fn split_transposed_vectors(
+    vectors: &mut [[u32; 2 * MAX_SIMD_DEGREE]; 8],
+) -> (TransposedSplit, TransposedSplit) {
+    DETECTED_IMPL.split_transposed_vectors(vectors)
+}
+
+#[inline]
+pub fn compress(
     block: &[u8; 64],
     block_len: u32,
-    cv: &mut [u32; 8],
+    cv: &[u32; 8],
     counter: u64,
     flags: u32,
-) {
-    DETECTED_IMPL.compress_in_place(block, block_len, cv, counter, flags);
+) -> [u32; 8] {
+    DETECTED_IMPL.compress(block, block_len, cv, counter, flags)
 }
 
 #[inline]
@@ -70,9 +83,9 @@ pub fn hash_chunks(
     key: &[u32; 8],
     counter: u64,
     flags: u32,
-    transposed_output: &mut TransposedVectors,
-) {
-    DETECTED_IMPL.hash_chunks(input, key, counter, flags, transposed_output);
+    transposed_output: TransposedSplit,
+) -> usize {
+    DETECTED_IMPL.hash_chunks(input, key, counter, flags, transposed_output)
 }
 
 #[inline]
@@ -80,14 +93,18 @@ pub fn hash_parents(
     transposed_input: &TransposedVectors,
     key: &[u32; 8],
     flags: u32,
-    transposed_output: &mut TransposedVectors,
-) {
-    DETECTED_IMPL.hash_parents(transposed_input, key, flags, transposed_output);
+    transposed_output: TransposedSplit,
+) -> usize {
+    DETECTED_IMPL.hash_parents(transposed_input, key, flags, transposed_output)
 }
 
 #[inline]
-pub fn reduce_parents(transposed_in_out: &mut TransposedVectors, key: &[u32; 8], flags: u32) {
-    DETECTED_IMPL.reduce_parents(transposed_in_out, key, flags);
+pub fn reduce_parents(
+    transposed_in_out: &mut TransposedVectors,
+    key: &[u32; 8],
+    flags: u32,
+) -> usize {
+    DETECTED_IMPL.reduce_parents(transposed_in_out, key, flags)
 }
 
 #[inline]
@@ -188,7 +205,7 @@ impl Implementation {
 
     pub fn portable() -> Self {
         Self::new(
-            degree::<{ portable::DEGREE }>,
+            || portable::DEGREE,
             portable::compress,
             portable::hash_chunks,
             portable::hash_parents,
@@ -209,24 +226,41 @@ impl Implementation {
     }
 
     #[inline]
+    pub fn split_transposed_vectors(
+        &self,
+        vectors: &mut [[u32; 2 * MAX_SIMD_DEGREE]; 8],
+    ) -> (TransposedSplit, TransposedSplit) {
+        let ptr = vectors[0].as_mut_ptr();
+        let left = TransposedSplit {
+            ptr,
+            phantom_data: PhantomData,
+        };
+        let right = TransposedSplit {
+            ptr: ptr.wrapping_add(self.degree()),
+            phantom_data: PhantomData,
+        };
+        (left, right)
+    }
+
+    #[inline]
     fn compress_fn(&self) -> CompressFn {
         unsafe { mem::transmute(self.compress_ptr.load(Relaxed)) }
     }
 
     #[inline]
-    pub fn compress_in_place(
+    pub fn compress(
         &self,
         block: &[u8; 64],
         block_len: u32,
-        cv: &mut [u32; 8],
+        cv: &[u32; 8],
         counter: u64,
         flags: u32,
-    ) {
+    ) -> [u32; 8] {
         let mut out = [0u32; 16];
         unsafe {
             self.compress_fn()(block, block_len, cv, counter, flags, &mut out);
         }
-        cv.copy_from_slice(&out[..8]);
+        out[..8].try_into().unwrap()
     }
 
     #[inline]
@@ -262,25 +296,28 @@ impl Implementation {
         key: &[u32; 8],
         counter: u64,
         flags: u32,
-        transposed_output: &mut TransposedVectors,
-    ) {
+        transposed_output: TransposedSplit,
+    ) -> usize {
         debug_assert!(input.len() > 0);
         debug_assert!(input.len() <= self.degree() * CHUNK_LEN);
-        debug_assert!(transposed_output.len == 0 || transposed_output.len == self.degree());
-        let output_offset = if transposed_output.len == 0 {
-            0
-        } else {
-            self.degree()
-        };
+        // SAFETY: If the caller passes in more than MAX_SIMD_DEGREE * CHUNK_LEN bytes, silently
+        // ignore the remainder. This makes it impossible to write out of bounds in a properly
+        // constructed TransposedSplit.
+        let len = cmp::min(input.len(), MAX_SIMD_DEGREE * CHUNK_LEN);
         unsafe {
             self.hash_chunks_fn()(
                 input.as_ptr(),
-                input.len(),
+                len,
                 key,
                 counter,
                 flags,
-                transposed_output[0].as_mut_ptr().add(output_offset),
+                transposed_output.ptr,
             );
+        }
+        if input.len() % CHUNK_LEN == 0 {
+            input.len() / CHUNK_LEN
+        } else {
+            (input.len() / CHUNK_LEN) + 1
         }
     }
 
@@ -295,14 +332,8 @@ impl Implementation {
         transposed_input: &TransposedVectors,
         key: &[u32; 8],
         flags: u32,
-        transposed_output: &mut TransposedVectors,
-    ) {
-        debug_assert!(transposed_output.len == 0 || transposed_output.len == self.degree());
-        let output_offset = if transposed_output.len == 0 {
-            0
-        } else {
-            self.degree()
-        };
+        transposed_output: TransposedSplit,
+    ) -> usize {
         let num_parents = transposed_input.len / 2;
         unsafe {
             self.hash_parents_fn()(
@@ -310,16 +341,19 @@ impl Implementation {
                 num_parents,
                 key,
                 flags,
-                transposed_output[0].as_mut_ptr().add(output_offset),
+                transposed_output.ptr,
             );
         }
-        transposed_output.len += num_parents;
         if transposed_input.len % 2 == 1 {
-            for word_index in 0..8 {
-                transposed_output[word_index][transposed_input.len] =
-                    transposed_input[word_index][transposed_input.len - 1];
+            unsafe {
+                copy_one_transposed_cv(
+                    transposed_input[0].as_ptr().add(transposed_input.len - 1),
+                    transposed_output.ptr.add(num_parents),
+                );
             }
-            transposed_output.len += 1;
+            num_parents + 1
+        } else {
+            num_parents
         }
     }
 
@@ -329,7 +363,7 @@ impl Implementation {
         transposed_in_out: &mut TransposedVectors,
         key: &[u32; 8],
         flags: u32,
-    ) {
+    ) -> usize {
         let len = transposed_in_out.len;
         let num_parents = len / 2;
         unsafe {
@@ -342,12 +376,13 @@ impl Implementation {
             );
         }
         if len % 2 == 1 {
-            for word_index in 0..8 {
-                transposed_in_out[word_index][len / 2] = transposed_in_out[word_index][len - 1];
+            let in_out_ptr = transposed_in_out[0].as_mut_ptr();
+            unsafe {
+                copy_one_transposed_cv(in_out_ptr.add(len - 1), in_out_ptr.add(num_parents));
             }
-            transposed_in_out.len = len / 2 + 1;
+            num_parents + 1
         } else {
-            transposed_in_out.len = len / 2;
+            num_parents
         }
     }
 
@@ -437,10 +472,6 @@ impl Clone for Implementation {
 }
 
 type DegreeFn = fn() -> usize;
-
-fn degree<const N: usize>() -> usize {
-    N
-}
 
 fn degree_init() -> usize {
     init_detected_impl();
@@ -759,5 +790,18 @@ impl core::ops::Index<usize> for TransposedVectors {
 impl core::ops::IndexMut<usize> for TransposedVectors {
     fn index_mut(&mut self, i: usize) -> &mut [u32] {
         &mut self.vectors[i][..self.len]
+    }
+}
+
+pub struct TransposedSplit<'vectors> {
+    ptr: *mut u32,
+    phantom_data: PhantomData<&'vectors mut u32>,
+}
+
+unsafe fn copy_one_transposed_cv(transposed_src: *const u32, transposed_dest: *mut u32) {
+    for word_index in 0..8 {
+        let offset_words = word_index * TRANSPOSED_STRIDE;
+        let word = transposed_src.add(offset_words).read();
+        transposed_dest.add(offset_words).write(word);
     }
 }
