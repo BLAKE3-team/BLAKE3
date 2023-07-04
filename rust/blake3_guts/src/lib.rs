@@ -42,7 +42,84 @@ cfg_if::cfg_if! {
     }
 }
 
-pub static DETECTED_IMPL: Implementation = Implementation::new(
+#[inline]
+pub fn compress_in_place(
+    block: &[u8; 64],
+    block_len: u32,
+    cv: &mut [u32; 8],
+    counter: u64,
+    flags: u32,
+) {
+    DETECTED_IMPL.compress_in_place(block, block_len, cv, counter, flags);
+}
+
+#[inline]
+pub fn compress_xof(
+    block: &[u8; 64],
+    block_len: u32,
+    cv: &[u32; 8],
+    counter: u64,
+    flags: u32,
+) -> [u8; 64] {
+    DETECTED_IMPL.compress_xof(block, block_len, cv, counter, flags)
+}
+
+#[inline]
+pub fn hash_chunks(
+    input: &[u8],
+    key: &[u32; 8],
+    counter: u64,
+    flags: u32,
+    transposed_output: &mut TransposedVectors,
+) {
+    DETECTED_IMPL.hash_chunks(input, key, counter, flags, transposed_output);
+}
+
+#[inline]
+pub fn hash_parents(
+    transposed_input: &TransposedVectors,
+    key: &[u32; 8],
+    flags: u32,
+    transposed_output: &mut TransposedVectors,
+) {
+    DETECTED_IMPL.hash_parents(transposed_input, key, flags, transposed_output);
+}
+
+#[inline]
+pub fn reduce_parents(transposed_in_out: &mut TransposedVectors, key: &[u32; 8], flags: u32) {
+    DETECTED_IMPL.reduce_parents(transposed_in_out, key, flags);
+}
+
+#[inline]
+pub fn xof(
+    block: &[u8; 64],
+    block_len: u32,
+    cv: &[u32; 8],
+    counter: u64,
+    flags: u32,
+    out: &mut [u8],
+) {
+    DETECTED_IMPL.xof(block, block_len, cv, counter, flags, out);
+}
+
+#[inline]
+pub fn xof_xor(
+    block: &[u8; 64],
+    block_len: u32,
+    cv: &[u32; 8],
+    counter: u64,
+    flags: u32,
+    out: &mut [u8],
+) {
+    DETECTED_IMPL.xof_xor(block, block_len, cv, counter, flags, out);
+}
+
+#[inline]
+pub fn universal_hash(input: &[u8], key: &[u32; 8], counter: u64) -> [u8; 16] {
+    DETECTED_IMPL.universal_hash(input, key, counter)
+}
+
+static DETECTED_IMPL: Implementation = Implementation::new(
     degree_init,
     compress_init,
     hash_chunks_init,
@@ -51,6 +128,32 @@ pub static DETECTED_IMPL: Implementation = Implementation::new(
     xof_xor_init,
     universal_hash_init,
 );
+
+fn init_detected_impl() {
+    let detected = Implementation::portable();
+
+    DETECTED_IMPL
+        .degree_ptr
+        .store(detected.degree_ptr.load(Relaxed), Relaxed);
+    DETECTED_IMPL
+        .compress_ptr
+        .store(detected.compress_ptr.load(Relaxed), Relaxed);
+    DETECTED_IMPL
+        .hash_chunks_ptr
+        .store(detected.hash_chunks_ptr.load(Relaxed), Relaxed);
+    DETECTED_IMPL
+        .hash_parents_ptr
+        .store(detected.hash_parents_ptr.load(Relaxed), Relaxed);
+    DETECTED_IMPL
+        .xof_ptr
+        .store(detected.xof_ptr.load(Relaxed), Relaxed);
+    DETECTED_IMPL
+        .xof_xor_ptr
+        .store(detected.xof_xor_ptr.load(Relaxed), Relaxed);
+    DETECTED_IMPL
+        .universal_hash_ptr
+        .store(detected.universal_hash_ptr.load(Relaxed), Relaxed);
+}
 
 pub struct Implementation {
     degree_ptr: AtomicPtr<()>,
@@ -83,26 +186,6 @@ impl Implementation {
         }
     }
 
-    fn assign(&self, other: &Self) {
-        self.degree_ptr
-            .store(other.degree_ptr.load(Relaxed), Relaxed);
-        self.compress_ptr
-            .store(other.compress_ptr.load(Relaxed), Relaxed);
-        self.hash_chunks_ptr
-            .store(other.hash_chunks_ptr.load(Relaxed), Relaxed);
-        self.hash_parents_ptr
-            .store(other.hash_parents_ptr.load(Relaxed), Relaxed);
-        self.xof_ptr.store(other.xof_ptr.load(Relaxed), Relaxed);
-        self.xof_xor_ptr
-            .store(other.xof_xor_ptr.load(Relaxed), Relaxed);
-        self.universal_hash_ptr
-            .store(other.universal_hash_ptr.load(Relaxed), Relaxed);
-    }
-
-    pub fn detect() -> Self {
-        Self::portable()
-    }
-
     pub fn portable() -> Self {
         Self::new(
             degree::<{ portable::DEGREE }>,
@@ -115,37 +198,64 @@ impl Implementation {
         )
     }
 
+    #[inline]
     fn degree_fn(&self) -> DegreeFn {
         unsafe { mem::transmute(self.degree_ptr.load(Relaxed)) }
     }
 
+    #[inline]
     pub fn degree(&self) -> usize {
         self.degree_fn()()
     }
 
+    #[inline]
     fn compress_fn(&self) -> CompressFn {
         unsafe { mem::transmute(self.compress_ptr.load(Relaxed)) }
     }
 
-    pub fn compress(
+    #[inline]
+    pub fn compress_in_place(
+        &self,
+        block: &[u8; 64],
+        block_len: u32,
+        cv: &mut [u32; 8],
+        counter: u64,
+        flags: u32,
+    ) {
+        let mut out = [0u32; 16];
+        unsafe {
+            self.compress_fn()(block, block_len, cv, counter, flags, &mut out);
+        }
+        cv.copy_from_slice(&out[..8]);
+    }
+
+    #[inline]
+    pub fn compress_xof(
         &self,
         block: &[u8; 64],
         block_len: u32,
         cv: &[u32; 8],
         counter: u64,
         flags: u32,
-    ) -> [u32; 16] {
-        let mut out = [0u32; 16];
+    ) -> [u8; 64] {
+        let mut out_words = [0u32; 16];
         unsafe {
-            self.compress_fn()(block, block_len, cv, counter, flags, &mut out);
+            self.compress_fn()(block, block_len, cv, counter, flags, &mut out_words);
         }
-        out
+        let mut out_bytes = [0u8; 64];
+        for word_index in 0..16 {
+            out_bytes[word_index * WORD_LEN..][..WORD_LEN]
+                .copy_from_slice(&out_words[word_index].to_le_bytes());
+        }
+        out_bytes
     }
 
+    #[inline]
     fn hash_chunks_fn(&self) -> HashChunksFn {
         unsafe { mem::transmute(self.hash_chunks_ptr.load(Relaxed)) }
     }
 
+    #[inline]
     pub fn hash_chunks(
         &self,
         input: &[u8],
@@ -174,10 +284,12 @@ impl Implementation {
         }
     }
 
+    #[inline]
     fn hash_parents_fn(&self) -> HashParentsFn {
         unsafe { mem::transmute(self.hash_parents_ptr.load(Relaxed)) }
     }
 
+    #[inline]
     pub fn hash_parents(
         &self,
         transposed_input: &TransposedVectors,
@@ -211,6 +323,7 @@ impl Implementation {
         }
     }
 
+    #[inline]
     pub fn reduce_parents(
         &self,
         transposed_in_out: &mut TransposedVectors,
@@ -238,10 +351,12 @@ impl Implementation {
         }
     }
 
+    #[inline]
     fn xof_fn(&self) -> XofFn {
         unsafe { mem::transmute(self.xof_ptr.load(Relaxed)) }
     }
 
+    #[inline]
     pub fn xof(
         &self,
         block: &[u8; 64],
@@ -264,10 +379,12 @@ impl Implementation {
         }
     }
 
+    #[inline]
     fn xof_xor_fn(&self) -> XofFn {
         unsafe { mem::transmute(self.xof_xor_ptr.load(Relaxed)) }
     }
 
+    #[inline]
     pub fn xof_xor(
         &self,
         block: &[u8; 64],
@@ -290,10 +407,12 @@ impl Implementation {
         }
     }
 
+    #[inline]
     fn universal_hash_fn(&self) -> UniversalHashFn {
         unsafe { mem::transmute(self.universal_hash_ptr.load(Relaxed)) }
     }
 
+    #[inline]
     pub fn universal_hash(&self, input: &[u8], key: &[u32; 8], counter: u64) -> [u8; 16] {
         let mut out = [0u8; 16];
         unsafe {
@@ -324,11 +443,11 @@ fn degree<const N: usize>() -> usize {
 }
 
 fn degree_init() -> usize {
-    DETECTED_IMPL.assign(&Implementation::detect());
+    init_detected_impl();
     DETECTED_IMPL.degree_fn()()
 }
 
-pub type CompressFn = unsafe extern "C" fn(
+type CompressFn = unsafe extern "C" fn(
     block: *const [u8; 64], // zero padded to 64 bytes
     block_len: u32,
     cv: *const [u32; 8],
@@ -345,11 +464,11 @@ unsafe extern "C" fn compress_init(
     flags: u32,
     out: *mut [u32; 16],
 ) {
-    DETECTED_IMPL.assign(&Implementation::detect());
+    init_detected_impl();
     DETECTED_IMPL.compress_fn()(block, block_len, cv, counter, flags, out);
 }
 
-pub type HashChunksFn = unsafe extern "C" fn(
+type HashChunksFn = unsafe extern "C" fn(
     input: *const u8,
     input_len: usize,
     key: *const [u32; 8],
@@ -366,11 +485,11 @@ unsafe extern "C" fn hash_chunks_init(
     flags: u32,
     transposed_output: *mut u32,
 ) {
-    DETECTED_IMPL.assign(&Implementation::detect());
+    init_detected_impl();
     DETECTED_IMPL.hash_chunks_fn()(input, input_len, key, counter, flags, transposed_output);
 }
 
-pub type HashParentsFn = unsafe extern "C" fn(
+type HashParentsFn = unsafe extern "C" fn(
     transposed_input: *const u32,
     num_parents: usize,
     key: *const [u32; 8],
@@ -385,12 +504,12 @@ unsafe extern "C" fn hash_parents_init(
     flags: u32,
     transposed_output: *mut u32,
 ) {
-    DETECTED_IMPL.assign(&Implementation::detect());
+    init_detected_impl();
     DETECTED_IMPL.hash_parents_fn()(transposed_input, num_parents, key, flags, transposed_output);
 }
 
 // This signature covers both xof() and xof_xor().
-pub type XofFn = unsafe extern "C" fn(
+type XofFn = unsafe extern "C" fn(
     block: *const [u8; 64], // zero padded to 64 bytes
     block_len: u32,
     cv: *const [u32; 8],
@@ -409,7 +528,7 @@ unsafe extern "C" fn xof_init(
     out: *mut u8,
     out_len: usize,
 ) {
-    DETECTED_IMPL.assign(&Implementation::detect());
+    init_detected_impl();
     DETECTED_IMPL.xof_fn()(block, block_len, cv, counter, flags, out, out_len);
 }
 
@@ -422,11 +541,11 @@ unsafe extern "C" fn xof_xor_init(
     out: *mut u8,
     out_len: usize,
 ) {
-    DETECTED_IMPL.assign(&Implementation::detect());
+    init_detected_impl();
     DETECTED_IMPL.xof_xor_fn()(block, block_len, cv, counter, flags, out, out_len);
 }
 
-pub type UniversalHashFn = unsafe extern "C" fn(
+type UniversalHashFn = unsafe extern "C" fn(
     input: *const u8,
     input_len: usize,
     key: *const [u32; 8],
@@ -441,12 +560,12 @@ unsafe extern "C" fn universal_hash_init(
     counter: u64,
     out: *mut [u8; 16],
 ) {
-    DETECTED_IMPL.assign(&Implementation::detect());
+    init_detected_impl();
     DETECTED_IMPL.universal_hash_fn()(input, input_len, key, counter, out);
 }
 
 // The implicit degree of this implementation is MAX_SIMD_DEGREE.
-pub(crate) unsafe fn hash_chunks_using_compress(
+unsafe fn hash_chunks_using_compress(
     compress: CompressFn,
     mut input: *const u8,
     mut input_len: usize,
@@ -500,7 +619,7 @@ pub(crate) unsafe fn hash_chunks_using_compress(
 }
 
 // The implicit degree of this implementation is MAX_SIMD_DEGREE.
-pub(crate) unsafe fn hash_parents_using_compress(
+unsafe fn hash_parents_using_compress(
     compress: CompressFn,
     mut transposed_input: *const u32,
     mut num_parents: usize,
@@ -535,7 +654,7 @@ pub(crate) unsafe fn hash_parents_using_compress(
     }
 }
 
-pub(crate) unsafe fn xof_using_compress(
+unsafe fn xof_using_compress(
     compress: CompressFn,
     block: *const [u8; 64],
     block_len: u32,
@@ -559,7 +678,7 @@ pub(crate) unsafe fn xof_using_compress(
     }
 }
 
-pub(crate) unsafe fn xof_xor_using_compress(
+unsafe fn xof_xor_using_compress(
     compress: CompressFn,
     block: *const [u8; 64],
     block_len: u32,
@@ -584,7 +703,7 @@ pub(crate) unsafe fn xof_xor_using_compress(
     }
 }
 
-pub(crate) unsafe fn universal_hash_using_compress(
+unsafe fn universal_hash_using_compress(
     compress: CompressFn,
     mut input: *const u8,
     mut input_len: usize,
@@ -620,7 +739,7 @@ pub(crate) unsafe fn universal_hash_using_compress(
 }
 
 // this is in units of *words*, for pointer operations on *const/*mut u32
-pub const TRANSPOSED_STRIDE: usize = 2 * MAX_SIMD_DEGREE;
+const TRANSPOSED_STRIDE: usize = 2 * MAX_SIMD_DEGREE;
 
 #[cfg_attr(any(target_arch = "x86", target_arch = "x86_64"), repr(C, align(64)))]
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
