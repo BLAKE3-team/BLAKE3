@@ -39,7 +39,8 @@ cfg_if::cfg_if! {
     } else if #[cfg(blake3_neon)] {
         pub const MAX_SIMD_DEGREE: usize = 4;
     } else {
-        pub const MAX_SIMD_DEGREE: usize = 1;
+        // never less than 2
+        pub const MAX_SIMD_DEGREE: usize = 2;
     }
 }
 
@@ -50,7 +51,7 @@ pub fn degree() -> usize {
 
 #[inline]
 pub fn split_transposed_vectors(
-    vectors: &mut [[u32; 2 * MAX_SIMD_DEGREE]; 8],
+    vectors: &mut TransposedVectors,
 ) -> (TransposedSplit, TransposedSplit) {
     DETECTED_IMPL.split_transposed_vectors(vectors)
 }
@@ -91,20 +92,22 @@ pub fn hash_chunks(
 #[inline]
 pub fn hash_parents(
     transposed_input: &TransposedVectors,
+    num_cvs: usize,
     key: &[u32; 8],
     flags: u32,
     transposed_output: TransposedSplit,
 ) -> usize {
-    DETECTED_IMPL.hash_parents(transposed_input, key, flags, transposed_output)
+    DETECTED_IMPL.hash_parents(transposed_input, num_cvs, key, flags, transposed_output)
 }
 
 #[inline]
 pub fn reduce_parents(
     transposed_in_out: &mut TransposedVectors,
+    num_cvs: usize,
     key: &[u32; 8],
     flags: u32,
 ) -> usize {
-    DETECTED_IMPL.reduce_parents(transposed_in_out, key, flags)
+    DETECTED_IMPL.reduce_parents(transposed_in_out, num_cvs, key, flags)
 }
 
 #[inline]
@@ -222,24 +225,17 @@ impl Implementation {
 
     #[inline]
     pub fn degree(&self) -> usize {
-        self.degree_fn()()
+        let degree = self.degree_fn()();
+        debug_assert!(degree >= 2);
+        degree
     }
 
     #[inline]
-    pub fn split_transposed_vectors(
+    pub fn split_transposed_vectors<'v>(
         &self,
-        vectors: &mut [[u32; 2 * MAX_SIMD_DEGREE]; 8],
-    ) -> (TransposedSplit, TransposedSplit) {
-        let ptr = vectors[0].as_mut_ptr();
-        let left = TransposedSplit {
-            ptr,
-            phantom_data: PhantomData,
-        };
-        let right = TransposedSplit {
-            ptr: ptr.wrapping_add(self.degree()),
-            phantom_data: PhantomData,
-        };
-        (left, right)
+        vectors: &'v mut TransposedVectors,
+    ) -> (TransposedSplit<'v>, TransposedSplit<'v>) {
+        vectors.split(self.degree())
     }
 
     #[inline]
@@ -330,24 +326,25 @@ impl Implementation {
     pub fn hash_parents(
         &self,
         transposed_input: &TransposedVectors,
+        num_cvs: usize,
         key: &[u32; 8],
         flags: u32,
         transposed_output: TransposedSplit,
     ) -> usize {
-        let num_parents = transposed_input.len / 2;
+        let num_parents = num_cvs / 2;
         unsafe {
             self.hash_parents_fn()(
-                transposed_input[0].as_ptr(),
+                transposed_input.as_ptr(),
                 num_parents,
                 key,
                 flags,
                 transposed_output.ptr,
             );
         }
-        if transposed_input.len % 2 == 1 {
+        if num_cvs % 2 == 1 {
             unsafe {
                 copy_one_transposed_cv(
-                    transposed_input[0].as_ptr().add(transposed_input.len - 1),
+                    transposed_input.as_ptr().add(num_cvs - 1),
                     transposed_output.ptr.add(num_parents),
                 );
             }
@@ -361,24 +358,18 @@ impl Implementation {
     pub fn reduce_parents(
         &self,
         transposed_in_out: &mut TransposedVectors,
+        num_cvs: usize,
         key: &[u32; 8],
         flags: u32,
     ) -> usize {
-        let len = transposed_in_out.len;
-        let num_parents = len / 2;
+        let num_parents = num_cvs / 2;
+        let in_out_ptr = transposed_in_out.as_mut_ptr();
         unsafe {
-            self.hash_parents_fn()(
-                transposed_in_out[0].as_ptr(),
-                num_parents,
-                key,
-                flags,
-                transposed_in_out[0].as_mut_ptr(),
-            );
+            self.hash_parents_fn()(in_out_ptr, num_parents, key, flags, in_out_ptr);
         }
-        if len % 2 == 1 {
-            let in_out_ptr = transposed_in_out[0].as_mut_ptr();
+        if num_cvs % 2 == 1 {
             unsafe {
-                copy_one_transposed_cv(in_out_ptr.add(len - 1), in_out_ptr.add(num_parents));
+                copy_one_transposed_cv(in_out_ptr.add(num_cvs - 1), in_out_ptr.add(num_parents));
             }
             num_parents + 1
         } else {
@@ -471,6 +462,7 @@ impl Clone for Implementation {
     }
 }
 
+// never less than 2
 type DegreeFn = fn() -> usize;
 
 fn degree_init() -> usize {
@@ -774,22 +766,42 @@ const TRANSPOSED_STRIDE: usize = 2 * MAX_SIMD_DEGREE;
 
 #[cfg_attr(any(target_arch = "x86", target_arch = "x86_64"), repr(C, align(64)))]
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
-pub struct TransposedVectors {
-    vectors: [[u32; 2 * MAX_SIMD_DEGREE]; 8],
-    len: usize, // the number of CVs populated in each vector
-}
+pub struct TransposedVectors([[u32; 2 * MAX_SIMD_DEGREE]; 8]);
 
-impl core::ops::Index<usize> for TransposedVectors {
-    type Output = [u32];
-
-    fn index(&self, i: usize) -> &[u32] {
-        &self.vectors[i][..self.len]
+impl TransposedVectors {
+    pub fn parent_node(&self, parent_index: usize) -> [u8; 64] {
+        let mut bytes = [0u8; 64];
+        for word_index in 0..8 {
+            bytes[word_index * WORD_LEN..][..WORD_LEN]
+                .copy_from_slice(&self.0[word_index][2 * parent_index].to_le_bytes());
+            bytes[(word_index + 8) * WORD_LEN..][..WORD_LEN]
+                .copy_from_slice(&self.0[word_index][2 * parent_index + 1].to_le_bytes());
+        }
+        bytes
     }
-}
 
-impl core::ops::IndexMut<usize> for TransposedVectors {
-    fn index_mut(&mut self, i: usize) -> &mut [u32] {
-        &mut self.vectors[i][..self.len]
+    fn as_ptr(&self) -> *const u32 {
+        self.0[0].as_ptr()
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut u32 {
+        self.0[0].as_mut_ptr()
+    }
+
+    fn split(&mut self, degree: usize) -> (TransposedSplit, TransposedSplit) {
+        debug_assert!(degree > 0);
+        debug_assert!(degree <= MAX_SIMD_DEGREE);
+        debug_assert_eq!(degree.count_ones(), 1, "power of 2");
+        let ptr = self.as_mut_ptr();
+        let left = TransposedSplit {
+            ptr,
+            phantom_data: PhantomData,
+        };
+        let right = TransposedSplit {
+            ptr: ptr.wrapping_add(degree),
+            phantom_data: PhantomData,
+        };
+        (left, right)
     }
 }
 
@@ -797,6 +809,9 @@ pub struct TransposedSplit<'vectors> {
     ptr: *mut u32,
     phantom_data: PhantomData<&'vectors mut u32>,
 }
+
+unsafe impl<'vectors> Send for TransposedSplit<'vectors> {}
+unsafe impl<'vectors> Sync for TransposedSplit<'vectors> {}
 
 unsafe fn copy_one_transposed_cv(transposed_src: *const u32, transposed_dest: *mut u32) {
     for word_index in 0..8 {

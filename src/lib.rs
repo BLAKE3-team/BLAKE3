@@ -70,112 +70,31 @@
 #[cfg(feature = "zeroize")]
 extern crate zeroize_crate as zeroize; // Needed because `zeroize::Zeroize` assumes the crate is named `zeroize`.
 
-
 #[cfg(test)]
 mod test;
-
-// The guts module is for incremental use cases like the `bao` crate that need
-// to explicitly compute chunk and parent chaining values. It is semi-stable
-// and likely to keep working, but largely undocumented and not intended for
-// widespread use.
-#[doc(hidden)]
-pub mod guts;
-
-/// Undocumented and unstable, for benchmarks only.
-#[doc(hidden)]
-pub mod platform;
-
-// Platform-specific implementations of the compression function. These
-// BLAKE3-specific cfg flags are set in build.rs.
-#[cfg(blake3_avx2_rust)]
-#[path = "rust_avx2.rs"]
-mod avx2;
-#[cfg(blake3_avx2_ffi)]
-#[path = "ffi_avx2.rs"]
-mod avx2;
-#[cfg(blake3_avx512_ffi)]
-#[path = "ffi_avx512.rs"]
-mod avx512;
-#[cfg(blake3_neon)]
-#[path = "ffi_neon.rs"]
-mod neon;
-mod portable;
-#[cfg(blake3_sse2_rust)]
-#[path = "rust_sse2.rs"]
-mod sse2;
-#[cfg(blake3_sse2_ffi)]
-#[path = "ffi_sse2.rs"]
-mod sse2;
-#[cfg(blake3_sse41_rust)]
-#[path = "rust_sse41.rs"]
-mod sse41;
-#[cfg(blake3_sse41_ffi)]
-#[path = "ffi_sse41.rs"]
-mod sse41;
 
 #[cfg(feature = "traits-preview")]
 pub mod traits;
 
 mod join;
 
-use arrayref::{array_mut_ref, array_ref};
 use arrayvec::{ArrayString, ArrayVec};
 use core::cmp;
 use core::fmt;
-use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
 
-/// The number of bytes in a [`Hash`](struct.Hash.html), 32.
+use blake3_guts as guts;
+use guts::{
+    BLOCK_LEN, CHUNK_END, CHUNK_LEN, CHUNK_START, DERIVE_KEY_CONTEXT, DERIVE_KEY_MATERIAL, IV,
+    KEYED_HASH, PARENT, ROOT, WORD_LEN,
+};
+
+/// The number of bytes in a [`Hash`](struct.Hash.html), 32
 pub const OUT_LEN: usize = 32;
 
-/// The number of bytes in a key, 32.
+/// The number of bytes in a key, 32
 pub const KEY_LEN: usize = 32;
 
 const MAX_DEPTH: usize = 54; // 2^54 * CHUNK_LEN = 2^64
-use guts::{BLOCK_LEN, CHUNK_LEN};
-
-// While iterating the compression function within a chunk, the CV is
-// represented as words, to avoid doing two extra endianness conversions for
-// each compression in the portable implementation. But the hash_many interface
-// needs to hash both input bytes and parent nodes, so its better for its
-// output CVs to be represented as bytes.
-type CVWords = [u32; 8];
-type CVBytes = [u8; 32]; // little-endian
-
-const IV: &CVWords = &[
-    0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
-];
-
-const MSG_SCHEDULE: [[usize; 16]; 7] = [
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-    [2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8],
-    [3, 4, 10, 12, 13, 2, 7, 14, 6, 5, 9, 0, 11, 15, 8, 1],
-    [10, 7, 12, 9, 14, 3, 13, 15, 4, 0, 11, 2, 5, 8, 1, 6],
-    [12, 13, 9, 11, 15, 10, 14, 8, 7, 2, 5, 3, 0, 1, 6, 4],
-    [9, 14, 11, 5, 8, 12, 15, 1, 13, 3, 0, 10, 2, 6, 4, 7],
-    [11, 15, 5, 0, 1, 9, 8, 6, 14, 10, 2, 12, 3, 4, 7, 13],
-];
-
-// These are the internal flags that we use to domain separate root/non-root,
-// chunk/parent, and chunk beginning/middle/end. These get set at the high end
-// of the block flags word in the compression function, so their values start
-// high and go down.
-const CHUNK_START: u8 = 1 << 0;
-const CHUNK_END: u8 = 1 << 1;
-const PARENT: u8 = 1 << 2;
-const ROOT: u8 = 1 << 3;
-const KEYED_HASH: u8 = 1 << 4;
-const DERIVE_KEY_CONTEXT: u8 = 1 << 5;
-const DERIVE_KEY_MATERIAL: u8 = 1 << 6;
-
-#[inline]
-fn counter_low(counter: u64) -> u32 {
-    counter as u32
-}
-
-#[inline]
-fn counter_high(counter: u64) -> u32 {
-    (counter >> 32) as u32
-}
 
 /// An output of the default size, 32 bytes, which provides constant-time
 /// equality checking.
@@ -379,43 +298,49 @@ impl std::error::Error for HexError {}
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 #[derive(Clone)]
 struct Output {
-    input_chaining_value: CVWords,
+    input_chaining_value: [u32; 8],
     block: [u8; 64],
     block_len: u8,
     counter: u64,
     flags: u8,
-    #[cfg_attr(feature = "zeroize", zeroize(skip))]
-    platform: Platform,
 }
 
 impl Output {
-    fn chaining_value(&self) -> CVBytes {
-        let mut cv = self.input_chaining_value;
-        self.platform.compress_in_place(
-            &mut cv,
+    fn chaining_value(&self) -> [u8; 32] {
+        let words = guts::compress(
             &self.block,
-            self.block_len,
+            self.block_len as u32,
+            &self.input_chaining_value,
             self.counter,
-            self.flags,
+            self.flags as u32,
         );
-        platform::le_bytes_from_words_32(&cv)
+        let mut bytes = [0u8; 32];
+        for word_index in 0..8 {
+            bytes[word_index * WORD_LEN..][..WORD_LEN]
+                .copy_from_slice(&words[word_index].to_le_bytes());
+        }
+        bytes
     }
 
     fn root_hash(&self) -> Hash {
         debug_assert_eq!(self.counter, 0);
-        let mut cv = self.input_chaining_value;
-        self.platform
-            .compress_in_place(&mut cv, &self.block, self.block_len, 0, self.flags | ROOT);
-        Hash(platform::le_bytes_from_words_32(&cv))
+        let out_bytes = guts::compress_xof(
+            &self.block,
+            self.block_len as u32,
+            &self.input_chaining_value,
+            0,
+            self.flags as u32 | ROOT,
+        );
+        Hash(out_bytes[..OUT_LEN].try_into().unwrap())
     }
 
     fn root_output_block(&self) -> [u8; 2 * OUT_LEN] {
-        self.platform.compress_xof(
-            &self.input_chaining_value,
+        guts::compress_xof(
             &self.block,
-            self.block_len,
+            self.block_len as u32,
+            &self.input_chaining_value,
             self.counter,
-            self.flags | ROOT,
+            self.flags as u32 | ROOT,
         )
     }
 }
@@ -423,26 +348,23 @@ impl Output {
 #[derive(Clone)]
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 struct ChunkState {
-    cv: CVWords,
+    cv: [u32; 8],
     chunk_counter: u64,
     buf: [u8; BLOCK_LEN],
     buf_len: u8,
     blocks_compressed: u8,
     flags: u8,
-    #[cfg_attr(feature = "zeroize", zeroize(skip))]
-    platform: Platform,
 }
 
 impl ChunkState {
-    fn new(key: &CVWords, chunk_counter: u64, flags: u8, platform: Platform) -> Self {
+    fn new(key: &[u32; 8], chunk_counter: u64, flags: u32) -> Self {
         Self {
             cv: *key,
             chunk_counter,
             buf: [0; BLOCK_LEN],
             buf_len: 0,
             blocks_compressed: 0,
-            flags,
-            platform,
+            flags: flags as u8,
         }
     }
 
@@ -458,7 +380,7 @@ impl ChunkState {
         *input = &input[take..];
     }
 
-    fn start_flag(&self) -> u8 {
+    fn start_flag(&self) -> u32 {
         if self.blocks_compressed == 0 {
             CHUNK_START
         } else {
@@ -473,13 +395,12 @@ impl ChunkState {
             self.fill_buf(&mut input);
             if !input.is_empty() {
                 debug_assert_eq!(self.buf_len as usize, BLOCK_LEN);
-                let block_flags = self.flags | self.start_flag(); // borrowck
-                self.platform.compress_in_place(
-                    &mut self.cv,
+                self.cv = guts::compress(
                     &self.buf,
-                    BLOCK_LEN as u8,
+                    BLOCK_LEN as u32,
+                    &self.cv,
                     self.chunk_counter,
-                    block_flags,
+                    self.flags as u32 | self.start_flag(),
                 );
                 self.buf_len = 0;
                 self.buf = [0; BLOCK_LEN];
@@ -489,13 +410,12 @@ impl ChunkState {
 
         while input.len() > BLOCK_LEN {
             debug_assert_eq!(self.buf_len, 0);
-            let block_flags = self.flags | self.start_flag(); // borrowck
-            self.platform.compress_in_place(
-                &mut self.cv,
-                array_ref!(input, 0, BLOCK_LEN),
-                BLOCK_LEN as u8,
+            self.cv = guts::compress(
+                input[..BLOCK_LEN].try_into().unwrap(),
+                BLOCK_LEN as u32,
+                &self.cv,
                 self.chunk_counter,
-                block_flags,
+                self.flags as u32 | self.start_flag(),
             );
             self.blocks_compressed += 1;
             input = &input[BLOCK_LEN..];
@@ -508,14 +428,12 @@ impl ChunkState {
     }
 
     fn output(&self) -> Output {
-        let block_flags = self.flags | self.start_flag() | CHUNK_END;
         Output {
             input_chaining_value: self.cv,
             block: self.buf,
             block_len: self.buf_len,
             counter: self.chunk_counter,
-            flags: block_flags,
-            platform: self.platform,
+            flags: self.flags | self.start_flag() as u8 | CHUNK_END as u8,
         }
     }
 }
@@ -527,7 +445,6 @@ impl fmt::Debug for ChunkState {
             .field("len", &self.len())
             .field("chunk_counter", &self.chunk_counter)
             .field("flags", &self.flags)
-            .field("platform", &self.platform)
             .finish()
     }
 }
@@ -547,24 +464,6 @@ impl fmt::Debug for ChunkState {
 //   use full-width SIMD vectors for parent hashing. Without parallel parent
 //   hashing, we lose about 10% of overall throughput on AVX2 and AVX-512.
 
-/// Undocumented and unstable, for benchmarks only.
-#[doc(hidden)]
-#[derive(Clone, Copy)]
-pub enum IncrementCounter {
-    Yes,
-    No,
-}
-
-impl IncrementCounter {
-    #[inline]
-    fn yes(&self) -> bool {
-        match self {
-            IncrementCounter::Yes => true,
-            IncrementCounter::No => false,
-        }
-    }
-}
-
 // The largest power of two less than or equal to `n`, used for left_len()
 // immediately below, and also directly in Hasher::update().
 fn largest_power_of_two_leq(n: usize) -> usize {
@@ -579,97 +478,6 @@ fn left_len(content_len: usize) -> usize {
     // Subtract 1 to reserve at least one byte for the right side.
     let full_chunks = (content_len - 1) / CHUNK_LEN;
     largest_power_of_two_leq(full_chunks) * CHUNK_LEN
-}
-
-// Use SIMD parallelism to hash up to MAX_SIMD_DEGREE chunks at the same time
-// on a single thread. Write out the chunk chaining values and return the
-// number of chunks hashed. These chunks are never the root and never empty;
-// those cases use a different codepath.
-fn compress_chunks_parallel(
-    input: &[u8],
-    key: &CVWords,
-    chunk_counter: u64,
-    flags: u8,
-    platform: Platform,
-    out: &mut [u8],
-) -> usize {
-    debug_assert!(!input.is_empty(), "empty chunks below the root");
-    debug_assert!(input.len() <= MAX_SIMD_DEGREE * CHUNK_LEN);
-
-    let mut chunks_exact = input.chunks_exact(CHUNK_LEN);
-    let mut chunks_array = ArrayVec::<&[u8; CHUNK_LEN], MAX_SIMD_DEGREE>::new();
-    for chunk in &mut chunks_exact {
-        chunks_array.push(array_ref!(chunk, 0, CHUNK_LEN));
-    }
-    platform.hash_many(
-        &chunks_array,
-        key,
-        chunk_counter,
-        IncrementCounter::Yes,
-        flags,
-        CHUNK_START,
-        CHUNK_END,
-        out,
-    );
-
-    // Hash the remaining partial chunk, if there is one. Note that the empty
-    // chunk (meaning the empty message) is a different codepath.
-    let chunks_so_far = chunks_array.len();
-    if !chunks_exact.remainder().is_empty() {
-        let counter = chunk_counter + chunks_so_far as u64;
-        let mut chunk_state = ChunkState::new(key, counter, flags, platform);
-        chunk_state.update(chunks_exact.remainder());
-        *array_mut_ref!(out, chunks_so_far * OUT_LEN, OUT_LEN) =
-            chunk_state.output().chaining_value();
-        chunks_so_far + 1
-    } else {
-        chunks_so_far
-    }
-}
-
-// Use SIMD parallelism to hash up to MAX_SIMD_DEGREE parents at the same time
-// on a single thread. Write out the parent chaining values and return the
-// number of parents hashed. (If there's an odd input chaining value left over,
-// return it as an additional output.) These parents are never the root and
-// never empty; those cases use a different codepath.
-fn compress_parents_parallel(
-    child_chaining_values: &[u8],
-    key: &CVWords,
-    flags: u8,
-    platform: Platform,
-    out: &mut [u8],
-) -> usize {
-    debug_assert_eq!(child_chaining_values.len() % OUT_LEN, 0, "wacky hash bytes");
-    let num_children = child_chaining_values.len() / OUT_LEN;
-    debug_assert!(num_children >= 2, "not enough children");
-    debug_assert!(num_children <= 2 * MAX_SIMD_DEGREE_OR_2, "too many");
-
-    let mut parents_exact = child_chaining_values.chunks_exact(BLOCK_LEN);
-    // Use MAX_SIMD_DEGREE_OR_2 rather than MAX_SIMD_DEGREE here, because of
-    // the requirements of compress_subtree_wide().
-    let mut parents_array = ArrayVec::<&[u8; BLOCK_LEN], MAX_SIMD_DEGREE_OR_2>::new();
-    for parent in &mut parents_exact {
-        parents_array.push(array_ref!(parent, 0, BLOCK_LEN));
-    }
-    platform.hash_many(
-        &parents_array,
-        key,
-        0, // Parents always use counter 0.
-        IncrementCounter::No,
-        flags | PARENT,
-        0, // Parents have no start flags.
-        0, // Parents have no end flags.
-        out,
-    );
-
-    // If there's an odd child left over, it becomes an output.
-    let parents_so_far = parents_array.len();
-    if !parents_exact.remainder().is_empty() {
-        out[parents_so_far * OUT_LEN..][..OUT_LEN].copy_from_slice(parents_exact.remainder());
-        parents_so_far + 1
-    } else {
-        parents_so_far
-    }
 }
 
 // The wide helper function returns (writes out) an array of chaining values
@@ -691,66 +499,40 @@ fn compress_parents_parallel(
 // multithreading parallelism for that update().
 fn compress_subtree_wide<J: join::Join>(
     input: &[u8],
-    key: &CVWords,
+    key: &[u32; 8],
     chunk_counter: u64,
-    flags: u8,
-    platform: Platform,
-    out: &mut [u8],
+    flags: u32,
+    out: guts::TransposedSplit,
 ) -> usize {
     // Note that the single chunk case does *not* bump the SIMD degree up to 2
     // when it is 1. This allows Rayon the option of multithreading even the
     // 2-chunk case, which can help performance on smaller platforms.
-    if input.len() <= platform.simd_degree() * CHUNK_LEN {
-        return compress_chunks_parallel(input, key, chunk_counter, flags, platform, out);
+    if input.len() <= guts::degree() * CHUNK_LEN {
+        return guts::hash_chunks(input, key, chunk_counter, flags, out);
     }
 
     // With more than simd_degree chunks, we need to recurse. Start by dividing
     // the input into left and right subtrees. (Note that this is only optimal
     // as long as the SIMD degree is a power of 2. If we ever get a SIMD degree
     // of 3 or something, we'll need a more complicated strategy.)
-    debug_assert_eq!(platform.simd_degree().count_ones(), 1, "power of 2");
+    debug_assert_eq!(guts::degree().count_ones(), 1, "power of 2");
     let (left, right) = input.split_at(left_len(input.len()));
     let right_chunk_counter = chunk_counter + (left.len() / CHUNK_LEN) as u64;
 
-    // Make space for the child outputs. Here we use MAX_SIMD_DEGREE_OR_2 to
-    // account for the special case of returning 2 outputs when the SIMD degree
-    // is 1.
-    let mut cv_array = [0; 2 * MAX_SIMD_DEGREE_OR_2 * OUT_LEN];
-    let degree = if left.len() == CHUNK_LEN {
-        // The "simd_degree=1 and we're at the leaf nodes" case.
-        debug_assert_eq!(platform.simd_degree(), 1);
-        1
-    } else {
-        cmp::max(platform.simd_degree(), 2)
-    };
-    let (left_out, right_out) = cv_array.split_at_mut(degree * OUT_LEN);
+    let mut transposed_cvs = guts::TransposedVectors::default();
+    let (left_cvs, right_cvs) = guts::split_transposed_vectors(&mut transposed_cvs);
 
     // Recurse! For update_rayon(), this is where we take advantage of RayonJoin and use multiple
     // threads.
     let (left_n, right_n) = J::join(
-        || compress_subtree_wide::<J>(left, key, chunk_counter, flags, platform, left_out),
-        || compress_subtree_wide::<J>(right, key, right_chunk_counter, flags, platform, right_out),
+        || compress_subtree_wide::<J>(left, key, chunk_counter, flags, left_cvs),
+        || compress_subtree_wide::<J>(right, key, right_chunk_counter, flags, right_cvs),
     );
 
-    // The special case again. If simd_degree=1, then we'll have left_n=1 and
-    // right_n=1. Rather than compressing them into a single output, return
-    // them directly, to make sure we always have at least two outputs.
-    debug_assert_eq!(left_n, degree);
-    debug_assert!(right_n >= 1 && right_n <= left_n);
-    if left_n == 1 {
-        out[..2 * OUT_LEN].copy_from_slice(&cv_array[..2 * OUT_LEN]);
-        return 2;
-    }
-
-    // Otherwise, do one layer of parent node compression.
-    let num_children = left_n + right_n;
-    compress_parents_parallel(
-        &cv_array[..num_children * OUT_LEN],
-        key,
-        flags,
-        platform,
-        out,
-    )
+    // Do one layer of parent node compression. The SIMD degree is always at least 2, so we're
+    // guaranteed that this isn't the root compression.
+    let num_cvs = left_n + right_n;
+    guts::hash_parents(&mut transposed_cvs, num_cvs, key, flags, out)
 }
 
 // Hash a subtree with compress_subtree_wide(), and then condense the resulting
@@ -765,50 +547,41 @@ fn compress_subtree_wide<J: join::Join>(
 // chunk or less. That's a different codepath.
 fn compress_subtree_to_parent_node<J: join::Join>(
     input: &[u8],
-    key: &CVWords,
+    key: &[u32; 8],
     chunk_counter: u64,
-    flags: u8,
-    platform: Platform,
-) -> [u8; BLOCK_LEN] {
+    flags: u32,
+) -> [u8; 64] {
     debug_assert!(input.len() > CHUNK_LEN);
-    let mut cv_array = [0; MAX_SIMD_DEGREE_OR_2 * OUT_LEN];
-    let mut num_cvs =
-        compress_subtree_wide::<J>(input, &key, chunk_counter, flags, platform, &mut cv_array);
+    let mut transposed_cvs = guts::TransposedVectors::default();
+    let (left_cvs, _) = guts::split_transposed_vectors(&mut transposed_cvs);
+    let mut num_cvs = compress_subtree_wide::<J>(input, &key, chunk_counter, flags, left_cvs);
     debug_assert!(num_cvs >= 2);
 
     // If MAX_SIMD_DEGREE is greater than 2 and there's enough input,
     // compress_subtree_wide() returns more than 2 chaining values. Condense
     // them into 2 by forming parent nodes repeatedly.
-    let mut out_array = [0; MAX_SIMD_DEGREE_OR_2 * OUT_LEN / 2];
     while num_cvs > 2 {
-        let cv_slice = &cv_array[..num_cvs * OUT_LEN];
-        num_cvs = compress_parents_parallel(cv_slice, key, flags, platform, &mut out_array);
-        cv_array[..num_cvs * OUT_LEN].copy_from_slice(&out_array[..num_cvs * OUT_LEN]);
+        num_cvs = guts::reduce_parents(&mut transposed_cvs, num_cvs, key, flags);
     }
-    *array_ref!(cv_array, 0, 2 * OUT_LEN)
+    transposed_cvs.parent_node(0)
 }
 
 // Hash a complete input all at once. Unlike compress_subtree_wide() and
 // compress_subtree_to_parent_node(), this function handles the 1 chunk case.
-fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8) -> Output {
-    let platform = Platform::detect();
-
+fn hash_all_at_once<J: join::Join>(input: &[u8], key: &[u32; 8], flags: u32) -> Output {
     // If the whole subtree is one chunk, hash it directly with a ChunkState.
     if input.len() <= CHUNK_LEN {
-        return ChunkState::new(key, 0, flags, platform)
-            .update(input)
-            .output();
+        return ChunkState::new(key, 0, flags).update(input).output();
     }
 
     // Otherwise construct an Output object from the parent node returned by
     // compress_subtree_to_parent_node().
     Output {
         input_chaining_value: *key,
-        block: compress_subtree_to_parent_node::<J>(input, key, 0, flags, platform),
+        block: compress_subtree_to_parent_node::<J>(input, key, 0, flags),
         block_len: BLOCK_LEN as u8,
         counter: 0,
-        flags: flags | PARENT,
-        platform,
+        flags: flags as u8 | PARENT as u8,
     }
 }
 
@@ -823,7 +596,20 @@ fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8) -> Ou
 /// This function is always single-threaded. For multithreading support, see
 /// [`Hasher::update_rayon`](struct.Hasher.html#method.update_rayon).
 pub fn hash(input: &[u8]) -> Hash {
-    hash_all_at_once::<join::SerialJoin>(input, IV, 0).root_hash()
+    hash_all_at_once::<join::SerialJoin>(input, &IV, 0).root_hash()
+}
+
+#[inline(always)]
+pub fn words_from_le_bytes_32(bytes: &[u8; 32]) -> [u32; 8] {
+    let mut out = [0; 8];
+    for word_index in 0..8 {
+        out[word_index] = u32::from_le_bytes(
+            bytes[word_index * WORD_LEN..][..WORD_LEN]
+                .try_into()
+                .unwrap(),
+        );
+    }
+    out
 }
 
 /// The keyed hash function.
@@ -841,7 +627,7 @@ pub fn hash(input: &[u8]) -> Hash {
 /// [`Hasher::new_keyed`] and
 /// [`Hasher::update_rayon`](struct.Hasher.html#method.update_rayon).
 pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
-    let key_words = platform::words_from_le_bytes_32(key);
+    let key_words = words_from_le_bytes_32(key);
     hash_all_at_once::<join::SerialJoin>(input, &key_words, KEYED_HASH).root_hash()
 }
 
@@ -882,20 +668,19 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 /// [Argon2]: https://en.wikipedia.org/wiki/Argon2
 pub fn derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
     let context_key =
-        hash_all_at_once::<join::SerialJoin>(context.as_bytes(), IV, DERIVE_KEY_CONTEXT)
+        hash_all_at_once::<join::SerialJoin>(context.as_bytes(), &IV, DERIVE_KEY_CONTEXT)
             .root_hash();
-    let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
+    let context_key_words = words_from_le_bytes_32(context_key.as_bytes());
     hash_all_at_once::<join::SerialJoin>(key_material, &context_key_words, DERIVE_KEY_MATERIAL)
         .root_hash()
         .0
 }
 
 fn parent_node_output(
-    left_child: &CVBytes,
-    right_child: &CVBytes,
-    key: &CVWords,
-    flags: u8,
-    platform: Platform,
+    left_child: &[u8; 32],
+    right_child: &[u8; 32],
+    key: &[u32; 8],
+    flags: u32,
 ) -> Output {
     let mut block = [0; BLOCK_LEN];
     block[..32].copy_from_slice(left_child);
@@ -905,8 +690,7 @@ fn parent_node_output(
         block,
         block_len: BLOCK_LEN as u8,
         counter: 0,
-        flags: flags | PARENT,
-        platform,
+        flags: (flags | PARENT) as u8,
     }
 }
 
@@ -953,28 +737,28 @@ fn parent_node_output(
 #[derive(Clone)]
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 pub struct Hasher {
-    key: CVWords,
+    key: [u32; 8],
     chunk_state: ChunkState,
     // The stack size is MAX_DEPTH + 1 because we do lazy merging. For example,
     // with 7 chunks, we have 3 entries in the stack. Adding an 8th chunk
     // requires a 4th entry, rather than merging everything down to 1, because
     // we don't know whether more input is coming. This is different from how
     // the reference implementation does things.
-    cv_stack: ArrayVec<CVBytes, { MAX_DEPTH + 1 }>,
+    cv_stack: ArrayVec<[u8; 32], { MAX_DEPTH + 1 }>,
 }
 
 impl Hasher {
-    fn new_internal(key: &CVWords, flags: u8) -> Self {
+    fn new_internal(key: &[u32; 8], flags: u32) -> Self {
         Self {
             key: *key,
-            chunk_state: ChunkState::new(key, 0, flags, Platform::detect()),
+            chunk_state: ChunkState::new(key, 0, flags),
             cv_stack: ArrayVec::new(),
         }
     }
 
     /// Construct a new `Hasher` for the regular hash function.
     pub fn new() -> Self {
-        Self::new_internal(IV, 0)
+        Self::new_internal(&IV, 0)
     }
 
     /// Construct a new `Hasher` for the keyed hash function. See
@@ -982,7 +766,7 @@ impl Hasher {
     ///
     /// [`keyed_hash`]: fn.keyed_hash.html
     pub fn new_keyed(key: &[u8; KEY_LEN]) -> Self {
-        let key_words = platform::words_from_le_bytes_32(key);
+        let key_words = words_from_le_bytes_32(key);
         Self::new_internal(&key_words, KEYED_HASH)
     }
 
@@ -993,9 +777,9 @@ impl Hasher {
     /// [`derive_key`]: fn.derive_key.html
     pub fn new_derive_key(context: &str) -> Self {
         let context_key =
-            hash_all_at_once::<join::SerialJoin>(context.as_bytes(), IV, DERIVE_KEY_CONTEXT)
+            hash_all_at_once::<join::SerialJoin>(context.as_bytes(), &IV, DERIVE_KEY_CONTEXT)
                 .root_hash();
-        let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
+        let context_key_words = words_from_le_bytes_32(context_key.as_bytes());
         Self::new_internal(&context_key_words, DERIVE_KEY_MATERIAL)
     }
 
@@ -1004,12 +788,7 @@ impl Hasher {
     /// This is functionally the same as overwriting the `Hasher` with a new
     /// one, using the same key or context string if any.
     pub fn reset(&mut self) -> &mut Self {
-        self.chunk_state = ChunkState::new(
-            &self.key,
-            0,
-            self.chunk_state.flags,
-            self.chunk_state.platform,
-        );
+        self.chunk_state = ChunkState::new(&self.key, 0, self.chunk_state.flags as u32);
         self.cv_stack.clear();
         self
     }
@@ -1034,8 +813,7 @@ impl Hasher {
                 &left_child,
                 &right_child,
                 &self.key,
-                self.chunk_state.flags,
-                self.chunk_state.platform,
+                self.chunk_state.flags as u32,
             );
             self.cv_stack.push(parent_output.chaining_value());
         }
@@ -1074,7 +852,7 @@ impl Hasher {
     // merging with each of them separately, so that the second CV will always
     // remain unmerged. (That also helps us support extendable output when
     // we're hashing an input all-at-once.)
-    fn push_cv(&mut self, new_cv: &CVBytes, chunk_counter: u64) {
+    fn push_cv(&mut self, new_cv: &[u8; 32], chunk_counter: u64) {
         self.merge_cv_stack(chunk_counter);
         self.cv_stack.push(*new_cv);
     }
@@ -1139,8 +917,7 @@ impl Hasher {
                 self.chunk_state = ChunkState::new(
                     &self.key,
                     self.chunk_state.chunk_counter + 1,
-                    self.chunk_state.flags,
-                    self.chunk_state.platform,
+                    self.chunk_state.flags as u32,
                 );
             } else {
                 return self;
@@ -1195,8 +972,7 @@ impl Hasher {
                     &ChunkState::new(
                         &self.key,
                         self.chunk_state.chunk_counter,
-                        self.chunk_state.flags,
-                        self.chunk_state.platform,
+                        self.chunk_state.flags as u32,
                     )
                     .update(&input[..subtree_len])
                     .output()
@@ -1210,11 +986,10 @@ impl Hasher {
                     &input[..subtree_len],
                     &self.key,
                     self.chunk_state.chunk_counter,
-                    self.chunk_state.flags,
-                    self.chunk_state.platform,
+                    self.chunk_state.flags as u32,
                 );
-                let left_cv = array_ref!(cv_pair, 0, 32);
-                let right_cv = array_ref!(cv_pair, 32, 32);
+                let left_cv = cv_pair[..32].try_into().unwrap();
+                let right_cv = cv_pair[32..].try_into().unwrap();
                 // Push the two CVs we received into the CV stack in order. Because
                 // the stack merges lazily, this guarantees we aren't merging the
                 // root.
@@ -1277,8 +1052,7 @@ impl Hasher {
                 &self.cv_stack[num_cvs_remaining - 2],
                 &self.cv_stack[num_cvs_remaining - 1],
                 &self.key,
-                self.chunk_state.flags,
-                self.chunk_state.platform,
+                self.chunk_state.flags as u32,
             );
             num_cvs_remaining -= 2;
         }
@@ -1287,8 +1061,7 @@ impl Hasher {
                 &self.cv_stack[num_cvs_remaining - 1],
                 &output.chaining_value(),
                 &self.key,
-                self.chunk_state.flags,
-                self.chunk_state.platform,
+                self.chunk_state.flags as u32,
             );
             num_cvs_remaining -= 1;
         }
@@ -1326,7 +1099,6 @@ impl fmt::Debug for Hasher {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Hasher")
             .field("flags", &self.chunk_state.flags)
-            .field("platform", &self.chunk_state.platform)
             .finish()
     }
 }
