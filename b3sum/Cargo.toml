@@ -1,6 +1,6 @@
 [package]
 name = "b3sum"
-version = "1.4.0"
+version = "1.4.1"
 authors = ["Jack O'Connor <oconnor663@gmail.com>"]
 description = "a command line implementation of the BLAKE3 hash function"
 repository = "https://github.com/BLAKE3-team/BLAKE3"

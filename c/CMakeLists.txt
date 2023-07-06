@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.9)
 
 project(libblake3
-  VERSION 1.4.0
+  VERSION 1.4.1
   DESCRIPTION "BLAKE3 C implementation"
   LANGUAGES C ASM
 )
