@@ -1,7 +1,7 @@
 # This Makefile is only for testing. C callers should follow the instructions
 # in ./README.md to incorporate these C files into their existing build.
 
-NAME=blake3
+PROGS = blake3 blake3-asm example
 CC=gcc
 CFLAGS=-O3 -Wall -Wextra -std=c11 -pedantic -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE -fvisibility=hidden
 LDFLAGS=-pie -Wl,-z,relro,-z,now
@@ -13,28 +13,28 @@ ifdef BLAKE3_NO_SSE2
 EXTRAFLAGS += -DBLAKE3_NO_SSE2
 else
 TARGETS += blake3_sse2.o
-ASM_TARGETS += blake3_sse2_x86-64_unix.S
+ASM_TARGETS += blake3_sse2_x86-64_unix.o
 endif
 
 ifdef BLAKE3_NO_SSE41
 EXTRAFLAGS += -DBLAKE3_NO_SSE41
 else
 TARGETS += blake3_sse41.o
-ASM_TARGETS += blake3_sse41_x86-64_unix.S
+ASM_TARGETS += blake3_sse41_x86-64_unix.o
 endif
 
 ifdef BLAKE3_NO_AVX2
 EXTRAFLAGS += -DBLAKE3_NO_AVX2
 else
 TARGETS += blake3_avx2.o
-ASM_TARGETS += blake3_avx2_x86-64_unix.S
+ASM_TARGETS += blake3_avx2_x86-64_unix.o
 endif
 
 ifdef BLAKE3_NO_AVX512
 EXTRAFLAGS += -DBLAKE3_NO_AVX512
 else
 TARGETS += blake3_avx512.o
-ASM_TARGETS += blake3_avx512_x86-64_unix.S
+ASM_TARGETS += blake3_avx512_x86-64_unix.o
 endif
 
 ifdef BLAKE3_USE_NEON
@@ -46,37 +46,43 @@ ifdef BLAKE3_NO_NEON
 EXTRAFLAGS += -DBLAKE3_USE_NEON=0
 endif
 
-all: blake3.c blake3_dispatch.c blake3_portable.c main.c $(TARGETS)
-	$(CC) $(CFLAGS) $(EXTRAFLAGS) $^ -o $(NAME) $(LDFLAGS)
+all: blake3
+asm: blake3-asm
 
-blake3_sse2.o: blake3_sse2.c
-	$(CC) $(CFLAGS) $(EXTRAFLAGS) -c $^ -o $@ -msse2
+common-objs = blake3.o blake3_dispatch.o blake3_portable.o
 
-blake3_sse41.o: blake3_sse41.c
-	$(CC) $(CFLAGS) $(EXTRAFLAGS) -c $^ -o $@ -msse4.1
+blake3-objs = main.o $(common-objs) $(TARGETS)
+blake3: $(blake3-objs)
 
-blake3_avx2.o: blake3_avx2.c
-	$(CC) $(CFLAGS) $(EXTRAFLAGS) -c $^ -o $@ -mavx2
+blake3-asm-objs = main.o $(common-objs) $(ASM_TARGETS)
+blake3-asm: $(blake3-asm-objs)
 
-blake3_avx512.o: blake3_avx512.c
-	$(CC) $(CFLAGS) $(EXTRAFLAGS) -c $^ -o $@ -mavx512f -mavx512vl
+example-objs = example.o $(common-objs) $(ASM_TARGETS)
+example: $(example-objs)
 
-blake3_neon.o: blake3_neon.c
-	$(CC) $(CFLAGS) $(EXTRAFLAGS) -c $^ -o $@
+$(PROGS):
+	$(CC) $(CFLAGS) $(EXTRAFLAGS) -o $@ $($@-objs) $(LDFLAGS)
+
+.c.o:
+	$(CC) $(CFLAGS) $(EXTRAFLAGS) $($@_CFLAGS) -o $@ -c $<
+
+.S.o:
+	$(CC) $(CFLAGS) $(EXTRAFLAGS) -o $@ -c $<
+
+blake3_sse2.o_CFLAGS = -msse2
+blake3_sse41.o_CFLAGS = -msse4.1
+blake3_avx2.o_CFLAGS = -mavx2
+blake3_avx512.o_CFLAGS = -mavx512f -mavx512vl
 
 test: CFLAGS += -DBLAKE3_TESTING -fsanitize=address,undefined
-test: all
-	./test.py
+test: blake3
+	./test.py blake3
 
-asm: blake3.c blake3_dispatch.c blake3_portable.c main.c $(ASM_TARGETS)
-	$(CC) $(CFLAGS) $(EXTRAFLAGS) $^ -o $(NAME) $(LDFLAGS)
+test_asm: CFLAGS += -DBLAKE3_TESTING -fsanitize=address,undefined
+test_asm: blake3-asm
+	./test.py blake3-asm
 
-test_asm: CFLAGS += -DBLAKE3_TESTING -fsanitize=address,undefined 
-test_asm: asm
-	./test.py
+clean:
+	rm -f $(PROGS) *.o
 
-example: example.c blake3.c blake3_dispatch.c blake3_portable.c $(ASM_TARGETS)
-	$(CC) $(CFLAGS) $(EXTRAFLAGS) $^ -o $@ $(LDFLAGS)
-
-clean: 
-	rm -f $(NAME) *.o
+.PHONY: clean all asm test test_asm

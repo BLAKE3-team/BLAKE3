@@ -4,14 +4,16 @@ from binascii import hexlify
 import json
 from os import path
 import subprocess
+import sys
 
 HERE = path.dirname(__file__)
 TEST_VECTORS_PATH = path.join(HERE, "..", "test_vectors", "test_vectors.json")
 TEST_VECTORS = json.load(open(TEST_VECTORS_PATH))
 
+NAME = sys.argv[1] if len(sys.argv) > 1 else "blake3"
 
 def run_blake3(args, input):
-    output = subprocess.run([path.join(HERE, "blake3")] + args,
+    output = subprocess.run([path.join(HERE, NAME)] + args,
                             input=input,
                             stdout=subprocess.PIPE,
                             check=True)

@@ -73,14 +73,8 @@ enum cpu_feature {
   UNDEFINED = 1 << 30
 };
 
-#if !defined(BLAKE3_TESTING)
-static /* Allow the variable to be controlled manually for testing */
-#endif
     enum cpu_feature g_cpu_features = UNDEFINED;
 
-#if !defined(BLAKE3_TESTING)
-static
-#endif
     enum cpu_feature
     get_cpu_features(void) {
 
