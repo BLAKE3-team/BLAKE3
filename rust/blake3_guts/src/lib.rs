@@ -587,6 +587,7 @@ unsafe fn hash_chunks_using_compress(
 ) {
     debug_assert!(input_len > 0);
     debug_assert!(input_len <= MAX_SIMD_DEGREE * CHUNK_LEN);
+    input_len = cmp::min(input_len, MAX_SIMD_DEGREE * CHUNK_LEN);
     while input_len > 0 {
         let mut chunk_len = cmp::min(input_len, CHUNK_LEN);
         input_len -= chunk_len;
@@ -757,14 +758,18 @@ const TRANSPOSED_STRIDE: usize = 2 * MAX_SIMD_DEGREE;
 pub struct TransposedVectors([[u32; 2 * MAX_SIMD_DEGREE]; 8]);
 
 impl TransposedVectors {
-    pub fn parent_node(&self, parent_index: usize) -> BlockBytes {
-        let mut bytes = [0u8; 64];
+    pub fn extract_cv(&self, cv_index: usize) -> CVBytes {
+        let mut words = [0u32; 8];
         for word_index in 0..8 {
-            bytes[word_index * WORD_LEN..][..WORD_LEN]
-                .copy_from_slice(&self.0[word_index][2 * parent_index].to_le_bytes());
-            bytes[(word_index + 8) * WORD_LEN..][..WORD_LEN]
-                .copy_from_slice(&self.0[word_index][2 * parent_index + 1].to_le_bytes());
+            words[word_index] = self.0[word_index][cv_index];
         }
+        le_bytes_from_words_32(&words)
+    }
+
+    pub fn extract_parent_node(&self, parent_index: usize) -> BlockBytes {
+        let mut bytes = [0u8; 64];
+        bytes[..32].copy_from_slice(&self.extract_cv(parent_index / 2));
+        bytes[32..].copy_from_slice(&self.extract_cv(parent_index / 2 + 1));
         bytes
     }
 

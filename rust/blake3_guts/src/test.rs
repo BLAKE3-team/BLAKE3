@@ -24,7 +24,6 @@ pub fn paint_test_input(buf: &mut [u8]) {
 }
 
 pub fn test_compress_vs_portable(compress_fn: CompressFn) {
-    let flags = KEYED_HASH;
     for block_len in BLOCK_LENGTHS {
         dbg!(block_len);
         let mut block = [0; BLOCK_LEN];
@@ -36,7 +35,7 @@ pub fn test_compress_vs_portable(compress_fn: CompressFn) {
                 block_len as u32,
                 &TEST_KEY,
                 counter,
-                flags,
+                KEYED_HASH,
             );
 
             let mut test_cv = TEST_KEY;
@@ -47,7 +46,7 @@ pub fn test_compress_vs_portable(compress_fn: CompressFn) {
                     block_len as u32,
                     test_cv_ptr,
                     counter,
-                    flags,
+                    KEYED_HASH,
                     test_cv_ptr,
                 );
             }
@@ -58,7 +57,6 @@ pub fn test_compress_vs_portable(compress_fn: CompressFn) {
 }
 
 pub fn test_compress_vs_reference(compress_fn: CompressFn) {
-    let flags = CHUNK_START | CHUNK_END | ROOT | KEYED_HASH;
     for block_len in BLOCK_LENGTHS {
         dbg!(block_len);
         let mut block = [0; BLOCK_LEN];
@@ -72,9 +70,97 @@ pub fn test_compress_vs_reference(compress_fn: CompressFn) {
         let mut test_cv = TEST_KEY;
         unsafe {
             let test_cv_ptr: *mut CVBytes = &mut test_cv;
-            compress_fn(&block, block_len as u32, test_cv_ptr, 0, flags, test_cv_ptr);
+            compress_fn(
+                &block,
+                block_len as u32,
+                test_cv_ptr,
+                0,
+                CHUNK_START | CHUNK_END | ROOT | KEYED_HASH,
+                test_cv_ptr,
+            );
         }
 
         assert_eq!(ref_hash, test_cv);
+    }
+}
+
+fn check_transposed_eq(output_a: &TransposedVectors, output_b: &TransposedVectors) {
+    let mut mismatch = false;
+    for cv_index in 0..2 * MAX_SIMD_DEGREE {
+        let cv_a = output_a.extract_cv(cv_index);
+        let cv_b = output_b.extract_cv(cv_index);
+        if cv_a == [0; 32] && cv_b == [0; 32] {
+            println!("CV {cv_index:2} empty");
+        } else if cv_a == cv_b {
+            println!("CV {cv_index:2} matches");
+        } else {
+            mismatch = true;
+            println!("CV {cv_index:2} mismatch:");
+            println!("    {}", hex::encode(cv_a));
+            println!("    {}", hex::encode(cv_b));
+        }
+    }
+    if mismatch {
+        panic!("transposed outputs are not equal");
+    }
+    assert_eq!(output_a, output_b, "just double check");
+}
+
+pub fn test_hash_chunks_vs_portable(hash_chunks_fn: HashChunksFn, degree: usize) {
+    assert!(degree <= MAX_SIMD_DEGREE);
+    let mut input = [0u8; 2 * MAX_SIMD_DEGREE * CHUNK_LEN];
+    paint_test_input(&mut input);
+    dbg!(degree * CHUNK_LEN);
+    for input_2_len in [
+        1,
+        degree * CHUNK_LEN / 3,
+        2 * degree * CHUNK_LEN / 3,
+        degree * CHUNK_LEN,
+    ] {
+        dbg!(input_2_len);
+        let input1 = &input[..degree * CHUNK_LEN];
+        let input2 = &input[degree * CHUNK_LEN..][..input_2_len];
+        for initial_counter in INITIAL_COUNTERS {
+            // Make two calls, to test the output_column parameter.
+            let mut portable_output = TransposedVectors::default();
+            let (portable_left, portable_right) = portable_output.split(degree);
+            Implementation::portable().hash_chunks(
+                input1,
+                &TEST_KEY,
+                initial_counter,
+                KEYED_HASH,
+                portable_left,
+            );
+            Implementation::portable().hash_chunks(
+                input2,
+                &TEST_KEY,
+                initial_counter + degree as u64,
+                KEYED_HASH,
+                portable_right,
+            );
+
+            let mut test_output = TransposedVectors::default();
+            let (test_left, test_right) = test_output.split(degree);
+            unsafe {
+                hash_chunks_fn(
+                    input1.as_ptr(),
+                    input1.len(),
+                    &TEST_KEY,
+                    initial_counter,
+                    KEYED_HASH,
+                    test_left.ptr,
+                );
+                hash_chunks_fn(
+                    input2.as_ptr(),
+                    input2.len(),
+                    &TEST_KEY,
+                    initial_counter + degree as u64,
+                    KEYED_HASH,
+                    test_right.ptr,
+                );
+            }
+
+            check_transposed_eq(&portable_output, &test_output);
+        }
     }
 }

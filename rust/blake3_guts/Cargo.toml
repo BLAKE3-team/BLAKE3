@@ -13,4 +13,5 @@ edition = "2021"
 cfg-if = "1.0.0"
 
 [dev-dependencies]
+hex = "0.4.3"
 reference_impl = { path = "../../reference_impl" }
