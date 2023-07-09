@@ -189,3 +189,19 @@ pub unsafe extern "C" fn universal_hash(
 ) {
     crate::universal_hash_using_compress(compress, input, input_len, key, counter, out)
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    // This is circular but do it anyway.
+    #[test]
+    fn test_compress_vs_portable() {
+        crate::test::test_compress_vs_portable(compress);
+    }
+
+    #[test]
+    fn test_compress_vs_reference() {
+        crate::test::test_compress_vs_reference(compress);
+    }
+}

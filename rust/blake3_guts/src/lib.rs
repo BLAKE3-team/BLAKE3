@@ -6,6 +6,10 @@ use core::sync::atomic::{AtomicPtr, Ordering::Relaxed};
 
 mod portable;
 
+#[cfg(test)]
+mod test;
+
+pub const OUT_LEN: usize = 32;
 pub const BLOCK_LEN: usize = 64;
 pub const CHUNK_LEN: usize = 1024;
 pub const WORD_LEN: usize = 4;

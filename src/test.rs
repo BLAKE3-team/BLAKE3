@@ -1,9 +1,6 @@
-use crate::platform::{ParentInOut, TransposedVectors, MAX_SIMD_DEGREE};
-use crate::{
-    CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, OUT_LEN, UNIVERSAL_HASH_LEN,
-};
+use blake3_guts as guts;
+use guts::{CVBytes, CVWords, BLOCK_LEN, CHUNK_LEN, OUT_LEN, UNIVERSAL_HASH_LEN};
 
-use arrayref::array_ref;
 use arrayvec::ArrayVec;
 use core::cmp;
 use core::usize;
@@ -52,9 +49,7 @@ pub const TEST_CASES_MAX: usize = 100 * CHUNK_LEN;
 
 // There's a test to make sure these two are equal below.
 pub const TEST_KEY: &CVBytes = b"whats the Elvish word for friend";
-pub const TEST_KEY_WORDS: &CVWords = &[
-    1952540791, 1752440947, 1816469605, 1752394102, 1919907616, 1868963940, 1919295602, 1684956521,
-];
+pub const TEST_KEY_WORDS: &CVWords = &guts::words_from_le_bytes_32(TEST_KEY);
 
 // Test a few different initial counter values.
 // - 0: The base case.
@@ -71,40 +66,6 @@ pub fn paint_test_input(buf: &mut [u8]) {
     for (i, b) in buf.iter_mut().enumerate() {
         *b = (i % 251) as u8;
     }
-}
-
-type CompressInPlaceFn =
-    unsafe fn(cv: &mut CVWords, block: &[u8; BLOCK_LEN], block_len: u8, counter: u64, flags: u8);
-
-type CompressXofFn = unsafe fn(
-    cv: &CVWords,
-    block: &[u8; BLOCK_LEN],
-    block_len: u8,
-    counter: u64,
-    flags: u8,
-) -> [u8; 64];
-
-// A shared helper function for platform-specific tests.
-pub fn test_compress_fn(compress_in_place_fn: CompressInPlaceFn, compress_xof_fn: CompressXofFn) {
-    let initial_state = *TEST_KEY_WORDS;
-    let block_len: u8 = 61;
-    let mut block = [0; BLOCK_LEN];
-    paint_test_input(&mut block[..block_len as usize]);
-    // Use a counter with set bits in both 32-bit words.
-    let counter = (5u64 << 32) + 6;
-    let flags = crate::CHUNK_END | crate::ROOT | crate::KEYED_HASH;
-
-    let portable_out =
-        crate::portable::compress_xof(&initial_state, &block, block_len, counter as u64, flags);
-
-    let mut test_state = initial_state;
-    unsafe { compress_in_place_fn(&mut test_state, &block, block_len, counter as u64, flags) };
-    let test_state_bytes = crate::platform::le_bytes_from_words_32(&test_state);
-    let test_xof =
-        unsafe { compress_xof_fn(&initial_state, &block, block_len, counter as u64, flags) };
-
-    assert_eq!(&portable_out[..32], &test_state_bytes[..]);
-    assert_eq!(&portable_out[..], &test_xof[..]);
 }
 
 type HashManyFn<A> = unsafe fn(
