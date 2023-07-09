@@ -1,9 +1,12 @@
-use crate::{IV, MAX_SIMD_DEGREE, MSG_SCHEDULE, WORD_LEN};
+use crate::{
+    le_bytes_from_words_32, le_bytes_from_words_64, words_from_le_bytes_32, words_from_le_bytes_64,
+    BlockBytes, BlockWords, CVBytes, CVWords, IV, MAX_SIMD_DEGREE, MSG_SCHEDULE,
+};
 
 pub const DEGREE: usize = MAX_SIMD_DEGREE;
 
 #[inline(always)]
-fn g(state: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize, x: u32, y: u32) {
+fn g(state: &mut BlockWords, a: usize, b: usize, c: usize, d: usize, x: u32, y: u32) {
     state[a] = state[a].wrapping_add(state[b]).wrapping_add(x);
     state[d] = (state[d] ^ state[a]).rotate_right(16);
     state[c] = state[c].wrapping_add(state[d]);
@@ -15,7 +18,7 @@ fn g(state: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize, x: u32, y: u
 }
 
 #[inline(always)]
-fn round(state: &mut [u32; 16], msg: &[u32; 16], round: usize) {
+fn round(state: &mut [u32; 16], msg: &BlockWords, round: usize) {
     // Select the message schedule based on the round.
     let schedule = MSG_SCHEDULE[round];
 
@@ -33,30 +36,22 @@ fn round(state: &mut [u32; 16], msg: &[u32; 16], round: usize) {
 }
 
 #[inline(always)]
-fn compress_safe(
-    block: &[u8; 64],
+fn compress_inner(
+    block_words: &BlockWords,
     block_len: u32,
-    cv: &[u32; 8],
+    cv_words: &CVWords,
     counter: u64,
     flags: u32,
 ) -> [u32; 16] {
-    let mut block_words = [0u32; 16];
-    for word_index in 0..16 {
-        block_words[word_index] = u32::from_le_bytes(
-            block[WORD_LEN * word_index..][..WORD_LEN]
-                .try_into()
-                .unwrap(),
-        );
-    }
     let mut state = [
-        cv[0],
-        cv[1],
-        cv[2],
-        cv[3],
-        cv[4],
-        cv[5],
-        cv[6],
-        cv[7],
+        cv_words[0],
+        cv_words[1],
+        cv_words[2],
+        cv_words[3],
+        cv_words[4],
+        cv_words[5],
+        cv_words[6],
+        cv_words[7],
         IV[0],
         IV[1],
         IV[2],
@@ -69,28 +64,48 @@ fn compress_safe(
     for round_number in 0..7 {
         round(&mut state, &block_words, round_number);
     }
-    for i in 0..8 {
-        state[i] ^= state[i + 8];
-        state[i + 8] ^= (*cv)[i];
-    }
     state
 }
 
 pub unsafe extern "C" fn compress(
-    block: *const [u8; 64],
+    block: *const BlockBytes,
     block_len: u32,
-    cv: *const [u32; 8],
+    cv: *const CVBytes,
     counter: u64,
     flags: u32,
-    out: *mut [u32; 16],
+    out: *mut CVBytes,
 ) {
-    *out = compress_safe(&*block, block_len, &*cv, counter, flags);
+    let block_words = words_from_le_bytes_64(&*block);
+    let cv_words = words_from_le_bytes_32(&*cv);
+    let mut state = compress_inner(&block_words, block_len, &cv_words, counter, flags);
+    for word_index in 0..8 {
+        state[word_index] ^= state[word_index + 8];
+    }
+    *out = le_bytes_from_words_32(state[..8].try_into().unwrap());
+}
+
+pub unsafe extern "C" fn compress_xof(
+    block: *const BlockBytes,
+    block_len: u32,
+    cv: *const CVBytes,
+    counter: u64,
+    flags: u32,
+    out: *mut BlockBytes,
+) {
+    let block_words = words_from_le_bytes_64(&*block);
+    let cv_words = words_from_le_bytes_32(&*cv);
+    let mut state = compress_inner(&block_words, block_len, &cv_words, counter, flags);
+    for word_index in 0..8 {
+        state[word_index] ^= state[word_index + 8];
+        state[word_index + 8] ^= cv_words[word_index];
+    }
+    *out = le_bytes_from_words_64(&state);
 }
 
 pub unsafe extern "C" fn hash_chunks(
     input: *const u8,
     input_len: usize,
-    key: *const [u32; 8],
+    key: *const CVBytes,
     counter: u64,
     flags: u32,
     transposed_output: *mut u32,
@@ -109,7 +124,7 @@ pub unsafe extern "C" fn hash_chunks(
 pub unsafe extern "C" fn hash_parents(
     transposed_input: *const u32,
     num_parents: usize,
-    key: *const [u32; 8],
+    key: *const CVBytes,
     flags: u32,
     transposed_output: *mut u32, // may overlap the input
 ) {
@@ -124,33 +139,51 @@ pub unsafe extern "C" fn hash_parents(
 }
 
 pub unsafe extern "C" fn xof(
-    block: *const [u8; 64],
+    block: *const BlockBytes,
     block_len: u32,
-    cv: *const [u32; 8],
+    cv: *const CVBytes,
     counter: u64,
     flags: u32,
     out: *mut u8,
     out_len: usize,
 ) {
-    crate::xof_using_compress(compress, block, block_len, cv, counter, flags, out, out_len)
+    crate::xof_using_compress_xof(
+        compress_xof,
+        block,
+        block_len,
+        cv,
+        counter,
+        flags,
+        out,
+        out_len,
+    )
 }
 
 pub unsafe extern "C" fn xof_xor(
-    block: *const [u8; 64],
+    block: *const BlockBytes,
     block_len: u32,
-    cv: *const [u32; 8],
+    cv: *const CVBytes,
     counter: u64,
     flags: u32,
     out: *mut u8,
     out_len: usize,
 ) {
-    crate::xof_xor_using_compress(compress, block, block_len, cv, counter, flags, out, out_len)
+    crate::xof_xor_using_compress_xof(
+        compress_xof,
+        block,
+        block_len,
+        cv,
+        counter,
+        flags,
+        out,
+        out_len,
+    )
 }
 
 pub unsafe extern "C" fn universal_hash(
     input: *const u8,
     input_len: usize,
-    key: *const [u32; 8],
+    key: *const CVBytes,
     counter: u64,
     out: *mut [u8; 16],
 ) {

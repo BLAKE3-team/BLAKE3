@@ -19,9 +19,10 @@ pub const KEYED_HASH: u32 = 1 << 4;
 pub const DERIVE_KEY_CONTEXT: u32 = 1 << 5;
 pub const DERIVE_KEY_MATERIAL: u32 = 1 << 6;
 
-pub const IV: [u32; 8] = [
+pub const IV: CVWords = [
     0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
 ];
+pub const IV_BYTES: CVBytes = le_bytes_from_words_32(&IV);
 
 pub const MSG_SCHEDULE: [[usize; 16]; 7] = [
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
@@ -44,6 +45,11 @@ cfg_if::cfg_if! {
     }
 }
 
+pub type CVBytes = [u8; 32];
+pub type CVWords = [u32; 8];
+pub type BlockBytes = [u8; 64];
+pub type BlockWords = [u32; 16];
+
 #[inline]
 pub fn degree() -> usize {
     DETECTED_IMPL.degree()
@@ -58,30 +64,19 @@ pub fn split_transposed_vectors(
 
 #[inline]
 pub fn compress(
-    block: &[u8; 64],
+    block: &BlockBytes,
     block_len: u32,
-    cv: &[u32; 8],
+    cv: &CVBytes,
     counter: u64,
     flags: u32,
-) -> [u32; 8] {
+) -> CVBytes {
     DETECTED_IMPL.compress(block, block_len, cv, counter, flags)
-}
-
-#[inline]
-pub fn compress_xof(
-    block: &[u8; 64],
-    block_len: u32,
-    cv: &[u32; 8],
-    counter: u64,
-    flags: u32,
-) -> [u8; 64] {
-    DETECTED_IMPL.compress_xof(block, block_len, cv, counter, flags)
 }
 
 #[inline]
 pub fn hash_chunks(
     input: &[u8],
-    key: &[u32; 8],
+    key: &CVBytes,
     counter: u64,
     flags: u32,
     transposed_output: TransposedSplit,
@@ -93,7 +88,7 @@ pub fn hash_chunks(
 pub fn hash_parents(
     transposed_input: &TransposedVectors,
     num_cvs: usize,
-    key: &[u32; 8],
+    key: &CVBytes,
     flags: u32,
     transposed_output: TransposedSplit,
 ) -> usize {
@@ -104,7 +99,7 @@ pub fn hash_parents(
 pub fn reduce_parents(
     transposed_in_out: &mut TransposedVectors,
     num_cvs: usize,
-    key: &[u32; 8],
+    key: &CVBytes,
     flags: u32,
 ) -> usize {
     DETECTED_IMPL.reduce_parents(transposed_in_out, num_cvs, key, flags)
@@ -112,9 +107,9 @@ pub fn reduce_parents(
 
 #[inline]
 pub fn xof(
-    block: &[u8; 64],
+    block: &BlockBytes,
     block_len: u32,
-    cv: &[u32; 8],
+    cv: &CVBytes,
     counter: u64,
     flags: u32,
     out: &mut [u8],
@@ -124,9 +119,9 @@ pub fn xof(
 
 #[inline]
 pub fn xof_xor(
-    block: &[u8; 64],
+    block: &BlockBytes,
     block_len: u32,
-    cv: &[u32; 8],
+    cv: &CVBytes,
     counter: u64,
     flags: u32,
     out: &mut [u8],
@@ -135,7 +130,7 @@ pub fn xof_xor(
 }
 
 #[inline]
-pub fn universal_hash(input: &[u8], key: &[u32; 8], counter: u64) -> [u8; 16] {
+pub fn universal_hash(input: &[u8], key: &CVBytes, counter: u64) -> [u8; 16] {
     DETECTED_IMPL.universal_hash(input, key, counter)
 }
 
@@ -246,38 +241,17 @@ impl Implementation {
     #[inline]
     pub fn compress(
         &self,
-        block: &[u8; 64],
+        block: &BlockBytes,
         block_len: u32,
-        cv: &[u32; 8],
+        cv: &CVBytes,
         counter: u64,
         flags: u32,
-    ) -> [u32; 8] {
-        let mut out = [0u32; 16];
+    ) -> CVBytes {
+        let mut out = [0u8; 32];
         unsafe {
             self.compress_fn()(block, block_len, cv, counter, flags, &mut out);
         }
-        out[..8].try_into().unwrap()
-    }
-
-    #[inline]
-    pub fn compress_xof(
-        &self,
-        block: &[u8; 64],
-        block_len: u32,
-        cv: &[u32; 8],
-        counter: u64,
-        flags: u32,
-    ) -> [u8; 64] {
-        let mut out_words = [0u32; 16];
-        unsafe {
-            self.compress_fn()(block, block_len, cv, counter, flags, &mut out_words);
-        }
-        let mut out_bytes = [0u8; 64];
-        for word_index in 0..16 {
-            out_bytes[word_index * WORD_LEN..][..WORD_LEN]
-                .copy_from_slice(&out_words[word_index].to_le_bytes());
-        }
-        out_bytes
+        out
     }
 
     #[inline]
@@ -289,7 +263,7 @@ impl Implementation {
     pub fn hash_chunks(
         &self,
         input: &[u8],
-        key: &[u32; 8],
+        key: &CVBytes,
         counter: u64,
         flags: u32,
         transposed_output: TransposedSplit,
@@ -327,7 +301,7 @@ impl Implementation {
         &self,
         transposed_input: &TransposedVectors,
         num_cvs: usize,
-        key: &[u32; 8],
+        key: &CVBytes,
         flags: u32,
         transposed_output: TransposedSplit,
     ) -> usize {
@@ -359,7 +333,7 @@ impl Implementation {
         &self,
         transposed_in_out: &mut TransposedVectors,
         num_cvs: usize,
-        key: &[u32; 8],
+        key: &CVBytes,
         flags: u32,
     ) -> usize {
         let num_parents = num_cvs / 2;
@@ -385,9 +359,9 @@ impl Implementation {
     #[inline]
     pub fn xof(
         &self,
-        block: &[u8; 64],
+        block: &BlockBytes,
         block_len: u32,
-        cv: &[u32; 8],
+        cv: &CVBytes,
         counter: u64,
         flags: u32,
         out: &mut [u8],
@@ -413,9 +387,9 @@ impl Implementation {
     #[inline]
     pub fn xof_xor(
         &self,
-        block: &[u8; 64],
+        block: &BlockBytes,
         block_len: u32,
-        cv: &[u32; 8],
+        cv: &CVBytes,
         counter: u64,
         flags: u32,
         out: &mut [u8],
@@ -439,7 +413,7 @@ impl Implementation {
     }
 
     #[inline]
-    pub fn universal_hash(&self, input: &[u8], key: &[u32; 8], counter: u64) -> [u8; 16] {
+    pub fn universal_hash(&self, input: &[u8], key: &CVBytes, counter: u64) -> [u8; 16] {
         let mut out = [0u8; 16];
         unsafe {
             self.universal_hash_fn()(input.as_ptr(), input.len(), key, counter, &mut out);
@@ -471,30 +445,39 @@ fn degree_init() -> usize {
 }
 
 type CompressFn = unsafe extern "C" fn(
-    block: *const [u8; 64], // zero padded to 64 bytes
+    block: *const BlockBytes, // zero padded to 64 bytes
     block_len: u32,
-    cv: *const [u32; 8],
+    cv: *const CVBytes,
     counter: u64,
     flags: u32,
-    out: *mut [u32; 16], // may overlap the input
+    out: *mut CVBytes, // may overlap the input
 );
 
 unsafe extern "C" fn compress_init(
-    block: *const [u8; 64],
+    block: *const BlockBytes,
     block_len: u32,
-    cv: *const [u32; 8],
+    cv: *const CVBytes,
     counter: u64,
     flags: u32,
-    out: *mut [u32; 16],
+    out: *mut CVBytes,
 ) {
     init_detected_impl();
     DETECTED_IMPL.compress_fn()(block, block_len, cv, counter, flags, out);
 }
 
+type CompressXofFn = unsafe extern "C" fn(
+    block: *const BlockBytes, // zero padded to 64 bytes
+    block_len: u32,
+    cv: *const CVBytes,
+    counter: u64,
+    flags: u32,
+    out: *mut BlockBytes, // may overlap the input
+);
+
 type HashChunksFn = unsafe extern "C" fn(
     input: *const u8,
     input_len: usize,
-    key: *const [u32; 8],
+    key: *const CVBytes,
     counter: u64,
     flags: u32,
     transposed_output: *mut u32,
@@ -503,7 +486,7 @@ type HashChunksFn = unsafe extern "C" fn(
 unsafe extern "C" fn hash_chunks_init(
     input: *const u8,
     input_len: usize,
-    key: *const [u32; 8],
+    key: *const CVBytes,
     counter: u64,
     flags: u32,
     transposed_output: *mut u32,
@@ -515,7 +498,7 @@ unsafe extern "C" fn hash_chunks_init(
 type HashParentsFn = unsafe extern "C" fn(
     transposed_input: *const u32,
     num_parents: usize,
-    key: *const [u32; 8],
+    key: *const CVBytes,
     flags: u32,
     transposed_output: *mut u32, // may overlap the input
 );
@@ -523,7 +506,7 @@ type HashParentsFn = unsafe extern "C" fn(
 unsafe extern "C" fn hash_parents_init(
     transposed_input: *const u32,
     num_parents: usize,
-    key: *const [u32; 8],
+    key: *const CVBytes,
     flags: u32,
     transposed_output: *mut u32,
 ) {
@@ -533,9 +516,9 @@ unsafe extern "C" fn hash_parents_init(
 
 // This signature covers both xof() and xof_xor().
 type XofFn = unsafe extern "C" fn(
-    block: *const [u8; 64], // zero padded to 64 bytes
+    block: *const BlockBytes, // zero padded to 64 bytes
     block_len: u32,
-    cv: *const [u32; 8],
+    cv: *const CVBytes,
     counter: u64,
     flags: u32,
     out: *mut u8,
@@ -543,9 +526,9 @@ type XofFn = unsafe extern "C" fn(
 );
 
 unsafe extern "C" fn xof_init(
-    block: *const [u8; 64],
+    block: *const BlockBytes,
     block_len: u32,
-    cv: *const [u32; 8],
+    cv: *const CVBytes,
     counter: u64,
     flags: u32,
     out: *mut u8,
@@ -556,9 +539,9 @@ unsafe extern "C" fn xof_init(
 }
 
 unsafe extern "C" fn xof_xor_init(
-    block: *const [u8; 64],
+    block: *const BlockBytes,
     block_len: u32,
-    cv: *const [u32; 8],
+    cv: *const CVBytes,
     counter: u64,
     flags: u32,
     out: *mut u8,
@@ -571,7 +554,7 @@ unsafe extern "C" fn xof_xor_init(
 type UniversalHashFn = unsafe extern "C" fn(
     input: *const u8,
     input_len: usize,
-    key: *const [u32; 8],
+    key: *const CVBytes,
     counter: u64,
     out: *mut [u8; 16],
 );
@@ -579,7 +562,7 @@ type UniversalHashFn = unsafe extern "C" fn(
 unsafe extern "C" fn universal_hash_init(
     input: *const u8,
     input_len: usize,
-    key: *const [u32; 8],
+    key: *const CVBytes,
     counter: u64,
     out: *mut [u8; 16],
 ) {
@@ -588,11 +571,12 @@ unsafe extern "C" fn universal_hash_init(
 }
 
 // The implicit degree of this implementation is MAX_SIMD_DEGREE.
+#[inline(always)]
 unsafe fn hash_chunks_using_compress(
     compress: CompressFn,
     mut input: *const u8,
     mut input_len: usize,
-    key: *const [u32; 8],
+    key: *const CVBytes,
     mut counter: u64,
     flags: u32,
     mut transposed_output: *mut u32,
@@ -603,15 +587,14 @@ unsafe fn hash_chunks_using_compress(
         let mut chunk_len = cmp::min(input_len, CHUNK_LEN);
         input_len -= chunk_len;
         // We only use 8 words of the CV, but compress returns 16.
-        let mut cv = [0u32; 16];
-        cv[..8].copy_from_slice(&*key);
-        let cv_ptr: *mut [u32; 16] = &mut cv;
+        let mut cv = *key;
+        let cv_ptr: *mut CVBytes = &mut cv;
         let mut chunk_flags = flags | CHUNK_START;
         while chunk_len > BLOCK_LEN {
             compress(
-                input as *const [u8; 64],
+                input as *const BlockBytes,
                 BLOCK_LEN as u32,
-                cv_ptr as *const [u32; 8],
+                cv_ptr,
                 counter,
                 chunk_flags,
                 cv_ptr,
@@ -626,15 +609,16 @@ unsafe fn hash_chunks_using_compress(
         compress(
             &last_block,
             chunk_len as u32,
-            cv_ptr as *const [u32; 8],
+            cv_ptr,
             counter,
             chunk_flags | CHUNK_END,
             cv_ptr,
         );
+        let cv_words = words_from_le_bytes_32(&cv);
         for word_index in 0..8 {
             transposed_output
                 .add(word_index * TRANSPOSED_STRIDE)
-                .write(cv[word_index]);
+                .write(cv_words[word_index]);
         }
         transposed_output = transposed_output.add(1);
         counter += 1;
@@ -642,11 +626,12 @@ unsafe fn hash_chunks_using_compress(
 }
 
 // The implicit degree of this implementation is MAX_SIMD_DEGREE.
+#[inline(always)]
 unsafe fn hash_parents_using_compress(
     compress: CompressFn,
     mut transposed_input: *const u32,
     mut num_parents: usize,
-    key: *const [u32; 8],
+    key: *const CVBytes,
     flags: u32,
     mut transposed_output: *mut u32, // may overlap the input
 ) {
@@ -664,12 +649,13 @@ unsafe fn hash_parents_using_compress(
             block_bytes[WORD_LEN * (word_index + 8)..][..WORD_LEN]
                 .copy_from_slice(&right_child_word.to_le_bytes());
         }
-        let mut cv = [0u32; 16];
+        let mut cv = [0u8; 32];
         compress(&block_bytes, BLOCK_LEN as u32, key, 0, flags, &mut cv);
+        let cv_words = words_from_le_bytes_32(&cv);
         for word_index in 0..8 {
             transposed_output
                 .add(word_index * TRANSPOSED_STRIDE)
-                .write(cv[word_index]);
+                .write(cv_words[word_index]);
         }
         transposed_input = transposed_input.add(2);
         transposed_output = transposed_output.add(1);
@@ -677,70 +663,68 @@ unsafe fn hash_parents_using_compress(
     }
 }
 
-unsafe fn xof_using_compress(
-    compress: CompressFn,
-    block: *const [u8; 64],
+#[inline(always)]
+unsafe fn xof_using_compress_xof(
+    compress_xof: CompressXofFn,
+    block: *const BlockBytes,
     block_len: u32,
-    cv: *const [u32; 8],
+    cv: *const CVBytes,
     mut counter: u64,
     flags: u32,
     mut out: *mut u8,
     mut out_len: usize,
 ) {
     while out_len > 0 {
-        let mut block_output = [0u32; 16];
-        compress(block, block_len, cv, counter, flags, &mut block_output);
-        for output_word in block_output {
-            let bytes = output_word.to_le_bytes();
-            let take = cmp::min(bytes.len(), out_len);
-            ptr::copy_nonoverlapping(bytes.as_ptr(), out, take);
-            out = out.add(take);
-            out_len -= take;
-        }
+        let mut block_output = [0u8; 64];
+        compress_xof(block, block_len, cv, counter, flags, &mut block_output);
+        let take = cmp::min(out_len, BLOCK_LEN);
+        ptr::copy_nonoverlapping(block_output.as_ptr(), out, take);
+        out = out.add(take);
+        out_len -= take;
         counter += 1;
     }
 }
 
-unsafe fn xof_xor_using_compress(
-    compress: CompressFn,
-    block: *const [u8; 64],
+#[inline(always)]
+unsafe fn xof_xor_using_compress_xof(
+    compress_xof: CompressXofFn,
+    block: *const BlockBytes,
     block_len: u32,
-    cv: *const [u32; 8],
+    cv: *const CVBytes,
     mut counter: u64,
     flags: u32,
     mut out: *mut u8,
     mut out_len: usize,
 ) {
     while out_len > 0 {
-        let mut block_output = [0u32; 16];
-        compress(block, block_len, cv, counter, flags, &mut block_output);
-        for output_word in block_output {
-            let bytes = output_word.to_le_bytes();
-            for i in 0..cmp::min(bytes.len(), out_len) {
-                *out = *out ^ bytes[i];
-                out = out.add(1);
-                out_len -= 1;
-            }
+        let mut block_output = [0u8; 64];
+        compress_xof(block, block_len, cv, counter, flags, &mut block_output);
+        let take = cmp::min(out_len, BLOCK_LEN);
+        for i in 0..take {
+            *out.add(i) ^= block_output[i];
         }
+        out = out.add(take);
+        out_len -= take;
         counter += 1;
     }
 }
 
+#[inline(always)]
 unsafe fn universal_hash_using_compress(
     compress: CompressFn,
     mut input: *const u8,
     mut input_len: usize,
-    key: *const [u32; 8],
+    key: *const CVBytes,
     mut counter: u64,
     out: *mut [u8; 16],
 ) {
     let flags = KEYED_HASH | CHUNK_START | CHUNK_END | ROOT;
-    let mut result = [0u32; 4];
+    let mut result = [0u8; 16];
     while input_len > 0 {
         let block_len = cmp::min(input_len, BLOCK_LEN);
         let mut block = [0u8; BLOCK_LEN];
         ptr::copy_nonoverlapping(input, block.as_mut_ptr(), block_len);
-        let mut block_output = [0u32; 16];
+        let mut block_output = [0u8; 32];
         compress(
             &block,
             BLOCK_LEN as u32,
@@ -749,7 +733,7 @@ unsafe fn universal_hash_using_compress(
             flags,
             &mut block_output,
         );
-        for i in 0..4 {
+        for i in 0..16 {
             result[i] ^= block_output[i];
         }
         input = input.add(block_len);
@@ -769,7 +753,7 @@ const TRANSPOSED_STRIDE: usize = 2 * MAX_SIMD_DEGREE;
 pub struct TransposedVectors([[u32; 2 * MAX_SIMD_DEGREE]; 8]);
 
 impl TransposedVectors {
-    pub fn parent_node(&self, parent_index: usize) -> [u8; 64] {
+    pub fn parent_node(&self, parent_index: usize) -> BlockBytes {
         let mut bytes = [0u8; 64];
         for word_index in 0..8 {
             bytes[word_index * WORD_LEN..][..WORD_LEN]
@@ -819,4 +803,85 @@ unsafe fn copy_one_transposed_cv(transposed_src: *const u32, transposed_dest: *m
         let word = transposed_src.add(offset_words).read();
         transposed_dest.add(offset_words).write(word);
     }
+}
+
+#[inline(always)]
+pub const fn le_bytes_from_words_32(words: &CVWords) -> CVBytes {
+    let mut bytes = [0u8; 32];
+    // This loop is super verbose because currently that's what it takes to be const.
+    let mut word_index = 0;
+    while word_index < bytes.len() / WORD_LEN {
+        let word_bytes = words[word_index].to_le_bytes();
+        let mut byte_index = 0;
+        while byte_index < WORD_LEN {
+            bytes[word_index * WORD_LEN + byte_index] = word_bytes[byte_index];
+            byte_index += 1;
+        }
+        word_index += 1;
+    }
+    bytes
+}
+
+#[inline(always)]
+pub const fn le_bytes_from_words_64(words: &BlockWords) -> BlockBytes {
+    let mut bytes = [0u8; 64];
+    // This loop is super verbose because currently that's what it takes to be const.
+    let mut word_index = 0;
+    while word_index < bytes.len() / WORD_LEN {
+        let word_bytes = words[word_index].to_le_bytes();
+        let mut byte_index = 0;
+        while byte_index < WORD_LEN {
+            bytes[word_index * WORD_LEN + byte_index] = word_bytes[byte_index];
+            byte_index += 1;
+        }
+        word_index += 1;
+    }
+    bytes
+}
+
+#[inline(always)]
+pub const fn words_from_le_bytes_32(bytes: &CVBytes) -> CVWords {
+    let mut words = [0u32; 8];
+    // This loop is super verbose because currently that's what it takes to be const.
+    let mut word_index = 0;
+    while word_index < words.len() {
+        let mut word_bytes = [0u8; WORD_LEN];
+        let mut byte_index = 0;
+        while byte_index < WORD_LEN {
+            word_bytes[byte_index] = bytes[word_index * WORD_LEN + byte_index];
+            byte_index += 1;
+        }
+        words[word_index] = u32::from_le_bytes(word_bytes);
+        word_index += 1;
+    }
+    words
+}
+
+#[inline(always)]
+pub const fn words_from_le_bytes_64(bytes: &BlockBytes) -> BlockWords {
+    let mut words = [0u32; 16];
+    // This loop is super verbose because currently that's what it takes to be const.
+    let mut word_index = 0;
+    while word_index < words.len() {
+        let mut word_bytes = [0u8; WORD_LEN];
+        let mut byte_index = 0;
+        while byte_index < WORD_LEN {
+            word_bytes[byte_index] = bytes[word_index * WORD_LEN + byte_index];
+            byte_index += 1;
+        }
+        words[word_index] = u32::from_le_bytes(word_bytes);
+        word_index += 1;
+    }
+    words
+}
+
+#[test]
+fn test_byte_word_round_trips() {
+    let cv = *b"This is 32 LE bytes/eight words.";
+    assert_eq!(cv, le_bytes_from_words_32(&words_from_le_bytes_32(&cv)));
+    let block = *b"This is sixty-four little-endian bytes, or sixteen 32-bit words.";
+    assert_eq!(
+        block,
+        le_bytes_from_words_64(&words_from_le_bytes_64(&block)),
+    );
 }

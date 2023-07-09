@@ -84,8 +84,8 @@ use core::fmt;
 
 use blake3_guts as guts;
 use guts::{
-    BLOCK_LEN, CHUNK_END, CHUNK_LEN, CHUNK_START, DERIVE_KEY_CONTEXT, DERIVE_KEY_MATERIAL, IV,
-    KEYED_HASH, PARENT, ROOT, WORD_LEN,
+    BlockBytes, CVBytes, BLOCK_LEN, CHUNK_END, CHUNK_LEN, CHUNK_START, DERIVE_KEY_CONTEXT,
+    DERIVE_KEY_MATERIAL, IV_BYTES, KEYED_HASH, PARENT, ROOT,
 };
 
 /// The number of bytes in a [`Hash`](struct.Hash.html), 32
@@ -122,19 +122,19 @@ const MAX_DEPTH: usize = 54; // 2^54 * CHUNK_LEN = 2^64
 /// [`FromStr`]: https://doc.rust-lang.org/std/str/trait.FromStr.html
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 #[derive(Clone, Copy, Hash)]
-pub struct Hash([u8; OUT_LEN]);
+pub struct Hash(CVBytes);
 
 impl Hash {
     /// The raw bytes of the `Hash`. Note that byte arrays don't provide
     /// constant-time equality checking, so if  you need to compare hashes,
     /// prefer the `Hash` type.
     #[inline]
-    pub const fn as_bytes(&self) -> &[u8; OUT_LEN] {
+    pub const fn as_bytes(&self) -> &CVBytes {
         &self.0
     }
 
     /// Create a `Hash` from its raw bytes representation.
-    pub const fn from_bytes(bytes: [u8; OUT_LEN]) -> Self {
+    pub const fn from_bytes(bytes: CVBytes) -> Self {
         Self(bytes)
     }
 
@@ -178,7 +178,7 @@ impl Hash {
         if hex_bytes.len() != OUT_LEN * 2 {
             return Err(HexError(HexErrorInner::InvalidLen(hex_bytes.len())));
         }
-        let mut hash_bytes: [u8; OUT_LEN] = [0; OUT_LEN];
+        let mut hash_bytes: CVBytes = [0; OUT_LEN];
         for i in 0..OUT_LEN {
             hash_bytes[i] = 16 * hex_val(hex_bytes[2 * i])? + hex_val(hex_bytes[2 * i + 1])?;
         }
@@ -186,14 +186,14 @@ impl Hash {
     }
 }
 
-impl From<[u8; OUT_LEN]> for Hash {
+impl From<CVBytes> for Hash {
     #[inline]
-    fn from(bytes: [u8; OUT_LEN]) -> Self {
+    fn from(bytes: CVBytes) -> Self {
         Self::from_bytes(bytes)
     }
 }
 
-impl From<Hash> for [u8; OUT_LEN] {
+impl From<Hash> for CVBytes {
     #[inline]
     fn from(hash: Hash) -> Self {
         hash.0
@@ -217,9 +217,9 @@ impl PartialEq for Hash {
 }
 
 /// This implementation is constant-time.
-impl PartialEq<[u8; OUT_LEN]> for Hash {
+impl PartialEq<CVBytes> for Hash {
     #[inline]
-    fn eq(&self, other: &[u8; OUT_LEN]) -> bool {
+    fn eq(&self, other: &CVBytes) -> bool {
         constant_time_eq::constant_time_eq_32(&self.0, other)
     }
 }
@@ -298,66 +298,49 @@ impl std::error::Error for HexError {}
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 #[derive(Clone)]
 struct Output {
-    input_chaining_value: [u32; 8],
-    block: [u8; 64],
+    input_chaining_value: CVBytes,
+    block: BlockBytes,
     block_len: u8,
     counter: u64,
     flags: u8,
 }
 
 impl Output {
-    fn chaining_value(&self) -> [u8; 32] {
-        let words = guts::compress(
+    fn chaining_value(&self) -> CVBytes {
+        guts::compress(
             &self.block,
             self.block_len as u32,
             &self.input_chaining_value,
             self.counter,
             self.flags as u32,
-        );
-        let mut bytes = [0u8; 32];
-        for word_index in 0..8 {
-            bytes[word_index * WORD_LEN..][..WORD_LEN]
-                .copy_from_slice(&words[word_index].to_le_bytes());
-        }
-        bytes
+        )
     }
 
     fn root_hash(&self) -> Hash {
         debug_assert_eq!(self.counter, 0);
-        let out_bytes = guts::compress_xof(
+        Hash(guts::compress(
             &self.block,
             self.block_len as u32,
             &self.input_chaining_value,
             0,
             self.flags as u32 | ROOT,
-        );
-        Hash(out_bytes[..OUT_LEN].try_into().unwrap())
-    }
-
-    fn root_output_block(&self) -> [u8; 2 * OUT_LEN] {
-        guts::compress_xof(
-            &self.block,
-            self.block_len as u32,
-            &self.input_chaining_value,
-            self.counter,
-            self.flags as u32 | ROOT,
-        )
+        ))
     }
 }
 
 #[derive(Clone)]
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 struct ChunkState {
-    cv: [u32; 8],
+    cv: CVBytes,
     chunk_counter: u64,
-    buf: [u8; BLOCK_LEN],
+    buf: BlockBytes,
     buf_len: u8,
     blocks_compressed: u8,
     flags: u8,
 }
 
 impl ChunkState {
-    fn new(key: &[u32; 8], chunk_counter: u64, flags: u32) -> Self {
+    fn new(key: &CVBytes, chunk_counter: u64, flags: u32) -> Self {
         Self {
             cv: *key,
             chunk_counter,
@@ -499,7 +482,7 @@ fn left_len(content_len: usize) -> usize {
 // multithreading parallelism for that update().
 fn compress_subtree_wide<J: join::Join>(
     input: &[u8],
-    key: &[u32; 8],
+    key: &CVBytes,
     chunk_counter: u64,
     flags: u32,
     out: guts::TransposedSplit,
@@ -547,10 +530,10 @@ fn compress_subtree_wide<J: join::Join>(
 // chunk or less. That's a different codepath.
 fn compress_subtree_to_parent_node<J: join::Join>(
     input: &[u8],
-    key: &[u32; 8],
+    key: &CVBytes,
     chunk_counter: u64,
     flags: u32,
-) -> [u8; 64] {
+) -> BlockBytes {
     debug_assert!(input.len() > CHUNK_LEN);
     let mut transposed_cvs = guts::TransposedVectors::default();
     let (left_cvs, _) = guts::split_transposed_vectors(&mut transposed_cvs);
@@ -568,7 +551,7 @@ fn compress_subtree_to_parent_node<J: join::Join>(
 
 // Hash a complete input all at once. Unlike compress_subtree_wide() and
 // compress_subtree_to_parent_node(), this function handles the 1 chunk case.
-fn hash_all_at_once<J: join::Join>(input: &[u8], key: &[u32; 8], flags: u32) -> Output {
+fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVBytes, flags: u32) -> Output {
     // If the whole subtree is one chunk, hash it directly with a ChunkState.
     if input.len() <= CHUNK_LEN {
         return ChunkState::new(key, 0, flags).update(input).output();
@@ -596,20 +579,7 @@ fn hash_all_at_once<J: join::Join>(input: &[u8], key: &[u32; 8], flags: u32) -> 
 /// This function is always single-threaded. For multithreading support, see
 /// [`Hasher::update_rayon`](struct.Hasher.html#method.update_rayon).
 pub fn hash(input: &[u8]) -> Hash {
-    hash_all_at_once::<join::SerialJoin>(input, &IV, 0).root_hash()
-}
-
-#[inline(always)]
-pub fn words_from_le_bytes_32(bytes: &[u8; 32]) -> [u32; 8] {
-    let mut out = [0; 8];
-    for word_index in 0..8 {
-        out[word_index] = u32::from_le_bytes(
-            bytes[word_index * WORD_LEN..][..WORD_LEN]
-                .try_into()
-                .unwrap(),
-        );
-    }
-    out
+    hash_all_at_once::<join::SerialJoin>(input, &IV_BYTES, 0).root_hash()
 }
 
 /// The keyed hash function.
@@ -626,9 +596,8 @@ pub fn words_from_le_bytes_32(bytes: &[u8; 32]) -> [u32; 8] {
 /// This function is always single-threaded. For multithreading support, see
 /// [`Hasher::new_keyed`] and
 /// [`Hasher::update_rayon`](struct.Hasher.html#method.update_rayon).
-pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
-    let key_words = words_from_le_bytes_32(key);
-    hash_all_at_once::<join::SerialJoin>(input, &key_words, KEYED_HASH).root_hash()
+pub fn keyed_hash(key: &CVBytes, input: &[u8]) -> Hash {
+    hash_all_at_once::<join::SerialJoin>(input, key, KEYED_HASH).root_hash()
 }
 
 /// The key derivation function.
@@ -666,20 +635,19 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 /// [`Hasher::update_rayon`](struct.Hasher.html#method.update_rayon).
 ///
 /// [Argon2]: https://en.wikipedia.org/wiki/Argon2
-pub fn derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
+pub fn derive_key(context: &str, key_material: &[u8]) -> CVBytes {
     let context_key =
-        hash_all_at_once::<join::SerialJoin>(context.as_bytes(), &IV, DERIVE_KEY_CONTEXT)
+        hash_all_at_once::<join::SerialJoin>(context.as_bytes(), &IV_BYTES, DERIVE_KEY_CONTEXT)
             .root_hash();
-    let context_key_words = words_from_le_bytes_32(context_key.as_bytes());
-    hash_all_at_once::<join::SerialJoin>(key_material, &context_key_words, DERIVE_KEY_MATERIAL)
+    hash_all_at_once::<join::SerialJoin>(key_material, context_key.as_bytes(), DERIVE_KEY_MATERIAL)
         .root_hash()
         .0
 }
 
 fn parent_node_output(
-    left_child: &[u8; 32],
-    right_child: &[u8; 32],
-    key: &[u32; 8],
+    left_child: &CVBytes,
+    right_child: &CVBytes,
+    key: &CVBytes,
     flags: u32,
 ) -> Output {
     let mut block = [0; BLOCK_LEN];
@@ -737,18 +705,18 @@ fn parent_node_output(
 #[derive(Clone)]
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 pub struct Hasher {
-    key: [u32; 8],
+    key: CVBytes,
     chunk_state: ChunkState,
     // The stack size is MAX_DEPTH + 1 because we do lazy merging. For example,
     // with 7 chunks, we have 3 entries in the stack. Adding an 8th chunk
     // requires a 4th entry, rather than merging everything down to 1, because
     // we don't know whether more input is coming. This is different from how
     // the reference implementation does things.
-    cv_stack: ArrayVec<[u8; 32], { MAX_DEPTH + 1 }>,
+    cv_stack: ArrayVec<CVBytes, { MAX_DEPTH + 1 }>,
 }
 
 impl Hasher {
-    fn new_internal(key: &[u32; 8], flags: u32) -> Self {
+    fn new_internal(key: &CVBytes, flags: u32) -> Self {
         Self {
             key: *key,
             chunk_state: ChunkState::new(key, 0, flags),
@@ -758,16 +726,15 @@ impl Hasher {
 
     /// Construct a new `Hasher` for the regular hash function.
     pub fn new() -> Self {
-        Self::new_internal(&IV, 0)
+        Self::new_internal(&IV_BYTES, 0)
     }
 
     /// Construct a new `Hasher` for the keyed hash function. See
     /// [`keyed_hash`].
     ///
     /// [`keyed_hash`]: fn.keyed_hash.html
-    pub fn new_keyed(key: &[u8; KEY_LEN]) -> Self {
-        let key_words = words_from_le_bytes_32(key);
-        Self::new_internal(&key_words, KEYED_HASH)
+    pub fn new_keyed(key: &CVBytes) -> Self {
+        Self::new_internal(key, KEYED_HASH)
     }
 
     /// Construct a new `Hasher` for the key derivation function. See
@@ -777,10 +744,9 @@ impl Hasher {
     /// [`derive_key`]: fn.derive_key.html
     pub fn new_derive_key(context: &str) -> Self {
         let context_key =
-            hash_all_at_once::<join::SerialJoin>(context.as_bytes(), &IV, DERIVE_KEY_CONTEXT)
+            hash_all_at_once::<join::SerialJoin>(context.as_bytes(), &IV_BYTES, DERIVE_KEY_CONTEXT)
                 .root_hash();
-        let context_key_words = words_from_le_bytes_32(context_key.as_bytes());
-        Self::new_internal(&context_key_words, DERIVE_KEY_MATERIAL)
+        Self::new_internal(context_key.as_bytes(), DERIVE_KEY_MATERIAL)
     }
 
     /// Reset the `Hasher` to its initial state.
@@ -852,7 +818,7 @@ impl Hasher {
     // merging with each of them separately, so that the second CV will always
     // remain unmerged. (That also helps us support extendable output when
     // we're hashing an input all-at-once.)
-    fn push_cv(&mut self, new_cv: &[u8; 32], chunk_counter: u64) {
+    fn push_cv(&mut self, new_cv: &CVBytes, chunk_counter: u64) {
         self.merge_cv_stack(chunk_counter);
         self.cv_stack.push(*new_cv);
     }
@@ -1178,19 +1144,26 @@ impl OutputReader {
     /// reading further, the behavior is unspecified.
     ///
     /// [`Read::read`]: #method.read
-    pub fn fill(&mut self, mut buf: &mut [u8]) {
-        while !buf.is_empty() {
-            let block: [u8; BLOCK_LEN] = self.inner.root_output_block();
-            let output_bytes = &block[self.position_within_block as usize..];
-            let take = cmp::min(buf.len(), output_bytes.len());
-            buf[..take].copy_from_slice(&output_bytes[..take]);
-            buf = &mut buf[take..];
-            self.position_within_block += take as u8;
-            if self.position_within_block == BLOCK_LEN as u8 {
-                self.inner.counter += 1;
-                self.position_within_block = 0;
-            }
-        }
+    pub fn fill(&mut self, buf: &mut [u8]) {
+        guts::xof(
+            &self.inner.block,
+            self.inner.block_len as u32,
+            &self.inner.input_chaining_value,
+            self.inner.counter,
+            self.inner.flags as u32,
+            buf,
+        );
+    }
+
+    pub fn fill_xor(&mut self, buf: &mut [u8]) {
+        guts::xof_xor(
+            &self.inner.block,
+            self.inner.block_len as u32,
+            &self.inner.input_chaining_value,
+            self.inner.counter,
+            self.inner.flags as u32,
+            buf,
+        );
     }
 
     /// Return the current read position in the output stream. This is
