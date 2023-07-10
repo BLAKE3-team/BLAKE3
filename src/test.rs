@@ -291,6 +291,55 @@ fn test_xof_seek() {
 }
 
 #[test]
+fn test_xof_xor() {
+    const STEP: usize = 17;
+
+    let mut ref_hasher = reference_impl::Hasher::new();
+    ref_hasher.update(b"foo");
+    let mut ref_output = [0u8; 1000];
+    ref_hasher.finalize(&mut ref_output);
+
+    let mut hasher = crate::Hasher::new();
+    hasher.update(b"foo");
+    let mut reader = hasher.finalize_xof();
+
+    let mut test_output = [0u8; 1000];
+    for chunk in test_output.chunks_mut(STEP) {
+        reader.fill(chunk);
+    }
+    assert_eq!(ref_output, test_output);
+    // Xor'ing the same output should zero the buffer.
+    reader.set_position(0);
+    for chunk in test_output.chunks_mut(STEP) {
+        reader.fill_xor(chunk);
+    }
+    assert_eq!([0u8; 1000], test_output);
+    // Xor'ing the same output again should reproduce the original.
+    reader.set_position(0);
+    for chunk in test_output.chunks_mut(STEP) {
+        reader.fill_xor(chunk);
+    }
+    assert_eq!(ref_output, test_output);
+
+    // Repeat the same test but starting at offset 500.
+    reader.set_position(500);
+    for chunk in test_output[..500].chunks_mut(STEP) {
+        reader.fill(chunk);
+    }
+    assert_eq!(ref_output[500..], test_output[..500]);
+    reader.set_position(500);
+    for chunk in test_output[..500].chunks_mut(STEP) {
+        reader.fill_xor(chunk);
+    }
+    assert_eq!([0u8; 500], test_output[..500]);
+    reader.set_position(500);
+    for chunk in test_output[..500].chunks_mut(STEP) {
+        reader.fill_xor(chunk);
+    }
+    assert_eq!(ref_output[500..], test_output[..500]);
+}
+
+#[test]
 fn test_msg_schedule_permutation() {
     let permutation = [2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8];
 

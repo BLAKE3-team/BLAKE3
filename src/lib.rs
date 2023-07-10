@@ -1128,7 +1128,31 @@ impl OutputReader {
     /// reading further, the behavior is unspecified.
     ///
     /// [`Read::read`]: #method.read
-    pub fn fill(&mut self, buf: &mut [u8]) {
+    pub fn fill(&mut self, mut buf: &mut [u8]) {
+        debug_assert!(self.position_within_block < BLOCK_LEN as u8);
+        if self.position_within_block != 0 {
+            let mut partial_block = [0u8; 64];
+            guts::xof(
+                &self.inner.block,
+                self.inner.block_len as u32,
+                &self.inner.input_chaining_value,
+                self.inner.counter,
+                self.inner.flags as u32,
+                &mut partial_block,
+            );
+            let output_bytes = &partial_block[self.position_within_block as usize..];
+            let take = cmp::min(buf.len(), output_bytes.len());
+            buf[..take].copy_from_slice(&output_bytes[..take]);
+            buf = &mut buf[take..];
+            self.position_within_block += take as u8;
+            if self.position_within_block == BLOCK_LEN as u8 {
+                self.position_within_block = 0;
+                self.inner.counter += 1;
+            } else {
+                debug_assert!(buf.is_empty());
+                return;
+            }
+        }
         guts::xof(
             &self.inner.block,
             self.inner.block_len as u32,
@@ -1137,9 +1161,36 @@ impl OutputReader {
             self.inner.flags as u32,
             buf,
         );
+        self.position_within_block = (buf.len() % BLOCK_LEN) as u8;
     }
 
-    pub fn fill_xor(&mut self, buf: &mut [u8]) {
+    pub fn fill_xor(&mut self, mut buf: &mut [u8]) {
+        debug_assert!(self.position_within_block < BLOCK_LEN as u8);
+        if self.position_within_block != 0 {
+            let mut partial_block = [0u8; 64];
+            guts::xof(
+                &self.inner.block,
+                self.inner.block_len as u32,
+                &self.inner.input_chaining_value,
+                self.inner.counter,
+                self.inner.flags as u32,
+                &mut partial_block,
+            );
+            let output_bytes = &partial_block[self.position_within_block as usize..];
+            let take = cmp::min(buf.len(), output_bytes.len());
+            for byte_index in 0..take {
+                buf[byte_index] ^= output_bytes[byte_index];
+            }
+            buf = &mut buf[take..];
+            self.position_within_block += take as u8;
+            if self.position_within_block == BLOCK_LEN as u8 {
+                self.position_within_block = 0;
+                self.inner.counter += 1;
+            } else {
+                debug_assert!(buf.is_empty());
+                return;
+            }
+        }
         guts::xof_xor(
             &self.inner.block,
             self.inner.block_len as u32,
@@ -1148,6 +1199,7 @@ impl OutputReader {
             self.inner.flags as u32,
             buf,
         );
+        self.position_within_block = (buf.len() % BLOCK_LEN) as u8;
     }
 
     /// Return the current read position in the output stream. This is
