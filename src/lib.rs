@@ -447,22 +447,6 @@ impl fmt::Debug for ChunkState {
 //   use full-width SIMD vectors for parent hashing. Without parallel parent
 //   hashing, we lose about 10% of overall throughput on AVX2 and AVX-512.
 
-// The largest power of two less than or equal to `n`, used for left_len()
-// immediately below, and also directly in Hasher::update().
-fn largest_power_of_two_leq(n: usize) -> usize {
-    ((n / 2) + 1).next_power_of_two()
-}
-
-// Given some input larger than one chunk, return the number of bytes that
-// should go in the left subtree. This is the largest power-of-2 number of
-// chunks that leaves at least 1 byte for the right subtree.
-fn left_len(content_len: usize) -> usize {
-    debug_assert!(content_len > CHUNK_LEN);
-    // Subtract 1 to reserve at least one byte for the right side.
-    let full_chunks = (content_len - 1) / CHUNK_LEN;
-    largest_power_of_two_leq(full_chunks) * CHUNK_LEN
-}
-
 // The wide helper function returns (writes out) an array of chaining values
 // and returns the length of that array. The number of chaining values returned
 // is the dynamically detected SIMD degree, at most MAX_SIMD_DEGREE. Or fewer,
@@ -499,10 +483,10 @@ fn compress_subtree_wide<J: join::Join>(
     // as long as the SIMD degree is a power of 2. If we ever get a SIMD degree
     // of 3 or something, we'll need a more complicated strategy.)
     debug_assert_eq!(guts::degree().count_ones(), 1, "power of 2");
-    let (left, right) = input.split_at(left_len(input.len()));
+    let (left, right) = input.split_at(guts::left_len(input.len()));
     let right_chunk_counter = chunk_counter + (left.len() / CHUNK_LEN) as u64;
 
-    let mut transposed_cvs = guts::TransposedVectors::default();
+    let mut transposed_cvs = guts::TransposedVectors::new();
     let (left_cvs, right_cvs) = guts::split_transposed_vectors(&mut transposed_cvs);
 
     // Recurse! For update_rayon(), this is where we take advantage of RayonJoin and use multiple
@@ -535,7 +519,7 @@ fn compress_subtree_to_parent_node<J: join::Join>(
     flags: u32,
 ) -> BlockBytes {
     debug_assert!(input.len() > CHUNK_LEN);
-    let mut transposed_cvs = guts::TransposedVectors::default();
+    let mut transposed_cvs = guts::TransposedVectors::new();
     let (left_cvs, _) = guts::split_transposed_vectors(&mut transposed_cvs);
     let mut num_cvs = compress_subtree_wide::<J>(input, &key, chunk_counter, flags, left_cvs);
     debug_assert!(num_cvs >= 2);
@@ -546,7 +530,7 @@ fn compress_subtree_to_parent_node<J: join::Join>(
     while num_cvs > 2 {
         num_cvs = guts::reduce_parents(&mut transposed_cvs, num_cvs, key, flags);
     }
-    transposed_cvs.parent_node(0)
+    transposed_cvs.extract_parent_node(0)
 }
 
 // Hash a complete input all at once. Unlike compress_subtree_wide() and
@@ -906,7 +890,7 @@ impl Hasher {
         while input.len() > CHUNK_LEN {
             debug_assert_eq!(self.chunk_state.len(), 0, "no partial chunk data");
             debug_assert_eq!(CHUNK_LEN.count_ones(), 1, "power of 2 chunk len");
-            let mut subtree_len = largest_power_of_two_leq(input.len());
+            let mut subtree_len = guts::largest_power_of_two_leq(input.len());
             let count_so_far = self.chunk_state.chunk_counter * CHUNK_LEN as u64;
             // Shrink the subtree_len until it evenly divides the count so far.
             // We know that subtree_len itself is a power of 2, so we can use a

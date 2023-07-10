@@ -23,14 +23,14 @@ pub fn paint_test_input(buf: &mut [u8]) {
     }
 }
 
-pub fn test_compress_vs_portable(compress_fn: CompressFn) {
+pub fn test_compress_vs_portable(test_impl: &Implementation) {
     for block_len in BLOCK_LENGTHS {
         dbg!(block_len);
         let mut block = [0; BLOCK_LEN];
         paint_test_input(&mut block[..block_len]);
         for counter in INITIAL_COUNTERS {
             dbg!(counter);
-            let portable_cv = Implementation::portable().compress(
+            let portable_cv = portable::implementation().compress(
                 &block,
                 block_len as u32,
                 &TEST_KEY,
@@ -38,25 +38,15 @@ pub fn test_compress_vs_portable(compress_fn: CompressFn) {
                 KEYED_HASH,
             );
 
-            let mut test_cv = TEST_KEY;
-            unsafe {
-                let test_cv_ptr: *mut CVBytes = &mut test_cv;
-                compress_fn(
-                    &block,
-                    block_len as u32,
-                    test_cv_ptr,
-                    counter,
-                    KEYED_HASH,
-                    test_cv_ptr,
-                );
-            }
+            let test_cv =
+                test_impl.compress(&block, block_len as u32, &TEST_KEY, counter, KEYED_HASH);
 
             assert_eq!(portable_cv, test_cv);
         }
     }
 }
 
-pub fn test_compress_vs_reference(compress_fn: CompressFn) {
+pub fn test_compress_vs_reference(test_impl: &Implementation) {
     for block_len in BLOCK_LENGTHS {
         dbg!(block_len);
         let mut block = [0; BLOCK_LEN];
@@ -67,18 +57,13 @@ pub fn test_compress_vs_reference(compress_fn: CompressFn) {
         let mut ref_hash = [0u8; 32];
         ref_hasher.finalize(&mut ref_hash);
 
-        let mut test_cv = TEST_KEY;
-        unsafe {
-            let test_cv_ptr: *mut CVBytes = &mut test_cv;
-            compress_fn(
-                &block,
-                block_len as u32,
-                test_cv_ptr,
-                0,
-                CHUNK_START | CHUNK_END | ROOT | KEYED_HASH,
-                test_cv_ptr,
-            );
-        }
+        let test_cv = test_impl.compress(
+            &block,
+            block_len as u32,
+            &TEST_KEY,
+            0,
+            CHUNK_START | CHUNK_END | ROOT | KEYED_HASH,
+        );
 
         assert_eq!(ref_hash, test_cv);
     }
@@ -104,14 +89,14 @@ fn check_transposed_eq(output_a: &TransposedVectors, output_b: &TransposedVector
     panic!("transposed outputs are not equal");
 }
 
-pub fn test_hash_chunks_vs_portable(hash_chunks_fn: HashChunksFn, degree: usize) {
-    assert!(degree <= MAX_SIMD_DEGREE);
+pub fn test_hash_chunks_vs_portable(test_impl: &Implementation) {
+    assert!(test_impl.degree() <= MAX_SIMD_DEGREE);
     let mut input = [0u8; 2 * MAX_SIMD_DEGREE * CHUNK_LEN];
     paint_test_input(&mut input);
-    dbg!(degree * CHUNK_LEN);
+    dbg!(test_impl.degree() * CHUNK_LEN);
+    // Try just below, equal to, and just above every whole number of chunks.
     let mut input_2_lengths = vec![1];
     let mut next_len = CHUNK_LEN;
-    // Try just below, equal to, and just above every power-of-2 number of chunks.
     loop {
         input_2_lengths.push(next_len - 1);
         input_2_lengths.push(next_len);
@@ -119,24 +104,25 @@ pub fn test_hash_chunks_vs_portable(hash_chunks_fn: HashChunksFn, degree: usize)
             break;
         }
         input_2_lengths.push(next_len + 1);
-        next_len *= 2;
+        next_len += CHUNK_LEN;
     }
     for input_2_len in input_2_lengths {
         dbg!(input_2_len);
-        let input1 = &input[..degree * CHUNK_LEN];
-        let input2 = &input[degree * CHUNK_LEN..][..input_2_len];
+        let input1 = &input[..test_impl.degree() * CHUNK_LEN];
+        let input2 = &input[test_impl.degree() * CHUNK_LEN..][..input_2_len];
         for initial_counter in INITIAL_COUNTERS {
             // Make two calls, to test the output_column parameter.
-            let mut portable_output = TransposedVectors::default();
-            let (portable_left, portable_right) = portable_output.split(degree);
-            Implementation::portable().hash_chunks(
+            let mut portable_output = TransposedVectors::new();
+            let (portable_left, portable_right) =
+                test_impl.split_transposed_vectors(&mut portable_output);
+            portable::implementation().hash_chunks(
                 input1,
                 &IV_BYTES,
                 initial_counter,
                 0,
                 portable_left,
             );
-            Implementation::portable().hash_chunks(
+            portable::implementation().hash_chunks(
                 input2,
                 &TEST_KEY,
                 initial_counter + degree as u64,
@@ -144,26 +130,16 @@ pub fn test_hash_chunks_vs_portable(hash_chunks_fn: HashChunksFn, degree: usize)
                 portable_right,
             );
 
-            let mut test_output = TransposedVectors::default();
-            let (test_left, test_right) = test_output.split(degree);
-            unsafe {
-                hash_chunks_fn(
-                    input1.as_ptr(),
-                    input1.len(),
-                    &IV_BYTES,
-                    initial_counter,
-                    0,
-                    test_left.ptr,
-                );
-                hash_chunks_fn(
-                    input2.as_ptr(),
-                    input2.len(),
-                    &TEST_KEY,
-                    initial_counter + degree as u64,
-                    KEYED_HASH,
-                    test_right.ptr,
-                );
-            }
+            let mut test_output = TransposedVectors::new();
+            let (test_left, test_right) = test_impl.split_transposed_vectors(&mut test_output);
+            test_impl.hash_chunks(input1, &IV_BYTES, initial_counter, 0, test_left);
+            test_impl.hash_chunks(
+                input2,
+                &TEST_KEY,
+                initial_counter + degree as u64,
+                KEYED_HASH,
+                test_right,
+            );
 
             check_transposed_eq(&portable_output, &test_output);
         }
@@ -171,7 +147,7 @@ pub fn test_hash_chunks_vs_portable(hash_chunks_fn: HashChunksFn, degree: usize)
 }
 
 fn painted_transposed_input() -> TransposedVectors {
-    let mut vectors = TransposedVectors::default();
+    let mut vectors = TransposedVectors::new();
     let mut val = 0;
     for col in 0..2 * MAX_SIMD_DEGREE {
         for row in 0..8 {
@@ -182,21 +158,22 @@ fn painted_transposed_input() -> TransposedVectors {
     vectors
 }
 
-pub fn test_hash_parents_vs_portable(hash_parents_fn: HashParentsFn, degree: usize) {
-    assert!(degree <= MAX_SIMD_DEGREE);
+pub fn test_hash_parents_vs_portable(test_impl: &Implementation) {
+    assert!(test_impl.degree() <= MAX_SIMD_DEGREE);
     let input = painted_transposed_input();
-    for num_parents in 2..=(degree / 2) {
+    for num_parents in 2..=(test_impl.degree() / 2) {
         dbg!(num_parents);
         let mut portable_output = TransposedVectors(input.0);
-        let (portable_left, portable_right) = portable_output.split(degree);
-        Implementation::portable().hash_parents(
+        let (portable_left, portable_right) =
+            test_impl.split_transposed_vectors(&mut portable_output);
+        portable::implementation().hash_parents(
             &input,
             2 * num_parents, // num_cvs
             &IV_BYTES,
             0,
             portable_left,
         );
-        Implementation::portable().hash_parents(
+        portable::implementation().hash_parents(
             &input,
             2 * num_parents, // num_cvs
             &TEST_KEY,
@@ -204,25 +181,101 @@ pub fn test_hash_parents_vs_portable(hash_parents_fn: HashParentsFn, degree: usi
             portable_right,
         );
 
-        let mut test_output = input.clone();
-        let (test_left, test_right) = test_output.split(degree);
-        unsafe {
-            hash_parents_fn(
-                input.as_ptr(),
-                num_parents,
-                &IV_BYTES,
-                PARENT,
-                test_left.ptr,
-            );
-            hash_parents_fn(
-                input.as_ptr(),
-                num_parents,
-                &TEST_KEY,
-                PARENT | KEYED_HASH,
-                test_right.ptr,
-            );
-        }
+        let mut test_output = TransposedVectors(input.0);
+        let (test_left, test_right) = test_impl.split_transposed_vectors(&mut test_output);
+        test_impl.hash_parents(
+            &input,
+            2 * num_parents, // num_cvs
+            &IV_BYTES,
+            0,
+            test_left,
+        );
+        test_impl.hash_parents(
+            &input,
+            2 * num_parents, // num_cvs
+            &TEST_KEY,
+            KEYED_HASH,
+            test_right,
+        );
 
         check_transposed_eq(&portable_output, &test_output);
+    }
+}
+
+fn hash_with_chunks_and_parents_recurse(
+    test_impl: &Implementation,
+    input: &[u8],
+    counter: u64,
+    output: TransposedSplit,
+) -> usize {
+    assert!(input.len() > 0);
+    if input.len() <= test_impl.degree() * CHUNK_LEN {
+        return test_impl.hash_chunks(input, &IV_BYTES, counter, 0, output);
+    }
+    let (left_input, right_input) = input.split_at(left_len(input.len()));
+    let mut child_output = TransposedVectors::new();
+    let (left_output, right_output) = test_impl.split_transposed_vectors(&mut child_output);
+    let mut children =
+        hash_with_chunks_and_parents_recurse(test_impl, left_input, counter, left_output);
+    assert_eq!(children, test_impl.degree());
+    children += hash_with_chunks_and_parents_recurse(
+        test_impl,
+        right_input,
+        counter + (left_input.len() / CHUNK_LEN) as u64,
+        right_output,
+    );
+    test_impl.hash_parents(&child_output, children, &IV_BYTES, PARENT, output)
+}
+
+// Note: This test implementation doesn't support the 1-chunk-or-less case.
+fn root_hash_with_chunks_and_parents(test_impl: &Implementation, input: &[u8]) -> CVBytes {
+    // TODO: handle the 1-chunk case?
+    assert!(input.len() > CHUNK_LEN);
+    let mut cvs = TransposedVectors::new();
+    // The right half of these vectors are never used.
+    let (cvs_left, _) = test_impl.split_transposed_vectors(&mut cvs);
+    let mut num_cvs = hash_with_chunks_and_parents_recurse(test_impl, input, 0, cvs_left);
+    while num_cvs > 2 {
+        num_cvs = test_impl.reduce_parents(&mut cvs, num_cvs, &IV_BYTES, 0);
+    }
+    test_impl.compress(
+        &cvs.extract_parent_node(0),
+        BLOCK_LEN as u32,
+        &IV_BYTES,
+        0,
+        PARENT | ROOT,
+    )
+}
+
+pub fn test_chunks_and_parents_vs_reference(test_impl: &Implementation) {
+    assert_eq!(test_impl.degree().count_ones(), 1, "power of 2");
+    const MAX_INPUT_LEN: usize = 2 * MAX_SIMD_DEGREE * CHUNK_LEN;
+    let mut input_buf = [0u8; MAX_INPUT_LEN];
+    paint_test_input(&mut input_buf);
+    // Try just below, equal to, and just above every whole number of chunks, except that
+    // root_hash_with_chunks_and_parents doesn't support the 1-chunk-or-less case.
+    let mut test_lengths = vec![CHUNK_LEN + 1];
+    let mut next_len = 2 * CHUNK_LEN;
+    loop {
+        test_lengths.push(next_len - 1);
+        test_lengths.push(next_len);
+        if next_len == MAX_INPUT_LEN {
+            break;
+        }
+        test_lengths.push(next_len + 1);
+        next_len += CHUNK_LEN;
+    }
+    for test_len in test_lengths {
+        dbg!(test_len);
+        let input = &input_buf[..test_len];
+
+        let mut ref_hasher = reference_impl::Hasher::new();
+        ref_hasher.update(&input);
+        let mut ref_hash = [0u8; 32];
+        ref_hasher.finalize(&mut ref_hash);
+
+        let test_hash = root_hash_with_chunks_and_parents(test_impl, input);
+
+        assert_eq!(ref_hash, test_hash);
     }
 }

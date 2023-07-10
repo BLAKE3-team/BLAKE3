@@ -4,7 +4,7 @@ use core::mem;
 use core::ptr;
 use core::sync::atomic::{AtomicPtr, Ordering::Relaxed};
 
-mod portable;
+pub mod portable;
 
 #[cfg(test)]
 mod test;
@@ -149,7 +149,7 @@ static DETECTED_IMPL: Implementation = Implementation::new(
 );
 
 fn init_detected_impl() {
-    let detected = Implementation::portable();
+    let detected = portable::implementation();
 
     DETECTED_IMPL
         .degree_ptr
@@ -205,18 +205,6 @@ impl Implementation {
         }
     }
 
-    pub fn portable() -> Self {
-        Self::new(
-            || portable::DEGREE,
-            portable::compress,
-            portable::hash_chunks,
-            portable::hash_parents,
-            portable::xof,
-            portable::xof_xor,
-            portable::universal_hash,
-        )
-    }
-
     #[inline]
     fn degree_fn(&self) -> DegreeFn {
         unsafe { mem::transmute(self.degree_ptr.load(Relaxed)) }
@@ -234,7 +222,7 @@ impl Implementation {
         &self,
         vectors: &'v mut TransposedVectors,
     ) -> (TransposedSplit<'v>, TransposedSplit<'v>) {
-        vectors.split(self.degree())
+        unsafe { vectors.split(self.degree()) }
     }
 
     #[inline]
@@ -758,6 +746,10 @@ const TRANSPOSED_STRIDE: usize = 2 * MAX_SIMD_DEGREE;
 pub struct TransposedVectors([[u32; 2 * MAX_SIMD_DEGREE]; 8]);
 
 impl TransposedVectors {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn extract_cv(&self, cv_index: usize) -> CVBytes {
         let mut words = [0u32; 8];
         for word_index in 0..8 {
@@ -781,7 +773,10 @@ impl TransposedVectors {
         self.0[0].as_mut_ptr()
     }
 
-    fn split(&mut self, degree: usize) -> (TransposedSplit, TransposedSplit) {
+    // SAFETY: This function is just pointer arithmetic, but callers assume that it's safe (not
+    // necessarily correct) to write up to `degree` words to either side of the split, possibly
+    // from different threads.
+    unsafe fn split(&mut self, degree: usize) -> (TransposedSplit, TransposedSplit) {
         debug_assert!(degree > 0);
         debug_assert!(degree <= MAX_SIMD_DEGREE);
         debug_assert_eq!(degree.count_ones(), 1, "power of 2");
@@ -893,4 +888,36 @@ fn test_byte_word_round_trips() {
         block,
         le_bytes_from_words_64(&words_from_le_bytes_64(&block)),
     );
+}
+
+// The largest power of two less than or equal to `n`, used for left_len()
+// immediately below, and also directly in Hasher::update().
+pub fn largest_power_of_two_leq(n: usize) -> usize {
+    ((n / 2) + 1).next_power_of_two()
+}
+
+// Given some input larger than one chunk, return the number of bytes that
+// should go in the left subtree. This is the largest power-of-2 number of
+// chunks that leaves at least 1 byte for the right subtree.
+pub fn left_len(content_len: usize) -> usize {
+    debug_assert!(content_len > CHUNK_LEN);
+    // Subtract 1 to reserve at least one byte for the right side.
+    let full_chunks = (content_len - 1) / CHUNK_LEN;
+    largest_power_of_two_leq(full_chunks) * CHUNK_LEN
+}
+
+#[test]
+fn test_left_len() {
+    let input_output = &[
+        (CHUNK_LEN + 1, CHUNK_LEN),
+        (2 * CHUNK_LEN - 1, CHUNK_LEN),
+        (2 * CHUNK_LEN, CHUNK_LEN),
+        (2 * CHUNK_LEN + 1, 2 * CHUNK_LEN),
+        (4 * CHUNK_LEN - 1, 2 * CHUNK_LEN),
+        (4 * CHUNK_LEN, 2 * CHUNK_LEN),
+        (4 * CHUNK_LEN + 1, 4 * CHUNK_LEN),
+    ];
+    for &(input, output) in input_output {
+        assert_eq!(left_len(input), output);
+    }
 }

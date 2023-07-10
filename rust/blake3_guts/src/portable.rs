@@ -1,9 +1,9 @@
 use crate::{
     le_bytes_from_words_32, le_bytes_from_words_64, words_from_le_bytes_32, words_from_le_bytes_64,
-    BlockBytes, BlockWords, CVBytes, CVWords, IV, MAX_SIMD_DEGREE, MSG_SCHEDULE,
+    BlockBytes, BlockWords, CVBytes, CVWords, Implementation, IV, MAX_SIMD_DEGREE, MSG_SCHEDULE,
 };
 
-pub const DEGREE: usize = MAX_SIMD_DEGREE;
+const DEGREE: usize = MAX_SIMD_DEGREE;
 
 #[inline(always)]
 fn g(state: &mut BlockWords, a: usize, b: usize, c: usize, d: usize, x: u32, y: u32) {
@@ -67,7 +67,7 @@ fn compress_inner(
     state
 }
 
-pub unsafe extern "C" fn compress(
+unsafe extern "C" fn compress(
     block: *const BlockBytes,
     block_len: u32,
     cv: *const CVBytes,
@@ -84,7 +84,7 @@ pub unsafe extern "C" fn compress(
     *out = le_bytes_from_words_32(state[..8].try_into().unwrap());
 }
 
-pub unsafe extern "C" fn compress_xof(
+unsafe extern "C" fn compress_xof(
     block: *const BlockBytes,
     block_len: u32,
     cv: *const CVBytes,
@@ -102,7 +102,7 @@ pub unsafe extern "C" fn compress_xof(
     *out = le_bytes_from_words_64(&state);
 }
 
-pub unsafe extern "C" fn hash_chunks(
+unsafe extern "C" fn hash_chunks(
     input: *const u8,
     input_len: usize,
     key: *const CVBytes,
@@ -121,7 +121,7 @@ pub unsafe extern "C" fn hash_chunks(
     )
 }
 
-pub unsafe extern "C" fn hash_parents(
+unsafe extern "C" fn hash_parents(
     transposed_input: *const u32,
     num_parents: usize,
     key: *const CVBytes,
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn hash_parents(
     )
 }
 
-pub unsafe extern "C" fn xof(
+unsafe extern "C" fn xof(
     block: *const BlockBytes,
     block_len: u32,
     cv: *const CVBytes,
@@ -159,7 +159,7 @@ pub unsafe extern "C" fn xof(
     )
 }
 
-pub unsafe extern "C" fn xof_xor(
+unsafe extern "C" fn xof_xor(
     block: *const BlockBytes,
     block_len: u32,
     cv: *const CVBytes,
@@ -180,7 +180,7 @@ pub unsafe extern "C" fn xof_xor(
     )
 }
 
-pub unsafe extern "C" fn universal_hash(
+unsafe extern "C" fn universal_hash(
     input: *const u8,
     input_len: usize,
     key: *const CVBytes,
@@ -190,6 +190,18 @@ pub unsafe extern "C" fn universal_hash(
     crate::universal_hash_using_compress(compress, input, input_len, key, counter, out)
 }
 
+pub fn implementation() -> Implementation {
+    Implementation::new(
+        || DEGREE,
+        compress,
+        hash_chunks,
+        hash_parents,
+        xof,
+        xof_xor,
+        universal_hash,
+    )
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -197,23 +209,28 @@ mod test {
     // This is circular but do it anyway.
     #[test]
     fn test_compress_vs_portable() {
-        crate::test::test_compress_vs_portable(compress);
+        crate::test::test_compress_vs_portable(&implementation());
     }
 
     #[test]
     fn test_compress_vs_reference() {
-        crate::test::test_compress_vs_reference(compress);
+        crate::test::test_compress_vs_reference(&implementation());
     }
 
     // This is circular but do it anyway.
     #[test]
     fn test_hash_chunks_vs_portable() {
-        crate::test::test_hash_chunks_vs_portable(hash_chunks, DEGREE);
+        crate::test::test_hash_chunks_vs_portable(&implementation());
     }
 
     // This is circular but do it anyway.
     #[test]
     fn test_hash_parents_vs_portable() {
-        crate::test::test_hash_parents_vs_portable(hash_parents, DEGREE);
+        crate::test::test_hash_parents_vs_portable(&implementation());
+    }
+
+    #[test]
+    fn test_chunks_and_parents_vs_reference() {
+        crate::test::test_chunks_and_parents_vs_reference(&implementation());
     }
 }
