@@ -164,3 +164,59 @@ pub fn test_hash_chunks_vs_portable(hash_chunks_fn: HashChunksFn, degree: usize)
         }
     }
 }
+
+fn painted_transposed_input() -> TransposedVectors {
+    let mut vectors = TransposedVectors::default();
+    let mut val = 0;
+    for col in 0..2 * MAX_SIMD_DEGREE {
+        for row in 0..8 {
+            vectors.0[row][col] = val;
+            val += 1;
+        }
+    }
+    vectors
+}
+
+pub fn test_hash_parents_vs_portable(hash_parents_fn: HashParentsFn, degree: usize) {
+    assert!(degree <= MAX_SIMD_DEGREE);
+    let input = painted_transposed_input();
+    for num_parents in 2..=(degree / 2) {
+        let mut portable_output = TransposedVectors(input.0);
+        let (portable_left, portable_right) = portable_output.split(degree);
+        Implementation::portable().hash_parents(
+            &input,
+            2 * num_parents, // num_cvs
+            &IV_BYTES,
+            0,
+            portable_left,
+        );
+        Implementation::portable().hash_parents(
+            &input,
+            2 * num_parents, // num_cvs
+            &TEST_KEY,
+            KEYED_HASH,
+            portable_right,
+        );
+
+        let mut test_output = input.clone();
+        let (test_left, test_right) = test_output.split(degree);
+        unsafe {
+            hash_parents_fn(
+                input.as_ptr(),
+                num_parents,
+                &IV_BYTES,
+                PARENT,
+                test_left.ptr,
+            );
+            hash_parents_fn(
+                input.as_ptr(),
+                num_parents,
+                &TEST_KEY,
+                PARENT | KEYED_HASH,
+                test_right.ptr,
+            );
+        }
+
+        check_transposed_eq(&portable_output, &test_output);
+    }
+}

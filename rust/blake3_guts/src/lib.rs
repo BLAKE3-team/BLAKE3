@@ -315,7 +315,7 @@ impl Implementation {
                 transposed_input.as_ptr(),
                 num_parents,
                 key,
-                flags,
+                flags | PARENT,
                 transposed_output.ptr,
             );
         }
@@ -343,7 +343,7 @@ impl Implementation {
         let num_parents = num_cvs / 2;
         let in_out_ptr = transposed_in_out.as_mut_ptr();
         unsafe {
-            self.hash_parents_fn()(in_out_ptr, num_parents, key, flags, in_out_ptr);
+            self.hash_parents_fn()(in_out_ptr, num_parents, key, flags | PARENT, in_out_ptr);
         }
         if num_cvs % 2 == 1 {
             unsafe {

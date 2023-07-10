@@ -210,4 +210,10 @@ mod test {
     fn test_hash_chunks_vs_portable() {
         crate::test::test_hash_chunks_vs_portable(hash_chunks, DEGREE);
     }
+
+    // This is circular but do it anyway.
+    #[test]
+    fn test_hash_parents_vs_portable() {
+        crate::test::test_hash_parents_vs_portable(hash_parents, DEGREE);
+    }
 }
