@@ -307,7 +307,7 @@ struct Output {
 
 impl Output {
     fn chaining_value(&self) -> CVBytes {
-        guts::compress(
+        guts::DETECTED_IMPL.compress(
             &self.block,
             self.block_len as u32,
             &self.input_chaining_value,
@@ -318,7 +318,7 @@ impl Output {
 
     fn root_hash(&self) -> Hash {
         debug_assert_eq!(self.counter, 0);
-        Hash(guts::compress(
+        Hash(guts::DETECTED_IMPL.compress(
             &self.block,
             self.block_len as u32,
             &self.input_chaining_value,
@@ -378,7 +378,7 @@ impl ChunkState {
             self.fill_buf(&mut input);
             if !input.is_empty() {
                 debug_assert_eq!(self.buf_len as usize, BLOCK_LEN);
-                self.cv = guts::compress(
+                self.cv = guts::DETECTED_IMPL.compress(
                     &self.buf,
                     BLOCK_LEN as u32,
                     &self.cv,
@@ -393,7 +393,7 @@ impl ChunkState {
 
         while input.len() > BLOCK_LEN {
             debug_assert_eq!(self.buf_len, 0);
-            self.cv = guts::compress(
+            self.cv = guts::DETECTED_IMPL.compress(
                 input[..BLOCK_LEN].try_into().unwrap(),
                 BLOCK_LEN as u32,
                 &self.cv,
@@ -474,20 +474,21 @@ fn compress_subtree_wide<J: join::Join>(
     // Note that the single chunk case does *not* bump the SIMD degree up to 2
     // when it is 1. This allows Rayon the option of multithreading even the
     // 2-chunk case, which can help performance on smaller platforms.
-    if input.len() <= guts::degree() * CHUNK_LEN {
-        return guts::hash_chunks(input, key, chunk_counter, flags, out);
+    let degree = guts::DETECTED_IMPL.degree();
+    if input.len() <= degree * CHUNK_LEN {
+        return guts::DETECTED_IMPL.hash_chunks(input, key, chunk_counter, flags, out);
     }
 
     // With more than simd_degree chunks, we need to recurse. Start by dividing
     // the input into left and right subtrees. (Note that this is only optimal
     // as long as the SIMD degree is a power of 2. If we ever get a SIMD degree
     // of 3 or something, we'll need a more complicated strategy.)
-    debug_assert_eq!(guts::degree().count_ones(), 1, "power of 2");
+    debug_assert_eq!(degree.count_ones(), 1, "power of 2");
     let (left, right) = input.split_at(guts::left_len(input.len()));
     let right_chunk_counter = chunk_counter + (left.len() / CHUNK_LEN) as u64;
 
     let mut transposed_cvs = guts::TransposedVectors::new();
-    let (left_cvs, right_cvs) = guts::split_transposed_vectors(&mut transposed_cvs);
+    let (left_cvs, right_cvs) = guts::DETECTED_IMPL.split_transposed_vectors(&mut transposed_cvs);
 
     // Recurse! For update_rayon(), this is where we take advantage of RayonJoin and use multiple
     // threads.
@@ -499,7 +500,7 @@ fn compress_subtree_wide<J: join::Join>(
     // Do one layer of parent node compression. The SIMD degree is always at least 2, so we're
     // guaranteed that this isn't the root compression.
     let num_cvs = left_n + right_n;
-    guts::hash_parents(&mut transposed_cvs, num_cvs, key, flags, out)
+    guts::DETECTED_IMPL.hash_parents(&mut transposed_cvs, num_cvs, key, flags, out)
 }
 
 // Hash a subtree with compress_subtree_wide(), and then condense the resulting
@@ -520,7 +521,7 @@ fn compress_subtree_to_parent_node<J: join::Join>(
 ) -> BlockBytes {
     debug_assert!(input.len() > CHUNK_LEN);
     let mut transposed_cvs = guts::TransposedVectors::new();
-    let (left_cvs, _) = guts::split_transposed_vectors(&mut transposed_cvs);
+    let (left_cvs, _) = guts::DETECTED_IMPL.split_transposed_vectors(&mut transposed_cvs);
     let mut num_cvs = compress_subtree_wide::<J>(input, &key, chunk_counter, flags, left_cvs);
     debug_assert!(num_cvs >= 2);
 
@@ -528,7 +529,7 @@ fn compress_subtree_to_parent_node<J: join::Join>(
     // compress_subtree_wide() returns more than 2 chaining values. Condense
     // them into 2 by forming parent nodes repeatedly.
     while num_cvs > 2 {
-        num_cvs = guts::reduce_parents(&mut transposed_cvs, num_cvs, key, flags);
+        num_cvs = guts::DETECTED_IMPL.reduce_parents(&mut transposed_cvs, num_cvs, key, flags);
     }
     transposed_cvs.extract_parent_node(0)
 }
@@ -1132,7 +1133,7 @@ impl OutputReader {
         debug_assert!(self.position_within_block < BLOCK_LEN as u8);
         if self.position_within_block != 0 {
             let mut partial_block = [0u8; 64];
-            guts::xof(
+            guts::DETECTED_IMPL.xof(
                 &self.inner.block,
                 self.inner.block_len as u32,
                 &self.inner.input_chaining_value,
@@ -1153,7 +1154,7 @@ impl OutputReader {
                 return;
             }
         }
-        guts::xof(
+        guts::DETECTED_IMPL.xof(
             &self.inner.block,
             self.inner.block_len as u32,
             &self.inner.input_chaining_value,
@@ -1168,7 +1169,7 @@ impl OutputReader {
         debug_assert!(self.position_within_block < BLOCK_LEN as u8);
         if self.position_within_block != 0 {
             let mut partial_block = [0u8; 64];
-            guts::xof(
+            guts::DETECTED_IMPL.xof(
                 &self.inner.block,
                 self.inner.block_len as u32,
                 &self.inner.input_chaining_value,
@@ -1191,7 +1192,7 @@ impl OutputReader {
                 return;
             }
         }
-        guts::xof_xor(
+        guts::DETECTED_IMPL.xof_xor(
             &self.inner.block,
             self.inner.block_len as u32,
             &self.inner.input_chaining_value,
