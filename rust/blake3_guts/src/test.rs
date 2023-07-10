@@ -98,12 +98,13 @@ pub fn test_hash_chunks_vs_portable(test_impl: &Implementation) {
     let mut input_2_lengths = vec![1];
     let mut next_len = CHUNK_LEN;
     loop {
-        input_2_lengths.push(next_len - 1);
+        // 95 is one whole block plus one interesting part of another
+        input_2_lengths.push(next_len - 95);
         input_2_lengths.push(next_len);
         if next_len == MAX_SIMD_DEGREE * CHUNK_LEN {
             break;
         }
-        input_2_lengths.push(next_len + 1);
+        input_2_lengths.push(next_len + 95);
         next_len += CHUNK_LEN;
     }
     for input_2_len in input_2_lengths {
@@ -257,12 +258,13 @@ pub fn test_chunks_and_parents_vs_reference(test_impl: &Implementation) {
     let mut test_lengths = vec![CHUNK_LEN + 1];
     let mut next_len = 2 * CHUNK_LEN;
     loop {
-        test_lengths.push(next_len - 1);
+        // 95 is one whole block plus one interesting part of another
+        test_lengths.push(next_len - 95);
         test_lengths.push(next_len);
         if next_len == MAX_INPUT_LEN {
             break;
         }
-        test_lengths.push(next_len + 1);
+        test_lengths.push(next_len + 95);
         next_len += CHUNK_LEN;
     }
     for test_len in test_lengths {
@@ -277,5 +279,137 @@ pub fn test_chunks_and_parents_vs_reference(test_impl: &Implementation) {
         let test_hash = root_hash_with_chunks_and_parents(test_impl, input);
 
         assert_eq!(ref_hash, test_hash);
+    }
+}
+
+pub fn test_xof_vs_portable(test_impl: &Implementation) {
+    let flags = CHUNK_START | CHUNK_END | ROOT | KEYED_HASH;
+    for counter in INITIAL_COUNTERS {
+        dbg!(counter);
+        for input_len in [0, 1, BLOCK_LEN] {
+            dbg!(input_len);
+            let mut input_block = [0u8; BLOCK_LEN];
+            for byte_index in 0..input_len {
+                input_block[byte_index] = byte_index as u8 + 42;
+            }
+            // Try equal to and partway through every whole number of output blocks.
+            const MAX_OUTPUT_LEN: usize = 2 * MAX_SIMD_DEGREE * BLOCK_LEN;
+            let mut output_lengths = Vec::new();
+            let mut next_len = 0;
+            loop {
+                output_lengths.push(next_len);
+                if next_len == MAX_OUTPUT_LEN {
+                    break;
+                }
+                output_lengths.push(next_len + 31);
+                next_len += BLOCK_LEN;
+            }
+            for output_len in output_lengths {
+                dbg!(output_len);
+                let mut portable_output = [0xff; MAX_OUTPUT_LEN];
+                portable::implementation().xof(
+                    &input_block,
+                    input_len as u32,
+                    &TEST_KEY,
+                    counter,
+                    flags,
+                    &mut portable_output[..output_len],
+                );
+                let mut test_output = [0xff; MAX_OUTPUT_LEN];
+                test_impl.xof(
+                    &input_block,
+                    input_len as u32,
+                    &TEST_KEY,
+                    counter,
+                    flags,
+                    &mut test_output[..output_len],
+                );
+                assert_eq!(portable_output, test_output);
+
+                // Double check that the implementation didn't overwrite.
+                assert!(test_output[output_len..].iter().all(|&b| b == 0xff));
+
+                // The first XOR cancels out the output.
+                test_impl.xof_xor(
+                    &input_block,
+                    input_len as u32,
+                    &TEST_KEY,
+                    counter,
+                    flags,
+                    &mut test_output[..output_len],
+                );
+                assert!(test_output[..output_len].iter().all(|&b| b == 0));
+                assert!(test_output[output_len..].iter().all(|&b| b == 0xff));
+
+                // The second XOR restores out the output.
+                test_impl.xof_xor(
+                    &input_block,
+                    input_len as u32,
+                    &TEST_KEY,
+                    counter,
+                    flags,
+                    &mut test_output[..output_len],
+                );
+                assert_eq!(portable_output, test_output);
+                assert!(test_output[output_len..].iter().all(|&b| b == 0xff));
+            }
+        }
+    }
+}
+
+pub fn test_xof_vs_reference(test_impl: &Implementation) {
+    let input = b"hello world";
+    let mut input_block = [0; BLOCK_LEN];
+    input_block[..input.len()].copy_from_slice(input);
+
+    const MAX_OUTPUT_LEN: usize = 2 * MAX_SIMD_DEGREE * BLOCK_LEN;
+    let mut ref_output = [0; MAX_OUTPUT_LEN];
+    let mut ref_hasher = reference_impl::Hasher::new_keyed(&TEST_KEY);
+    ref_hasher.update(input);
+    ref_hasher.finalize(&mut ref_output);
+
+    // Try equal to and partway through every whole number of output blocks.
+    let mut output_lengths = vec![0, 1, 31];
+    let mut next_len = BLOCK_LEN;
+    loop {
+        output_lengths.push(next_len);
+        if next_len == MAX_OUTPUT_LEN {
+            break;
+        }
+        output_lengths.push(next_len + 31);
+        next_len += BLOCK_LEN;
+    }
+
+    for output_len in output_lengths {
+        dbg!(output_len);
+        let mut test_output = [0; MAX_OUTPUT_LEN];
+        test_impl.xof(
+            &input_block,
+            input.len() as u32,
+            &TEST_KEY,
+            0,
+            crate::KEYED_HASH | crate::CHUNK_START | crate::CHUNK_END | crate::ROOT,
+            &mut test_output[..output_len],
+        );
+        assert_eq!(ref_output[..output_len], test_output[..output_len]);
+
+        // Double check that the implementation didn't overwrite.
+        assert!(test_output[output_len..].iter().all(|&b| b == 0));
+
+        // Do it again starting from block 1.
+        if output_len >= BLOCK_LEN {
+            test_impl.xof(
+                &input_block,
+                input.len() as u32,
+                &TEST_KEY,
+                1,
+                crate::KEYED_HASH | crate::CHUNK_START | crate::CHUNK_END | crate::ROOT,
+                &mut test_output[..output_len - BLOCK_LEN],
+            );
+            assert_eq!(
+                ref_output[BLOCK_LEN..output_len],
+                test_output[..output_len - BLOCK_LEN],
+            );
+        }
     }
 }

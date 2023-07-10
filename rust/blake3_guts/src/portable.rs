@@ -233,4 +233,15 @@ mod test {
     fn test_chunks_and_parents_vs_reference() {
         crate::test::test_chunks_and_parents_vs_reference(&implementation());
     }
+
+    // This is circular but do it anyway.
+    #[test]
+    fn test_xof_vs_portable() {
+        crate::test::test_xof_vs_portable(&implementation());
+    }
+
+    #[test]
+    fn test_xof_vs_reference() {
+        crate::test::test_xof_vs_reference(&implementation());
+    }
 }
