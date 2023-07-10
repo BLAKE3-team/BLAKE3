@@ -244,4 +244,15 @@ mod test {
     fn test_xof_vs_reference() {
         crate::test::test_xof_vs_reference(&implementation());
     }
+
+    // This is circular but do it anyway.
+    #[test]
+    fn test_universal_hash_vs_portable() {
+        crate::test::test_universal_hash_vs_portable(&implementation());
+    }
+
+    #[test]
+    fn test_universal_hash_vs_reference() {
+        crate::test::test_universal_hash_vs_reference(&implementation());
+    }
 }

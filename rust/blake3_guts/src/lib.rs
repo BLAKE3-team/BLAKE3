@@ -720,7 +720,7 @@ unsafe fn universal_hash_using_compress(
         let mut block_output = [0u8; 32];
         compress(
             &block,
-            BLOCK_LEN as u32,
+            block_len as u32,
             key,
             counter,
             flags,
@@ -733,9 +733,7 @@ unsafe fn universal_hash_using_compress(
         input_len -= block_len;
         counter += 1;
     }
-    for i in 0..4 {
-        (*out)[WORD_LEN * i..][..WORD_LEN].copy_from_slice(&result[i].to_le_bytes());
-    }
+    *out = result;
 }
 
 // this is in units of *words*, for pointer operations on *const/*mut u32

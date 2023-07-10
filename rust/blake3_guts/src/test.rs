@@ -413,3 +413,77 @@ pub fn test_xof_vs_reference(test_impl: &Implementation) {
         }
     }
 }
+
+pub fn test_universal_hash_vs_portable(test_impl: &Implementation) {
+    const MAX_INPUT_LEN: usize = 2 * MAX_SIMD_DEGREE * BLOCK_LEN;
+    let mut input_buf = [0; MAX_INPUT_LEN];
+    paint_test_input(&mut input_buf);
+    // Try equal to and partway through every whole number of input blocks.
+    let mut input_lengths = vec![0, 1, 31];
+    let mut next_len = BLOCK_LEN;
+    loop {
+        input_lengths.push(next_len);
+        if next_len == MAX_INPUT_LEN {
+            break;
+        }
+        input_lengths.push(next_len + 31);
+        next_len += BLOCK_LEN;
+    }
+    for input_len in input_lengths {
+        dbg!(input_len);
+        for counter in INITIAL_COUNTERS {
+            dbg!(counter);
+            let portable_output = portable::implementation().universal_hash(
+                &input_buf[..input_len],
+                &TEST_KEY,
+                counter,
+            );
+            let test_output = test_impl.universal_hash(&input_buf[..input_len], &TEST_KEY, counter);
+            assert_eq!(portable_output, test_output);
+        }
+    }
+}
+
+fn reference_impl_universal_hash(input: &[u8], key: &CVBytes) -> [u8; UNIVERSAL_HASH_LEN] {
+    // The reference_impl doesn't support XOF seeking, so we have to materialize an entire extended
+    // output to seek to a block.
+    const MAX_BLOCKS: usize = 2 * MAX_SIMD_DEGREE;
+    assert!(input.len() / BLOCK_LEN <= MAX_BLOCKS);
+    let mut output_buffer: [u8; BLOCK_LEN * MAX_BLOCKS] = [0u8; BLOCK_LEN * MAX_BLOCKS];
+    let mut result = [0u8; UNIVERSAL_HASH_LEN];
+    let mut block_start = 0;
+    while block_start < input.len() {
+        let block_len = cmp::min(input.len() - block_start, BLOCK_LEN);
+        let mut ref_hasher = reference_impl::Hasher::new_keyed(key);
+        ref_hasher.update(&input[block_start..block_start + block_len]);
+        ref_hasher.finalize(&mut output_buffer[..block_start + UNIVERSAL_HASH_LEN]);
+        for byte_index in 0..UNIVERSAL_HASH_LEN {
+            result[byte_index] ^= output_buffer[block_start + byte_index];
+        }
+        block_start += BLOCK_LEN;
+    }
+    result
+}
+
+pub fn test_universal_hash_vs_reference(test_impl: &Implementation) {
+    const MAX_INPUT_LEN: usize = 2 * MAX_SIMD_DEGREE * BLOCK_LEN;
+    let mut input_buf = [0; MAX_INPUT_LEN];
+    paint_test_input(&mut input_buf);
+    // Try equal to and partway through every whole number of input blocks.
+    let mut input_lengths = vec![0, 1, 31];
+    let mut next_len = BLOCK_LEN;
+    loop {
+        input_lengths.push(next_len);
+        if next_len == MAX_INPUT_LEN {
+            break;
+        }
+        input_lengths.push(next_len + 31);
+        next_len += BLOCK_LEN;
+    }
+    for input_len in input_lengths {
+        dbg!(input_len);
+        let ref_output = reference_impl_universal_hash(&input_buf[..input_len], &TEST_KEY);
+        let test_output = test_impl.universal_hash(&input_buf[..input_len], &TEST_KEY, 0);
+        assert_eq!(ref_output, test_output);
+    }
+}

@@ -51,67 +51,6 @@ pub const TEST_CASES_MAX: usize = 100 * CHUNK_LEN;
 pub const TEST_KEY: &CVBytes = b"whats the Elvish word for friend";
 pub const TEST_KEY_WORDS: &CVWords = &guts::words_from_le_bytes_32(TEST_KEY);
 
-type UniversalHashFn =
-    unsafe fn(input: &[u8], key: &[u32; 8], counter: u64) -> [u8; UNIVERSAL_HASH_LEN];
-
-pub fn test_universal_hash_fn(target_fn: UniversalHashFn) {
-    // 31 (16 + 8 + 4 + 2 + 1) inputs
-    const NUM_INPUTS: usize = 31;
-    let mut input_buf = [0; BLOCK_LEN * NUM_INPUTS];
-    paint_test_input(&mut input_buf);
-    for len in [0, 1, BLOCK_LEN, BLOCK_LEN + 1, input_buf.len()] {
-        for &counter in INITIAL_COUNTERS {
-            let portable_output =
-                crate::portable::universal_hash(&input_buf[..len], TEST_KEY_WORDS, counter);
-            let test_output = unsafe { target_fn(&input_buf[..len], TEST_KEY_WORDS, counter) };
-            assert_eq!(portable_output, test_output);
-        }
-    }
-}
-
-fn reference_impl_universal_hash(
-    input: &[u8],
-    key: &[u8; crate::KEY_LEN],
-) -> [u8; UNIVERSAL_HASH_LEN] {
-    // The reference_impl doesn't support XOF seeking, so we have to materialize an entire extended
-    // output to seek to a block.
-    const MAX_BLOCKS: usize = 31;
-    assert!(input.len() / BLOCK_LEN <= MAX_BLOCKS);
-    let mut output_buffer: [u8; BLOCK_LEN * MAX_BLOCKS] = [0u8; BLOCK_LEN * MAX_BLOCKS];
-    let mut result = [0u8; UNIVERSAL_HASH_LEN];
-    let mut i = 0;
-    while i == 0 || i < input.len() {
-        let block_len = cmp::min(input.len() - i, BLOCK_LEN);
-        let mut reference_hasher = reference_impl::Hasher::new_keyed(key);
-        reference_hasher.update(&input[i..i + block_len]);
-        reference_hasher.finalize(&mut output_buffer);
-        for (result_byte, output_byte) in result
-            .iter_mut()
-            .zip(output_buffer[i..i + UNIVERSAL_HASH_LEN].iter())
-        {
-            *result_byte ^= *output_byte;
-        }
-        i += BLOCK_LEN;
-    }
-    result
-}
-
-#[test]
-fn test_compare_reference_impl_universal_hash() {
-    const NUM_INPUTS: usize = 31;
-    let mut input_buf = [0; BLOCK_LEN * NUM_INPUTS];
-    paint_test_input(&mut input_buf);
-    for len in [0, 1, BLOCK_LEN, BLOCK_LEN + 1, input_buf.len()] {
-        let reference_output = reference_impl_universal_hash(&input_buf[..len], TEST_KEY);
-        let test_output = crate::platform::Platform::detect().universal_hash(
-            &input_buf[..len],
-            TEST_KEY_WORDS,
-            0,
-        );
-        assert_eq!(reference_output, test_output);
-    }
-}
-
 #[test]
 fn test_key_bytes_equal_key_words() {
     assert_eq!(
