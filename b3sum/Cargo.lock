@@ -58,12 +58,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c7d0618f0e0b7e8ff11427422b64564d5fb0be1940354bfe2e0529b18a9d9b8"
 
 [[package]]
-name = "arrayref"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b4930d2cb77ce62f89ee5d5289b4ac049559b1c45539271f5ed4fdc7db34545"
-
-[[package]]
 name = "arrayvec"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -81,6 +75,7 @@ version = "1.4.1"
 dependencies = [
  "anyhow",
  "blake3",
+ "blake3_guts",
  "clap",
  "duct",
  "hex",
@@ -106,13 +101,20 @@ checksum = "630be753d4e58660abd17930c71b647fe46c27ea6b63cc59e1e3851406972e42"
 name = "blake3"
 version = "1.4.1"
 dependencies = [
- "arrayref",
  "arrayvec",
+ "blake3_guts",
  "cc",
  "cfg-if",
  "constant_time_eq",
  "digest",
  "rayon",
+]
+
+[[package]]
+name = "blake3_guts"
+version = "0.0.0"
+dependencies = [
+ "cfg-if",
 ]
 
 [[package]]
