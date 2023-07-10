@@ -283,7 +283,7 @@ pub fn test_chunks_and_parents_vs_reference(test_impl: &Implementation) {
 }
 
 pub fn test_xof_vs_portable(test_impl: &Implementation) {
-    let flags = CHUNK_START | CHUNK_END | ROOT | KEYED_HASH;
+    let flags = CHUNK_START | CHUNK_END | KEYED_HASH;
     for counter in INITIAL_COUNTERS {
         dbg!(counter);
         for input_len in [0, 1, BLOCK_LEN] {
@@ -388,7 +388,7 @@ pub fn test_xof_vs_reference(test_impl: &Implementation) {
             input.len() as u32,
             &TEST_KEY,
             0,
-            crate::KEYED_HASH | crate::CHUNK_START | crate::CHUNK_END | crate::ROOT,
+            KEYED_HASH | CHUNK_START | CHUNK_END,
             &mut test_output[..output_len],
         );
         assert_eq!(ref_output[..output_len], test_output[..output_len]);
@@ -403,7 +403,7 @@ pub fn test_xof_vs_reference(test_impl: &Implementation) {
                 input.len() as u32,
                 &TEST_KEY,
                 1,
-                crate::KEYED_HASH | crate::CHUNK_START | crate::CHUNK_END | crate::ROOT,
+                KEYED_HASH | CHUNK_START | CHUNK_END,
                 &mut test_output[..output_len - BLOCK_LEN],
             );
             assert_eq!(

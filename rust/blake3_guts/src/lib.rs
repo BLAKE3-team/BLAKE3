@@ -364,7 +364,7 @@ impl Implementation {
                 block_len,
                 cv,
                 counter,
-                flags,
+                flags | ROOT,
                 out.as_mut_ptr(),
                 out.len(),
             );
@@ -392,7 +392,7 @@ impl Implementation {
                 block_len,
                 cv,
                 counter,
-                flags,
+                flags | ROOT,
                 out.as_mut_ptr(),
                 out.len(),
             );
@@ -892,6 +892,32 @@ fn test_byte_word_round_trips() {
 // immediately below, and also directly in Hasher::update().
 pub fn largest_power_of_two_leq(n: usize) -> usize {
     ((n / 2) + 1).next_power_of_two()
+}
+
+#[test]
+fn test_largest_power_of_two_leq() {
+    let input_output = &[
+        // The zero case is nonsensical, but it does work.
+        (0, 1),
+        (1, 1),
+        (2, 2),
+        (3, 2),
+        (4, 4),
+        (5, 4),
+        (6, 4),
+        (7, 4),
+        (8, 8),
+        // the largest possible usize
+        (usize::MAX, (usize::MAX >> 1) + 1),
+    ];
+    for &(input, output) in input_output {
+        assert_eq!(
+            output,
+            crate::largest_power_of_two_leq(input),
+            "wrong output for n={}",
+            input
+        );
+    }
 }
 
 // Given some input larger than one chunk, return the number of bytes that

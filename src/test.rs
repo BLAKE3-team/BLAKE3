@@ -1,8 +1,6 @@
 use blake3_guts as guts;
-use guts::{CVBytes, CVWords, BLOCK_LEN, CHUNK_LEN, OUT_LEN, UNIVERSAL_HASH_LEN};
+use guts::{CVBytes, CVWords, BLOCK_LEN, CHUNK_LEN};
 
-use arrayvec::ArrayVec;
-use core::cmp;
 use core::usize;
 use rand::prelude::*;
 
@@ -53,10 +51,7 @@ pub const TEST_KEY_WORDS: &CVWords = &guts::words_from_le_bytes_32(TEST_KEY);
 
 #[test]
 fn test_key_bytes_equal_key_words() {
-    assert_eq!(
-        TEST_KEY_WORDS,
-        &crate::platform::words_from_le_bytes_32(TEST_KEY),
-    );
+    assert_eq!(TEST_KEY, &guts::le_bytes_from_words_32(TEST_KEY_WORDS),);
 }
 
 #[test]
@@ -69,36 +64,9 @@ fn test_reference_impl_size() {
     assert_eq!(1880, core::mem::size_of::<reference_impl::Hasher>());
 }
 
-#[test]
-fn test_counter_words() {
-    let counter: u64 = (1 << 32) + 2;
-    assert_eq!(crate::counter_low(counter), 2);
-    assert_eq!(crate::counter_high(counter), 1);
-}
-
-#[test]
-fn test_largest_power_of_two_leq() {
-    let input_output = &[
-        // The zero case is nonsensical, but it does work.
-        (0, 1),
-        (1, 1),
-        (2, 2),
-        (3, 2),
-        (4, 4),
-        (5, 4),
-        (6, 4),
-        (7, 4),
-        (8, 8),
-        // the largest possible usize
-        (usize::MAX, (usize::MAX >> 1) + 1),
-    ];
-    for &(input, output) in input_output {
-        assert_eq!(
-            output,
-            crate::largest_power_of_two_leq(input),
-            "wrong output for n={}",
-            input
-        );
+fn paint_test_input(buf: &mut [u8]) {
+    for (i, b) in buf.iter_mut().enumerate() {
+        *b = (i % 251) as u8;
     }
 }
 
@@ -121,18 +89,18 @@ fn test_compare_reference_impl() {
 
             // all at once
             let test_out = crate::hash(input);
-            assert_eq!(test_out, *array_ref!(expected_out, 0, 32));
+            assert_eq!(test_out, expected_out[..32]);
             // incremental
             let mut hasher = crate::Hasher::new();
             hasher.update(input);
-            assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+            assert_eq!(hasher.finalize(), expected_out[..32]);
             assert_eq!(hasher.finalize(), test_out);
             // incremental (rayon)
             #[cfg(feature = "rayon")]
             {
                 let mut hasher = crate::Hasher::new();
                 hasher.update_rayon(input);
-                assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+                assert_eq!(hasher.finalize(), expected_out[..32]);
                 assert_eq!(hasher.finalize(), test_out);
             }
             // xof
@@ -150,18 +118,18 @@ fn test_compare_reference_impl() {
 
             // all at once
             let test_out = crate::keyed_hash(TEST_KEY, input);
-            assert_eq!(test_out, *array_ref!(expected_out, 0, 32));
+            assert_eq!(test_out, expected_out[..32]);
             // incremental
             let mut hasher = crate::Hasher::new_keyed(TEST_KEY);
             hasher.update(input);
-            assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+            assert_eq!(hasher.finalize(), expected_out[..32]);
             assert_eq!(hasher.finalize(), test_out);
             // incremental (rayon)
             #[cfg(feature = "rayon")]
             {
                 let mut hasher = crate::Hasher::new_keyed(TEST_KEY);
                 hasher.update_rayon(input);
-                assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+                assert_eq!(hasher.finalize(), expected_out[..32]);
                 assert_eq!(hasher.finalize(), test_out);
             }
             // xof
@@ -184,15 +152,15 @@ fn test_compare_reference_impl() {
             // incremental
             let mut hasher = crate::Hasher::new_derive_key(context);
             hasher.update(input);
-            assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
-            assert_eq!(hasher.finalize(), *array_ref!(test_out, 0, 32));
+            assert_eq!(hasher.finalize(), expected_out[..32]);
+            assert_eq!(hasher.finalize(), test_out[..32]);
             // incremental (rayon)
             #[cfg(feature = "rayon")]
             {
                 let mut hasher = crate::Hasher::new_derive_key(context);
                 hasher.update_rayon(input);
-                assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
-                assert_eq!(hasher.finalize(), *array_ref!(test_out, 0, 32));
+                assert_eq!(hasher.finalize(), expected_out[..32]);
+                assert_eq!(hasher.finalize(), test_out[..32]);
             }
             // xof
             let mut extended = [0; OUT];
@@ -335,7 +303,7 @@ fn test_msg_schedule_permutation() {
         }
     }
 
-    assert_eq!(generated, crate::MSG_SCHEDULE);
+    assert_eq!(generated, guts::MSG_SCHEDULE);
 }
 
 #[test]
