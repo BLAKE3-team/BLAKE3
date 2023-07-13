@@ -292,51 +292,52 @@ fn test_xof_seek() {
 
 #[test]
 fn test_xof_xor() {
-    const STEP: usize = 17;
+    for step in [32, 63, 64, 128, 303] {
+        dbg!(step);
+        let mut ref_hasher = reference_impl::Hasher::new();
+        ref_hasher.update(b"foo");
+        let mut ref_output = [0u8; 1000];
+        ref_hasher.finalize(&mut ref_output);
 
-    let mut ref_hasher = reference_impl::Hasher::new();
-    ref_hasher.update(b"foo");
-    let mut ref_output = [0u8; 1000];
-    ref_hasher.finalize(&mut ref_output);
+        let mut hasher = crate::Hasher::new();
+        hasher.update(b"foo");
+        let mut reader = hasher.finalize_xof();
 
-    let mut hasher = crate::Hasher::new();
-    hasher.update(b"foo");
-    let mut reader = hasher.finalize_xof();
+        let mut test_output = [0u8; 1000];
+        for chunk in test_output.chunks_mut(step) {
+            reader.fill(chunk);
+        }
+        assert_eq!(ref_output, test_output);
+        // Xor'ing the same output should zero the buffer.
+        reader.set_position(0);
+        for chunk in test_output.chunks_mut(step) {
+            reader.fill_xor(chunk);
+        }
+        assert_eq!([0u8; 1000], test_output);
+        // Xor'ing the same output again should reproduce the original.
+        reader.set_position(0);
+        for chunk in test_output.chunks_mut(step) {
+            reader.fill_xor(chunk);
+        }
+        assert_eq!(ref_output, test_output);
 
-    let mut test_output = [0u8; 1000];
-    for chunk in test_output.chunks_mut(STEP) {
-        reader.fill(chunk);
+        // Repeat the same test but starting at offset 500.
+        reader.set_position(500);
+        for chunk in test_output[..500].chunks_mut(step) {
+            reader.fill(chunk);
+        }
+        assert_eq!(ref_output[500..], test_output[..500]);
+        reader.set_position(500);
+        for chunk in test_output[..500].chunks_mut(step) {
+            reader.fill_xor(chunk);
+        }
+        assert_eq!([0u8; 500], test_output[..500]);
+        reader.set_position(500);
+        for chunk in test_output[..500].chunks_mut(step) {
+            reader.fill_xor(chunk);
+        }
+        assert_eq!(ref_output[500..], test_output[..500]);
     }
-    assert_eq!(ref_output, test_output);
-    // Xor'ing the same output should zero the buffer.
-    reader.set_position(0);
-    for chunk in test_output.chunks_mut(STEP) {
-        reader.fill_xor(chunk);
-    }
-    assert_eq!([0u8; 1000], test_output);
-    // Xor'ing the same output again should reproduce the original.
-    reader.set_position(0);
-    for chunk in test_output.chunks_mut(STEP) {
-        reader.fill_xor(chunk);
-    }
-    assert_eq!(ref_output, test_output);
-
-    // Repeat the same test but starting at offset 500.
-    reader.set_position(500);
-    for chunk in test_output[..500].chunks_mut(STEP) {
-        reader.fill(chunk);
-    }
-    assert_eq!(ref_output[500..], test_output[..500]);
-    reader.set_position(500);
-    for chunk in test_output[..500].chunks_mut(STEP) {
-        reader.fill_xor(chunk);
-    }
-    assert_eq!([0u8; 500], test_output[..500]);
-    reader.set_position(500);
-    for chunk in test_output[..500].chunks_mut(STEP) {
-        reader.fill_xor(chunk);
-    }
-    assert_eq!(ref_output[500..], test_output[..500]);
 }
 
 #[test]

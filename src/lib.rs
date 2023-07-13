@@ -1114,6 +1114,61 @@ impl OutputReader {
         }
     }
 
+    // There's some nontrivial logic here to handle partial blocks, and I don't want to copy-paste
+    // it between the xof and xof_xor cases.
+    #[inline(always)]
+    fn fill_inner(&mut self, mut buf: &mut [u8], xor: bool) {
+        debug_assert!(self.position_within_block < BLOCK_LEN as u8);
+        if self.position_within_block != 0 {
+            // The xof() and xof_xor() APIs can handle a partial block at the end but not a partial
+            // block at the beginning. We handle the beginning case here. Start by computing the
+            // complete block that we need part of.
+            let mut partial_block = [0u8; 64];
+            guts::DETECTED_IMPL.xof(
+                &self.inner.block,
+                self.inner.block_len as u32,
+                &self.inner.input_chaining_value,
+                self.inner.counter,
+                self.inner.flags as u32,
+                &mut partial_block,
+            );
+            let output_bytes = &partial_block[self.position_within_block as usize..];
+            let take = cmp::min(buf.len(), output_bytes.len());
+            if xor {
+                for byte_index in 0..take {
+                    buf[byte_index] ^= output_bytes[byte_index];
+                }
+            } else {
+                buf[..take].copy_from_slice(&output_bytes[..take]);
+            }
+            buf = &mut buf[take..];
+            self.position_within_block += take as u8;
+            if self.position_within_block == BLOCK_LEN as u8 {
+                self.position_within_block = 0;
+                self.inner.counter += 1;
+            } else {
+                debug_assert!(buf.is_empty());
+                return;
+            }
+        }
+        let xof_fn = if xor {
+            guts::Implementation::xof_xor
+        } else {
+            guts::Implementation::xof
+        };
+        xof_fn(
+            &guts::DETECTED_IMPL,
+            &self.inner.block,
+            self.inner.block_len as u32,
+            &self.inner.input_chaining_value,
+            self.inner.counter,
+            self.inner.flags as u32,
+            buf,
+        );
+        self.inner.counter += (buf.len() / BLOCK_LEN) as u64;
+        self.position_within_block = (buf.len() % BLOCK_LEN) as u8;
+    }
+
     /// Fill a buffer with output bytes and advance the position of the
     /// `OutputReader`. This is equivalent to [`Read::read`], except that it
     /// doesn't return a `Result`. Both methods always fill the entire buffer.
@@ -1129,78 +1184,12 @@ impl OutputReader {
     /// reading further, the behavior is unspecified.
     ///
     /// [`Read::read`]: #method.read
-    pub fn fill(&mut self, mut buf: &mut [u8]) {
-        debug_assert!(self.position_within_block < BLOCK_LEN as u8);
-        if self.position_within_block != 0 {
-            let mut partial_block = [0u8; 64];
-            guts::DETECTED_IMPL.xof(
-                &self.inner.block,
-                self.inner.block_len as u32,
-                &self.inner.input_chaining_value,
-                self.inner.counter,
-                self.inner.flags as u32,
-                &mut partial_block,
-            );
-            let output_bytes = &partial_block[self.position_within_block as usize..];
-            let take = cmp::min(buf.len(), output_bytes.len());
-            buf[..take].copy_from_slice(&output_bytes[..take]);
-            buf = &mut buf[take..];
-            self.position_within_block += take as u8;
-            if self.position_within_block == BLOCK_LEN as u8 {
-                self.position_within_block = 0;
-                self.inner.counter += 1;
-            } else {
-                debug_assert!(buf.is_empty());
-                return;
-            }
-        }
-        guts::DETECTED_IMPL.xof(
-            &self.inner.block,
-            self.inner.block_len as u32,
-            &self.inner.input_chaining_value,
-            self.inner.counter,
-            self.inner.flags as u32,
-            buf,
-        );
-        self.position_within_block = (buf.len() % BLOCK_LEN) as u8;
+    pub fn fill(&mut self, buf: &mut [u8]) {
+        self.fill_inner(buf, false);
     }
 
-    pub fn fill_xor(&mut self, mut buf: &mut [u8]) {
-        debug_assert!(self.position_within_block < BLOCK_LEN as u8);
-        if self.position_within_block != 0 {
-            let mut partial_block = [0u8; 64];
-            guts::DETECTED_IMPL.xof(
-                &self.inner.block,
-                self.inner.block_len as u32,
-                &self.inner.input_chaining_value,
-                self.inner.counter,
-                self.inner.flags as u32,
-                &mut partial_block,
-            );
-            let output_bytes = &partial_block[self.position_within_block as usize..];
-            let take = cmp::min(buf.len(), output_bytes.len());
-            for byte_index in 0..take {
-                buf[byte_index] ^= output_bytes[byte_index];
-            }
-            buf = &mut buf[take..];
-            self.position_within_block += take as u8;
-            if self.position_within_block == BLOCK_LEN as u8 {
-                self.position_within_block = 0;
-                self.inner.counter += 1;
-            } else {
-                debug_assert!(buf.is_empty());
-                return;
-            }
-        }
-        guts::DETECTED_IMPL.xof_xor(
-            &self.inner.block,
-            self.inner.block_len as u32,
-            &self.inner.input_chaining_value,
-            self.inner.counter,
-            self.inner.flags as u32,
-            buf,
-        );
-        self.position_within_block = (buf.len() % BLOCK_LEN) as u8;
+    pub fn fill_xor(&mut self, buf: &mut [u8]) {
+        self.fill_inner(buf, true);
     }
 
     /// Return the current read position in the output stream. This is
