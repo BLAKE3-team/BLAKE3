@@ -64,7 +64,7 @@ fn test_reference_impl_size() {
     assert_eq!(1880, core::mem::size_of::<reference_impl::Hasher>());
 }
 
-fn paint_test_input(buf: &mut [u8]) {
+pub(crate) fn paint_test_input(buf: &mut [u8]) {
     for (i, b) in buf.iter_mut().enumerate() {
         *b = (i % 251) as u8;
     }
