@@ -126,7 +126,7 @@ pub fn test_hash_chunks_vs_portable(test_impl: &Implementation) {
             portable::implementation().hash_chunks(
                 input2,
                 &TEST_KEY,
-                initial_counter + degree as u64,
+                initial_counter + test_impl.degree() as u64,
                 KEYED_HASH,
                 portable_right,
             );
@@ -137,7 +137,7 @@ pub fn test_hash_chunks_vs_portable(test_impl: &Implementation) {
             test_impl.hash_chunks(
                 input2,
                 &TEST_KEY,
-                initial_counter + degree as u64,
+                initial_counter + test_impl.degree() as u64,
                 KEYED_HASH,
                 test_right,
             );

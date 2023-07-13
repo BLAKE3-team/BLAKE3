@@ -293,6 +293,7 @@ fn test_xof_seek() {
 #[test]
 fn test_xof_xor() {
     for step in [32, 63, 64, 128, 303] {
+        #[cfg(feature = "std")]
         dbg!(step);
         let mut ref_hasher = reference_impl::Hasher::new();
         ref_hasher.update(b"foo");
