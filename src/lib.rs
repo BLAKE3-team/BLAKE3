@@ -1119,12 +1119,18 @@ impl OutputReader {
     #[inline(always)]
     fn fill_inner(&mut self, mut buf: &mut [u8], xor: bool) {
         debug_assert!(self.position_within_block < BLOCK_LEN as u8);
+        let xof_fn = if xor {
+            guts::Implementation::xof_xor
+        } else {
+            guts::Implementation::xof
+        };
         if self.position_within_block != 0 {
             // The xof() and xof_xor() APIs can handle a partial block at the end but not a partial
             // block at the beginning. We handle the beginning case here. Start by computing the
             // complete block that we need part of.
             let mut partial_block = [0u8; 64];
-            guts::DETECTED_IMPL.xof(
+            xof_fn(
+                &guts::DETECTED_IMPL,
                 &self.inner.block,
                 self.inner.block_len as u32,
                 &self.inner.input_chaining_value,
@@ -1151,11 +1157,6 @@ impl OutputReader {
                 return;
             }
         }
-        let xof_fn = if xor {
-            guts::Implementation::xof_xor
-        } else {
-            guts::Implementation::xof
-        };
         xof_fn(
             &guts::DETECTED_IMPL,
             &self.inner.block,

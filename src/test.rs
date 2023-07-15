@@ -1,6 +1,7 @@
 use blake3_guts as guts;
 use guts::{CVBytes, CVWords, BLOCK_LEN, CHUNK_LEN};
 
+use core::cmp;
 use core::usize;
 use rand::prelude::*;
 
@@ -220,9 +221,9 @@ fn test_fuzz_hasher() {
     let mut input_buf = [0; 3 * INPUT_MAX];
     paint_test_input(&mut input_buf);
 
-    // Don't do too many iterations in debug mode, to keep the tests under a
-    // second or so. CI should run tests in release mode also. Provide an
-    // environment variable for specifying a larger number of fuzz iterations.
+    // Don't do too many iterations in debug mode, to keep the tests under a second or so. CI
+    // should run tests in release mode also.
+    // TODO: Provide an environment variable for specifying a larger number of fuzz iterations?
     let num_tests = if cfg!(debug_assertions) { 100 } else { 10_000 };
 
     // Use a fixed RNG seed for reproducibility.
@@ -338,6 +339,82 @@ fn test_xof_xor() {
             reader.fill_xor(chunk);
         }
         assert_eq!(ref_output[500..], test_output[..500]);
+    }
+}
+
+#[test]
+#[cfg(feature = "std")]
+fn test_fuzz_xof() {
+    // Use a fixed RNG seed for reproducibility.
+    let mut rng = rand_chacha::ChaCha8Rng::from_seed([99; 32]);
+    let random_key: [u8; 32] = rng.gen();
+
+    let possible_seeks = [-64i64, -63 - 1, 0, 1, 63, 64, 127, 128, 129];
+
+    const MAX_LEN: usize = 1100;
+    let possible_lengths = [0usize, 1, 63, 64, 65, 128, 256, 512, 1024, MAX_LEN];
+    assert!(possible_lengths.into_iter().all(|x| x <= MAX_LEN));
+
+    let mut xof_output = crate::Hasher::new_keyed(&random_key).finalize_xof();
+    let mut xof_xor_output = crate::Hasher::new_keyed(&random_key).finalize_xof();
+
+    // Don't do too many iterations in debug mode, to keep the tests under a second or so. CI
+    // should run tests in release mode also.
+    // TODO: Provide an environment variable for specifying a larger number of fuzz iterations?
+    let num_tests = if cfg!(debug_assertions) {
+        1_000
+    } else {
+        100_000
+    };
+
+    let mut position = 0;
+    let mut ref_output = Vec::new();
+    for test_i in 0..num_tests {
+        eprintln!("--- test {test_i} ---");
+        // Do a random relative seek maybe. Could be zero.
+        let relative_seek: i64 = *possible_seeks.choose(&mut rng).unwrap();
+        dbg!(relative_seek);
+        if relative_seek != 0 {
+            let new_position = position as i64 + relative_seek;
+            if 0 <= new_position && new_position <= MAX_LEN as i64 {
+                position = new_position as u64;
+            } else {
+                position = 0;
+            }
+            assert_eq!(xof_output.position(), xof_xor_output.position());
+            xof_output.set_position(position as u64);
+            xof_xor_output.set_position(position as u64);
+        }
+        dbg!(position);
+
+        // Generate a random number of output bytes. If the amount of output we've gotten from the
+        // reference_impl isn't enough, double it.
+        let len: usize = *possible_lengths.choose(&mut rng).unwrap();
+        dbg!(len);
+        if position as usize + len > ref_output.len() {
+            let new_len = cmp::max(MAX_LEN, 2 * ref_output.len());
+            ref_output = vec![0u8; new_len];
+            eprintln!("grow reference output length to {}", ref_output.len());
+            let ref_hasher = reference_impl::Hasher::new_keyed(&random_key);
+            ref_hasher.finalize(&mut ref_output);
+        }
+        let mut buf = [0u8; MAX_LEN];
+        xof_output.fill(&mut buf[..len]);
+        assert_eq!(ref_output[position as usize..][..len], buf[..len]);
+        assert_eq!([0u8; MAX_LEN][..MAX_LEN - len], buf[len..]);
+
+        // Xor over the output with a random byte value, and then confirm that xof_xor() recovers
+        // that value.
+        let random_byte: u8 = rng.gen();
+        dbg!(random_byte);
+        for i in 0..len {
+            buf[i] ^= random_byte;
+        }
+        xof_xor_output.fill_xor(&mut buf[..len]);
+        assert_eq!([random_byte; MAX_LEN][..len], buf[..len]);
+        assert_eq!([0u8; MAX_LEN][..MAX_LEN - len], buf[len..]);
+
+        position += len as u64;
     }
 }
 
