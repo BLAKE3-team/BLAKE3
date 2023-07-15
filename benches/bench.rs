@@ -342,3 +342,36 @@ fn bench_two_updates(b: &mut Bencher) {
         hasher.finalize()
     });
 }
+
+fn bench_xof(b: &mut Bencher, len: usize) {
+    b.bytes = len as u64;
+    let mut output = [0u8; 65536];
+    let output_slice = &mut output[..len];
+    let mut reader = blake3::Hasher::new().finalize_xof();
+    b.iter(|| reader.fill(output_slice));
+}
+
+#[bench]
+fn bench_xof_0064(b: &mut Bencher) {
+    bench_xof(b, 64);
+}
+
+#[bench]
+fn bench_xof_0128(b: &mut Bencher) {
+    bench_xof(b, 64);
+}
+
+#[bench]
+fn bench_xof_0256(b: &mut Bencher) {
+    bench_xof(b, 64);
+}
+
+#[bench]
+fn bench_xof_0512(b: &mut Bencher) {
+    bench_xof(b, 64);
+}
+
+#[bench]
+fn bench_xof_1024(b: &mut Bencher) {
+    bench_xof(b, 64);
+}
