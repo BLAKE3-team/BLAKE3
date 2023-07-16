@@ -16,7 +16,7 @@ pure = ["blake3/pure"]
 [dependencies]
 anyhow = "1.0.25"
 blake3 = { version = "1", path = "..", features = ["rayon"] }
-blake3_guts = { path = "../rust/blake3_guts" }
+blake3_guts = { path = "../rust/guts" }
 clap = { version = "4.0.8", features = ["derive", "wrap_help"] }
 hex = "0.4.0"
 memmap2 = "0.7.0"

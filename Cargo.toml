@@ -85,7 +85,7 @@ features = ["rayon"]
 
 [dependencies]
 arrayvec = { version = "0.7.4", default-features = false }
-blake3_guts = { path = "rust/blake3_guts" }
+blake3_guts = { path = "rust/guts" }
 constant_time_eq = "0.3.0"
 rayon = { version = "1.2.1", optional = true }
 cfg-if = "1.0.0"
