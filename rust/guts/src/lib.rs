@@ -4,6 +4,8 @@ use core::mem;
 use core::ptr;
 use core::sync::atomic::{AtomicPtr, Ordering::Relaxed};
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub mod avx512;
 pub mod portable;
 
 #[cfg(test)]
@@ -64,8 +66,18 @@ pub static DETECTED_IMPL: Implementation = Implementation::new(
     universal_hash_init,
 );
 
+fn detect() -> Implementation {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        if let Some(avx512_impl) = avx512::implementation() {
+            return avx512_impl;
+        }
+    }
+    portable::implementation()
+}
+
 fn init_detected_impl() {
-    let detected = portable::implementation();
+    let detected = detect();
 
     DETECTED_IMPL
         .degree_ptr

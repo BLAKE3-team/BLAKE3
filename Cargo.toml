@@ -99,6 +99,3 @@ rand = "0.8.0"
 rand_chacha = "0.3.0"
 reference_impl = { path = "./reference_impl" }
 hmac = "0.12.0"
-
-[build-dependencies]
-cc = "1.0.4"

@@ -19,6 +19,10 @@
 .global _blake3_compress_in_place_avx512
 .global blake3_compress_xof_avx512
 .global _blake3_compress_xof_avx512
+.global blake3_guts_avx512_compress
+.global _blake3_guts_avx512_compress
+.global blake3_guts_avx512_compress_xof
+.global _blake3_guts_avx512_compress_xof
 
 #ifdef __APPLE__
 .text
@@ -2547,6 +2551,190 @@ blake3_compress_xof_avx512:
         vpxor   xmm1, xmm1, xmm3
         vpxor   xmm2, xmm2, [rdi]
         vpxor   xmm3, xmm3, [rdi+0x10]
+        vmovdqu xmmword ptr [r9], xmm0
+        vmovdqu xmmword ptr [r9+0x10], xmm1
+        vmovdqu xmmword ptr [r9+0x20], xmm2
+        vmovdqu xmmword ptr [r9+0x30], xmm3
+        ret
+
+// type CompressFn = unsafe extern "C" fn(
+//     block: *const BlockBytes,                 rdi
+//     block_len: u32,                           esi
+//     cv: *const CVBytes,                       rdx
+//     counter: u64,                             rcx
+//     flags: u32,                               r8d
+//     out: *mut CVBytes,                        r9
+// );
+.p2align 6
+_blake3_guts_avx512_compress:
+blake3_guts_avx512_compress:
+        _CET_ENDBR
+        vmovdqu xmm0, xmmword ptr [rdx]
+        vmovdqu xmm1, xmmword ptr [rdx+0x10]
+        mov     eax, esi
+        shl     r8, 32
+        add     rax, r8
+        vmovq   xmm3, rcx
+        vmovq   xmm4, rax
+        vpunpcklqdq xmm3, xmm3, xmm4
+        vmovaps xmm2, xmmword ptr [BLAKE3_IV+rip]
+        vmovups xmm8, xmmword ptr [rdi]
+        vmovups xmm9, xmmword ptr [rdi+0x10]
+        vshufps xmm4, xmm8, xmm9, 136
+        vshufps xmm5, xmm8, xmm9, 221
+        vmovups xmm8, xmmword ptr [rdi+0x20]
+        vmovups xmm9, xmmword ptr [rdi+0x30]
+        vshufps xmm6, xmm8, xmm9, 136
+        vshufps xmm7, xmm8, xmm9, 221
+        vpshufd xmm6, xmm6, 0x93
+        vpshufd xmm7, xmm7, 0x93
+        mov     al, 7
+9:
+        vpaddd  xmm0, xmm0, xmm4
+        vpaddd  xmm0, xmm0, xmm1
+        vpxord  xmm3, xmm3, xmm0
+        vprord  xmm3, xmm3, 16
+        vpaddd  xmm2, xmm2, xmm3
+        vpxord  xmm1, xmm1, xmm2
+        vprord  xmm1, xmm1, 12
+        vpaddd  xmm0, xmm0, xmm5
+        vpaddd  xmm0, xmm0, xmm1
+        vpxord  xmm3, xmm3, xmm0
+        vprord  xmm3, xmm3, 8
+        vpaddd  xmm2, xmm2, xmm3
+        vpxord  xmm1, xmm1, xmm2
+        vprord  xmm1, xmm1, 7
+        vpshufd xmm0, xmm0, 0x93
+        vpshufd xmm3, xmm3, 0x4E
+        vpshufd xmm2, xmm2, 0x39
+        vpaddd  xmm0, xmm0, xmm6
+        vpaddd  xmm0, xmm0, xmm1
+        vpxord  xmm3, xmm3, xmm0
+        vprord  xmm3, xmm3, 16
+        vpaddd  xmm2, xmm2, xmm3
+        vpxord  xmm1, xmm1, xmm2
+        vprord  xmm1, xmm1, 12
+        vpaddd  xmm0, xmm0, xmm7
+        vpaddd  xmm0, xmm0, xmm1
+        vpxord  xmm3, xmm3, xmm0
+        vprord  xmm3, xmm3, 8
+        vpaddd  xmm2, xmm2, xmm3
+        vpxord  xmm1, xmm1, xmm2
+        vprord  xmm1, xmm1, 7
+        vpshufd xmm0, xmm0, 0x39
+        vpshufd xmm3, xmm3, 0x4E
+        vpshufd xmm2, xmm2, 0x93
+        dec     al
+        jz      9f
+        vshufps xmm8, xmm4, xmm5, 214
+        vpshufd xmm9, xmm4, 0x0F
+        vpshufd xmm4, xmm8, 0x39
+        vshufps xmm8, xmm6, xmm7, 250
+        vpblendd xmm9, xmm9, xmm8, 0xAA
+        vpunpcklqdq xmm8, xmm7, xmm5
+        vpblendd xmm8, xmm8, xmm6, 0x88
+        vpshufd xmm8, xmm8, 0x78
+        vpunpckhdq xmm5, xmm5, xmm7
+        vpunpckldq xmm6, xmm6, xmm5
+        vpshufd xmm7, xmm6, 0x1E
+        vmovdqa xmm5, xmm9
+        vmovdqa xmm6, xmm8
+        jmp     9b
+9:
+        vpxor   xmm0, xmm0, xmm2
+        vpxor   xmm1, xmm1, xmm3
+        vmovdqu xmmword ptr [r9], xmm0
+        vmovdqu xmmword ptr [r9+0x10], xmm1
+        ret
+
+// type CompressXofFn = unsafe extern "C" fn(
+//     block: *const BlockBytes,                 rdi
+//     block_len: u32,                           esi
+//     cv: *const CVBytes,                       rdx
+//     counter: u64,                             rcx
+//     flags: u32,                               r8d
+//     out: *mut BlockBytes,                     r9
+// );
+.p2align 6
+_blake3_guts_avx512_compress_xof:
+blake3_guts_avx512_compress_xof:
+        _CET_ENDBR
+        vmovdqu xmm0, xmmword ptr [rdx]
+        vmovdqu xmm1, xmmword ptr [rdx+0x10]
+        mov     eax, esi
+        shl     r8, 32
+        add     rax, r8
+        vmovq   xmm3, rcx
+        vmovq   xmm4, rax
+        vpunpcklqdq xmm3, xmm3, xmm4
+        vmovaps xmm2, xmmword ptr [BLAKE3_IV+rip]
+        vmovups xmm8, xmmword ptr [rdi]
+        vmovups xmm9, xmmword ptr [rdi+0x10]
+        vshufps xmm4, xmm8, xmm9, 136
+        vshufps xmm5, xmm8, xmm9, 221
+        vmovups xmm8, xmmword ptr [rdi+0x20]
+        vmovups xmm9, xmmword ptr [rdi+0x30]
+        vshufps xmm6, xmm8, xmm9, 136
+        vshufps xmm7, xmm8, xmm9, 221
+        vpshufd xmm6, xmm6, 0x93
+        vpshufd xmm7, xmm7, 0x93
+        mov     al, 7
+9:
+        vpaddd  xmm0, xmm0, xmm4
+        vpaddd  xmm0, xmm0, xmm1
+        vpxord  xmm3, xmm3, xmm0
+        vprord  xmm3, xmm3, 16
+        vpaddd  xmm2, xmm2, xmm3
+        vpxord  xmm1, xmm1, xmm2
+        vprord  xmm1, xmm1, 12
+        vpaddd  xmm0, xmm0, xmm5
+        vpaddd  xmm0, xmm0, xmm1
+        vpxord  xmm3, xmm3, xmm0
+        vprord  xmm3, xmm3, 8
+        vpaddd  xmm2, xmm2, xmm3
+        vpxord  xmm1, xmm1, xmm2
+        vprord  xmm1, xmm1, 7
+        vpshufd xmm0, xmm0, 0x93
+        vpshufd xmm3, xmm3, 0x4E
+        vpshufd xmm2, xmm2, 0x39
+        vpaddd  xmm0, xmm0, xmm6
+        vpaddd  xmm0, xmm0, xmm1
+        vpxord  xmm3, xmm3, xmm0
+        vprord  xmm3, xmm3, 16
+        vpaddd  xmm2, xmm2, xmm3
+        vpxord  xmm1, xmm1, xmm2
+        vprord  xmm1, xmm1, 12
+        vpaddd  xmm0, xmm0, xmm7
+        vpaddd  xmm0, xmm0, xmm1
+        vpxord  xmm3, xmm3, xmm0
+        vprord  xmm3, xmm3, 8
+        vpaddd  xmm2, xmm2, xmm3
+        vpxord  xmm1, xmm1, xmm2
+        vprord  xmm1, xmm1, 7
+        vpshufd xmm0, xmm0, 0x39
+        vpshufd xmm3, xmm3, 0x4E
+        vpshufd xmm2, xmm2, 0x93
+        dec     al
+        jz      9f
+        vshufps xmm8, xmm4, xmm5, 214
+        vpshufd xmm9, xmm4, 0x0F
+        vpshufd xmm4, xmm8, 0x39
+        vshufps xmm8, xmm6, xmm7, 250
+        vpblendd xmm9, xmm9, xmm8, 0xAA
+        vpunpcklqdq xmm8, xmm7, xmm5
+        vpblendd xmm8, xmm8, xmm6, 0x88
+        vpshufd xmm8, xmm8, 0x78
+        vpunpckhdq xmm5, xmm5, xmm7
+        vpunpckldq xmm6, xmm6, xmm5
+        vpshufd xmm7, xmm6, 0x1E
+        vmovdqa xmm5, xmm9
+        vmovdqa xmm6, xmm8
+        jmp     9b
+9:
+        vpxor   xmm0, xmm0, xmm2
+        vpxor   xmm1, xmm1, xmm3
+        vpxor   xmm2, xmm2, [rdx]
+        vpxor   xmm3, xmm3, [rdx+0x10]
         vmovdqu xmmword ptr [r9], xmm0
         vmovdqu xmmword ptr [r9+0x10], xmm1
         vmovdqu xmmword ptr [r9+0x20], xmm2

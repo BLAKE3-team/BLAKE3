@@ -148,20 +148,20 @@ fn build_sse2_sse41_avx2_assembly() {
     println!("cargo:rustc-cfg=blake3_avx2_ffi");
     let mut build = new_build();
     if is_windows_msvc() {
-        build.file("c/blake3_sse2_x86-64_windows_msvc.asm");
-        build.file("c/blake3_sse41_x86-64_windows_msvc.asm");
-        build.file("c/blake3_avx2_x86-64_windows_msvc.asm");
+        build.file("../../c/blake3_sse2_x86-64_windows_msvc.asm");
+        build.file("../../c/blake3_sse41_x86-64_windows_msvc.asm");
+        build.file("../../c/blake3_avx2_x86-64_windows_msvc.asm");
     } else if is_windows_gnu() {
-        build.file("c/blake3_sse2_x86-64_windows_gnu.S");
-        build.file("c/blake3_sse41_x86-64_windows_gnu.S");
-        build.file("c/blake3_avx2_x86-64_windows_gnu.S");
+        build.file("../../c/blake3_sse2_x86-64_windows_gnu.S");
+        build.file("../../c/blake3_sse41_x86-64_windows_gnu.S");
+        build.file("../../c/blake3_avx2_x86-64_windows_gnu.S");
     } else {
         // All non-Windows implementations are assumed to support
         // Linux-style assembly. These files do contain a small
         // explicit workaround for macOS also.
-        build.file("c/blake3_sse2_x86-64_unix.S");
-        build.file("c/blake3_sse41_x86-64_unix.S");
-        build.file("c/blake3_avx2_x86-64_unix.S");
+        build.file("../../c/blake3_sse2_x86-64_unix.S");
+        build.file("../../c/blake3_sse41_x86-64_unix.S");
+        build.file("../../c/blake3_avx2_x86-64_unix.S");
     }
     build.compile("blake3_sse2_sse41_avx2_assembly");
 }
@@ -171,7 +171,7 @@ fn build_avx512_c_intrinsics() {
     // implementation doesn't support those.
     println!("cargo:rustc-cfg=blake3_avx512_ffi");
     let mut build = new_build();
-    build.file("c/blake3_avx512.c");
+    build.file("../../c/blake3_avx512.c");
     if is_windows_msvc() {
         build.flag("/arch:AVX512");
     } else {
@@ -192,15 +192,15 @@ fn build_avx512_assembly() {
     println!("cargo:rustc-cfg=blake3_avx512_ffi");
     let mut build = new_build();
     if is_windows_msvc() {
-        build.file("c/blake3_avx512_x86-64_windows_msvc.asm");
+        build.file("../../c/blake3_avx512_x86-64_windows_msvc.asm");
     } else {
         if is_windows_gnu() {
-            build.file("c/blake3_avx512_x86-64_windows_gnu.S");
+            build.file("../../c/blake3_avx512_x86-64_windows_gnu.S");
         } else {
             // All non-Windows implementations are assumed to support Linux-style
             // assembly. These files do contain a small explicit workaround for
             // macOS also.
-            build.file("c/blake3_avx512_x86-64_unix.S");
+            build.file("../../c/blake3_avx512_x86-64_unix.S");
         }
         // Older versions of Clang require these flags, even for assembly. See
         // https://github.com/BLAKE3-team/BLAKE3/issues/79.
@@ -215,7 +215,7 @@ fn build_neon_c_intrinsics() {
     // Note that blake3_neon.c normally depends on the blake3_portable.c
     // for the single-instance compression function, but we expose
     // portable.rs over FFI instead. See ffi_neon.rs.
-    build.file("c/blake3_neon.c");
+    build.file("../../c/blake3_neon.c");
     // ARMv7 platforms that support NEON generally need the following
     // flags. AArch64 supports NEON by default and does not support -mpfu.
     if is_armv7() {
@@ -225,7 +225,7 @@ fn build_neon_c_intrinsics() {
     build.compile("blake3_neon");
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     if is_pure() && is_neon() {
         panic!("It doesn't make sense to enable both \"pure\" and \"neon\".");
     }
@@ -266,12 +266,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-env-changed=CFLAGS");
 
     // Ditto for source files, though these shouldn't change as often.
-    for file in std::fs::read_dir("c")? {
+    for file in std::fs::read_dir("../../c").unwrap() {
         println!(
             "cargo:rerun-if-changed={}",
-            file?.path().to_str().expect("utf-8")
+            file.unwrap().path().to_str().expect("utf-8")
         );
     }
-
-    Ok(())
 }
