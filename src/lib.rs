@@ -116,6 +116,9 @@ mod sse41;
 #[cfg(feature = "traits-preview")]
 pub mod traits;
 
+#[cfg(feature = "file")]
+pub mod file;
+
 mod join;
 
 use arrayref::{array_mut_ref, array_ref};
@@ -1350,6 +1353,29 @@ impl std::io::Write for Hasher {
     #[inline]
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
+    }
+}
+
+/// Copy from `reader` to `hasher`, returning the number of bytes read.
+///
+/// A 16 KiB buffer is enough to take advantage of all the SIMD instruction sets
+/// that we support, but `std::io::copy` currently uses 8 KiB. Most platforms
+/// can support at least 64 KiB, and there's some performance benefit to using
+/// bigger reads, so that's what we use here.
+#[cfg(feature = "std")]
+pub fn copy_wide(mut reader: impl std::io::Read, hasher: &mut Hasher) -> std::io::Result<u64> {
+    let mut buffer = [0; 65536];
+    let mut total = 0;
+    loop {
+        match reader.read(&mut buffer) {
+            Ok(0) => return Ok(total),
+            Ok(n) => {
+                hasher.update(&buffer[..n]);
+                total += n as u64;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e),
+        }
     }
 }
 
