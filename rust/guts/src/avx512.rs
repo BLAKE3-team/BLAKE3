@@ -1,4 +1,4 @@
-use crate::{BlockBytes, CVBytes, Implementation, BLOCK_LEN};
+use crate::{BlockBytes, CVBytes, Implementation, BLOCK_LEN, CHUNK_LEN};
 
 const DEGREE: usize = 16;
 
@@ -18,6 +18,14 @@ extern "C" {
         counter: u64,
         flags: u32,
         out: *mut BlockBytes,
+    );
+    fn blake3_guts_avx512_hash_chunks_16_exact(
+        input: *const u8,
+        input_len: usize,
+        key: *const CVBytes,
+        counter: u64,
+        flags: u32,
+        transposed_output: *mut u32,
     );
     fn blake3_guts_avx512_xof_16_exact(
         block: *const BlockBytes,
@@ -45,6 +53,18 @@ unsafe extern "C" fn hash_chunks(
     flags: u32,
     transposed_output: *mut u32,
 ) {
+    debug_assert!(input_len <= 16 * CHUNK_LEN);
+    if input_len == 16 * CHUNK_LEN {
+        blake3_guts_avx512_hash_chunks_16_exact(
+            input,
+            0, // unused
+            key,
+            counter,
+            flags,
+            transposed_output,
+        );
+        return;
+    }
     crate::hash_chunks_using_compress(
         blake3_guts_avx512_compress,
         input,

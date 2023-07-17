@@ -112,6 +112,7 @@ pub fn test_hash_chunks_vs_portable(test_impl: &Implementation) {
         let input1 = &input[..test_impl.degree() * CHUNK_LEN];
         let input2 = &input[test_impl.degree() * CHUNK_LEN..][..input_2_len];
         for initial_counter in INITIAL_COUNTERS {
+            dbg!(initial_counter);
             // Make two calls, to test the output_column parameter.
             let mut portable_output = TransposedVectors::new();
             let (portable_left, portable_right) =
