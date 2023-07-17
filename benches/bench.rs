@@ -358,20 +358,20 @@ fn bench_xof_0064(b: &mut Bencher) {
 
 #[bench]
 fn bench_xof_0128(b: &mut Bencher) {
-    bench_xof(b, 64);
+    bench_xof(b, 128);
 }
 
 #[bench]
 fn bench_xof_0256(b: &mut Bencher) {
-    bench_xof(b, 64);
+    bench_xof(b, 256);
 }
 
 #[bench]
 fn bench_xof_0512(b: &mut Bencher) {
-    bench_xof(b, 64);
+    bench_xof(b, 512);
 }
 
 #[bench]
 fn bench_xof_1024(b: &mut Bencher) {
-    bench_xof(b, 64);
+    bench_xof(b, 1024);
 }
