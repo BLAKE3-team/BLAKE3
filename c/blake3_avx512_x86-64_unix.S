@@ -23,10 +23,10 @@
 .global _blake3_guts_avx512_compress
 .global blake3_guts_avx512_compress_xof
 .global _blake3_guts_avx512_compress_xof
-.global blake3_guts_avx512_xof_16
-.global _blake3_guts_avx512_xof_16
-.global blake3_guts_avx512_xof_xor_16
-.global _blake3_guts_avx512_xof_xor_16
+.global blake3_guts_avx512_xof_16_exact
+.global _blake3_guts_avx512_xof_16_exact
+.global blake3_guts_avx512_xof_xor_16_exact
+.global _blake3_guts_avx512_xof_xor_16_exact
 
 #ifdef __APPLE__
 .text
@@ -2746,8 +2746,8 @@ blake3_guts_avx512_compress_xof:
         ret
 
 .p2align 6
-_blake3_guts_kernel_16_avx512:
-blake3_guts_kernel_16_avx512:
+_blake3_guts_kernel_16_avx512_exact:
+blake3_guts_kernel_16_avx512_exact:
         vpbroadcastd zmm8, dword ptr [BLAKE3_IV_0+rip]
         vpbroadcastd zmm9, dword ptr [BLAKE3_IV_1+rip]
         vpbroadcastd zmm10, dword ptr [BLAKE3_IV_2+rip]
@@ -3545,8 +3545,8 @@ blake3_guts_kernel_16_avx512:
 // r8d: flags
 // r9:  out pointer
 .p2align 6
-_blake3_guts_avx512_xof_inner_16:
-blake3_guts_avx512_xof_inner_16:
+_blake3_guts_avx512_xof_inner_16_exact:
+blake3_guts_avx512_xof_inner_16_exact:
         // broadcast the block words
         vpbroadcastd zmm16,DWORD PTR [rdi]
         vpbroadcastd zmm17,DWORD PTR [rdi+0x4]
@@ -3586,7 +3586,7 @@ blake3_guts_avx512_xof_inner_16:
         vpbroadcastd zmm15, r8d
 
         // execute the kernel
-        call blake3_guts_kernel_16_avx512
+        call blake3_guts_kernel_16_avx512_exact
 
         // xor the two halves of the state
         vpxord  zmm0, zmm0, zmm8
@@ -3681,9 +3681,9 @@ blake3_guts_avx512_xof_inner_16:
 // r8d: flags
 // r9:  out pointer
 .p2align 6
-_blake3_guts_avx512_xof_16:
-blake3_guts_avx512_xof_16:
-        call blake3_guts_avx512_xof_inner_16
+_blake3_guts_avx512_xof_16_exact:
+blake3_guts_avx512_xof_16_exact:
+        call blake3_guts_avx512_xof_inner_16_exact
         vmovdqu32 ZMMWORD PTR [r9],zmm0
         vmovdqu32 ZMMWORD PTR [r9+0x40],zmm1
         vmovdqu32 ZMMWORD PTR [r9+0x80],zmm2
@@ -3709,9 +3709,9 @@ blake3_guts_avx512_xof_16:
 // r8d: flags
 // r9:  out pointer
 .p2align 6
-_blake3_guts_avx512_xof_xor_16:
-blake3_guts_avx512_xof_xor_16:
-        call blake3_guts_avx512_xof_inner_16
+_blake3_guts_avx512_xof_xor_16_exact:
+blake3_guts_avx512_xof_xor_16_exact:
+        call blake3_guts_avx512_xof_inner_16_exact
         vpxord    zmm0, zmm0, ZMMWORD PTR [r9]
         vmovdqu32 ZMMWORD PTR [r9],zmm0
         vpxord    zmm1, zmm1, ZMMWORD PTR [r9+0x40]

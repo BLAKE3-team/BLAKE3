@@ -19,7 +19,7 @@ extern "C" {
         flags: u32,
         out: *mut BlockBytes,
     );
-    fn blake3_guts_avx512_xof_16(
+    fn blake3_guts_avx512_xof_16_exact(
         block: *const BlockBytes,
         block_len: u32,
         cv: *const CVBytes,
@@ -27,7 +27,7 @@ extern "C" {
         flags: u32,
         out: *mut u8,
     );
-    fn blake3_guts_avx512_xof_xor_16(
+    fn blake3_guts_avx512_xof_xor_16_exact(
         block: *const BlockBytes,
         block_len: u32,
         cv: *const CVBytes,
@@ -83,7 +83,7 @@ unsafe extern "C" fn xof(
     mut out_len: usize,
 ) {
     while out_len >= 16 * BLOCK_LEN {
-        blake3_guts_avx512_xof_16(block, block_len, cv, counter, flags, out);
+        blake3_guts_avx512_xof_16_exact(block, block_len, cv, counter, flags, out);
         counter += 16;
         out = out.add(16 * BLOCK_LEN);
         out_len -= 16 * BLOCK_LEN;
@@ -110,7 +110,7 @@ unsafe extern "C" fn xof_xor(
     mut out_len: usize,
 ) {
     while out_len >= 16 * BLOCK_LEN {
-        blake3_guts_avx512_xof_xor_16(block, block_len, cv, counter, flags, out);
+        blake3_guts_avx512_xof_xor_16_exact(block, block_len, cv, counter, flags, out);
         counter += 16;
         out = out.add(16 * BLOCK_LEN);
         out_len -= 16 * BLOCK_LEN;
