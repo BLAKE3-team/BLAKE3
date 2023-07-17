@@ -25,6 +25,8 @@
 .global _blake3_guts_avx512_compress_xof
 .global blake3_guts_avx512_xof_16
 .global _blake3_guts_avx512_xof_16
+.global blake3_guts_avx512_xof_xor_16
+.global _blake3_guts_avx512_xof_xor_16
 
 #ifdef __APPLE__
 .text
@@ -3543,8 +3545,8 @@ blake3_guts_kernel_16_avx512:
 // r8d: flags
 // r9:  out pointer
 .p2align 6
-_blake3_guts_avx512_xof_16:
-blake3_guts_avx512_xof_16:
+_blake3_guts_avx512_xof_inner_16:
+blake3_guts_avx512_xof_inner_16:
         // broadcast the block words
         vpbroadcastd zmm16,DWORD PTR [rdi]
         vpbroadcastd zmm17,DWORD PTR [rdi+0x4]
@@ -3670,8 +3672,18 @@ blake3_guts_avx512_xof_16:
         vshufi32x4 zmm13,zmm21,zmm29,0xdd
         vshufi32x4 zmm14,zmm22,zmm30,0xdd
         vshufi32x4 zmm15,zmm23,zmm31,0xdd
+        ret
 
-        // write out the untransposed state
+// rdi: block pointer
+// esi: block_len
+// rdx: cv
+// rcx: counter
+// r8d: flags
+// r9:  out pointer
+.p2align 6
+_blake3_guts_avx512_xof_16:
+blake3_guts_avx512_xof_16:
+        call blake3_guts_avx512_xof_inner_16
         vmovdqu32 ZMMWORD PTR [r9],zmm0
         vmovdqu32 ZMMWORD PTR [r9+0x40],zmm1
         vmovdqu32 ZMMWORD PTR [r9+0x80],zmm2
@@ -3687,6 +3699,50 @@ blake3_guts_avx512_xof_16:
         vmovdqu32 ZMMWORD PTR [r9+0x300],zmm12
         vmovdqu32 ZMMWORD PTR [r9+0x340],zmm13
         vmovdqu32 ZMMWORD PTR [r9+0x380],zmm14
+        vmovdqu32 ZMMWORD PTR [r9+0x3c0],zmm15
+        ret
+
+// rdi: block pointer
+// esi: block_len
+// rdx: cv
+// rcx: counter
+// r8d: flags
+// r9:  out pointer
+.p2align 6
+_blake3_guts_avx512_xof_xor_16:
+blake3_guts_avx512_xof_xor_16:
+        call blake3_guts_avx512_xof_inner_16
+        vpxord    zmm0, zmm0, ZMMWORD PTR [r9]
+        vmovdqu32 ZMMWORD PTR [r9],zmm0
+        vpxord    zmm1, zmm1, ZMMWORD PTR [r9+0x40]
+        vmovdqu32 ZMMWORD PTR [r9+0x40],zmm1
+        vpxord    zmm2, zmm2, ZMMWORD PTR [r9+0x80]
+        vmovdqu32 ZMMWORD PTR [r9+0x80],zmm2
+        vpxord    zmm3, zmm3, ZMMWORD PTR [r9+0xc0]
+        vmovdqu32 ZMMWORD PTR [r9+0xc0],zmm3
+        vpxord    zmm4, zmm4, ZMMWORD PTR [r9+0x100]
+        vmovdqu32 ZMMWORD PTR [r9+0x100],zmm4
+        vpxord    zmm5, zmm5, ZMMWORD PTR [r9+0x140]
+        vmovdqu32 ZMMWORD PTR [r9+0x140],zmm5
+        vpxord    zmm6, zmm6, ZMMWORD PTR [r9+0x180]
+        vmovdqu32 ZMMWORD PTR [r9+0x180],zmm6
+        vpxord    zmm7, zmm7, ZMMWORD PTR [r9+0x1c0]
+        vmovdqu32 ZMMWORD PTR [r9+0x1c0],zmm7
+        vpxord    zmm8, zmm8, ZMMWORD PTR [r9+0x200]
+        vmovdqu32 ZMMWORD PTR [r9+0x200],zmm8
+        vpxord    zmm9, zmm9, ZMMWORD PTR [r9+0x240]
+        vmovdqu32 ZMMWORD PTR [r9+0x240],zmm9
+        vpxord    zmm10, zmm10, ZMMWORD PTR [r9+0x280]
+        vmovdqu32 ZMMWORD PTR [r9+0x280],zmm10
+        vpxord    zmm11, zmm11, ZMMWORD PTR [r9+0x2c0]
+        vmovdqu32 ZMMWORD PTR [r9+0x2c0],zmm11
+        vpxord    zmm12, zmm12, ZMMWORD PTR [r9+0x300]
+        vmovdqu32 ZMMWORD PTR [r9+0x300],zmm12
+        vpxord    zmm13, zmm13, ZMMWORD PTR [r9+0x340]
+        vmovdqu32 ZMMWORD PTR [r9+0x340],zmm13
+        vpxord    zmm14, zmm14, ZMMWORD PTR [r9+0x380]
+        vmovdqu32 ZMMWORD PTR [r9+0x380],zmm14
+        vpxord    zmm15, zmm15, ZMMWORD PTR [r9+0x3c0]
         vmovdqu32 ZMMWORD PTR [r9+0x3c0],zmm15
         ret
 

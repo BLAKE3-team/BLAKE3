@@ -27,6 +27,14 @@ extern "C" {
         flags: u32,
         out: *mut u8,
     );
+    fn blake3_guts_avx512_xof_xor_16(
+        block: *const BlockBytes,
+        block_len: u32,
+        cv: *const CVBytes,
+        counter: u64,
+        flags: u32,
+        out: *mut u8,
+    );
 }
 
 unsafe extern "C" fn hash_chunks(
@@ -96,11 +104,17 @@ unsafe extern "C" fn xof_xor(
     block: *const BlockBytes,
     block_len: u32,
     cv: *const CVBytes,
-    counter: u64,
+    mut counter: u64,
     flags: u32,
-    out: *mut u8,
-    out_len: usize,
+    mut out: *mut u8,
+    mut out_len: usize,
 ) {
+    while out_len >= 16 * BLOCK_LEN {
+        blake3_guts_avx512_xof_xor_16(block, block_len, cv, counter, flags, out);
+        counter += 16;
+        out = out.add(16 * BLOCK_LEN);
+        out_len -= 16 * BLOCK_LEN;
+    }
     crate::xof_xor_using_compress_xof(
         blake3_guts_avx512_compress_xof,
         block,
