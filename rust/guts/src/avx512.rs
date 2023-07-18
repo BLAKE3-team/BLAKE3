@@ -27,6 +27,13 @@ extern "C" {
         flags: u32,
         transposed_output: *mut u32,
     );
+    fn blake3_guts_avx512_hash_parents_16_exact(
+        transposed_input: *const u32,
+        num_parents: usize,
+        key: *const CVBytes,
+        flags: u32,
+        transposed_output: *mut u32,
+    );
     fn blake3_guts_avx512_xof_16_exact(
         block: *const BlockBytes,
         block_len: u32,
@@ -83,6 +90,17 @@ unsafe extern "C" fn hash_parents(
     flags: u32,
     transposed_output: *mut u32, // may overlap the input
 ) {
+    debug_assert!(num_parents <= 16);
+    if num_parents == 16 {
+        blake3_guts_avx512_hash_parents_16_exact(
+            transposed_input,
+            num_parents,
+            key,
+            flags,
+            transposed_output,
+        );
+        return;
+    }
     crate::hash_parents_using_compress(
         blake3_guts_avx512_compress,
         transposed_input,
