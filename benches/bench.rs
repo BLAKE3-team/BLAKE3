@@ -344,6 +344,77 @@ fn bench_two_updates(b: &mut Bencher) {
     });
 }
 
+fn bench_hash_chunks(b: &mut Bencher, len: usize) {
+    if len > guts::DETECTED_IMPL.degree() * guts::CHUNK_LEN {
+        return;
+    }
+    let mut input = RandomInput::new(b, len);
+    let key = [99; 32];
+    let mut output = guts::TransposedVectors::new();
+    b.iter(|| {
+        let (output_left, _) = guts::DETECTED_IMPL.split_transposed_vectors(&mut output);
+        guts::DETECTED_IMPL.hash_chunks(input.get(), &key, 0, 0, output_left);
+    });
+}
+
+#[bench]
+fn bench_hash_chunks_01_kib(b: &mut Bencher) {
+    bench_hash_chunks(b, 1024);
+}
+
+#[bench]
+fn bench_hash_chunks_02_kib(b: &mut Bencher) {
+    bench_hash_chunks(b, 2048);
+}
+
+#[bench]
+fn bench_hash_chunks_04_kib(b: &mut Bencher) {
+    bench_hash_chunks(b, 4096);
+}
+
+#[bench]
+fn bench_hash_chunks_08_kib(b: &mut Bencher) {
+    bench_hash_chunks(b, 8192);
+}
+
+#[bench]
+fn bench_hash_chunks_16_kib(b: &mut Bencher) {
+    bench_hash_chunks(b, 16384);
+}
+
+fn bench_hash_parents(b: &mut Bencher, num_parents: usize) {
+    if num_parents > guts::DETECTED_IMPL.degree() {
+        return;
+    }
+    b.bytes = 64 * num_parents as u64;
+    let num_cvs = 2 * num_parents;
+    let key = [99; 32];
+    let mut output = guts::TransposedVectors::new();
+    b.iter(|| {
+        guts::DETECTED_IMPL.reduce_parents(&mut output, num_cvs, &key, 0);
+    });
+}
+
+#[bench]
+fn bench_hash_parents_02(b: &mut Bencher) {
+    bench_hash_parents(b, 2);
+}
+
+#[bench]
+fn bench_hash_parents_04(b: &mut Bencher) {
+    bench_hash_parents(b, 4);
+}
+
+#[bench]
+fn bench_hash_parents_08(b: &mut Bencher) {
+    bench_hash_parents(b, 8);
+}
+
+#[bench]
+fn bench_hash_parents_16(b: &mut Bencher) {
+    bench_hash_parents(b, 16);
+}
+
 fn bench_xof(b: &mut Bencher, len: usize) {
     b.bytes = len as u64;
     let mut output = [0u8; 65536];
