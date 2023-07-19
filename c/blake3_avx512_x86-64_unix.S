@@ -2657,6 +2657,8 @@ blake3_guts_avx512_compress:
         vpxor   xmm1, xmm1, xmm3
         vmovdqu xmmword ptr [r9], xmm0
         vmovdqu xmmword ptr [r9+0x10], xmm1
+
+        vzeroupper
         ret
 
 // type CompressXofFn = unsafe extern "C" fn(
@@ -2751,6 +2753,8 @@ blake3_guts_avx512_compress_xof:
         vmovdqu xmmword ptr [r9+0x10], xmm1
         vmovdqu xmmword ptr [r9+0x20], xmm2
         vmovdqu xmmword ptr [r9+0x30], xmm3
+
+        vzeroupper
         ret
 
 .p2align 6
@@ -3544,6 +3548,8 @@ blake3_guts_avx512_kernel_16:
         vprord  zmm6, zmm6, 7
         vprord  zmm7, zmm7, 7
         vprord  zmm4, zmm4, 7
+
+        // internal function, no vzeroupper
         ret
 
 .p2align 6
@@ -4337,6 +4343,8 @@ blake3_guts_avx512_kernel_8:
         vprord  ymm6, ymm6, 7
         vprord  ymm7, ymm7, 7
         vprord  ymm4, ymm4, 7
+
+        // internal function, no vzeroupper
         ret
 
 // rdi: block pointer
@@ -4481,6 +4489,8 @@ blake3_guts_avx512_hash_blocks_16_exact:
         vpxord zmm5, zmm5, zmm13
         vpxord zmm6, zmm6, zmm14
         vpxord zmm7, zmm7, zmm15
+
+        // internal function, no vzeroupper
         ret
 
 // rdi: block pointer
@@ -4549,6 +4559,8 @@ blake3_guts_avx512_hash_chunks_16_exact:
         vmovdqa32 ZMMWORD PTR [r9+0x5*0x80],zmm5
         vmovdqa32 ZMMWORD PTR [r9+0x6*0x80],zmm6
         vmovdqa32 ZMMWORD PTR [r9+0x7*0x80],zmm7
+
+        vzeroupper
         ret
 
 // rdi: aligned+transposed input
@@ -4643,6 +4655,8 @@ blake3_guts_avx512_hash_parents_16_exact:
         vmovdqa32 ZMMWORD PTR [r8+0x5*0x80],zmm5
         vmovdqa32 ZMMWORD PTR [r8+0x6*0x80],zmm6
         vmovdqa32 ZMMWORD PTR [r8+0x7*0x80],zmm7
+
+        vzeroupper
         ret
 
 // rdi: aligned+transposed input
@@ -4737,6 +4751,8 @@ blake3_guts_avx512_hash_parents_8_exact:
         vmovdqa32 YMMWORD PTR [r8+0x5*0x80],ymm5
         vmovdqa32 YMMWORD PTR [r8+0x6*0x80],ymm6
         vmovdqa32 YMMWORD PTR [r8+0x7*0x80],ymm7
+
+        vzeroupper
         ret
 
 // rdi: block pointer
@@ -4873,6 +4889,8 @@ blake3_guts_avx512_xof_inner_16_exact:
         vshufi32x4 zmm13,zmm21,zmm29,0xdd
         vshufi32x4 zmm14,zmm22,zmm30,0xdd
         vshufi32x4 zmm15,zmm23,zmm31,0xdd
+
+        // internal function, no vzeroupper
         ret
 
 // rdi: block pointer
@@ -4901,6 +4919,8 @@ blake3_guts_avx512_xof_16_exact:
         vmovdqu32 ZMMWORD PTR [r9+0x340],zmm13
         vmovdqu32 ZMMWORD PTR [r9+0x380],zmm14
         vmovdqu32 ZMMWORD PTR [r9+0x3c0],zmm15
+
+        vzeroupper
         ret
 
 // rdi: block pointer
@@ -4945,6 +4965,8 @@ blake3_guts_avx512_xof_xor_16_exact:
         vmovdqu32 ZMMWORD PTR [r9+0x380],zmm14
         vpxord    zmm15, zmm15, ZMMWORD PTR [r9+0x3c0]
         vmovdqu32 ZMMWORD PTR [r9+0x3c0],zmm15
+
+        vzeroupper
         ret
 
 // rdi: input pointer
@@ -5122,6 +5144,8 @@ blake3_guts_avx512_universal_hash_16_exact:
         vpinsrd xmm1, xmm1, eax, 1
         vpunpcklqdq     xmm0, xmm0, xmm1
         vmovdqu XMMWORD PTR [r8], xmm0
+
+        vzeroupper
         ret
 
 #ifdef __APPLE__
