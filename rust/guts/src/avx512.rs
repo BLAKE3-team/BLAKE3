@@ -50,6 +50,13 @@ extern "C" {
         flags: u32,
         out: *mut u8,
     );
+    fn blake3_guts_avx512_universal_hash_16_exact(
+        input: *const u8,
+        input_len: usize,
+        key: *const CVBytes,
+        counter: u64,
+        out: *mut [u8; 16],
+    );
 }
 
 unsafe extern "C" fn hash_chunks(
@@ -172,6 +179,11 @@ unsafe extern "C" fn universal_hash(
     counter: u64,
     out: *mut [u8; 16],
 ) {
+    debug_assert!(input_len <= 16 * BLOCK_LEN);
+    if input_len == 16 * BLOCK_LEN {
+        blake3_guts_avx512_universal_hash_16_exact(input, input_len, key, counter, out);
+        return;
+    }
     crate::universal_hash_using_compress(
         blake3_guts_avx512_compress,
         input,

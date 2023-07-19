@@ -2,7 +2,8 @@
 
 extern crate test;
 
-use blake3_guts::BLOCK_LEN;
+use blake3_guts as guts;
+use guts::BLOCK_LEN;
 use rand::prelude::*;
 use test::Bencher;
 
@@ -374,4 +375,35 @@ fn bench_xof_0512(b: &mut Bencher) {
 #[bench]
 fn bench_xof_1024(b: &mut Bencher) {
     bench_xof(b, 1024);
+}
+
+fn bench_universal_hash(b: &mut Bencher, len: usize) {
+    let mut input = RandomInput::new(b, len);
+    let key = [99; 32];
+    b.iter(|| guts::DETECTED_IMPL.universal_hash(input.get(), &key, 0));
+}
+
+#[bench]
+fn bench_universal_hash_0064(b: &mut Bencher) {
+    bench_universal_hash(b, 64);
+}
+
+#[bench]
+fn bench_universal_hash_0128(b: &mut Bencher) {
+    bench_universal_hash(b, 128);
+}
+
+#[bench]
+fn bench_universal_hash_0256(b: &mut Bencher) {
+    bench_universal_hash(b, 256);
+}
+
+#[bench]
+fn bench_universal_hash_0512(b: &mut Bencher) {
+    bench_universal_hash(b, 512);
+}
+
+#[bench]
+fn bench_universal_hash_1024(b: &mut Bencher) {
+    bench_universal_hash(b, 1024);
 }

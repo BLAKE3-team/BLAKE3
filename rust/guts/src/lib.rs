@@ -142,6 +142,8 @@ impl Implementation {
     pub fn degree(&self) -> usize {
         let degree = self.degree_fn()();
         debug_assert!(degree >= 2);
+        debug_assert!(degree <= MAX_SIMD_DEGREE);
+        debug_assert_eq!(1, degree.count_ones(), "power of 2");
         degree
     }
 
@@ -333,12 +335,23 @@ impl Implementation {
     }
 
     #[inline]
-    pub fn universal_hash(&self, input: &[u8], key: &CVBytes, counter: u64) -> [u8; 16] {
-        let mut out = [0u8; 16];
-        unsafe {
-            self.universal_hash_fn()(input.as_ptr(), input.len(), key, counter, &mut out);
+    pub fn universal_hash(&self, mut input: &[u8], key: &CVBytes, mut counter: u64) -> [u8; 16] {
+        let degree = self.degree();
+        let simd_len = degree * BLOCK_LEN;
+        let mut ret = [0u8; 16];
+        while !input.is_empty() {
+            let take = cmp::min(simd_len, input.len());
+            let mut output = [0u8; 16];
+            unsafe {
+                self.universal_hash_fn()(input.as_ptr(), take, key, counter, &mut output);
+            }
+            input = &input[take..];
+            counter += degree as u64;
+            for byte_index in 0..16 {
+                ret[byte_index] ^= output[byte_index];
+            }
         }
-        out
+        ret
     }
 }
 
