@@ -284,20 +284,27 @@ impl Implementation {
         block: &BlockBytes,
         block_len: u32,
         cv: &CVBytes,
-        counter: u64,
+        mut counter: u64,
         flags: u32,
-        out: &mut [u8],
+        mut out: &mut [u8],
     ) {
-        unsafe {
-            self.xof_fn()(
-                block,
-                block_len,
-                cv,
-                counter,
-                flags | ROOT,
-                out.as_mut_ptr(),
-                out.len(),
-            );
+        let degree = self.degree();
+        let simd_len = degree * BLOCK_LEN;
+        while !out.is_empty() {
+            let take = cmp::min(simd_len, out.len());
+            unsafe {
+                self.xof_fn()(
+                    block,
+                    block_len,
+                    cv,
+                    counter,
+                    flags | ROOT,
+                    out.as_mut_ptr(),
+                    take,
+                );
+            }
+            out = &mut out[take..];
+            counter += degree as u64;
         }
     }
 
@@ -312,20 +319,27 @@ impl Implementation {
         block: &BlockBytes,
         block_len: u32,
         cv: &CVBytes,
-        counter: u64,
+        mut counter: u64,
         flags: u32,
-        out: &mut [u8],
+        mut out: &mut [u8],
     ) {
-        unsafe {
-            self.xof_xor_fn()(
-                block,
-                block_len,
-                cv,
-                counter,
-                flags | ROOT,
-                out.as_mut_ptr(),
-                out.len(),
-            );
+        let degree = self.degree();
+        let simd_len = degree * BLOCK_LEN;
+        while !out.is_empty() {
+            let take = cmp::min(simd_len, out.len());
+            unsafe {
+                self.xof_xor_fn()(
+                    block,
+                    block_len,
+                    cv,
+                    counter,
+                    flags | ROOT,
+                    out.as_mut_ptr(),
+                    take,
+                );
+            }
+            out = &mut out[take..];
+            counter += degree as u64;
         }
     }
 
@@ -608,6 +622,7 @@ unsafe fn xof_using_compress_xof(
     mut out: *mut u8,
     mut out_len: usize,
 ) {
+    debug_assert!(out_len <= MAX_SIMD_DEGREE * BLOCK_LEN);
     while out_len > 0 {
         let mut block_output = [0u8; 64];
         compress_xof(block, block_len, cv, counter, flags, &mut block_output);
@@ -630,6 +645,7 @@ unsafe fn xof_xor_using_compress_xof(
     mut out: *mut u8,
     mut out_len: usize,
 ) {
+    debug_assert!(out_len <= MAX_SIMD_DEGREE * BLOCK_LEN);
     while out_len > 0 {
         let mut block_output = [0u8; 64];
         compress_xof(block, block_len, cv, counter, flags, &mut block_output);
