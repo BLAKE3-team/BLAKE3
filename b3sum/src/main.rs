@@ -196,7 +196,9 @@ impl Input {
             // multiple threads. This doesn't work on stdin, or on some files,
             // and it can also be disabled with --no-mmap.
             Self::Mmap(cursor) => {
-                hasher.update_rayon(cursor.get_ref());
+                for chunk in cursor.get_ref().chunks(4_194_304) {
+                    hasher.update_rayon(chunk);
+                }
             }
             // The slower paths, for stdin or files we didn't/couldn't mmap.
             // This is currently all single-threaded. Doing multi-threaded
