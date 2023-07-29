@@ -409,6 +409,18 @@ impl Output {
         Hash(platform::le_bytes_from_words_32(&cv))
     }
 
+    fn hash(&self, is_root: bool) -> Hash {
+        // debug_assert_eq!(self.counter, 0);
+        let mut cv = self.input_chaining_value;
+        let mut flags = self.flags;
+        if is_root {
+            flags |= ROOT;
+        }
+        self.platform
+            .compress_in_place(&mut cv, &self.block, self.block_len, 0, flags);
+        Hash(platform::le_bytes_from_words_32(&cv))
+    }
+
     fn root_output_block(&self) -> [u8; 2 * OUT_LEN] {
         self.platform.compress_xof(
             &self.input_chaining_value,
@@ -977,6 +989,15 @@ impl Hasher {
         Self::new_internal(IV, 0)
     }
 
+    /// Construct a new `Hasher` with a start chunk
+    fn new_with_start_chunk(start_chunk: u64) -> Self {
+        Self {
+            key: *IV,
+            chunk_state: ChunkState::new(IV, start_chunk, 0, Platform::detect()),
+            cv_stack: ArrayVec::new(),
+        }
+    }
+
     /// Construct a new `Hasher` for the keyed hash function. See
     /// [`keyed_hash`].
     ///
@@ -1246,7 +1267,7 @@ impl Hasher {
         // also. Convert it directly into an Output. Otherwise, we need to
         // merge subtrees below.
         if self.cv_stack.is_empty() {
-            debug_assert_eq!(self.chunk_state.chunk_counter, 0);
+            // debug_assert_eq!(self.chunk_state.chunk_counter, 0);
             return self.chunk_state.output();
         }
 
@@ -1265,11 +1286,11 @@ impl Hasher {
         let mut output: Output;
         let mut num_cvs_remaining = self.cv_stack.len();
         if self.chunk_state.len() > 0 {
-            debug_assert_eq!(
-                self.cv_stack.len(),
-                self.chunk_state.chunk_counter.count_ones() as usize,
-                "cv stack does not need a merge"
-            );
+            // debug_assert_eq!(
+            //     self.cv_stack.len(),
+            //     self.chunk_state.chunk_counter.count_ones() as usize,
+            //     "cv stack does not need a merge"
+            // );
             output = self.chunk_state.output();
         } else {
             debug_assert!(self.cv_stack.len() >= 2);
@@ -1302,6 +1323,11 @@ impl Hasher {
     /// You can also add more input and finalize again.
     pub fn finalize(&self) -> Hash {
         self.final_output().root_hash()
+    }
+
+    fn finalize_node(&self, is_root: bool) -> Hash {
+        let output = self.final_output();
+        output.hash(is_root)
     }
 
     /// Finalize the hash state and return an [`OutputReader`], which can

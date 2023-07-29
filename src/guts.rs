@@ -9,6 +9,12 @@
 pub const BLOCK_LEN: usize = 64;
 pub const CHUNK_LEN: usize = 1024;
 
+pub fn hash_block(start_chunk: u64, data: &[u8], is_root: bool) -> crate::Hash {
+    let mut hasher = crate::Hasher::new_with_start_chunk(start_chunk);
+    hasher.update(data);
+    hasher.finalize_node(is_root)
+}
+
 #[derive(Clone, Debug)]
 pub struct ChunkState(crate::ChunkState);
 
@@ -97,5 +103,13 @@ mod test {
         let parent = parent_cv(&chunk0_cv, &chunk1_cv, false);
         let root = parent_cv(&parent, &chunk2_cv, true);
         assert_eq!(hasher.finalize(), root);
+    }
+
+    #[test]
+    fn test_hash_block() {
+        assert_eq!(
+            crate::hash(b"foo"),
+            hash_block(0, b"foo", true)
+        );
     }
 }
