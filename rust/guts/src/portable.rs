@@ -5,6 +5,10 @@ use crate::{
 
 const DEGREE: usize = MAX_SIMD_DEGREE;
 
+unsafe extern "C" fn degree() -> usize {
+    DEGREE
+}
+
 #[inline(always)]
 fn g(state: &mut BlockWords, a: usize, b: usize, c: usize, d: usize, x: u32, y: u32) {
     state[a] = state[a].wrapping_add(state[b]).wrapping_add(x);
@@ -67,7 +71,7 @@ fn compress_inner(
     state
 }
 
-unsafe extern "C" fn compress(
+pub(crate) unsafe extern "C" fn compress(
     block: *const BlockBytes,
     block_len: u32,
     cv: *const CVBytes,
@@ -84,7 +88,7 @@ unsafe extern "C" fn compress(
     *out = le_bytes_from_words_32(state[..8].try_into().unwrap());
 }
 
-unsafe extern "C" fn compress_xof(
+pub(crate) unsafe extern "C" fn compress_xof(
     block: *const BlockBytes,
     block_len: u32,
     cv: *const CVBytes,
@@ -102,7 +106,7 @@ unsafe extern "C" fn compress_xof(
     *out = le_bytes_from_words_64(&state);
 }
 
-unsafe extern "C" fn hash_chunks(
+pub(crate) unsafe extern "C" fn hash_chunks(
     input: *const u8,
     input_len: usize,
     key: *const CVBytes,
@@ -121,7 +125,7 @@ unsafe extern "C" fn hash_chunks(
     )
 }
 
-unsafe extern "C" fn hash_parents(
+pub(crate) unsafe extern "C" fn hash_parents(
     transposed_input: *const u32,
     num_parents: usize,
     key: *const CVBytes,
@@ -138,7 +142,7 @@ unsafe extern "C" fn hash_parents(
     )
 }
 
-unsafe extern "C" fn xof(
+pub(crate) unsafe extern "C" fn xof(
     block: *const BlockBytes,
     block_len: u32,
     cv: *const CVBytes,
@@ -159,7 +163,7 @@ unsafe extern "C" fn xof(
     )
 }
 
-unsafe extern "C" fn xof_xor(
+pub(crate) unsafe extern "C" fn xof_xor(
     block: *const BlockBytes,
     block_len: u32,
     cv: *const CVBytes,
@@ -180,7 +184,7 @@ unsafe extern "C" fn xof_xor(
     )
 }
 
-unsafe extern "C" fn universal_hash(
+pub(crate) unsafe extern "C" fn universal_hash(
     input: *const u8,
     input_len: usize,
     key: *const CVBytes,
@@ -192,7 +196,7 @@ unsafe extern "C" fn universal_hash(
 
 pub fn implementation() -> Implementation {
     Implementation::new(
-        || DEGREE,
+        degree,
         compress,
         hash_chunks,
         hash_parents,

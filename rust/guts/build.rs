@@ -60,6 +60,10 @@ fn is_armv7() -> bool {
     target_components()[0] == "armv7"
 }
 
+fn is_riscv64gc() -> bool {
+    target_components()[0] == "riscv64gc"
+}
+
 // Windows targets may be using the MSVC toolchain or the GNU toolchain. The
 // right compiler flags to use depend on the toolchain. (And we don't want to
 // use flag_if_supported, because we don't want features to be silently
@@ -225,6 +229,18 @@ fn build_neon_c_intrinsics() {
     build.compile("blake3_neon");
 }
 
+fn build_riscv64gcv_assembly() {
+    println!("cargo:rustc-cfg=blake3_riscv64gcv_ffi");
+    let mut build = new_build();
+    let asm_path = "src/riscv64gcv.S";
+    build.file(asm_path);
+    build.flag("--target=riscv64");
+    build.flag("-march=rv64gcv_zbb_zvbb1p0");
+    build.flag("-menable-experimental-extensions");
+    build.compile("blake3_riscv64gcv_assembly");
+    println!("cargo:rerun-if-changed={asm_path}");
+}
+
 fn main() {
     if is_pure() && is_neon() {
         panic!("It doesn't make sense to enable both \"pure\" and \"neon\".");
@@ -256,6 +272,12 @@ fn main() {
     if (is_arm() && is_neon()) || (!is_no_neon() && !is_pure() && is_aarch64()) {
         println!("cargo:rustc-cfg=blake3_neon");
         build_neon_c_intrinsics();
+    }
+
+    // TODO: This implementation assumes some bleeding-edge extensions, and it should probably be
+    // gated by a Cargo feature.
+    if is_riscv64gc() && !is_pure() {
+        build_riscv64gcv_assembly();
     }
 
     // The `cc` crate doesn't automatically emit rerun-if directives for the

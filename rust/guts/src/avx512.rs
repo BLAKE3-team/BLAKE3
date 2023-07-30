@@ -1,6 +1,10 @@
 use crate::{BlockBytes, CVBytes, Implementation, BLOCK_LEN, CHUNK_LEN};
 
-const DEGREE: usize = 16;
+pub(crate) const DEGREE: usize = 16;
+
+unsafe extern "C" fn degree() -> usize {
+    DEGREE
+}
 
 extern "C" {
     fn blake3_guts_avx512_compress(
@@ -232,7 +236,7 @@ fn supported() -> bool {
 pub fn implementation() -> Option<Implementation> {
     if supported() {
         Some(Implementation::new(
-            || DEGREE,
+            degree,
             blake3_guts_avx512_compress,
             hash_chunks,
             hash_parents,

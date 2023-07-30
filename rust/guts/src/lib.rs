@@ -7,6 +7,8 @@ use core::sync::atomic::{AtomicPtr, Ordering::Relaxed};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub mod avx512;
 pub mod portable;
+#[cfg(any(target_arch = "riscv64"))]
+pub mod riscv64gcv;
 
 #[cfg(test)]
 mod test;
@@ -42,7 +44,9 @@ pub const MSG_SCHEDULE: [[usize; 16]; 7] = [
 
 cfg_if::cfg_if! {
     if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
-        pub const MAX_SIMD_DEGREE: usize = 16;
+        pub const MAX_SIMD_DEGREE: usize = avx512::DEGREE;
+    } else if #[cfg(target_arch = "riscv64")] {
+        pub const MAX_SIMD_DEGREE: usize = riscv64gcv::MAX_SIMD_DEGREE;
     } else if #[cfg(blake3_neon)] {
         pub const MAX_SIMD_DEGREE: usize = 4;
     } else {
@@ -73,6 +77,11 @@ fn detect() -> Implementation {
             return avx512_impl;
         }
     }
+    #[cfg(target_arch = "riscv64")]
+    {
+        return riscv64gcv::implementation();
+    }
+    #[allow(unreachable_code)]
     portable::implementation()
 }
 
@@ -140,7 +149,7 @@ impl Implementation {
 
     #[inline]
     pub fn degree(&self) -> usize {
-        let degree = self.degree_fn()();
+        let degree = unsafe { self.degree_fn()() };
         debug_assert!(degree >= 2);
         debug_assert!(degree <= MAX_SIMD_DEGREE);
         debug_assert_eq!(1, degree.count_ones(), "power of 2");
@@ -222,11 +231,20 @@ impl Implementation {
     pub fn hash_parents(
         &self,
         transposed_input: &TransposedVectors,
-        num_cvs: usize,
+        mut num_cvs: usize,
         key: &CVBytes,
         flags: u32,
         transposed_output: TransposedSplit,
     ) -> usize {
+        debug_assert!(num_cvs <= 2 * MAX_SIMD_DEGREE);
+        // SAFETY: Cap num_cvs at 2 * MAX_SIMD_DEGREE, to guarantee no out-of-bounds accesses.
+        num_cvs = cmp::min(num_cvs, 2 * MAX_SIMD_DEGREE);
+        let mut odd_cv = [0u32; 8];
+        if num_cvs % 2 == 1 {
+            unsafe {
+                odd_cv = read_transposed_cv(transposed_input.as_ptr().add(num_cvs - 1));
+            }
+        }
         let num_parents = num_cvs / 2;
         unsafe {
             self.hash_parents_fn()(
@@ -239,10 +257,7 @@ impl Implementation {
         }
         if num_cvs % 2 == 1 {
             unsafe {
-                copy_one_transposed_cv(
-                    transposed_input.as_ptr().add(num_cvs - 1),
-                    transposed_output.ptr.add(num_parents),
-                );
+                write_transposed_cv(&odd_cv, transposed_output.ptr.add(num_parents));
             }
             num_parents + 1
         } else {
@@ -254,18 +269,27 @@ impl Implementation {
     pub fn reduce_parents(
         &self,
         transposed_in_out: &mut TransposedVectors,
-        num_cvs: usize,
+        mut num_cvs: usize,
         key: &CVBytes,
         flags: u32,
     ) -> usize {
-        let num_parents = num_cvs / 2;
+        debug_assert!(num_cvs <= 2 * MAX_SIMD_DEGREE);
+        // SAFETY: Cap num_cvs at 2 * MAX_SIMD_DEGREE, to guarantee no out-of-bounds accesses.
+        num_cvs = cmp::min(num_cvs, 2 * MAX_SIMD_DEGREE);
         let in_out_ptr = transposed_in_out.as_mut_ptr();
+        let mut odd_cv = [0u32; 8];
+        if num_cvs % 2 == 1 {
+            unsafe {
+                odd_cv = read_transposed_cv(in_out_ptr.add(num_cvs - 1));
+            }
+        }
+        let num_parents = num_cvs / 2;
         unsafe {
             self.hash_parents_fn()(in_out_ptr, num_parents, key, flags | PARENT, in_out_ptr);
         }
         if num_cvs % 2 == 1 {
             unsafe {
-                copy_one_transposed_cv(in_out_ptr.add(num_cvs - 1), in_out_ptr.add(num_parents));
+                write_transposed_cv(&odd_cv, in_out_ptr.add(num_parents));
             }
             num_parents + 1
         } else {
@@ -384,9 +408,9 @@ impl Clone for Implementation {
 }
 
 // never less than 2
-type DegreeFn = fn() -> usize;
+type DegreeFn = unsafe extern "C" fn() -> usize;
 
-fn degree_init() -> usize {
+unsafe extern "C" fn degree_init() -> usize {
     init_detected_impl();
     DETECTED_IMPL.degree_fn()()
 }
@@ -756,11 +780,19 @@ pub struct TransposedSplit<'vectors> {
 unsafe impl<'vectors> Send for TransposedSplit<'vectors> {}
 unsafe impl<'vectors> Sync for TransposedSplit<'vectors> {}
 
-unsafe fn copy_one_transposed_cv(transposed_src: *const u32, transposed_dest: *mut u32) {
+unsafe fn read_transposed_cv(src: *const u32) -> CVWords {
+    let mut cv = [0u32; 8];
     for word_index in 0..8 {
         let offset_words = word_index * TRANSPOSED_STRIDE;
-        let word = transposed_src.add(offset_words).read();
-        transposed_dest.add(offset_words).write(word);
+        cv[word_index] = src.add(offset_words).read();
+    }
+    cv
+}
+
+unsafe fn write_transposed_cv(cv: &CVWords, dest: *mut u32) {
+    for word_index in 0..8 {
+        let offset_words = word_index * TRANSPOSED_STRIDE;
+        dest.add(offset_words).write(cv[word_index]);
     }
 }
 

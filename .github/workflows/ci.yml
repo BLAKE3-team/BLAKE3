@@ -178,6 +178,8 @@ jobs:
           - armv7-unknown-linux-gnueabihf
           - aarch64-unknown-linux-gnu
           - mips-unknown-linux-gnu
+          - riscv32-unknown-linux-gnu
+          - riscv64-unknown-linux-gnu
 
     steps:
     - uses: actions/checkout@v3

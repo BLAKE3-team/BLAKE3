@@ -101,7 +101,7 @@ pub fn test_hash_chunks_vs_portable(test_impl: &Implementation) {
         // 95 is one whole block plus one interesting part of another
         input_2_lengths.push(next_len - 95);
         input_2_lengths.push(next_len);
-        if next_len == MAX_SIMD_DEGREE * CHUNK_LEN {
+        if next_len == test_impl.degree() * CHUNK_LEN {
             break;
         }
         input_2_lengths.push(next_len + 95);
@@ -165,7 +165,7 @@ pub fn test_hash_parents_vs_portable(test_impl: &Implementation) {
     let input = painted_transposed_input();
     for num_parents in 2..=(test_impl.degree() / 2) {
         dbg!(num_parents);
-        let mut portable_output = TransposedVectors(input.0);
+        let mut portable_output = TransposedVectors::new();
         let (portable_left, portable_right) =
             test_impl.split_transposed_vectors(&mut portable_output);
         portable::implementation().hash_parents(
@@ -183,7 +183,7 @@ pub fn test_hash_parents_vs_portable(test_impl: &Implementation) {
             portable_right,
         );
 
-        let mut test_output = TransposedVectors(input.0);
+        let mut test_output = TransposedVectors::new();
         let (test_left, test_right) = test_impl.split_transposed_vectors(&mut test_output);
         test_impl.hash_parents(
             &input,

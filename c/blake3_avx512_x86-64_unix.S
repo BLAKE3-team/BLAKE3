@@ -4572,7 +4572,7 @@ blake3_guts_avx512_hash_chunks_16_exact:
 _blake3_guts_avx512_hash_parents_16_exact:
 blake3_guts_avx512_hash_parents_16_exact:
         // load the transposed CVs and split alternating words into the low and
-        // high halfs of the input vectors
+        // high halves of the input vectors
         vmovdqa32  zmm0, ZMMWORD PTR [EVEN+rip]
         vmovdqa32  zmm1, ZMMWORD PTR [ODD+rip]
         vmovdqa32 zmm16, ZMMWORD PTR [rdi+0x0*0x40]
