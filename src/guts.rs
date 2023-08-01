@@ -9,9 +9,35 @@
 pub const BLOCK_LEN: usize = 64;
 pub const CHUNK_LEN: usize = 1024;
 
+fn is_subtree(start_chunk: u64, len: u64) -> bool {
+    const CHUNK_LEN_U64: u64 = CHUNK_LEN as u64;
+    let chunks = len / CHUNK_LEN_U64 + (len % CHUNK_LEN_U64 != 0) as u64;
+    let block_mask = chunks.next_power_of_two() - 1;
+    start_chunk & block_mask == 0
+}
+
+/// Compute the hash of a subtree consisting of one or many chunks.
+///
+/// The range given by `start_chunk` and `len` must be a single subtree, i.e.
+/// `is_subtree(start_chunk, len)` must be true. The `is_root` flag indicates
+/// whether the subtree is the root of the tree.
+///
+/// Subtrees that start at a non zero chunk can not be the root.
 pub fn hash_block(start_chunk: u64, data: &[u8], is_root: bool) -> crate::Hash {
+    debug_assert!(is_subtree(start_chunk, data.len() as u64));
+    debug_assert!(start_chunk == 0 || !is_root);
     let mut hasher = crate::Hasher::new_with_start_chunk(start_chunk);
     hasher.update(data);
+    hasher.finalize_node(is_root)
+}
+
+/// Rayon parallel version of [`hash_block`].
+#[cfg(feature = "rayon")]
+pub fn hash_block_rayon(start_chunk: u64, data: &[u8], is_root: bool) -> crate::Hash {
+    debug_assert!(is_subtree(start_chunk, data.len() as u64));
+    debug_assert!(start_chunk == 0 || !is_root);
+    let mut hasher = crate::Hasher::new_with_start_chunk(start_chunk);
+    hasher.update_rayon(data);
     hasher.finalize_node(is_root)
 }
 
@@ -107,9 +133,9 @@ mod test {
 
     #[test]
     fn test_hash_block() {
-        assert_eq!(
-            crate::hash(b"foo"),
-            hash_block(0, b"foo", true)
-        );
+        assert_eq!(crate::hash(b"foo"), hash_block(0, b"foo", true));
+
+        assert_eq!(is_subtree(4, 1024 * 4 - 1), true);
+        assert_eq!(is_subtree(1, 1024 * 4), false);
     }
 }
