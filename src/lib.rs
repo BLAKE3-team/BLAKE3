@@ -70,7 +70,6 @@
 #[cfg(feature = "zeroize")]
 extern crate zeroize_crate as zeroize; // Needed because `zeroize::Zeroize` assumes the crate is named `zeroize`.
 
-
 #[cfg(test)]
 mod test;
 
@@ -406,18 +405,6 @@ impl Output {
         let mut cv = self.input_chaining_value;
         self.platform
             .compress_in_place(&mut cv, &self.block, self.block_len, 0, self.flags | ROOT);
-        Hash(platform::le_bytes_from_words_32(&cv))
-    }
-
-    fn hash(&self, is_root: bool) -> Hash {
-        // debug_assert_eq!(self.counter, 0);
-        let mut cv = self.input_chaining_value;
-        let mut flags = self.flags;
-        if is_root {
-            flags |= ROOT;
-        }
-        self.platform
-            .compress_in_place(&mut cv, &self.block, self.block_len, 0, flags);
         Hash(platform::le_bytes_from_words_32(&cv))
     }
 
@@ -1267,7 +1254,6 @@ impl Hasher {
         // also. Convert it directly into an Output. Otherwise, we need to
         // merge subtrees below.
         if self.cv_stack.is_empty() {
-            // debug_assert_eq!(self.chunk_state.chunk_counter, 0);
             return self.chunk_state.output();
         }
 
@@ -1286,11 +1272,6 @@ impl Hasher {
         let mut output: Output;
         let mut num_cvs_remaining = self.cv_stack.len();
         if self.chunk_state.len() > 0 {
-            // debug_assert_eq!(
-            //     self.cv_stack.len(),
-            //     self.chunk_state.chunk_counter.count_ones() as usize,
-            //     "cv stack does not need a merge"
-            // );
             output = self.chunk_state.output();
         } else {
             debug_assert!(self.cv_stack.len() >= 2);
@@ -1327,7 +1308,11 @@ impl Hasher {
 
     fn finalize_node(&self, is_root: bool) -> Hash {
         let output = self.final_output();
-        output.hash(is_root)
+        if is_root {
+            output.root_hash()
+        } else {
+            output.chaining_value().into()
+        }
     }
 
     /// Finalize the hash state and return an [`OutputReader`], which can
