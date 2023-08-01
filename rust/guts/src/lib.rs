@@ -721,12 +721,12 @@ unsafe fn universal_hash_using_compress(
 const TRANSPOSED_STRIDE: usize = 2 * MAX_SIMD_DEGREE;
 
 #[cfg_attr(any(target_arch = "x86", target_arch = "x86_64"), repr(C, align(64)))]
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransposedVectors([[u32; 2 * MAX_SIMD_DEGREE]; 8]);
 
 impl TransposedVectors {
     pub fn new() -> Self {
-        Self::default()
+        Self([[0; 2 * MAX_SIMD_DEGREE]; 8])
     }
 
     pub fn extract_cv(&self, cv_index: usize) -> CVBytes {
