@@ -9,6 +9,9 @@
 #define IV2 0x3C6EF372
 #define IV3 0xA54FF53A
 
+// NOTE: Keep this in sync with the same constant in Rust.
+#define MAX_SIMD_DEGREE 16
+
 .section .text
 
 .global blake3_guts_riscv64gcv_degree
@@ -818,8 +821,7 @@ blake3_guts_riscv64gcv_kernel:
 // a4: out pointer
 .global blake3_guts_riscv64gcv_hash_parents
 blake3_guts_riscv64gcv_hash_parents:
-        // the transposed stride in bytes: 2 * MAX_SIMD_DEGREE * 4
-        li t1, 128
+        li t1, 2 * MAX_SIMD_DEGREE * 4 // the transposed stride in bytes
         // load the transposed CVs and split alternating words into the low and
         // high halves of the input vectors
         vsetvli zero, a1, e32, m1, ta, ma

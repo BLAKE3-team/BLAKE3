@@ -6,6 +6,7 @@
 
 use crate::{CVBytes, Implementation};
 
+// NOTE: Keep this in sync with the same constant in assembly.
 pub(crate) const MAX_SIMD_DEGREE: usize = 16;
 
 extern "C" {
