@@ -17,7 +17,9 @@
 .global blake3_guts_riscv64gcv_degree
 blake3_guts_riscv64gcv_degree:
         csrr t0, vlenb
-        srli a0, t0, 2
+        srli t0, t0, 2
+        li t1, MAX_SIMD_DEGREE
+        minu a0, t0, t1
 
 blake3_guts_riscv64gcv_kernel:
         li t0, IV0
