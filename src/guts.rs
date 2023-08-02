@@ -23,7 +23,7 @@ fn is_subtree(start_chunk: u64, len: u64) -> bool {
 /// whether the subtree is the root of the tree.
 ///
 /// Subtrees that start at a non zero chunk can not be the root.
-pub fn hash_block(start_chunk: u64, data: &[u8], is_root: bool) -> crate::Hash {
+pub fn hash_subtree(start_chunk: u64, data: &[u8], is_root: bool) -> crate::Hash {
     debug_assert!(is_subtree(start_chunk, data.len() as u64));
     debug_assert!(start_chunk == 0 || !is_root);
     let mut hasher = crate::Hasher::new_with_start_chunk(start_chunk);
@@ -33,7 +33,7 @@ pub fn hash_block(start_chunk: u64, data: &[u8], is_root: bool) -> crate::Hash {
 
 /// Rayon parallel version of [`hash_block`].
 #[cfg(feature = "rayon")]
-pub fn hash_block_rayon(start_chunk: u64, data: &[u8], is_root: bool) -> crate::Hash {
+pub fn hash_subtree_rayon(start_chunk: u64, data: &[u8], is_root: bool) -> crate::Hash {
     debug_assert!(is_subtree(start_chunk, data.len() as u64));
     debug_assert!(start_chunk == 0 || !is_root);
     let mut hasher = crate::Hasher::new_with_start_chunk(start_chunk);
@@ -132,13 +132,14 @@ mod test {
     }
 
     #[test]
-    fn test_hash_block() {
-        assert_eq!(crate::hash(b"foo"), hash_block(0, b"foo", true));
+    fn test_hash_subtree() {
+        assert_eq!(crate::hash(b"foo"), hash_subtree(0, b"foo", true));
 
         assert_eq!(is_subtree(4, 1024 * 4 - 1), true);
         assert_eq!(is_subtree(1, 1024 * 4), false);
 
-        fn recursive_hash_block(start_chunk: u64, data: &[u8], is_root: bool) -> crate::Hash {
+        /// This is a recursive version of [`hash_subtree`], for testing.
+        fn recursive_hash_subtree(start_chunk: u64, data: &[u8], is_root: bool) -> crate::Hash {
             if data.len() <= CHUNK_LEN {
                 let mut hasher = ChunkState::new(start_chunk);
                 hasher.update(data);
@@ -148,9 +149,9 @@ mod test {
                 let chunks = chunks.next_power_of_two();
                 let mid = chunks / 2;
                 let mid_bytes = mid * CHUNK_LEN;
-                let left = recursive_hash_block(start_chunk, &data[..mid_bytes], false);
+                let left = recursive_hash_subtree(start_chunk, &data[..mid_bytes], false);
                 let right =
-                    recursive_hash_block(start_chunk + mid as u64, &data[mid_bytes..], false);
+                    recursive_hash_subtree(start_chunk + mid as u64, &data[mid_bytes..], false);
                 parent_cv(&left, &right, is_root)
             }
         }
@@ -162,12 +163,12 @@ mod test {
             for i in 0..100 {
                 let start_chunk = i * block_size_u64;
                 assert_eq!(
-                    recursive_hash_block(start_chunk, &data[..CHUNK_LEN], false),
-                    hash_block(start_chunk, &data[..CHUNK_LEN], false)
+                    recursive_hash_subtree(start_chunk, &data[..CHUNK_LEN], false),
+                    hash_subtree(start_chunk, &data[..CHUNK_LEN], false)
                 );
                 assert_eq!(
-                    recursive_hash_block(start_chunk, &data[..block_size * CHUNK_LEN], false),
-                    hash_block(start_chunk, &data[..block_size * CHUNK_LEN], false)
+                    recursive_hash_subtree(start_chunk, &data[..block_size * CHUNK_LEN], false),
+                    hash_subtree(start_chunk, &data[..block_size * CHUNK_LEN], false)
                 );
             }
         }
