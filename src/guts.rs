@@ -131,30 +131,29 @@ mod test {
         assert_eq!(hasher.finalize(), root);
     }
 
+    /// This is a recursive version of [`hash_subtree`], for testing.
+    fn recursive_hash_subtree(start_chunk: u64, data: &[u8], is_root: bool) -> crate::Hash {
+        if data.len() <= CHUNK_LEN {
+            let mut hasher = ChunkState::new(start_chunk);
+            hasher.update(data);
+            hasher.finalize(is_root)
+        } else {
+            let chunks = data.len() / CHUNK_LEN + (data.len() % CHUNK_LEN != 0) as usize;
+            let chunks = chunks.next_power_of_two();
+            let mid = chunks / 2;
+            let mid_bytes = mid * CHUNK_LEN;
+            let left = recursive_hash_subtree(start_chunk, &data[..mid_bytes], false);
+            let right = recursive_hash_subtree(start_chunk + mid as u64, &data[mid_bytes..], false);
+            parent_cv(&left, &right, is_root)
+        }
+    }
+
     #[test]
     fn test_hash_subtree() {
         assert_eq!(crate::hash(b"foo"), hash_subtree(0, b"foo", true));
 
         assert_eq!(is_subtree(4, 1024 * 4 - 1), true);
         assert_eq!(is_subtree(1, 1024 * 4), false);
-
-        /// This is a recursive version of [`hash_subtree`], for testing.
-        fn recursive_hash_subtree(start_chunk: u64, data: &[u8], is_root: bool) -> crate::Hash {
-            if data.len() <= CHUNK_LEN {
-                let mut hasher = ChunkState::new(start_chunk);
-                hasher.update(data);
-                hasher.finalize(is_root)
-            } else {
-                let chunks = data.len() / CHUNK_LEN + (data.len() % CHUNK_LEN != 0) as usize;
-                let chunks = chunks.next_power_of_two();
-                let mid = chunks / 2;
-                let mid_bytes = mid * CHUNK_LEN;
-                let left = recursive_hash_subtree(start_chunk, &data[..mid_bytes], false);
-                let right =
-                    recursive_hash_subtree(start_chunk + mid as u64, &data[mid_bytes..], false);
-                parent_cv(&left, &right, is_root)
-            }
-        }
 
         let data = (0..1024 << 4).map(|i| i as u8).collect::<Vec<_>>();
         for block_log in 0..4 {
@@ -172,5 +171,16 @@ mod test {
                 );
             }
         }
+    }
+
+    #[test]
+    fn wrong_hash_small() {
+        let start_chunk = 97648;
+        let len = 8448;
+        let is_root = false;
+        let data = (0..len).map(|i| i as u8).collect::<Vec<_>>();
+        let expected = recursive_hash_subtree(start_chunk, &data, is_root);
+        let actual = hash_subtree(start_chunk, &data, is_root);
+        assert_eq!(expected, actual);
     }
 }
