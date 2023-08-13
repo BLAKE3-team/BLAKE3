@@ -80,8 +80,8 @@ no_neon = []
 zeroize = ["zeroize_crate", "arrayvec/zeroize"]
 
 [package.metadata.docs.rs]
-# Document Hasher::update_rayon on docs.rs.
-features = ["rayon"]
+features = ["rayon", "traits-preview", "zeroize"]
+rustdoc-args = ["--cfg", "doc_cfg"]
 
 [dependencies]
 arrayref = "0.3.5"
