@@ -827,24 +827,32 @@ blake3_guts_riscv64gcv_kernel:
 // a3: counter
 // a4: flags
 // a5: aligned+transposed output [unused]
+// a6: total chunks [unused]
+// a7: remaining_bytes_in_last_chunk
 blake3_guts_riscv64gcv_hash_blocks:
-        // t0 = full_blocks = (input_len + 1024 - 64) / 1024
+        // t0 := full_blocks := (input_len + 1024 - 64) / 1024
+        addi t0, a1, 1024 - 64
+        srli t0, t0, 10
+        // Load and transpose full message blocks.
         // NOTE: If the final chunk is short, this could be 1 less than the
         // total number of chunks, in which case this setup code and the kernel
         // will leave a CV word undisturbed in each of v0-v7.
-        addi t0, a1, 1024 - 64
-        srli t0, t0, 10
-        vsetvli zero, t0, e32, m1, ta, ma
-        li t1, 1024
         // NOTE: These loads could be misaligned. As far as I know, the Linux
         // RISC-V ABI allows misaligned loads and stores. If we need to support
         // an environment that doesn't allow them (or where they're
         // unacceptably slow), we could add a fallback here.
+        vsetvli zero, t0, e32, m1, ta, ma
+        li t1, 1024
+        addi t2, a0, 32
         vlsseg8e32.v v16, (a0), t1
-        addi a0, a0, 32
-        vlsseg8e32.v v24, (a0), t1
-        addi a0, a0, 32
-        addi a1, a1, -64
+        vlsseg8e32.v v24, (t2), t1
+        // If remaining_bytes_in_last_chunk in 1..=63, there's a partial block
+        // at the end. Handle it out-of-line. If we take this branch, it will
+        // increment t0 by 1.
+        addi t1, a7, -1
+        li t2, 63
+        bltu t1, t2, handle_partial_block
+partial_block_finished:
         // load the counter
         vsetvli zero, t0, e64, m2, ta, ma
         vmv.v.x v8, a3
@@ -857,12 +865,26 @@ blake3_guts_riscv64gcv_hash_blocks:
         vncvt.x.x.w v12, v8
         li t1, 32
         vnsrl.wx v13, v8, t1
-        // broadcast the block length
-        // TODO: handle partial blocks
+        // Broadcast the block length, then overwrite the last block's length
+        // to be ((min(64, remaining_bytes_in_last_chunk) - 1) % 64) + 1. That
+        // is: 64 if remaining_bytes_in_last_chunk >= 64
+        //     else 64 if remaining_bytes_in_last_chunk is 0
+        //     else remaining_bytes_in_last_chunk
         li t1, 64
         vmv.v.x v14, t1
-        // broadcast the flags
+        minu t1, t1, a7
+        addi t1, t1, -1
+        andi t1, t1, 63
+        addi t1, t1, 1
+        vslide1down.vx v14, v14, t1
+        // Broadcast the flags, then set CHUNK_END in the last block's flags if
+        // remaining_bytes_in_last_chunk is in 1..=64.
         vmv.v.x v15, a4
+        addi t1, a7, -1
+        sltiu t1, t1, 64
+        slli t1, t1, 1  // CHUNK_END = 2
+        or t1, t1, a4
+        vslide1down.vx v15, v15, t1
         // execute the kernel
         mv t6, ra
         call blake3_guts_riscv64gcv_kernel
@@ -876,7 +898,80 @@ blake3_guts_riscv64gcv_hash_blocks:
         vxor.vv v5, v5, v13
         vxor.vv v6, v6, v14
         vxor.vv v7, v7, v15
+        // Increment the input pointer, input_len, and
+        // remaining_bytes_in_last_chunk (which cannot go below zero).
+        addi a0, a0, 64
+        addi a1, a1, -64
+        addi a7, a7, -64
+        max a7, a7, zero
         ret
+handle_partial_block:
+        // The minimum VLEN is 128 bits, so we're guaranteed to be able to fit
+        // the block in v8-v11 with LMUL=4. Clear 64 zero bytes before the
+        // load, to make sure the partial block is zero-padded.
+        li t1, 64
+        vsetvli zero, t1, e8, m4, ta, ma
+        vmv.v.i v8, 0
+        add t2, a0, a1
+        sub t2, t2, a7
+        vsetvli zero, a7, e8, m4, ta, ma
+        vle8.v v8, (t2)
+        // If VLEN is longer than 128 bits (16 bytes), then half or all of the
+        // block bytes will be in v8. Make sure they're split evenly across
+        // v8-v11.
+        csrr t1, vlenb
+        li t2, 64
+        bltu t1, t2, vlenb_less_than_64
+        vsetivli zero, 8, e32, m1, ta, ma
+        vslidedown.vi v9, v8, 8
+vlenb_less_than_64:
+        li t2, 32
+        bltu t1, t2, vlenb_less_than_32
+        vsetivli zero, 4, e32, m1, ta, ma
+        vmv.v.v v10, v9
+        vslidedown.vi v11, v9, 4
+        vslidedown.vi v9, v8, 4
+vlenb_less_than_32:
+        // Shift each of the words of the padded partial block to the end of
+        // the corresponding message vector. t0 was previously the number of
+        // full blocks. Now we increment it, so that it's the number of all
+        // blocks (both full and partial).
+        mv t1, t0
+        addi t0, t0, 1
+        // Set vl to at least 4, because v8-v11 each have 4 message words.
+        // Setting vl shorter will make vslide1down clobber those words.
+        li t2, 4
+        maxu t2, t0, t2
+        vsetvli zero, t2, e32, m1, ta, ma
+        vslideup.vx v16, v8, t1
+        vslide1down.vx v8, v8, zero
+        vslideup.vx v17, v8, t1
+        vslide1down.vx v8, v8, zero
+        vslideup.vx v18, v8, t1
+        vslide1down.vx v8, v8, zero
+        vslideup.vx v19, v8, t1
+        vslideup.vx v20, v9, t1
+        vslide1down.vx v9, v9, zero
+        vslideup.vx v21, v9, t1
+        vslide1down.vx v9, v9, zero
+        vslideup.vx v22, v9, t1
+        vslide1down.vx v9, v9, zero
+        vslideup.vx v23, v9, t1
+        vslideup.vx v24, v10, t1
+        vslide1down.vx v10, v10, zero
+        vslideup.vx v25, v10, t1
+        vslide1down.vx v10, v10, zero
+        vslideup.vx v26, v10, t1
+        vslide1down.vx v10, v10, zero
+        vslideup.vx v27, v10, t1
+        vslideup.vx v28, v11, t1
+        vslide1down.vx v11, v11, zero
+        vslideup.vx v29, v11, t1
+        vslide1down.vx v11, v11, zero
+        vslideup.vx v30, v11, t1
+        vslide1down.vx v11, v11, zero
+        vslideup.vx v31, v11, t1
+        j partial_block_finished
 
 // a0: input
 // a1: input_len
@@ -886,9 +981,16 @@ blake3_guts_riscv64gcv_hash_blocks:
 // a5: aligned+transposed output
 .global blake3_guts_riscv64gcv_hash_chunks
 blake3_guts_riscv64gcv_hash_chunks:
-        // keep the original num_chunks = (input_len+1023)/1024 in a6
+        // Save the original num_chunks = (input_len+1023)/1024 in a6.
         addi a6, a1, 1023
         srli a6, a6, 10
+        // Track the bytes remaining in the last chunk in a7. The initial value
+        // of this is ((input_len - 1) % 1024) + 1. (The input to this function
+        // is never empty.) It decrements by 64 with each call to
+        // blake3_guts_riscv64gcv_hash_chunks, but not below 0.
+        addi a7, a1, -1
+        andi a7, a7, 1023
+        addi a7, a7, 1
         // broadcast the key to v0-7
         vsetvli zero, a6, e32, m1, ta, ma
         lw t0, 0(a2)

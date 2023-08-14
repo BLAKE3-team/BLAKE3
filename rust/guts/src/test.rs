@@ -107,8 +107,8 @@ pub fn test_hash_chunks_vs_portable(test_impl: &Implementation) {
     paint_test_input(aligned_input);
     paint_test_input(unaligned_input);
     // Try just below, equal to, and just above every whole number of chunks.
-    let mut input_2_lengths = vec![1];
-    let mut next_len = CHUNK_LEN;
+    let mut input_2_lengths = Vec::new();
+    let mut next_len = 2 * CHUNK_LEN;
     loop {
         // 95 is one whole block plus one interesting part of another
         input_2_lengths.push(next_len - 95);

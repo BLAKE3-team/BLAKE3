@@ -185,6 +185,45 @@ impl Implementation {
         out
     }
 
+    // The contract for HashChunksFn doesn't require the implementation to support single-chunk
+    // inputs. Instead we handle that case here by calling compress in a loop.
+    #[inline]
+    fn hash_one_chunk(
+        &self,
+        mut input: &[u8],
+        key: &CVBytes,
+        counter: u64,
+        mut flags: u32,
+        output: TransposedSplit,
+    ) {
+        debug_assert!(input.len() <= CHUNK_LEN);
+        let mut cv = *key;
+        flags |= CHUNK_START;
+        while input.len() > BLOCK_LEN {
+            cv = self.compress(
+                input[..BLOCK_LEN].try_into().unwrap(),
+                BLOCK_LEN as u32,
+                &cv,
+                counter,
+                flags,
+            );
+            input = &input[BLOCK_LEN..];
+            flags &= !CHUNK_START;
+        }
+        let mut final_block = [0u8; BLOCK_LEN];
+        final_block[..input.len()].copy_from_slice(input);
+        cv = self.compress(
+            &final_block,
+            input.len() as u32,
+            &cv,
+            counter,
+            flags | CHUNK_END,
+        );
+        unsafe {
+            write_transposed_cv(&words_from_le_bytes_32(&cv), output.ptr);
+        }
+    }
+
     #[inline]
     fn hash_chunks_fn(&self) -> HashChunksFn {
         unsafe { mem::transmute(self.hash_chunks_ptr.load(Relaxed)) }
@@ -199,8 +238,14 @@ impl Implementation {
         flags: u32,
         transposed_output: TransposedSplit,
     ) -> usize {
-        debug_assert!(input.len() > 0);
         debug_assert!(input.len() <= self.degree() * CHUNK_LEN);
+        if input.len() <= CHUNK_LEN {
+            // The underlying hash_chunks_fn isn't required to support this case. Instead we handle
+            // it by calling compress_fn in a loop. But note that we still don't support root
+            // finalization or the empty input here.
+            self.hash_one_chunk(input, key, counter, flags, transposed_output);
+            return 1;
+        }
         // SAFETY: If the caller passes in more than MAX_SIMD_DEGREE * CHUNK_LEN bytes, silently
         // ignore the remainder. This makes it impossible to write out of bounds in a properly
         // constructed TransposedSplit.
