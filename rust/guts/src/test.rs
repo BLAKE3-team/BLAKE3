@@ -91,9 +91,21 @@ fn check_transposed_eq(output_a: &TransposedVectors, output_b: &TransposedVector
 
 pub fn test_hash_chunks_vs_portable(test_impl: &Implementation) {
     assert!(test_impl.degree() <= MAX_SIMD_DEGREE);
-    let mut input = [0u8; 2 * MAX_SIMD_DEGREE * CHUNK_LEN];
-    paint_test_input(&mut input);
     dbg!(test_impl.degree() * CHUNK_LEN);
+    // Allocate 4 extra bytes of padding so we can make aligned slices.
+    let mut input_buf = [0u8; 2 * 2 * MAX_SIMD_DEGREE * CHUNK_LEN + 4];
+    let mut input_slice = &mut input_buf[..];
+    // Make sure the start of the input is word-aligned.
+    while input_slice.as_ptr() as usize % 4 != 0 {
+        input_slice = &mut input_slice[1..];
+    }
+    let (aligned_input, mut unaligned_input) =
+        input_slice.split_at_mut(2 * MAX_SIMD_DEGREE * CHUNK_LEN);
+    unaligned_input = &mut unaligned_input[1..][..2 * MAX_SIMD_DEGREE * CHUNK_LEN];
+    assert_eq!(aligned_input.as_ptr() as usize % 4, 0);
+    assert_eq!(unaligned_input.as_ptr() as usize % 4, 1);
+    paint_test_input(aligned_input);
+    paint_test_input(unaligned_input);
     // Try just below, equal to, and just above every whole number of chunks.
     let mut input_2_lengths = vec![1];
     let mut next_len = CHUNK_LEN;
@@ -109,8 +121,10 @@ pub fn test_hash_chunks_vs_portable(test_impl: &Implementation) {
     }
     for input_2_len in input_2_lengths {
         dbg!(input_2_len);
-        let input1 = &input[..test_impl.degree() * CHUNK_LEN];
-        let input2 = &input[test_impl.degree() * CHUNK_LEN..][..input_2_len];
+        let aligned_input1 = &aligned_input[..test_impl.degree() * CHUNK_LEN];
+        let aligned_input2 = &aligned_input[test_impl.degree() * CHUNK_LEN..][..input_2_len];
+        let unaligned_input1 = &unaligned_input[..test_impl.degree() * CHUNK_LEN];
+        let unaligned_input2 = &unaligned_input[test_impl.degree() * CHUNK_LEN..][..input_2_len];
         for initial_counter in INITIAL_COUNTERS {
             dbg!(initial_counter);
             // Make two calls, to test the output_column parameter.
@@ -118,14 +132,14 @@ pub fn test_hash_chunks_vs_portable(test_impl: &Implementation) {
             let (portable_left, portable_right) =
                 test_impl.split_transposed_vectors(&mut portable_output);
             portable::implementation().hash_chunks(
-                input1,
+                aligned_input1,
                 &IV_BYTES,
                 initial_counter,
                 0,
                 portable_left,
             );
             portable::implementation().hash_chunks(
-                input2,
+                aligned_input2,
                 &TEST_KEY,
                 initial_counter + test_impl.degree() as u64,
                 KEYED_HASH,
@@ -134,16 +148,35 @@ pub fn test_hash_chunks_vs_portable(test_impl: &Implementation) {
 
             let mut test_output = TransposedVectors::new();
             let (test_left, test_right) = test_impl.split_transposed_vectors(&mut test_output);
-            test_impl.hash_chunks(input1, &IV_BYTES, initial_counter, 0, test_left);
+            test_impl.hash_chunks(aligned_input1, &IV_BYTES, initial_counter, 0, test_left);
             test_impl.hash_chunks(
-                input2,
+                aligned_input2,
                 &TEST_KEY,
                 initial_counter + test_impl.degree() as u64,
                 KEYED_HASH,
                 test_right,
             );
-
             check_transposed_eq(&portable_output, &test_output);
+
+            // Do the same thing with unaligned input.
+            let mut unaligned_test_output = TransposedVectors::new();
+            let (unaligned_left, unaligned_right) =
+                test_impl.split_transposed_vectors(&mut unaligned_test_output);
+            test_impl.hash_chunks(
+                unaligned_input1,
+                &IV_BYTES,
+                initial_counter,
+                0,
+                unaligned_left,
+            );
+            test_impl.hash_chunks(
+                unaligned_input2,
+                &TEST_KEY,
+                initial_counter + test_impl.degree() as u64,
+                KEYED_HASH,
+                unaligned_right,
+            );
+            check_transposed_eq(&portable_output, &unaligned_test_output);
         }
     }
 }
