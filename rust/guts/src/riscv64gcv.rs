@@ -36,7 +36,7 @@ unsafe extern "C" fn hash_chunks(
     flags: u32,
     transposed_output: *mut u32,
 ) {
-    if input_len % CHUNK_LEN == 0 && input as usize % 4 == 0 {
+    if input_len % CHUNK_LEN == 0 {
         blake3_guts_riscv64gcv_hash_chunks(
             input,
             input_len,

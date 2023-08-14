@@ -829,14 +829,17 @@ blake3_guts_riscv64gcv_kernel:
 // a5: aligned+transposed output [unused]
 blake3_guts_riscv64gcv_hash_blocks:
         // t0 = full_blocks = (input_len + 1024 - 64) / 1024
-        // Note that if the final chunk is short, this could be 1 less than the
-        // total number of chunks, in which case we'll leave a CV word
-        // undisturbed in each of v0-v7.
+        // NOTE: If the final chunk is short, this could be 1 less than the
+        // total number of chunks, in which case this setup code and the kernel
+        // will leave a CV word undisturbed in each of v0-v7.
         addi t0, a1, 1024 - 64
         srli t0, t0, 10
         vsetvli zero, t0, e32, m1, ta, ma
         li t1, 1024
-        // TODO: handle misaligned blocks
+        // NOTE: These loads could be misaligned. As far as I know, the Linux
+        // RISC-V ABI allows misaligned loads and stores. If we need to support
+        // an environment that doesn't allow them (or where they're
+        // unacceptably slow), we could add a fallback here.
         vlsseg8e32.v v16, (a0), t1
         addi a0, a0, 32
         vlsseg8e32.v v24, (a0), t1
