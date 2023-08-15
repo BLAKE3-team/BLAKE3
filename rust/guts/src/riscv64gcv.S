@@ -833,7 +833,12 @@ blake3_guts_riscv64gcv_hash_blocks:
         // t0 := full_blocks := (input_len + 1024 - 64) / 1024
         addi t0, a1, 1024 - 64
         srli t0, t0, 10
-        // Load and transpose full message blocks.
+        // Load and transpose full message blocks. These are "strided segment
+        // loads". Each vlsseg8e32 instruction transposes 8 words from multiple
+        // message blocks into 8 registers, so we need two vlsseg8e32
+        // instructions (with the second offset by 32 bytes) to load full
+        // 64-byte blocks. The 1024-byte stride represents the spacing between
+        // two blocks in the same position in adjacent chunks.
         // NOTE: If the final chunk is short, this could be 1 less than the
         // total number of chunks, in which case this setup code and the kernel
         // will leave a CV word undisturbed in each of v0-v7.
@@ -1144,4 +1149,146 @@ blake3_guts_riscv64gcv_hash_parents:
         vse32.v v6, (a4)
         addi a4, a4, TRANSPOSED_STRIDE_BYTES
         vse32.v v7, (a4)
+        ret
+
+// a0: 64 zero-padded block bytes
+// a1: block_len
+// a2: cv
+// a3: counter
+// a4: flags
+// a5: out_ptr
+// a6: out_len
+blake3_guts_riscv64gcv_xof_inner:
+        // t0 := full_blocks := out_len / 64
+        srli t0, a6, 6
+        // broadcast the CV to v0-7
+        vsetvli zero, t0, e32, m1, ta, ma
+        lw t3, 0(a2)
+        vmv.v.x v0, t3
+        lw t3, 4(a2)
+        vmv.v.x v1, t3
+        lw t3, 8(a2)
+        vmv.v.x v2, t3
+        lw t3, 12(a2)
+        vmv.v.x v3, t3
+        lw t3, 16(a2)
+        vmv.v.x v4, t3
+        lw t3, 20(a2)
+        vmv.v.x v5, t3
+        lw t3, 24(a2)
+        vmv.v.x v6, t3
+        lw t3, 28(a2)
+        vmv.v.x v7, t3
+        // broadcast the block_words to v16-31
+        lw t3, 0(a0)
+        vmv.v.x v16, t3
+        lw t3, 4(a0)
+        vmv.v.x v17, t3
+        lw t3, 8(a0)
+        vmv.v.x v18, t3
+        lw t3, 12(a0)
+        vmv.v.x v19, t3
+        lw t3, 16(a0)
+        vmv.v.x v20, t3
+        lw t3, 20(a0)
+        vmv.v.x v21, t3
+        lw t3, 24(a0)
+        vmv.v.x v22, t3
+        lw t3, 28(a0)
+        vmv.v.x v23, t3
+        lw t3, 32(a0)
+        vmv.v.x v24, t3
+        lw t3, 36(a0)
+        vmv.v.x v25, t3
+        lw t3, 40(a0)
+        vmv.v.x v26, t3
+        lw t3, 44(a0)
+        vmv.v.x v27, t3
+        lw t3, 48(a0)
+        vmv.v.x v28, t3
+        lw t3, 52(a0)
+        vmv.v.x v29, t3
+        lw t3, 56(a0)
+        vmv.v.x v30, t3
+        lw t3, 60(a0)
+        vmv.v.x v31, t3
+        // load the counter
+        vsetvli zero, t0, e64, m2, ta, ma
+        vmv.v.x v8, a3
+        vid.v v10
+        vadd.vv v8, v8, v10
+        vsetvli zero, t0, e32, m1, ta, ma
+        vncvt.x.x.w v12, v8
+        li t2, 32
+        vnsrl.wx v13, v8, t2
+        // broadcast the block length
+        vmv.v.x v14, a1
+        // broadcast the flags
+        vmv.v.x v15, a4
+
+        // execute the kernel
+        mv t6, ra
+        call blake3_guts_riscv64gcv_kernel
+        mv ra, t6
+
+        // reload the CV, this time into v16-23
+        lw t3, 0(a2)
+        vmv.v.x v16, t3
+        lw t3, 4(a2)
+        vmv.v.x v17, t3
+        lw t3, 8(a2)
+        vmv.v.x v18, t3
+        lw t3, 12(a2)
+        vmv.v.x v19, t3
+        lw t3, 16(a2)
+        vmv.v.x v20, t3
+        lw t3, 20(a2)
+        vmv.v.x v21, t3
+        lw t3, 24(a2)
+        vmv.v.x v22, t3
+        lw t3, 28(a2)
+        vmv.v.x v23, t3
+        // xor the two halves of the state and feed-forward the CV
+        vxor.vv v0, v0, v8
+        vxor.vv v1, v1, v9
+        vxor.vv v2, v2, v10
+        vxor.vv v3, v3, v11
+        vxor.vv v4, v4, v12
+        vxor.vv v5, v5, v13
+        vxor.vv v6, v6, v14
+        vxor.vv v7, v7, v15
+        vxor.vv v8, v8, v16
+        vxor.vv v9, v9, v17
+        vxor.vv v10, v10, v18
+        vxor.vv v11, v11, v19
+        vxor.vv v12, v12, v20
+        vxor.vv v13, v13, v21
+        vxor.vv v14, v14, v22
+        vxor.vv v15, v15, v23
+        ret
+
+// a0: 64 zero-padded block bytes
+// a1: block_len
+// a2: cv
+// a3: counter
+// a4: flags
+// a5: out_ptr
+// a6: out_len
+.global blake3_guts_riscv64gcv_xof
+blake3_guts_riscv64gcv_xof:
+        mv t5, ra
+        call blake3_guts_riscv64gcv_xof_inner
+        mv ra, t5
+
+        // Transpose and store full output blocks. These are "strided segment
+        // stores". Each vlsseg8e32 instruction transposes 8 words from
+        // adjacent registers into 32 bytes of contiguous output, so we need
+        // two vlsseg8e32 instructions to store full 64-byte blocks. We offset
+        // the second store by 32 bytes and use a 64-byte stride.
+        // NOTE: These stores might be misaligned.
+        // TODO: Handle partial blocks.
+        li t2, 64
+        addi t3, a5, 32
+        vssseg8e32.v v0, (a5), t2
+        vssseg8e32.v v8, (t3), t2
         ret

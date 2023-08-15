@@ -4,7 +4,7 @@
 //! requires quite a lot of effort, including building Clang from master and building QEMU from a
 //! custom branch. Please don't expect this code to be usable on real hardware for some time.
 
-use crate::{CVBytes, Implementation};
+use crate::{BlockBytes, CVBytes, Implementation, BLOCK_LEN};
 
 // NOTE: Keep this in sync with the same constant in assembly.
 pub(crate) const MAX_SIMD_DEGREE: usize = 16;
@@ -26,6 +26,45 @@ extern "C" {
         flags: u32,
         transposed_output: *mut u32,
     );
+    fn blake3_guts_riscv64gcv_xof(
+        block: *const BlockBytes,
+        block_len: u32,
+        cv: *const CVBytes,
+        counter: u64,
+        flags: u32,
+        out: *mut u8,
+        out_len: usize,
+    );
+}
+
+// TODO: get rid of this function
+unsafe extern "C" fn xof(
+    block: *const BlockBytes,
+    block_len: u32,
+    cv: *const CVBytes,
+    mut counter: u64,
+    flags: u32,
+    mut out: *mut u8,
+    mut out_len: usize,
+) {
+    let full_blocks = out_len / BLOCK_LEN;
+    let full_blocks_len = full_blocks * BLOCK_LEN;
+    blake3_guts_riscv64gcv_xof(block, block_len, cv, counter, flags, out, full_blocks_len);
+    counter += full_blocks as u64;
+    out = out.add(full_blocks_len);
+    out_len -= full_blocks_len;
+    if out_len > 0 {
+        let mut final_output_block = [0u8; BLOCK_LEN];
+        crate::portable::compress_xof(
+            block,
+            block_len,
+            cv,
+            counter,
+            flags,
+            &mut final_output_block,
+        );
+        core::ptr::copy_nonoverlapping(final_output_block.as_ptr(), out, out_len);
+    }
 }
 
 pub fn implementation() -> Implementation {
@@ -34,7 +73,7 @@ pub fn implementation() -> Implementation {
         crate::portable::compress,
         blake3_guts_riscv64gcv_hash_chunks,
         blake3_guts_riscv64gcv_hash_parents,
-        crate::portable::xof,
+        xof,
         crate::portable::xof_xor,
         crate::portable::universal_hash,
     )
