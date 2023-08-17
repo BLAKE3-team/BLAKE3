@@ -35,6 +35,15 @@ extern "C" {
         out: *mut u8,
         out_len: usize,
     );
+    fn blake3_guts_riscv64gcv_xof_xor(
+        block: *const BlockBytes,
+        block_len: u32,
+        cv: *const CVBytes,
+        counter: u64,
+        flags: u32,
+        out: *mut u8,
+        out_len: usize,
+    );
 }
 
 // TODO: get rid of this function
@@ -67,6 +76,38 @@ unsafe extern "C" fn xof(
     }
 }
 
+// TODO: get rid of this function
+unsafe extern "C" fn xof_xor(
+    block: *const BlockBytes,
+    block_len: u32,
+    cv: *const CVBytes,
+    mut counter: u64,
+    flags: u32,
+    mut out: *mut u8,
+    mut out_len: usize,
+) {
+    let full_blocks = out_len / BLOCK_LEN;
+    let full_blocks_len = full_blocks * BLOCK_LEN;
+    blake3_guts_riscv64gcv_xof_xor(block, block_len, cv, counter, flags, out, full_blocks_len);
+    counter += full_blocks as u64;
+    out = out.add(full_blocks_len);
+    out_len -= full_blocks_len;
+    if out_len > 0 {
+        let mut final_output_block = [0u8; BLOCK_LEN];
+        crate::portable::compress_xof(
+            block,
+            block_len,
+            cv,
+            counter,
+            flags,
+            &mut final_output_block,
+        );
+        for i in 0..out_len {
+            *out.add(i) ^= final_output_block[i];
+        }
+    }
+}
+
 pub fn implementation() -> Implementation {
     Implementation::new(
         blake3_guts_riscv64gcv_degree,
@@ -74,7 +115,7 @@ pub fn implementation() -> Implementation {
         blake3_guts_riscv64gcv_hash_chunks,
         blake3_guts_riscv64gcv_hash_parents,
         xof,
-        crate::portable::xof_xor,
+        xof_xor,
         crate::portable::universal_hash,
     )
 }

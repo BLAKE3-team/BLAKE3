@@ -1292,3 +1292,41 @@ blake3_guts_riscv64gcv_xof:
         vssseg8e32.v v0, (a5), t2
         vssseg8e32.v v8, (t3), t2
         ret
+
+// a0: 64 zero-padded block bytes
+// a1: block_len
+// a2: cv
+// a3: counter
+// a4: flags
+// a5: out_ptr
+// a6: out_len
+.global blake3_guts_riscv64gcv_xof_xor
+blake3_guts_riscv64gcv_xof_xor:
+        mv t5, ra
+        call blake3_guts_riscv64gcv_xof_inner
+        mv ra, t5
+
+        li t2, 64
+        addi t3, a5, 32
+        vlsseg8e32.v v16, (a5), t2
+        vlsseg8e32.v v24, (t3), t2
+        vxor.vv v0, v0, v16
+        vxor.vv v1, v1, v17
+        vxor.vv v2, v2, v18
+        vxor.vv v3, v3, v19
+        vxor.vv v4, v4, v20
+        vxor.vv v5, v5, v21
+        vxor.vv v6, v6, v22
+        vxor.vv v7, v7, v23
+        vxor.vv v8, v8, v24
+        vxor.vv v9, v9, v25
+        vxor.vv v10, v10, v26
+        vxor.vv v11, v11, v27
+        vxor.vv v12, v12, v28
+        vxor.vv v13, v13, v29
+        vxor.vv v14, v14, v30
+        vxor.vv v15, v15, v31
+        vssseg8e32.v v0, (a5), t2
+        vssseg8e32.v v8, (t3), t2
+
+        ret
