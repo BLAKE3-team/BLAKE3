@@ -16,6 +16,159 @@
 
 .section .text
 
+.p2align 2
+IV_VEC:
+        .word    IV0, IV1, IV2, IV3
+ROR1:
+        .word    3, 0, 1, 2
+ROR2:
+        .word    2, 3, 0, 1
+ROR3:
+        .word    1, 2, 3, 0
+
+# The bottom half of the load permutation is tweaked to account for the fact that
+# we hold the second row fixed during diagonalization.
+MSG_LOAD:
+        .short   0, 2, 4, 6, 1, 3, 5, 7, 14, 8, 10, 12, 15, 9, 11, 13
+
+# The message permutation as given in the in the BLAKE3 spec would be the correct
+# permutation to use if the load order above was 0, 1, 2, 3... However, since
+# we're using a tricky load order, we need to adjust the permutation accordingly.
+# The following Python snippet reproduces the permutation we're using here:
+#
+#     load_order = [0, 2, 4, 6, 1, 3, 5, 7, 14, 8, 10, 12, 15, 9, 11, 13]
+#     original_permutation = [2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8]
+#     retargeted_permutation = [load_order.index(x) for x in original_permutation]
+#     shuffled_permutation = [retargeted_permutation[i] for i in load_order]
+#     print(shuffled_permutation)
+MSG_PERMUTE:
+        .short   1, 5, 7, 2, 3, 10, 0, 15, 12, 4, 11, 13, 9, 14, 6, 8
+
+// a0: block (zero-padded to 64 bytes)
+// a1: block_len
+// a2: cv_bytes
+// a3: counter
+// a4: flags
+// a5: out_ptr
+.global blake3_guts_riscv64gcv_compress
+blake3_guts_riscv64gcv_compress:
+        // Load the message load and message permutation indexes.
+        vsetivli zero, 16, e16, m2, ta, ma
+        la t0, MSG_LOAD
+        vle16.v v8, (t0)
+        la t0, MSG_PERMUTE
+        vle16.v v10, (t0)
+        // Load the CV into v0-v1.
+        vsetivli zero, 16, e8, m1, ta, ma
+        vle8.v v0, (a2)
+        addi a2, a2, 16
+        vle8.v v1, (a2)
+        // Set LMUL=4 and load the message block temporarily into scratch
+        // space. Apply the MSG_LOAD permutation, and then move the permuted
+        // message words into v4-v7.
+        // TODO: Do this with less register movement?
+        li t0, 64
+        vsetvli zero, t0, e8, m4, ta, ma
+        vle8.v v20, (a0)
+        vsetivli zero, 16, e32, m4, ta, ma
+        vrgatherei16.vv v16, v20, v8
+        vsetivli zero, 4, e32, m4, ta, ma
+        vslidedown.vi v20, v16, 4
+        vslidedown.vi v24, v16, 8
+        vslidedown.vi v28, v16, 12
+        vsetivli zero, 4, e32, m1, ta, ma
+        vmv.v.v v4, v16
+        vmv.v.v v5, v20
+        vmv.v.v v6, v24
+        vmv.v.v v7, v28
+        // Load the diagonalization gather indexes.
+        la t0, ROR1
+        vle32.v v12, (t0)
+        la t0, ROR2
+        vle32.v v13, (t0)
+        la t0, ROR3
+        vle32.v v14, (t0)
+        // Load the IV words.
+        la t0, IV_VEC
+        vle32.v v2, (t0)
+        // Load the counter, block_len, and flags.
+        vsetivli zero, 4, e32, m1, ta, ma
+        vslide1down.vx v3, v3, a3
+        srli a3, a3, 32
+        vslide1down.vx v3, v3, a3
+        vslide1down.vx v3, v3, a1
+        vslide1down.vx v3, v3, a4
+        li t0, 7  // round counter
+blake3_guts_riscv64gcv_compress_round_loop:
+        vadd.vv  v0, v0, v4
+        vadd.vv  v0, v0, v1
+        vxor.vv  v3, v3, v0
+        vror.vi  v3, v3, 16
+        vadd.vv  v2, v2, v3
+        vxor.vv  v1, v1, v2
+        vror.vi  v1, v1, 12
+        vadd.vv  v0, v0, v5
+        vadd.vv  v0, v0, v1
+        vxor.vv  v3, v3, v0
+        vror.vi  v3, v3, 8
+        vadd.vv  v2, v2, v3
+        vxor.vv  v1, v1, v2
+        vror.vi  v1, v1, 7
+        // Gathers can't overlap a source register, so use v20/v22/v23 in place
+        // of v0/v2/v3 for this section.
+        vrgather.vv v20, v0, v12
+        vrgather.vv v23, v3, v13
+        vrgather.vv v22, v2, v14
+        vadd.vv  v20, v20, v6
+        vadd.vv  v20, v20, v1
+        vxor.vv  v23, v23, v20
+        vror.vi  v23, v23, 16
+        vadd.vv  v22, v22, v23
+        vxor.vv  v1, v1, v22
+        vror.vi  v1, v1, 12
+        vadd.vv  v20, v20, v7
+        vadd.vv  v20, v20, v1
+        vxor.vv  v23, v23, v20
+        vror.vi  v23, v23, 8
+        vadd.vv  v22, v22, v23
+        vxor.vv  v1, v1, v22
+        vror.vi  v1, v1, 7
+        vrgather.vv v0, v20, v14
+        vrgather.vv v3, v23, v13
+        vrgather.vv v2, v22, v12
+        addi t0, t0, -1
+        beqz t0, blake3_guts_riscv64gcv_compress_end
+        // Shuffle message words.
+        // TODO: Find a way to do this without so much movement?
+        vmv.v.v v16, v4
+        vmv.v.v v20, v5
+        vmv.v.v v24, v6
+        vmv.v.v v28, v7
+        vsetivli zero, 16, e32, m4, ta, ma
+        vslideup.vi v16, v20, 4
+        vslideup.vi v16, v24, 8
+        vslideup.vi v16, v28, 12
+        vrgatherei16.vv v28, v16, v10
+        vsetivli zero, 4, e32, m4, ta, ma
+        vslidedown.vi v16, v28, 4
+        vslidedown.vi v20, v28, 8
+        vslidedown.vi v24, v28, 12
+        vsetivli zero, 4, e32, m1, ta, ma
+        vmv.v.v v4, v28
+        vmv.v.v v5, v16
+        vmv.v.v v6, v20
+        vmv.v.v v7, v24
+        j blake3_guts_riscv64gcv_compress_round_loop
+blake3_guts_riscv64gcv_compress_end:
+        vxor.vv v0, v0, v2
+        vxor.vv v1, v1, v3
+        vsetivli zero, 16, e8, m1, ta, ma
+        vse8.v v0, (a5)
+        addi a5, a5, 16
+        vse8.v v1, (a5)
+        ret
+
+
 .global blake3_guts_riscv64gcv_degree
 blake3_guts_riscv64gcv_degree:
         csrr t0, vlenb

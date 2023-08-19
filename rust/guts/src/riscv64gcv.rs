@@ -11,6 +11,14 @@ pub(crate) const MAX_SIMD_DEGREE: usize = 16;
 
 extern "C" {
     fn blake3_guts_riscv64gcv_degree() -> usize;
+    fn blake3_guts_riscv64gcv_compress(
+        block: *const BlockBytes,
+        block_len: u32,
+        cv: *const CVBytes,
+        counter: u64,
+        flags: u32,
+        out: *mut CVBytes,
+    );
     fn blake3_guts_riscv64gcv_hash_chunks(
         input: *const u8,
         input_len: usize,
@@ -49,7 +57,7 @@ extern "C" {
 pub fn implementation() -> Implementation {
     Implementation::new(
         blake3_guts_riscv64gcv_degree,
-        crate::portable::compress,
+        blake3_guts_riscv64gcv_compress,
         blake3_guts_riscv64gcv_hash_chunks,
         blake3_guts_riscv64gcv_hash_parents,
         blake3_guts_riscv64gcv_xof,
