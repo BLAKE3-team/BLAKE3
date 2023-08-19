@@ -1159,10 +1159,13 @@ blake3_guts_riscv64gcv_hash_parents:
 // a5: out_ptr
 // a6: out_len
 blake3_guts_riscv64gcv_xof_inner:
-        // t0 := full_blocks := out_len / 64
-        srli t0, a6, 6
+        // t1 := total_blocks := (out_len + 63) / 64
+        addi t1, a6, 63
+        srli t1, t1, 6
+        // t2 := full_blocks := out_len / 64
+        srli t2, a6, 6
         // broadcast the CV to v0-7
-        vsetvli zero, t0, e32, m1, ta, ma
+        vsetvli zero, t1, e32, m1, ta, ma
         lw t3, 0(a2)
         vmv.v.x v0, t3
         lw t3, 4(a2)
@@ -1213,14 +1216,14 @@ blake3_guts_riscv64gcv_xof_inner:
         lw t3, 60(a0)
         vmv.v.x v31, t3
         // load the counter
-        vsetvli zero, t0, e64, m2, ta, ma
+        vsetvli zero, t1, e64, m2, ta, ma
         vmv.v.x v8, a3
         vid.v v10
         vadd.vv v8, v8, v10
-        vsetvli zero, t0, e32, m1, ta, ma
+        vsetvli zero, t1, e32, m1, ta, ma
         vncvt.x.x.w v12, v8
-        li t2, 32
-        vnsrl.wx v13, v8, t2
+        li t3, 32
+        vnsrl.wx v13, v8, t3
         // broadcast the block length
         vmv.v.x v14, a1
         // broadcast the flags
@@ -1280,17 +1283,70 @@ blake3_guts_riscv64gcv_xof:
         call blake3_guts_riscv64gcv_xof_inner
         mv ra, t5
 
+        // t1 is now total_blocks, and t2 is full_blocks. Set vl to t2 and the
+        // tail policy to undisturbed. We'll handle full blocks with segmented
+        // stores, and then we'll use a separate branch for a partial final
+        // block, if any.
+        vsetvli zero, t2, e32, m1, tu, ma
+
         // Transpose and store full output blocks. These are "strided segment
-        // stores". Each vlsseg8e32 instruction transposes 8 words from
+        // stores". Each vssseg8e32 instruction transposes 8 words from
         // adjacent registers into 32 bytes of contiguous output, so we need
-        // two vlsseg8e32 instructions to store full 64-byte blocks. We offset
+        // two vssseg8e32 instructions to store full 64-byte blocks. We offset
         // the second store by 32 bytes and use a 64-byte stride.
         // NOTE: These stores might be misaligned.
-        // TODO: Handle partial blocks.
-        li t2, 64
+        li t0, 64
         addi t3, a5, 32
-        vssseg8e32.v v0, (a5), t2
-        vssseg8e32.v v8, (t3), t2
+        vssseg8e32.v v0, (a5), t0
+        vssseg8e32.v v8, (t3), t0
+
+        // If full_blocks != partial_blocks, we need to handle the final
+        // partial block. Otherwise, we're done.
+        bne t1, t2, blake3_guts_riscv64gcv_xof_partial_block
+        ret
+blake3_guts_riscv64gcv_xof_partial_block:
+        // Collect groups of 4 words in v0, v4, v8, and v12.
+        vsetivli zero, 4, e32, m1, ta, ma
+        vslidedown.vx v0, v0, t2
+        vslidedown.vx v1, v1, t2
+        vslideup.vi v0, v1, 1
+        vslidedown.vx v2, v2, t2
+        vslideup.vi v0, v2, 2
+        vslidedown.vx v3, v3, t2
+        vslideup.vi v0, v3, 3
+        vslidedown.vx v4, v4, t2
+        vslidedown.vx v5, v5, t2
+        vslideup.vi v4, v5, 1
+        vslidedown.vx v6, v6, t2
+        vslideup.vi v4, v6, 2
+        vslidedown.vx v7, v7, t2
+        vslideup.vi v4, v7, 3
+        vslidedown.vx v8, v8, t2
+        vslidedown.vx v9, v9, t2
+        vslideup.vi v8, v9, 1
+        vslidedown.vx v10, v10, t2
+        vslideup.vi v8, v10, 2
+        vslidedown.vx v11, v11, t2
+        vslideup.vi v8, v11, 3
+        vslidedown.vx v12, v12, t2
+        vslidedown.vx v13, v13, t2
+        vslideup.vi v12, v13, 1
+        vslidedown.vx v14, v14, t2
+        vslideup.vi v12, v14, 2
+        vslidedown.vx v15, v15, t2
+        vslideup.vi v12, v15, 3
+        // Use LMUL=4 to guarantee that one vector register group can hold 16
+        // words, and collect all 16 words in the v0 group.
+        vsetivli zero, 16, e32, m4, ta, ma
+        vslideup.vi v0, v4, 4
+        vslideup.vi v0, v8, 8
+        vslideup.vi v0, v12, 12
+        // Switch to bytes and write the output.
+        andi t3, a6, 63
+        add a5, a5, a6
+        sub a5, a5, t3
+        vsetvli zero, t3, e8, m4, ta, ma
+        vse8.v v0, (a5)
         ret
 
 // a0: 64 zero-padded block bytes
@@ -1306,10 +1362,23 @@ blake3_guts_riscv64gcv_xof_xor:
         call blake3_guts_riscv64gcv_xof_inner
         mv ra, t5
 
-        li t2, 64
+        // t1 is now total_blocks, and t2 is full_blocks. Set vl to t2 and the
+        // tail policy to undisturbed. We'll handle full blocks with segmented
+        // stores, and then we'll use a separate branch for a partial final
+        // block, if any.
+        vsetvli zero, t2, e32, m1, tu, ma
+
+        // Do a transposed load of the caller's buffer, xor that with the state
+        // words, and do a transposed store. These are "strided segment"
+        // loads/stores. Each vlsseg8e32/vssseg8e32 instruction works with
+        // groups of 8 words or 32 bytes, so we need pairs of these
+        // instructions to handle full 64-byte blocks. We offset the second by
+        // 32 bytes and use a 64-byte stride.
+        // NOTE: These accesses might be misaligned.
+        li t0, 64
         addi t3, a5, 32
-        vlsseg8e32.v v16, (a5), t2
-        vlsseg8e32.v v24, (t3), t2
+        vlsseg8e32.v v16, (a5), t0
+        vlsseg8e32.v v24, (t3), t0
         vxor.vv v0, v0, v16
         vxor.vv v1, v1, v17
         vxor.vv v2, v2, v18
@@ -1326,7 +1395,56 @@ blake3_guts_riscv64gcv_xof_xor:
         vxor.vv v13, v13, v29
         vxor.vv v14, v14, v30
         vxor.vv v15, v15, v31
-        vssseg8e32.v v0, (a5), t2
-        vssseg8e32.v v8, (t3), t2
+        vssseg8e32.v v0, (a5), t0
+        vssseg8e32.v v8, (t3), t0
 
+        // If full_blocks != partial_blocks, we need to handle the final
+        // partial block. Otherwise, we're done.
+        bne t1, t2, blake3_guts_riscv64gcv_xof_xor_partial_block
+        ret
+blake3_guts_riscv64gcv_xof_xor_partial_block:
+        // Collect groups of 4 words in v0, v4, v8, and v12.
+        vsetivli zero, 4, e32, m1, ta, ma
+        vslidedown.vx v0, v0, t2
+        vslidedown.vx v1, v1, t2
+        vslideup.vi v0, v1, 1
+        vslidedown.vx v2, v2, t2
+        vslideup.vi v0, v2, 2
+        vslidedown.vx v3, v3, t2
+        vslideup.vi v0, v3, 3
+        vslidedown.vx v4, v4, t2
+        vslidedown.vx v5, v5, t2
+        vslideup.vi v4, v5, 1
+        vslidedown.vx v6, v6, t2
+        vslideup.vi v4, v6, 2
+        vslidedown.vx v7, v7, t2
+        vslideup.vi v4, v7, 3
+        vslidedown.vx v8, v8, t2
+        vslidedown.vx v9, v9, t2
+        vslideup.vi v8, v9, 1
+        vslidedown.vx v10, v10, t2
+        vslideup.vi v8, v10, 2
+        vslidedown.vx v11, v11, t2
+        vslideup.vi v8, v11, 3
+        vslidedown.vx v12, v12, t2
+        vslidedown.vx v13, v13, t2
+        vslideup.vi v12, v13, 1
+        vslidedown.vx v14, v14, t2
+        vslideup.vi v12, v14, 2
+        vslidedown.vx v15, v15, t2
+        vslideup.vi v12, v15, 3
+        // Use LMUL=4 to guarantee that one vector register group can hold 16
+        // words, and collect all 16 words in the v0 group.
+        vsetivli zero, 16, e32, m4, ta, ma
+        vslideup.vi v0, v4, 4
+        vslideup.vi v0, v8, 8
+        vslideup.vi v0, v12, 12
+        // Switch to bytes and read/xor/write the output.
+        andi t3, a6, 63
+        add a5, a5, a6
+        sub a5, a5, t3
+        vsetvli zero, t3, e8, m4, ta, ma
+        vle8.v v4, (a5)
+        vxor.vv v0, v0, v4
+        vse8.v v0, (a5)
         ret
