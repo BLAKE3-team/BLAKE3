@@ -1601,3 +1601,53 @@ blake3_guts_riscv64gcv_xof_xor_partial_block:
         vxor.vv v0, v0, v4
         vse8.v v0, (a5)
         ret
+
+// a0: input_ptr
+// a1: input_len
+// a2: key
+// a3: counter
+// a4: out_ptr
+.global blake3_guts_riscv64gcv_universal_hash
+blake3_guts_riscv64gcv_universal_hash:
+    // Prepare the padding null bytes in v8-v11, length = -input_len & 63.
+    // LMUL=4 is guaranteed to be sufficient to hold 64 bytes. Retain this
+    // length in t3.
+    neg t3, a1
+    andi t3, t3, 63
+    vsetvli zero, t3, e8, m4, ta, ma
+    vmv.v.i v8, 0
+
+    // Load the input into v16-v31 and slide the padding bytes into place.
+    // Rather than checking which register group needs to be padded, just pad
+    // them both. The vslideup will be a no-op if the offset is >vl, and
+    // anything after the last block of input will ultimately be ignored.
+    vsetvli t0, a1, e8, m8, ta, ma
+    vle8.v v16, (a0)
+    add t1, a1, t3
+    vsetvli zero, t1, e8, m8, ta, ma
+    vslideup.vx v16, v8, a1
+    add a0, a0, t0
+    sub a1, a1, t0
+    vsetvli t0, a1, e8, m8, ta, ma
+    vle8.v v24, (a0)
+    add t1, a1, t3
+    vsetvli zero, t1, e8, m8, ta, ma
+    vslideup.vx v24, v8, a1
+
+    // Compute the vrgather indexes for the first of two rounds of vrgathers.
+    // We'll gather four vectors at a time, which lets us leave v0-v8
+    // untouched. That isn't a requirement in this case, but we can use the
+    // same vrgathers in hash_blocks where it is a requirement. Let W be the
+    // max number of 32-bit words per physical vector register (vlenb/4), then
+    // the gather indexes are:
+    //     0, 1, 2, 3, 16, 17, 18, 19, 32, 33, 34, 35, ...
+    //     f(i) = (i/4)*16 + (i%4)
+    vsetvli t0, zero, e16, m2, ta, ma  // VLMAX
+    vid.v v8
+    vid.v v10
+    vsrl.vi v8, v8, 2  // /4
+    vand.vi v10, v10, 3  // %4
+    vsll.vi v8, v8, 4  // *16
+    vadd.vv v8, v8, v10
+
+    ret

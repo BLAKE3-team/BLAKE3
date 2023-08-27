@@ -52,6 +52,13 @@ extern "C" {
         out: *mut u8,
         out_len: usize,
     );
+    fn blake3_guts_riscv64gcv_universal_hash(
+        input: *const u8,
+        input_len: usize,
+        key: *const CVBytes,
+        counter: u64,
+        out: *mut [u8; 16],
+    );
 }
 
 pub fn implementation() -> Implementation {
@@ -62,7 +69,7 @@ pub fn implementation() -> Implementation {
         blake3_guts_riscv64gcv_hash_parents,
         blake3_guts_riscv64gcv_xof,
         blake3_guts_riscv64gcv_xof_xor,
-        crate::portable::universal_hash,
+        blake3_guts_riscv64gcv_universal_hash,
     )
 }
 
