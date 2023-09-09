@@ -127,6 +127,10 @@ mod sse41;
 #[path = "ffi_sse41.rs"]
 mod sse41;
 
+#[cfg(blake3_wasm32_simd)]
+#[path = "wasm32_simd.rs"]
+mod wasm32_simd;
+
 #[cfg(feature = "traits-preview")]
 pub mod traits;
 
