@@ -69,6 +69,9 @@
 //! expect breaking changes between patch versions. (The "-preview" feature name
 //! follows the conventions of the RustCrypto [`signature`] crate.)
 //!
+//! The `serde` feature (disabled by default) enables serde compatibility for
+//! the `Hash` struct.
+//!
 //! [`Hasher::update_rayon`]: struct.Hasher.html#method.update_rayon
 //! [BLAKE3]: https://blake3.io
 //! [Rayon]: https://github.com/rayon-rs/rayon
@@ -212,6 +215,7 @@ fn counter_high(counter: u64) -> u32 {
 /// [`Display`]: https://doc.rust-lang.org/std/fmt/trait.Display.html
 /// [`FromStr`]: https://doc.rust-lang.org/std/str/trait.FromStr.html
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Hash)]
 pub struct Hash([u8; OUT_LEN]);
 
