@@ -21,6 +21,10 @@ fn is_no_neon() -> bool {
     defined("CARGO_FEATURE_NO_NEON")
 }
 
+fn is_wasm32_simd() -> bool {
+    defined("CARGO_FEATURE_WASM32_SIMD")
+}
+
 fn is_ci() -> bool {
     defined("BLAKE3_CI")
 }
@@ -58,6 +62,10 @@ fn is_aarch64() -> bool {
 
 fn is_armv7() -> bool {
     target_components()[0] == "armv7"
+}
+
+fn is_wasm32() -> bool {
+    target_components()[0] == "wasm32"
 }
 
 // Windows targets may be using the MSVC toolchain or the GNU toolchain. The
@@ -225,6 +233,13 @@ fn build_neon_c_intrinsics() {
     build.compile("blake3_neon");
 }
 
+fn build_wasm32_simd() {
+    assert!(is_wasm32());
+    // No C code to compile here. Set the cfg flags that enable the WASM SIMD.
+    // The regular Cargo build will compile it.
+    println!("cargo:rustc-cfg=blake3_wasm32_simd");
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if is_pure() && is_neon() {
         panic!("It doesn't make sense to enable both \"pure\" and \"neon\".");
@@ -256,6 +271,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if (is_arm() && is_neon()) || (!is_no_neon() && !is_pure() && is_aarch64()) {
         println!("cargo:rustc-cfg=blake3_neon");
         build_neon_c_intrinsics();
+    }
+
+    if is_wasm32() && is_wasm32_simd() {
+        build_wasm32_simd();
     }
 
     // The `cc` crate doesn't automatically emit rerun-if directives for the

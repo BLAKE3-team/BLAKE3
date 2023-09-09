@@ -70,7 +70,6 @@
 #[cfg(feature = "zeroize")]
 extern crate zeroize_crate as zeroize; // Needed because `zeroize::Zeroize` assumes the crate is named `zeroize`.
 
-
 #[cfg(test)]
 mod test;
 
@@ -112,6 +111,10 @@ mod sse41;
 #[cfg(blake3_sse41_ffi)]
 #[path = "ffi_sse41.rs"]
 mod sse41;
+
+#[cfg(blake3_wasm32_simd)]
+#[path = "wasm32_simd.rs"]
+mod wasm32_simd;
 
 #[cfg(feature = "traits-preview")]
 pub mod traits;
