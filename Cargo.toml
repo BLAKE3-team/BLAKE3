@@ -18,9 +18,9 @@ default = ["std"]
 # implementation uses C intrinsics and requires a C compiler.
 neon = []
 
-# The WASM-SIMD implementation does not participate in dynamic feature detection,
-# which is currently x86-only. If "wasm_simd" is on, WASM SIMD support is assumed.
-# Note that not all WASM implementation may support WASM-SIMD specification.
+# The Wasm SIMD implementation does not participate in dynamic feature detection,
+# which is currently x86-only. If "wasm_simd" is on, Wasm SIMD support is assumed.
+# Note that not all Wasm implementation may support Wasm SIMD specification.
 wasm32_simd = []
 
 # This crate uses libstd for std::io trait implementations, and also for

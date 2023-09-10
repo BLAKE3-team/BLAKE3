@@ -5,11 +5,11 @@
  * Performance measurements with a primitive benchmark with ~16Kb of data:
  *
  * | M1 native     | 11,610 ns |
- * | M1 WASM SIMD  | 13,355 ns |
- * | M1 WASM       | 22,037 ns |
+ * | M1 Wasm SIMD  | 13,355 ns |
+ * | M1 Wasm       | 22,037 ns |
  * | x64 native    |  6,713 ns |
- * | x64 WASM SIMD | 11,985 ns |
- * | x64 WASM      | 25,978 ns |
+ * | x64 Wasm SIMD | 11,985 ns |
+ * | x64 Wasm      | 25,978 ns |
  *
  * wasmtime v12.0.1 was used on both platforms.
  */
@@ -690,7 +690,7 @@ unsafe fn hash1<const N: usize>(
         block_flags = flags;
         slice = &slice[BLOCK_LEN..];
     }
-    *out = core::mem::transmute(cv); // x86 is little-endian
+    *out = core::mem::transmute(cv);
 }
 
 #[target_feature(enable = "simd128")]
