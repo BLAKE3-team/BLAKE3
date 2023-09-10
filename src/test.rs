@@ -658,10 +658,12 @@ fn test_zeroize() {
     assert_eq!(hasher.chunk_state.buf_len, 0);
     assert_eq!(hasher.chunk_state.blocks_compressed, 0);
     assert_eq!(hasher.chunk_state.flags, 0);
-    assert!(matches!(hasher.chunk_state.platform, crate::Platform::Portable));
+    assert!(matches!(
+        hasher.chunk_state.platform,
+        crate::Platform::Portable
+    ));
     assert_eq!(hasher.key, [0; 8]);
     assert_eq!(&*hasher.cv_stack, &[[0u8; 32]; 0]);
-
 
     let mut output_reader = crate::OutputReader {
         inner: crate::Output {
@@ -675,14 +677,123 @@ fn test_zeroize() {
         position_within_block: 42,
     };
 
-
     output_reader.zeroize();
     assert_eq!(output_reader.inner.input_chaining_value, [0; 8]);
     assert_eq!(output_reader.inner.block, [0; 64]);
     assert_eq!(output_reader.inner.counter, 0);
     assert_eq!(output_reader.inner.block_len, 0);
     assert_eq!(output_reader.inner.flags, 0);
-    assert!(matches!(output_reader.inner.platform, crate::Platform::Portable));
+    assert!(matches!(
+        output_reader.inner.platform,
+        crate::Platform::Portable
+    ));
     assert_eq!(output_reader.position_within_block, 0);
+}
 
+#[test]
+#[cfg(feature = "std")]
+fn test_update_reader() -> Result<(), std::io::Error> {
+    // This is a brief test, since update_reader() is mostly a wrapper around update(), which already
+    // has substantial testing.
+    use std::io::prelude::*;
+    let mut input = vec![0; 1_000_000];
+    paint_test_input(&mut input);
+    let mut tempfile = tempfile::NamedTempFile::new()?;
+    tempfile.write_all(&input)?;
+    tempfile.flush()?;
+    let mut hasher = crate::Hasher::new();
+    hasher.update_reader(std::fs::File::open(tempfile.path())?)?;
+    assert_eq!(hasher.finalize(), crate::hash(&input));
+    Ok(())
+}
+
+#[test]
+#[cfg(feature = "std")]
+fn test_update_reader_interrupted() -> std::io::Result<()> {
+    use std::io;
+    struct InterruptingReader<'a> {
+        already_interrupted: bool,
+        slice: &'a [u8],
+    }
+    impl<'a> InterruptingReader<'a> {
+        fn new(slice: &'a [u8]) -> Self {
+            Self {
+                already_interrupted: false,
+                slice,
+            }
+        }
+    }
+    impl<'a> io::Read for InterruptingReader<'a> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if !self.already_interrupted {
+                self.already_interrupted = true;
+                return Err(io::Error::from(io::ErrorKind::Interrupted));
+            }
+            let take = std::cmp::min(self.slice.len(), buf.len());
+            buf[..take].copy_from_slice(&self.slice[..take]);
+            self.slice = &self.slice[take..];
+            Ok(take)
+        }
+    }
+
+    let input = b"hello world";
+    let mut reader = InterruptingReader::new(input);
+    let mut hasher = crate::Hasher::new();
+    hasher.update_reader(&mut reader)?;
+    assert_eq!(hasher.finalize(), crate::hash(input));
+    Ok(())
+}
+
+#[test]
+#[cfg(feature = "mmap")]
+fn test_mmap() -> Result<(), std::io::Error> {
+    // This is a brief test, since update_mmap() is mostly a wrapper around update(), which already
+    // has substantial testing.
+    use std::io::prelude::*;
+    let mut input = vec![0; 1_000_000];
+    paint_test_input(&mut input);
+    let mut tempfile = tempfile::NamedTempFile::new()?;
+    tempfile.write_all(&input)?;
+    tempfile.flush()?;
+    let mut hasher = crate::Hasher::new();
+    hasher.update_mmap(tempfile.path())?;
+    assert_eq!(hasher.finalize(), crate::hash(&input));
+    Ok(())
+}
+
+#[test]
+#[cfg(feature = "mmap")]
+#[cfg(target_os = "linux")]
+fn test_mmap_virtual_file() -> Result<(), std::io::Error> {
+    // Virtual files like /proc/version can't be mmapped, because their contents don't actually
+    // exist anywhere in memory. Make sure we fall back to regular file IO in these cases.
+    // Currently this is handled with a length check, where the assumption is that virtual files
+    // will always report length 0. If that assumption ever breaks, hopefully this test will catch
+    // it.
+    let virtual_filepath = "/proc/version";
+    let mut mmap_hasher = crate::Hasher::new();
+    // We'll fail right here if the fallback doesn't work.
+    mmap_hasher.update_mmap(virtual_filepath)?;
+    let mut read_hasher = crate::Hasher::new();
+    read_hasher.update_reader(std::fs::File::open(virtual_filepath)?)?;
+    assert_eq!(mmap_hasher.finalize(), read_hasher.finalize());
+    Ok(())
+}
+
+#[test]
+#[cfg(feature = "mmap")]
+#[cfg(feature = "rayon")]
+fn test_mmap_rayon() -> Result<(), std::io::Error> {
+    // This is a brief test, since update_mmap_rayon() is mostly a wrapper around update_rayon(),
+    // which already has substantial testing.
+    use std::io::prelude::*;
+    let mut input = vec![0; 1_000_000];
+    paint_test_input(&mut input);
+    let mut tempfile = tempfile::NamedTempFile::new()?;
+    tempfile.write_all(&input)?;
+    tempfile.flush()?;
+    let mut hasher = crate::Hasher::new();
+    hasher.update_mmap_rayon(tempfile.path())?;
+    assert_eq!(hasher.finalize(), crate::hash(&input));
+    Ok(())
 }
