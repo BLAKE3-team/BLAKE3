@@ -148,7 +148,7 @@ jobs:
           # The b3sum MSRV is sometimes higher than the blake3 crate's, because
           # b3sum depends on Clap. We check in the b3sum Cargo.lock, so Clap
           # update shouldn't randomly break us here.
-          "1.66.1",
+          "1.70.0",
         ]
 
     steps:
