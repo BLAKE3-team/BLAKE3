@@ -235,7 +235,7 @@ fn build_neon_c_intrinsics() {
 
 fn build_wasm32_simd() {
     assert!(is_wasm32());
-    // No C code to compile here. Set the cfg flags that enable the WASM SIMD.
+    // No C code to compile here. Set the cfg flags that enable the Wasm SIMD.
     // The regular Cargo build will compile it.
     println!("cargo:rustc-cfg=blake3_wasm32_simd");
 }

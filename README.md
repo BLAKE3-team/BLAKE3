@@ -35,8 +35,8 @@ This repository is the official implementation of BLAKE3. It includes:
 
 * The [`blake3`](https://crates.io/crates/blake3) Rust crate, which
   includes optimized implementations for SSE2, SSE4.1, AVX2, AVX-512,
-  and NEON, with automatic runtime CPU feature detection on x86. The
-  `rayon` feature provides multithreading.
+  NEON and Wasm SIMD, with automatic runtime CPU feature detection on x86.
+  The `rayon` feature provides multithreading.
 
 * The [`b3sum`](https://crates.io/crates/b3sum) Rust crate, which
   provides a command line interface. It uses multithreading by default,
