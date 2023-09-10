@@ -25,10 +25,16 @@ neon = []
 # entire build, with e.g. RUSTFLAGS="-C target-cpu=native".
 std = []
 
-# The "rayon" feature (defined below as an optional dependency) enables the
-# `Hasher::update_rayon` method, for multithreaded hashing. However, even if
-# this feature is enabled, all other APIs remain single-threaded.
+# The `rayon` feature (disabled by default, but enabled for docs.rs) adds the
+# `update_rayon` and (in combination with `mmap` below) `update_mmap_rayon`
+# methods, for multithreaded hashing. However, even if this feature is enabled,
+# all other APIs remain single-threaded.
 rayon = ["dep:rayon", "std"]
+
+# The `mmap` feature (disabled by default, but enabled for docs.rs) adds the
+# `update_mmap` and (in combination with `rayon` above) `update_mmap_rayon`
+# helper methods for memory-mapped IO.
+mmap = ["std", "dep:memmap2"]
 
 # Implement the zeroize::Zeroize trait for types in this crate.
 zeroize = ["dep:zeroize", "arrayvec/zeroize"]
@@ -81,11 +87,9 @@ no_avx2 = []
 no_avx512 = []
 no_neon = []
 
-file = ["memmap2", "rayon", "std"]
-
 [package.metadata.docs.rs]
-# Document Hasher::update_rayon on docs.rs.
-features = ["rayon", "zeroize"]
+# Document the rayon/mmap methods and the Zeroize impls on docs.rs.
+features = ["mmap", "rayon", "zeroize"]
 
 [dependencies]
 arrayref = "0.3.5"
@@ -98,12 +102,13 @@ zeroize = { version = "1", default-features = false, features = ["zeroize_derive
 memmap2 = { version = "0.7.1", optional = true }
 
 [dev-dependencies]
+hmac = "0.12.0"
 hex = "0.4.2"
 page_size = "0.6.0"
 rand = "0.8.0"
 rand_chacha = "0.3.0"
 reference_impl = { path = "./reference_impl" }
-hmac = "0.12.0"
+tempfile = "3.8.0"
 
 [build-dependencies]
 cc = "1.0.4"

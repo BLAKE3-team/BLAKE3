@@ -33,18 +33,28 @@
 //! # Cargo Features
 //!
 //! The `std` feature (the only feature enabled by default) is required for
-//! implementations of the [`Write`] and [`Seek`] traits, and also for runtime
-//! CPU feature detection on x86. If this feature is disabled, the only way to
-//! use the x86 SIMD implementations is to enable the corresponding instruction
-//! sets globally, with e.g. `RUSTFLAGS="-C target-cpu=native"`. The resulting
-//! binary will not be portable to other machines.
+//! implementations of the [`Write`] and [`Seek`] traits, the
+//! [`update_reader`](Hasher::update_reader) helper method, and runtime CPU
+//! feature detection on x86. If this feature is disabled, the only way to use
+//! the x86 SIMD implementations is to enable the corresponding instruction sets
+//! globally, with e.g. `RUSTFLAGS="-C target-cpu=native"`. The resulting binary
+//! will not be portable to other machines.
 //!
 //! The `rayon` feature (disabled by default, but enabled for [docs.rs]) adds
-//! the [`Hasher::update_rayon`] method, for multithreaded hashing. However,
-//! even if this feature is enabled, all other APIs remain single-threaded.
+//! the [`update_rayon`](Hasher::update_rayon) and (in combination with `mmap`
+//! below) [`update_mmap_rayon`](Hasher::update_mmap_rayon) methods, for
+//! multithreaded hashing. However, even if this feature is enabled, all other
+//! APIs remain single-threaded.
 //!
-//! The `zeroize` feature (disabled by default, but enabled for [docs.rs]) implements
-//! [`Zeroize`](https://docs.rs/zeroize/latest/zeroize/trait.Zeroize.html) for this crate's types.
+//! The `mmap` feature (disabled by default, but enabled for [docs.rs]) adds the
+//! [`update_mmap`](Hasher::update_mmap) and (in combination with `rayon` above)
+//! [`update_mmap_rayon`](Hasher::update_mmap_rayon) helper methods for
+//! memory-mapped IO.
+//!
+//! The `zeroize` feature (disabled by default, but enabled for [docs.rs])
+//! implements
+//! [`Zeroize`](https://docs.rs/zeroize/latest/zeroize/trait.Zeroize.html) for
+//! this crate's types.
 //!
 //! The NEON implementation is enabled by default for AArch64 but requires the
 //! `neon` feature for other ARM targets. Not all ARMv7 CPUs support NEON, and
@@ -52,12 +62,12 @@
 //! without NEON support.
 //!
 //! The `traits-preview` feature enables implementations of traits from the
-//! RustCrypto [`digest`] crate, and re-exports that crate as
-//! `traits::digest`. However, the traits aren't stable, and they're expected to
-//! change in incompatible ways before that crate reaches 1.0. For that reason,
-//! this crate makes no SemVer guarantees for this feature, and callers who use
-//! it should expect breaking changes between patch versions. (The "-preview"
-//! feature name follows the conventions of the RustCrypto [`signature`] crate.)
+//! RustCrypto [`digest`] crate, and re-exports that crate as `traits::digest`.
+//! However, the traits aren't stable, and they're expected to change in
+//! incompatible ways before that crate reaches 1.0. For that reason, this crate
+//! makes no SemVer guarantees for this feature, and callers who use it should
+//! expect breaking changes between patch versions. (The "-preview" feature name
+//! follows the conventions of the RustCrypto [`signature`] crate.)
 //!
 //! [`Hasher::update_rayon`]: struct.Hasher.html#method.update_rayon
 //! [BLAKE3]: https://blake3.io
@@ -115,9 +125,7 @@ mod sse41;
 #[cfg(feature = "traits-preview")]
 pub mod traits;
 
-#[cfg(feature = "file")]
-pub mod file;
-
+mod io;
 mod join;
 
 use arrayref::{array_mut_ref, array_ref};
@@ -914,6 +922,15 @@ fn parent_node_output(
 
 /// An incremental hash state that can accept any number of writes.
 ///
+/// **Performance note:** The [`update`](#method.update) method can't take full
+/// advantage of SIMD optimizations if its input buffer is too small or oddly
+/// sized. Using a 16 KiB buffer, or any multiple of that, enables all currently
+/// supported SIMD instruction sets. See also
+/// [`update_reader`](Hasher::update_reader).
+///
+/// The `rayon` and `mmap` Cargo features enable additional methods on this
+/// type related to multithreading and memory-mapped IO.
+///
 /// When the `traits-preview` Cargo feature is enabled, this type implements
 /// several commonly used traits from the
 /// [`digest`](https://crates.io/crates/digest) crate. However, those
@@ -921,15 +938,6 @@ fn parent_node_output(
 /// before that crate reaches 1.0. For that reason, this crate makes no SemVer
 /// guarantees for this feature, and callers who use it should expect breaking
 /// changes between patch versions.
-///
-/// When the `rayon` Cargo feature is enabled, the
-/// [`update_rayon`](#method.update_rayon) method is available for multithreaded
-/// hashing.
-///
-/// **Performance note:** The [`update`](#method.update) method can't take full
-/// advantage of SIMD optimizations if its input buffer is too small or oddly
-/// sized. Using a 16 KiB buffer, or any multiple of that, enables all currently
-/// supported SIMD instruction sets.
 ///
 /// # Examples
 ///
@@ -1097,30 +1105,6 @@ impl Hasher {
     /// [`std::io::copy`]: https://doc.rust-lang.org/std/io/fn.copy.html
     pub fn update(&mut self, input: &[u8]) -> &mut Self {
         self.update_with_join::<join::SerialJoin>(input)
-    }
-
-    /// Identical to [`update`](Hasher::update), but using Rayon-based
-    /// multithreading internally.
-    ///
-    /// This method is gated by the `rayon` Cargo feature, which is disabled by
-    /// default but enabled on [docs.rs](https://docs.rs).
-    ///
-    /// To get any performance benefit from multithreading, the input buffer
-    /// needs to be large. As a rule of thumb on x86_64, `update_rayon` is
-    /// _slower_ than `update` for inputs under 128 KiB. That threshold varies
-    /// quite a lot across different processors, and it's important to benchmark
-    /// your specific use case.
-    ///
-    /// Memory mapping an entire input file is a simple way to take advantage of
-    /// multithreading without needing to carefully tune your buffer size or
-    /// offload IO. However, on spinning disks where random access is expensive,
-    /// that approach can lead to disk thrashing and terrible IO performance.
-    /// Note that OS page caching can mask this problem, in which case it might
-    /// only appear for files larger than available RAM. Again, benchmarking
-    /// your specific use case is important.
-    #[cfg(feature = "rayon")]
-    pub fn update_rayon(&mut self, input: &[u8]) -> &mut Self {
-        self.update_with_join::<join::RayonJoin>(input)
     }
 
     fn update_with_join<J: join::Join>(&mut self, mut input: &[u8]) -> &mut Self {
@@ -1321,6 +1305,179 @@ impl Hasher {
     pub fn count(&self) -> u64 {
         self.chunk_state.chunk_counter * CHUNK_LEN as u64 + self.chunk_state.len() as u64
     }
+
+    /// As [`update`](Hasher::update), but reading from a
+    /// [`std::io::Read`](https://doc.rust-lang.org/std/io/trait.Read.html) implementation.
+    ///
+    /// [`Hasher`] implements
+    /// [`std::io::Write`](https://doc.rust-lang.org/std/io/trait.Write.html), so it's possible to
+    /// use [`std::io::copy`](https://doc.rust-lang.org/std/io/fn.copy.html) to update a [`Hasher`]
+    /// from any reader. Unfortunately, this standard approach can limit performance, because the
+    /// [`copy`](https://doc.rust-lang.org/std/io/fn.copy.html) function currently uses an internal
+    /// 8 KiB buffer that isn't big enough to take advantage of all SIMD instruction sets. (In
+    ///   particular, [AVX-512](https://en.wikipedia.org/wiki/AVX-512) needs a
+    /// 16 KiB buffer.) `update_reader` avoids this performance problem and is slightly more
+    ///    convenient.
+    ///
+    /// The internal buffer size this method uses may change at any time, and it may be different
+    /// for different targets. The only guarantee is that it will be large enough for all of this
+    /// crate's SIMD implementations on the current platform.
+    ///
+    /// The most common implementer of
+    /// [`std::io::Read`](https://doc.rust-lang.org/std/io/trait.Read.html) might be
+    /// [`std::fs::File`](https://doc.rust-lang.org/std/fs/struct.File.html), but note that memory
+    /// mapping can be faster than this method for hashing large files. See
+    /// [`update_mmap`](Hasher::update_mmap) and [`update_mmap_rayon`](Hasher::update_mmap_rayon),
+    /// which require the `mmap` and (for the latter) `rayon` Cargo features.
+    ///
+    /// This method requires the `std` Cargo feature, which is enabled by default.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use std::fs::File;
+    /// # use std::io;
+    /// # fn main() -> io::Result<()> {
+    /// // Hash standard input.
+    /// let mut hasher = blake3::Hasher::new();
+    /// hasher.update_reader(std::io::stdin().lock())?;
+    /// println!("{}", hasher.finalize());
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "std")]
+    pub fn update_reader(&mut self, reader: impl std::io::Read) -> std::io::Result<u64> {
+        io::copy_wide(reader, self)
+    }
+
+    /// As [`update`](Hasher::update), but using Rayon-based multithreading
+    /// internally.
+    ///
+    /// This method is gated by the `rayon` Cargo feature, which is disabled by
+    /// default but enabled on [docs.rs](https://docs.rs).
+    ///
+    /// To get any performance benefit from multithreading, the input buffer
+    /// needs to be large. As a rule of thumb on x86_64, `update_rayon` is
+    /// _slower_ than `update` for inputs under 128 KiB. That threshold varies
+    /// quite a lot across different processors, and it's important to benchmark
+    /// your specific use case. See also the performance warning associated with
+    /// [`update_mmap_rayon`](Hasher::update_mmap_rayon).
+    ///
+    /// If you already have a large buffer in memory, and you want to hash it
+    /// with multiple threads, this method is a good option. However, reading a
+    /// file into memory just to call this method can be a performance mistake,
+    /// both because it requires lots of memory and because single-threaded
+    /// reads can be slow. For hashing whole files, see
+    /// [`update_mmap_rayon`](Hasher::update_mmap_rayon), which is gated by both
+    /// the `rayon` and `mmap` Cargo features.
+    #[cfg(feature = "rayon")]
+    pub fn update_rayon(&mut self, input: &[u8]) -> &mut Self {
+        self.update_with_join::<join::RayonJoin>(input)
+    }
+
+    /// As [`update`](Hasher::update), but reading the contents of a file using memory mapping.
+    ///
+    /// Not all files can be memory mapped, and memory mapping small files can be slower than
+    /// reading them the usual way. In those cases, this method will fall back to standard file IO.
+    /// The heuristic for whether to use memory mapping is currently very simple (file size >=
+    /// 16 KiB), and it might change at any time.
+    ///
+    /// Like [`update`](Hasher::update), this method is single-threaded. In this author's
+    /// experience, memory mapping improves single-threaded performance by ~10% for large files
+    /// that are already in cache. This probably varies between platforms, and as always it's a
+    /// good idea to benchmark your own use case. In comparison, the multithreaded
+    /// [`update_mmap_rayon`](Hasher::update_mmap_rayon) method can have a much larger impact on
+    /// performance.
+    ///
+    /// There's a correctness reason that this method takes
+    /// [`Path`](https://doc.rust-lang.org/stable/std/path/struct.Path.html) instead of
+    /// [`File`](https://doc.rust-lang.org/std/fs/struct.File.html): reading from a memory-mapped
+    /// file ignores the seek position of the original file handle (it neither respects the current
+    /// position nor updates the position). This difference in behavior would've caused
+    /// `update_mmap` and [`update_reader`](Hasher::update_reader) to give different answers and
+    /// have different side effects in some cases. Taking a
+    /// [`Path`](https://doc.rust-lang.org/stable/std/path/struct.Path.html) avoids this problem by
+    /// making it clear that a new [`File`](https://doc.rust-lang.org/std/fs/struct.File.html) is
+    /// opened internally.
+    ///
+    /// This method requires the `mmap` Cargo feature, which is disabled by default but enabled on
+    /// [docs.rs](https://docs.rs).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use std::io;
+    /// # use std::path::Path;
+    /// # fn main() -> io::Result<()> {
+    /// let path = Path::new("file.dat");
+    /// let mut hasher = blake3::Hasher::new();
+    /// hasher.update_mmap(path)?;
+    /// println!("{}", hasher.finalize());
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "mmap")]
+    pub fn update_mmap(&mut self, path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        let file = std::fs::File::open(path.as_ref())?;
+        if let Some(mmap) = io::maybe_mmap_file(&file)? {
+            self.update(&mmap);
+        } else {
+            io::copy_wide(&file, self)?;
+        }
+        Ok(())
+    }
+
+    /// As [`update_rayon`](Hasher::update_rayon), but reading the contents of a file using
+    /// memory mapping. This is the default behavior of `b3sum`.
+    ///
+    /// For large files that are likely to be in cache, this can be much faster than
+    /// single-threaded hashing. When benchmarks report that BLAKE3 is 10x or 20x faster than other
+    /// cryptographic hashes, this is usually what they're measuring. However...
+    ///
+    /// **Performance Warning:** There are cases where multithreading hurts performance. The worst
+    /// case is [a large file on a spinning disk](https://github.com/BLAKE3-team/BLAKE3/issues/31),
+    /// where simultaneous reads from multiple threads can cause "thrashing" (i.e. the disk spends
+    /// more time seeking around than reading data). Windows tends to be somewhat worse about this,
+    /// in part because it's less likely than Linux to keep very large files in cache. More
+    /// generally, if your CPU cores are already busy, then multithreading will add overhead
+    /// without improving performance. If your code runs in different environments that you don't
+    /// control and can't measure, then unfortunately there's no one-size-fits-all answer for
+    /// whether multithreading is a good idea.
+    ///
+    /// The memory mapping behavior of this function is the same as
+    /// [`update_mmap`](Hasher::update_mmap), and the heuristic for when to fall back to standard
+    /// file IO might change at any time.
+    ///
+    /// This method requires both the `mmap` and `rayon` Cargo features, which are disabled by
+    /// default but enabled on [docs.rs](https://docs.rs).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use std::io;
+    /// # use std::path::Path;
+    /// # fn main() -> io::Result<()> {
+    /// # #[cfg(feature = "rayon")]
+    /// # {
+    /// let path = Path::new("big_file.dat");
+    /// let mut hasher = blake3::Hasher::new();
+    /// hasher.update_mmap_rayon(path)?;
+    /// println!("{}", hasher.finalize());
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "mmap")]
+    #[cfg(feature = "rayon")]
+    pub fn update_mmap_rayon(&mut self, path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        let file = std::fs::File::open(path.as_ref())?;
+        if let Some(mmap) = io::maybe_mmap_file(&file)? {
+            self.update_rayon(&mmap);
+        } else {
+            io::copy_wide(&file, self)?;
+        }
+        Ok(())
+    }
 }
 
 // Don't derive(Debug), because the state may be secret.
@@ -1352,29 +1509,6 @@ impl std::io::Write for Hasher {
     #[inline]
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
-    }
-}
-
-/// Copy from `reader` to `hasher`, returning the number of bytes read.
-///
-/// A 16 KiB buffer is enough to take advantage of all the SIMD instruction sets
-/// that we support, but `std::io::copy` currently uses 8 KiB. Most platforms
-/// can support at least 64 KiB, and there's some performance benefit to using
-/// bigger reads, so that's what we use here.
-#[cfg(feature = "std")]
-pub fn copy_wide(mut reader: impl std::io::Read, hasher: &mut Hasher) -> std::io::Result<u64> {
-    let mut buffer = [0; 65536];
-    let mut total = 0;
-    loop {
-        match reader.read(&mut buffer) {
-            Ok(0) => return Ok(total),
-            Ok(n) => {
-                hasher.update(&buffer[..n]);
-                total += n as u64;
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
-            Err(e) => return Err(e),
-        }
     }
 }
 
