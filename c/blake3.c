@@ -11,7 +11,6 @@ INLINE void chunk_state_init(blake3_chunk_state *self, const uint32_t key[8],
                              uint8_t flags) {
   memcpy(self->cv, key, BLAKE3_KEY_LEN);
   self->chunk_counter = 0;
-  memset(self->buf, 0, BLAKE3_BLOCK_LEN);
   self->buf_len = 0;
   self->blocks_compressed = 0;
   self->flags = flags;
@@ -22,7 +21,6 @@ INLINE void chunk_state_reset(blake3_chunk_state *self, const uint32_t key[8],
   memcpy(self->cv, key, BLAKE3_KEY_LEN);
   self->chunk_counter = chunk_counter;
   self->blocks_compressed = 0;
-  memset(self->buf, 0, BLAKE3_BLOCK_LEN);
   self->buf_len = 0;
 }
 
@@ -121,7 +119,6 @@ INLINE void chunk_state_update(blake3_chunk_state *self, const uint8_t *input,
           self->flags | chunk_state_maybe_start_flag(self));
       self->blocks_compressed += 1;
       self->buf_len = 0;
-      memset(self->buf, 0, BLAKE3_BLOCK_LEN);
     }
   }
 
@@ -361,6 +358,7 @@ INLINE void compress_subtree_to_parent_node(
 
 INLINE void hasher_init_base(blake3_hasher *self, const uint32_t key[8],
                              uint8_t flags) {
+  memset(self, 0, sizeof(*self));
   memcpy(self->key, key, BLAKE3_KEY_LEN);
   chunk_state_init(&self->chunk, key, flags);
   self->cv_stack_len = 0;
