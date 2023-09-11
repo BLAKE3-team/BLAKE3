@@ -37,22 +37,22 @@ unsafe fn storeu(src: v128, dest: *mut u8) {
 }
 
 #[inline(always)]
-unsafe fn add(a: v128, b: v128) -> v128 {
+fn add(a: v128, b: v128) -> v128 {
     i32x4_add(a, b)
 }
 
 #[inline(always)]
-unsafe fn xor(a: v128, b: v128) -> v128 {
+fn xor(a: v128, b: v128) -> v128 {
     v128_xor(a, b)
 }
 
 #[inline(always)]
-unsafe fn set1(x: u32) -> v128 {
+fn set1(x: u32) -> v128 {
     i32x4_splat(x as i32)
 }
 
 #[inline(always)]
-unsafe fn set4(a: u32, b: u32, c: u32, d: u32) -> v128 {
+fn set4(a: u32, b: u32, c: u32, d: u32) -> v128 {
     i32x4(a as i32, b as i32, c as i32, d as i32)
 }
 
@@ -64,27 +64,27 @@ unsafe fn set4(a: u32, b: u32, c: u32, d: u32) -> v128 {
 // (https://bugs.llvm.org/show_bug.cgi?id=44379), this version performs better
 // on recent x86 chips.
 #[inline(always)]
-unsafe fn rot16(a: v128) -> v128 {
+fn rot16(a: v128) -> v128 {
     v128_or(u32x4_shr(a, 16), u32x4_shl(a, 32 - 16))
 }
 
 #[inline(always)]
-unsafe fn rot12(a: v128) -> v128 {
+fn rot12(a: v128) -> v128 {
     v128_or(u32x4_shr(a, 12), u32x4_shl(a, 32 - 12))
 }
 
 #[inline(always)]
-unsafe fn rot8(a: v128) -> v128 {
+fn rot8(a: v128) -> v128 {
     v128_or(u32x4_shr(a, 8), u32x4_shl(a, 32 - 8))
 }
 
 #[inline(always)]
-unsafe fn rot7(a: v128) -> v128 {
+fn rot7(a: v128) -> v128 {
     v128_or(u32x4_shr(a, 7), u32x4_shl(a, 32 - 7))
 }
 
 #[inline(always)]
-unsafe fn g1(row0: &mut v128, row1: &mut v128, row2: &mut v128, row3: &mut v128, m: v128) {
+fn g1(row0: &mut v128, row1: &mut v128, row2: &mut v128, row3: &mut v128, m: v128) {
     *row0 = add(add(*row0, m), *row1);
     *row3 = xor(*row3, *row0);
     *row3 = rot16(*row3);
@@ -94,7 +94,7 @@ unsafe fn g1(row0: &mut v128, row1: &mut v128, row2: &mut v128, row3: &mut v128,
 }
 
 #[inline(always)]
-unsafe fn g2(row0: &mut v128, row1: &mut v128, row2: &mut v128, row3: &mut v128, m: v128) {
+fn g2(row0: &mut v128, row1: &mut v128, row2: &mut v128, row3: &mut v128, m: v128) {
     *row0 = add(add(*row0, m), *row1);
     *row3 = xor(*row3, *row0);
     *row3 = rot8(*row3);
@@ -141,7 +141,7 @@ fn shuffle_epi32<const I3: usize, const I2: usize, const I1: usize, const I0: us
 }
 
 #[inline(always)]
-unsafe fn blend_epi16(a: v128, b: v128, imm8: i32) -> v128 {
+fn blend_epi16(a: v128, b: v128, imm8: i32) -> v128 {
     // imm8 is always constant; it allows to implement this function with
     // i16x8_shuffle.  However, it is marginally slower on x64.
     let bits = i16x8(0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80);
@@ -156,14 +156,14 @@ unsafe fn blend_epi16(a: v128, b: v128, imm8: i32) -> v128 {
 // row0. All the message loads below are adjusted to compensate for this. See
 // discussion at https://github.com/sneves/blake2-avx2/pull/4
 #[inline(always)]
-unsafe fn diagonalize(row0: &mut v128, row2: &mut v128, row3: &mut v128) {
+fn diagonalize(row0: &mut v128, row2: &mut v128, row3: &mut v128) {
     *row0 = shuffle_epi32::<2, 1, 0, 3>(*row0);
     *row3 = shuffle_epi32::<1, 0, 3, 2>(*row3);
     *row2 = shuffle_epi32::<0, 3, 2, 1>(*row2);
 }
 
 #[inline(always)]
-unsafe fn undiagonalize(row0: &mut v128, row2: &mut v128, row3: &mut v128) {
+fn undiagonalize(row0: &mut v128, row2: &mut v128, row3: &mut v128) {
     *row0 = shuffle_epi32::<0, 3, 2, 1>(*row0);
     *row3 = shuffle_epi32::<1, 0, 3, 2>(*row3);
     *row2 = shuffle_epi32::<2, 1, 0, 3>(*row2);
@@ -388,7 +388,7 @@ pub unsafe fn compress_xof(
 }
 
 #[inline(always)]
-unsafe fn round(v: &mut [v128; 16], m: &[v128; 16], r: usize) {
+fn round(v: &mut [v128; 16], m: &[v128; 16], r: usize) {
     v[0] = add(v[0], m[MSG_SCHEDULE[r][0] as usize]);
     v[1] = add(v[1], m[MSG_SCHEDULE[r][2] as usize]);
     v[2] = add(v[2], m[MSG_SCHEDULE[r][4] as usize]);
@@ -505,7 +505,7 @@ unsafe fn round(v: &mut [v128; 16], m: &[v128; 16], r: usize) {
 }
 
 #[inline(always)]
-unsafe fn transpose_vecs(vecs: &mut [v128; DEGREE]) {
+fn transpose_vecs(vecs: &mut [v128; DEGREE]) {
     // Interleave 32-bit lanes. The low unpack is lanes 00/11 and the high is
     // 22/33. Note that this doesn't split the vector into two lanes, as the
     // AVX2 counterparts do.
@@ -555,7 +555,7 @@ unsafe fn transpose_msg_vecs(inputs: &[*const u8; DEGREE], block_offset: usize) 
 }
 
 #[inline(always)]
-unsafe fn load_counters(counter: u64, increment_counter: IncrementCounter) -> (v128, v128) {
+fn load_counters(counter: u64, increment_counter: IncrementCounter) -> (v128, v128) {
     let mask = if increment_counter.yes() { !0 } else { 0 };
     (
         set4(
@@ -750,7 +750,7 @@ mod test {
     #[test]
     fn test_transpose() {
         #[target_feature(enable = "simd128")]
-        unsafe fn transpose_wrapper(vecs: &mut [v128; DEGREE]) {
+        fn transpose_wrapper(vecs: &mut [v128; DEGREE]) {
             transpose_vecs(vecs);
         }
 
