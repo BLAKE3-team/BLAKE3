@@ -66,6 +66,7 @@
 //! [`signature`]: https://crates.io/crates/signature
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(doc_cfg, feature(doc_auto_cfg, doc_cfg))]
 
 #[cfg(feature = "zeroize")]
 extern crate zeroize_crate as zeroize; // Needed because `zeroize::Zeroize` assumes the crate is named `zeroize`.
