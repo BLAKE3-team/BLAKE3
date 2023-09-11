@@ -401,7 +401,7 @@ impl Platform {
 
     #[cfg(blake3_wasm32_simd)]
     pub fn wasm32_simd() -> Option<Self> {
-        // Assumed to be safe if the "neon" feature is on.
+        // Assumed to be safe if the "wasm32_simd" feature is on.
         Some(Self::WASM32_SIMD)
     }
 }
