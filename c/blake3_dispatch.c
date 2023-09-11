@@ -1,8 +1,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdatomic.h>
 
 #include "blake3_impl.h"
+#include "blake3_thread.h"
 
 #if defined(IS_X86)
 #if defined(_MSC_VER)
@@ -302,4 +304,22 @@ size_t blake3_simd_degree(void) {
   return 4;
 #endif
   return 1;
+}
+
+blake3_thread_pool *blake3_get_thread_pool(void) {
+  static _Atomic(blake3_thread_pool *)g_thread_pool;
+  blake3_thread_pool *tp, *exp_tp;
+
+  if ((tp = atomic_load(&g_thread_pool)) == NULL) {
+    tp = blake3_thread_pool_create(0);	/* let the pool implementation choose */
+    assert(tp);
+    exp_tp = NULL;
+    /* store it, if the comparison fails, some other thread won, use theirs */
+    if (!atomic_compare_exchange_strong(&g_thread_pool, &exp_tp, tp)) {
+      blake3_thread_pool_destroy(tp);
+      return exp_tp;
+    }
+  }
+
+  return tp;
 }

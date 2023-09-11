@@ -1,4 +1,5 @@
 blake3
 example
+example-mmap
 build/
 *.o

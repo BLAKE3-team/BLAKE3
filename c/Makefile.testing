@@ -46,7 +46,7 @@ ifdef BLAKE3_NO_NEON
 EXTRAFLAGS += -DBLAKE3_USE_NEON=0
 endif
 
-all: blake3.c blake3_dispatch.c blake3_portable.c main.c $(TARGETS)
+all: blake3.c blake3_dispatch.c blake3_portable.c main.c blake3_thread.c $(TARGETS)
 	$(CC) $(CFLAGS) $(EXTRAFLAGS) $^ -o $(NAME) $(LDFLAGS)
 
 blake3_sse2.o: blake3_sse2.c
@@ -68,14 +68,17 @@ test: CFLAGS += -DBLAKE3_TESTING -fsanitize=address,undefined
 test: all
 	./test.py
 
-asm: blake3.c blake3_dispatch.c blake3_portable.c main.c $(ASM_TARGETS)
+asm: blake3.c blake3_dispatch.c blake3_portable.c main.c blake3_thread.c $(ASM_TARGETS)
 	$(CC) $(CFLAGS) $(EXTRAFLAGS) $^ -o $(NAME) $(LDFLAGS)
 
 test_asm: CFLAGS += -DBLAKE3_TESTING -fsanitize=address,undefined 
 test_asm: asm
 	./test.py
 
-example: example.c blake3.c blake3_dispatch.c blake3_portable.c $(ASM_TARGETS)
+example: example.c blake3.c blake3_dispatch.c blake3_portable.c blake3_thread.c $(ASM_TARGETS)
+	$(CC) $(CFLAGS) $(EXTRAFLAGS) $^ -o $@ $(LDFLAGS)
+
+example-mmap: example-mmap.c blake3.c blake3_dispatch.c blake3_portable.c blake3_thread.c $(ASM_TARGETS)
 	$(CC) $(CFLAGS) $(EXTRAFLAGS) $^ -o $@ $(LDFLAGS)
 
 clean: 
