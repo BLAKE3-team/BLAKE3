@@ -70,7 +70,6 @@
 #[cfg(feature = "zeroize")]
 extern crate zeroize_crate as zeroize; // Needed because `zeroize::Zeroize` assumes the crate is named `zeroize`.
 
-
 #[cfg(test)]
 mod test;
 
@@ -977,6 +976,15 @@ impl Hasher {
         Self::new_internal(IV, 0)
     }
 
+    /// Construct a new `Hasher` with a start chunk
+    fn new_with_start_chunk(start_chunk: u64) -> Self {
+        Self {
+            key: *IV,
+            chunk_state: ChunkState::new(IV, start_chunk, 0, Platform::detect()),
+            cv_stack: ArrayVec::new(),
+        }
+    }
+
     /// Construct a new `Hasher` for the keyed hash function. See
     /// [`keyed_hash`].
     ///
@@ -1246,7 +1254,6 @@ impl Hasher {
         // also. Convert it directly into an Output. Otherwise, we need to
         // merge subtrees below.
         if self.cv_stack.is_empty() {
-            debug_assert_eq!(self.chunk_state.chunk_counter, 0);
             return self.chunk_state.output();
         }
 
@@ -1265,11 +1272,6 @@ impl Hasher {
         let mut output: Output;
         let mut num_cvs_remaining = self.cv_stack.len();
         if self.chunk_state.len() > 0 {
-            debug_assert_eq!(
-                self.cv_stack.len(),
-                self.chunk_state.chunk_counter.count_ones() as usize,
-                "cv stack does not need a merge"
-            );
             output = self.chunk_state.output();
         } else {
             debug_assert!(self.cv_stack.len() >= 2);
@@ -1302,6 +1304,15 @@ impl Hasher {
     /// You can also add more input and finalize again.
     pub fn finalize(&self) -> Hash {
         self.final_output().root_hash()
+    }
+
+    fn finalize_node(&self, is_root: bool) -> Hash {
+        let output = self.final_output();
+        if is_root {
+            output.root_hash()
+        } else {
+            output.chaining_value().into()
+        }
     }
 
     /// Finalize the hash state and return an [`OutputReader`], which can
