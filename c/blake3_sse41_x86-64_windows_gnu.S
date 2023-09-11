@@ -41,15 +41,15 @@ blake3_hash_many_sse41:
         pshufd  xmm0, xmm0, 0x00
         movdqa  xmmword ptr [rsp+0x130], xmm0
         movdqa  xmm1, xmm0
-        pand    xmm1, xmmword ptr [ADD0+rip]
-        pand    xmm0, xmmword ptr [ADD1+rip]
+        pand    xmm1, xmmword ptr [SSE41_ADD0+rip]
+        pand    xmm0, xmmword ptr [SSE41_ADD1+rip]
         movdqa  xmmword ptr [rsp+0x150], xmm0
         movd    xmm0, r8d
         pshufd  xmm0, xmm0, 0x00
         paddd   xmm0, xmm1
         movdqa  xmmword ptr [rsp+0x110], xmm0
-        pxor    xmm0, xmmword ptr [CMP_MSB_MASK+rip]
-        pxor    xmm1, xmmword ptr [CMP_MSB_MASK+rip]
+        pxor    xmm0, xmmword ptr [SSE41_CMP_MSB_MASK+rip]
+        pxor    xmm1, xmmword ptr [SSE41_CMP_MSB_MASK+rip]
         pcmpgtd xmm1, xmm0
         shr     r8, 32
         movd    xmm2, r8d
@@ -167,12 +167,12 @@ blake3_hash_many_sse41:
         movdqa  xmmword ptr [rsp+0xD0], xmm9
         movdqa  xmmword ptr [rsp+0xE0], xmm12
         movdqa  xmmword ptr [rsp+0xF0], xmm13
-        movdqa  xmm9, xmmword ptr [BLAKE3_IV_1+rip]
-        movdqa  xmm10, xmmword ptr [BLAKE3_IV_2+rip]
-        movdqa  xmm11, xmmword ptr [BLAKE3_IV_3+rip]
+        movdqa  xmm9, xmmword ptr [SSE41_BLAKE3_IV_1+rip]
+        movdqa  xmm10, xmmword ptr [SSE41_BLAKE3_IV_2+rip]
+        movdqa  xmm11, xmmword ptr [SSE41_BLAKE3_IV_3+rip]
         movdqa  xmm12, xmmword ptr [rsp+0x110]
         movdqa  xmm13, xmmword ptr [rsp+0x120]
-        movdqa  xmm14, xmmword ptr [BLAKE3_BLOCK_LEN+rip]
+        movdqa  xmm14, xmmword ptr [SSE41_BLAKE3_BLOCK_LEN+rip]
         movd    xmm15, eax
         pshufd  xmm15, xmm15, 0x00
         prefetcht0 [r8+rdx+0x80]
@@ -191,12 +191,12 @@ blake3_hash_many_sse41:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT16+rip]
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
         pshufb  xmm14, xmm8
         pshufb  xmm15, xmm8
-        movdqa  xmm8, xmmword ptr [BLAKE3_IV_0+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_BLAKE3_IV_0+rip]
         paddd   xmm8, xmm12
         paddd   xmm9, xmm13
         paddd   xmm10, xmm14
@@ -234,7 +234,7 @@ blake3_hash_many_sse41:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT8+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT8+rip]
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
         pshufb  xmm14, xmm8
@@ -277,7 +277,7 @@ blake3_hash_many_sse41:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT16+rip]
         pshufb  xmm15, xmm8
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
@@ -320,7 +320,7 @@ blake3_hash_many_sse41:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT8+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT8+rip]
         pshufb  xmm15, xmm8
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
@@ -363,7 +363,7 @@ blake3_hash_many_sse41:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT16+rip]
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
         pshufb  xmm14, xmm8
@@ -406,7 +406,7 @@ blake3_hash_many_sse41:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT8+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT8+rip]
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
         pshufb  xmm14, xmm8
@@ -449,7 +449,7 @@ blake3_hash_many_sse41:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT16+rip]
         pshufb  xmm15, xmm8
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
@@ -492,7 +492,7 @@ blake3_hash_many_sse41:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT8+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT8+rip]
         pshufb  xmm15, xmm8
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
@@ -535,7 +535,7 @@ blake3_hash_many_sse41:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT16+rip]
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
         pshufb  xmm14, xmm8
@@ -578,7 +578,7 @@ blake3_hash_many_sse41:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT8+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT8+rip]
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
         pshufb  xmm14, xmm8
@@ -621,7 +621,7 @@ blake3_hash_many_sse41:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT16+rip]
         pshufb  xmm15, xmm8
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
@@ -664,7 +664,7 @@ blake3_hash_many_sse41:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT8+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT8+rip]
         pshufb  xmm15, xmm8
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
@@ -707,7 +707,7 @@ blake3_hash_many_sse41:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT16+rip]
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
         pshufb  xmm14, xmm8
@@ -750,7 +750,7 @@ blake3_hash_many_sse41:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT8+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT8+rip]
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
         pshufb  xmm14, xmm8
@@ -793,7 +793,7 @@ blake3_hash_many_sse41:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT16+rip]
         pshufb  xmm15, xmm8
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
@@ -836,7 +836,7 @@ blake3_hash_many_sse41:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT8+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT8+rip]
         pshufb  xmm15, xmm8
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
@@ -879,7 +879,7 @@ blake3_hash_many_sse41:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT16+rip]
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
         pshufb  xmm14, xmm8
@@ -922,7 +922,7 @@ blake3_hash_many_sse41:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT8+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT8+rip]
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
         pshufb  xmm14, xmm8
@@ -965,7 +965,7 @@ blake3_hash_many_sse41:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT16+rip]
         pshufb  xmm15, xmm8
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
@@ -1008,7 +1008,7 @@ blake3_hash_many_sse41:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT8+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT8+rip]
         pshufb  xmm15, xmm8
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
@@ -1051,7 +1051,7 @@ blake3_hash_many_sse41:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT16+rip]
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
         pshufb  xmm14, xmm8
@@ -1094,7 +1094,7 @@ blake3_hash_many_sse41:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT8+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT8+rip]
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
         pshufb  xmm14, xmm8
@@ -1137,7 +1137,7 @@ blake3_hash_many_sse41:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT16+rip]
         pshufb  xmm15, xmm8
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
@@ -1180,7 +1180,7 @@ blake3_hash_many_sse41:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT8+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT8+rip]
         pshufb  xmm15, xmm8
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
@@ -1223,7 +1223,7 @@ blake3_hash_many_sse41:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT16+rip]
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
         pshufb  xmm14, xmm8
@@ -1266,7 +1266,7 @@ blake3_hash_many_sse41:
         pxor    xmm13, xmm1
         pxor    xmm14, xmm2
         pxor    xmm15, xmm3
-        movdqa  xmm8, xmmword ptr [ROT8+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT8+rip]
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
         pshufb  xmm14, xmm8
@@ -1309,7 +1309,7 @@ blake3_hash_many_sse41:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT16+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT16+rip]
         pshufb  xmm15, xmm8
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
@@ -1352,7 +1352,7 @@ blake3_hash_many_sse41:
         pxor    xmm12, xmm1
         pxor    xmm13, xmm2
         pxor    xmm14, xmm3
-        movdqa  xmm8, xmmword ptr [ROT8+rip]
+        movdqa  xmm8, xmmword ptr [SSE41_ROT8+rip]
         pshufb  xmm15, xmm8
         pshufb  xmm12, xmm8
         pshufb  xmm13, xmm8
@@ -1428,8 +1428,8 @@ blake3_hash_many_sse41:
         movdqa  xmm0, xmm1
         paddd   xmm1, xmmword ptr [rsp+0x150]
         movdqa  xmmword ptr [rsp+0x110], xmm1
-        pxor    xmm0, xmmword ptr [CMP_MSB_MASK+rip]
-        pxor    xmm1, xmmword ptr [CMP_MSB_MASK+rip]
+        pxor    xmm0, xmmword ptr [SSE41_CMP_MSB_MASK+rip]
+        pxor    xmm1, xmmword ptr [SSE41_CMP_MSB_MASK+rip]
         pcmpgtd xmm0, xmm1
         movdqa  xmm1, xmmword ptr [rsp+0x120]
         psubd   xmm1, xmm0
@@ -1472,11 +1472,11 @@ blake3_hash_many_sse41:
         movaps  xmm9, xmm1
         movd    xmm13, dword ptr [rsp+0x110]
         pinsrd  xmm13, dword ptr [rsp+0x120], 1
-        pinsrd  xmm13, dword ptr [BLAKE3_BLOCK_LEN+rip], 2
+        pinsrd  xmm13, dword ptr [SSE41_BLAKE3_BLOCK_LEN+rip], 2
         movaps  xmmword ptr [rsp], xmm13
         movd    xmm14, dword ptr [rsp+0x114]
         pinsrd  xmm14, dword ptr [rsp+0x124], 1
-        pinsrd  xmm14, dword ptr [BLAKE3_BLOCK_LEN+rip], 2
+        pinsrd  xmm14, dword ptr [SSE41_BLAKE3_BLOCK_LEN+rip], 2
         movaps  xmmword ptr [rsp+0x10], xmm14
         mov     r8, qword ptr [rdi]
         mov     r9, qword ptr [rdi+0x8]
@@ -1489,7 +1489,7 @@ blake3_hash_many_sse41:
         add     rdx, 64
         cmp     rdx, r15
         cmovne  eax, r14d
-        movaps  xmm2, xmmword ptr [BLAKE3_IV+rip]
+        movaps  xmm2, xmmword ptr [SSE41_BLAKE3_IV+rip]
         movaps  xmm10, xmm2
         movups  xmm4, xmmword ptr [r8+rdx-0x40]
         movups  xmm5, xmmword ptr [r8+rdx-0x30]
@@ -1531,7 +1531,7 @@ blake3_hash_many_sse41:
         paddd   xmm8, xmm9
         pxor    xmm3, xmm0
         pxor    xmm11, xmm8
-        movaps  xmm12, xmmword ptr [ROT16+rip]
+        movaps  xmm12, xmmword ptr [SSE41_ROT16+rip]
         pshufb  xmm3, xmm12
         pshufb  xmm11, xmm12
         paddd   xmm2, xmm3
@@ -1554,7 +1554,7 @@ blake3_hash_many_sse41:
         paddd   xmm8, xmm9
         pxor    xmm3, xmm0
         pxor    xmm11, xmm8
-        movaps  xmm13, xmmword ptr [ROT8+rip]
+        movaps  xmm13, xmmword ptr [SSE41_ROT8+rip]
         pshufb  xmm3, xmm13
         pshufb  xmm11, xmm13
         paddd   xmm2, xmm3
@@ -1691,9 +1691,9 @@ blake3_hash_many_sse41:
         movups  xmm1, xmmword ptr [rcx+0x10]
         movd    xmm13, dword ptr [rsp+0x110]
         pinsrd  xmm13, dword ptr [rsp+0x120], 1
-        pinsrd  xmm13, dword ptr [BLAKE3_BLOCK_LEN+rip], 2
-        movaps  xmm14, xmmword ptr [ROT8+rip]
-        movaps  xmm15, xmmword ptr [ROT16+rip]
+        pinsrd  xmm13, dword ptr [SSE41_BLAKE3_BLOCK_LEN+rip], 2
+        movaps  xmm14, xmmword ptr [SSE41_ROT8+rip]
+        movaps  xmm15, xmmword ptr [SSE41_ROT16+rip]
         mov     r8, qword ptr [rdi]
         movzx   eax, byte ptr [rbp+0x80]
         or      eax, r13d
@@ -1704,7 +1704,7 @@ blake3_hash_many_sse41:
         add     rdx, 64
         cmp     rdx, r15
         cmovne  eax, r14d
-        movaps  xmm2, xmmword ptr [BLAKE3_IV+rip]
+        movaps  xmm2, xmmword ptr [SSE41_BLAKE3_IV+rip]
         movaps  xmm3, xmm13
         pinsrd  xmm3, eax, 3
         movups  xmm4, xmmword ptr [r8+rdx-0x40]
@@ -1810,7 +1810,7 @@ _blake3_compress_in_place_sse41:
         movdqa  xmmword ptr [rsp+0x60], xmm15
         movups  xmm0, xmmword ptr [rcx]
         movups  xmm1, xmmword ptr [rcx+0x10]
-        movaps  xmm2, xmmword ptr [BLAKE3_IV+rip]
+        movaps  xmm2, xmmword ptr [SSE41_BLAKE3_IV+rip]
         movzx   eax, byte ptr [rsp+0xA0]
         movzx   r8d, r8b
         shl     rax, 32
@@ -1831,8 +1831,8 @@ _blake3_compress_in_place_sse41:
         pshufd  xmm6, xmm6, 0x93
         shufps  xmm8, xmm7, 221
         pshufd  xmm7, xmm8, 0x93
-        movaps  xmm14, xmmword ptr [ROT8+rip]
-        movaps  xmm15, xmmword ptr [ROT16+rip]
+        movaps  xmm14, xmmword ptr [SSE41_ROT8+rip]
+        movaps  xmm15, xmmword ptr [SSE41_ROT16+rip]
         mov     al, 7
 9:
         paddd   xmm0, xmm4
@@ -1929,7 +1929,7 @@ blake3_compress_xof_sse41:
         movdqa  xmmword ptr [rsp+0x60], xmm15
         movups  xmm0, xmmword ptr [rcx]
         movups  xmm1, xmmword ptr [rcx+0x10]
-        movaps  xmm2, xmmword ptr [BLAKE3_IV+rip]
+        movaps  xmm2, xmmword ptr [SSE41_BLAKE3_IV+rip]
         movzx   eax, byte ptr [rsp+0xA0]
         movzx   r8d, r8b
         mov     r10, qword ptr [rsp+0xA8]
@@ -1951,8 +1951,8 @@ blake3_compress_xof_sse41:
         pshufd  xmm6, xmm6, 0x93
         shufps  xmm8, xmm7, 221
         pshufd  xmm7, xmm8, 0x93
-        movaps  xmm14, xmmword ptr [ROT8+rip]
-        movaps  xmm15, xmmword ptr [ROT16+rip]
+        movaps  xmm14, xmmword ptr [SSE41_ROT8+rip]
+        movaps  xmm15, xmmword ptr [SSE41_ROT16+rip]
         mov     al, 7
 9:
         paddd   xmm0, xmm4
@@ -2044,26 +2044,26 @@ blake3_compress_xof_sse41:
 
 .section .rdata
 .p2align  6
-BLAKE3_IV:
+SSE41_BLAKE3_IV:
         .long  0x6A09E667, 0xBB67AE85
         .long  0x3C6EF372, 0xA54FF53A
-ROT16:
+SSE41_ROT16:
         .byte  2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13
-ROT8:
+SSE41_ROT8:
         .byte  1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 12
-ADD0:   
+SSE41_ADD0:   
         .long  0, 1, 2, 3
-ADD1:
+SSE41_ADD1:
         .long  4, 4, 4, 4
-BLAKE3_IV_0:
+SSE41_BLAKE3_IV_0:
         .long  0x6A09E667, 0x6A09E667, 0x6A09E667, 0x6A09E667
-BLAKE3_IV_1:
+SSE41_BLAKE3_IV_1:
         .long  0xBB67AE85, 0xBB67AE85, 0xBB67AE85, 0xBB67AE85
-BLAKE3_IV_2:
+SSE41_BLAKE3_IV_2:
         .long  0x3C6EF372, 0x3C6EF372, 0x3C6EF372, 0x3C6EF372
-BLAKE3_IV_3:
+SSE41_BLAKE3_IV_3:
         .long  0xA54FF53A, 0xA54FF53A, 0xA54FF53A, 0xA54FF53A
-BLAKE3_BLOCK_LEN:
+SSE41_BLAKE3_BLOCK_LEN:
         .long  64, 64, 64, 64
-CMP_MSB_MASK:
+SSE41_CMP_MSB_MASK:
         .long  0x80000000, 0x80000000, 0x80000000, 0x80000000

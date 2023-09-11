@@ -1,4 +1,5 @@
 use std::env;
+use std::path::{Path, PathBuf};
 
 fn defined(var: &str) -> bool {
     println!("cargo:rerun-if-env-changed={}", var);
@@ -21,19 +22,6 @@ fn is_no_neon() -> bool {
     defined("CARGO_FEATURE_NO_NEON")
 }
 
-fn is_ci() -> bool {
-    defined("BLAKE3_CI")
-}
-
-fn warn(warning: &str) {
-    assert!(!warning.contains("\n"));
-    println!("cargo:warning={}", warning);
-    if is_ci() {
-        println!("cargo:warning=Warnings in CI are treated as errors. Build failed.");
-        std::process::exit(1);
-    }
-}
-
 fn target_components() -> Vec<String> {
     let target = env::var("TARGET").unwrap();
     target.split("-").map(|s| s.to_string()).collect()
@@ -48,6 +36,11 @@ fn is_x86_32() -> bool {
     arch == "i386" || arch == "i586" || arch == "i686"
 }
 
+fn is_apple() -> bool {
+    let vendor = &target_components()[1];
+    vendor == "apple"
+}
+
 fn is_arm() -> bool {
     is_armv7() || is_aarch64() || target_components()[0] == "arm"
 }
@@ -58,6 +51,10 @@ fn is_aarch64() -> bool {
 
 fn is_armv7() -> bool {
     target_components()[0] == "armv7"
+}
+
+fn out_dir() -> PathBuf {
+    std::env::var("OUT_DIR").unwrap().into()
 }
 
 // Windows targets may be using the MSVC toolchain or the GNU toolchain. The
@@ -71,13 +68,6 @@ fn is_windows_msvc() -> bool {
         && target_components()[3] == "msvc"
 }
 
-fn is_windows_gnu() -> bool {
-    // Some targets are only two components long, so check in steps.
-    target_components()[1] == "pc"
-        && target_components()[2] == "windows"
-        && target_components()[3] == "gnu"
-}
-
 fn new_build() -> cc::Build {
     let mut build = cc::Build::new();
     if !is_windows_msvc() {
@@ -86,48 +76,50 @@ fn new_build() -> cc::Build {
     build
 }
 
-#[derive(PartialEq)]
-enum CCompilerSupport {
-    NoCompiler,
-    NoAVX512,
-    YesAVX512,
-}
-use CCompilerSupport::*;
-
-fn c_compiler_support() -> CCompilerSupport {
-    let build = new_build();
-    let flags_checked;
-    let support_result: Result<bool, _> = if is_windows_msvc() {
-        flags_checked = "/arch:AVX512";
-        build.is_flag_supported("/arch:AVX512")
-    } else {
-        // Check for both of the flags we use. If -mavx512f works, then -mavx512vl
-        // will probably always work too, but we might as well be thorough.
-        flags_checked = "-mavx512f and -mavx512vl";
-        match build.is_flag_supported("-mavx512f") {
-            Ok(true) => build.is_flag_supported("-mavx512vl"),
-            false_or_error => false_or_error,
-        }
-    };
-    match support_result {
-        Ok(true) => YesAVX512,
-        Ok(false) => {
-            warn(&format!(
-                "The C compiler {:?} does not support {}.",
-                build.get_compiler().path(),
-                flags_checked,
-            ));
-            NoAVX512
-        }
-        Err(e) => {
-            println!("{:?}", e);
-            warn(&format!(
-                "No C compiler {:?} detected.",
-                build.get_compiler().path()
-            ));
-            NoCompiler
-        }
+fn build_asm<T: AsRef<Path>>(path: T, name: &str) {
+    let mut asm = std::fs::read_to_string(path.as_ref()).unwrap();
+    if asm.starts_with(".intel_syntax") {
+        asm = asm[asm.find('\n').unwrap_or(asm.len())..].to_string()
     }
+    if is_apple() {
+        // Apple doesn't support .section .rodata/.section .text, and instead
+        // has its own directives. Let's just rewrite them.
+        asm = asm.replace(".section .rodata", ".static_data");
+        asm = asm.replace(".section .text", ".text");
+    }
+    // Global_asm uses { and } for format string stuff, but they're used by the
+    // x86_64 asm for AVX512 stuff.
+    asm = asm.replace("{", "{{");
+    asm = asm.replace("}", "}}");
+
+    std::fs::write(out_dir().join(name), asm).unwrap();
+}
+
+fn build_sse2_sse41_avx2_rust_asm() {
+    // No C code to compile here, global_asm will be used to include the asm.
+    // Set the cfg flags that enable the SSE2, SSE4.1, and AVX2 asm modules.
+    // The regular Cargo build will compile them.
+    println!("cargo:rustc-cfg=blake3_sse2_ffi");
+    println!("cargo:rustc-cfg=blake3_sse41_ffi");
+    println!("cargo:rustc-cfg=blake3_avx2_ffi");
+    println!("cargo:rustc-cfg=blake3_sse2_asm");
+    println!("cargo:rustc-cfg=blake3_sse41_asm");
+    println!("cargo:rustc-cfg=blake3_avx2_asm");
+
+    build_asm("c/blake3_sse2_x86-64_windows_gnu.S", "blake3_sse2.S");
+    build_asm("c/blake3_sse41_x86-64_windows_gnu.S", "blake3_sse41.S");
+    build_asm("c/blake3_avx2_x86-64_windows_gnu.S", "blake3_avx2.S");
+
+}
+
+fn build_avx512_rust_asm() {
+    // No C code to compile here, global_asm will be used to include the asm.
+    // Set the cfg flags that enable the AVX512 asm modules.
+    // The regular Cargo build will compile them.
+    println!("cargo:rustc-cfg=blake3_avx512_ffi");
+    println!("cargo:rustc-cfg=blake3_avx512_asm");
+
+    build_asm("c/blake3_avx512_x86-64_windows_gnu.S", "blake3_avx512.S");
 }
 
 fn build_sse2_sse41_avx2_rust_intrinsics() {
@@ -137,77 +129,6 @@ fn build_sse2_sse41_avx2_rust_intrinsics() {
     println!("cargo:rustc-cfg=blake3_sse2_rust");
     println!("cargo:rustc-cfg=blake3_sse41_rust");
     println!("cargo:rustc-cfg=blake3_avx2_rust");
-}
-
-fn build_sse2_sse41_avx2_assembly() {
-    // Build the assembly implementations for SSE4.1 and AVX2. This is
-    // preferred, but it only supports x86_64.
-    assert!(is_x86_64());
-    println!("cargo:rustc-cfg=blake3_sse2_ffi");
-    println!("cargo:rustc-cfg=blake3_sse41_ffi");
-    println!("cargo:rustc-cfg=blake3_avx2_ffi");
-    let mut build = new_build();
-    if is_windows_msvc() {
-        build.file("c/blake3_sse2_x86-64_windows_msvc.asm");
-        build.file("c/blake3_sse41_x86-64_windows_msvc.asm");
-        build.file("c/blake3_avx2_x86-64_windows_msvc.asm");
-    } else if is_windows_gnu() {
-        build.file("c/blake3_sse2_x86-64_windows_gnu.S");
-        build.file("c/blake3_sse41_x86-64_windows_gnu.S");
-        build.file("c/blake3_avx2_x86-64_windows_gnu.S");
-    } else {
-        // All non-Windows implementations are assumed to support
-        // Linux-style assembly. These files do contain a small
-        // explicit workaround for macOS also.
-        build.file("c/blake3_sse2_x86-64_unix.S");
-        build.file("c/blake3_sse41_x86-64_unix.S");
-        build.file("c/blake3_avx2_x86-64_unix.S");
-    }
-    build.compile("blake3_sse2_sse41_avx2_assembly");
-}
-
-fn build_avx512_c_intrinsics() {
-    // This is required on 32-bit x86 targets, since the assembly
-    // implementation doesn't support those.
-    println!("cargo:rustc-cfg=blake3_avx512_ffi");
-    let mut build = new_build();
-    build.file("c/blake3_avx512.c");
-    if is_windows_msvc() {
-        build.flag("/arch:AVX512");
-    } else {
-        build.flag("-mavx512f");
-        build.flag("-mavx512vl");
-    }
-    if is_windows_gnu() {
-        // Workaround for https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65782.
-        build.flag("-fno-asynchronous-unwind-tables");
-    }
-    build.compile("blake3_avx512_intrinsics");
-}
-
-fn build_avx512_assembly() {
-    // Build the assembly implementation for AVX-512. This is preferred, but it
-    // only supports x86_64.
-    assert!(is_x86_64());
-    println!("cargo:rustc-cfg=blake3_avx512_ffi");
-    let mut build = new_build();
-    if is_windows_msvc() {
-        build.file("c/blake3_avx512_x86-64_windows_msvc.asm");
-    } else {
-        if is_windows_gnu() {
-            build.file("c/blake3_avx512_x86-64_windows_gnu.S");
-        } else {
-            // All non-Windows implementations are assumed to support Linux-style
-            // assembly. These files do contain a small explicit workaround for
-            // macOS also.
-            build.file("c/blake3_avx512_x86-64_unix.S");
-        }
-        // Older versions of Clang require these flags, even for assembly. See
-        // https://github.com/BLAKE3-team/BLAKE3/issues/79.
-        build.flag("-mavx512f");
-        build.flag("-mavx512vl");
-    }
-    build.compile("blake3_avx512_assembly");
 }
 
 fn build_neon_c_intrinsics() {
@@ -235,21 +156,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if is_x86_64() || is_x86_32() {
-        let support = c_compiler_support();
-        if is_x86_32() || should_prefer_intrinsics() || is_pure() || support == NoCompiler {
+        if is_x86_32() || is_pure() || should_prefer_intrinsics() {
             build_sse2_sse41_avx2_rust_intrinsics();
         } else {
-            // We assume that all C compilers can assemble SSE4.1 and AVX2. We
-            // don't explicitly check for support.
-            build_sse2_sse41_avx2_assembly();
+            build_sse2_sse41_avx2_rust_asm();
         }
 
-        if is_pure() || support == NoCompiler || support == NoAVX512 {
+        if is_x86_32() || is_pure() || should_prefer_intrinsics() {
             // The binary will not include any AVX-512 code.
-        } else if is_x86_32() || should_prefer_intrinsics() {
-            build_avx512_c_intrinsics();
         } else {
-            build_avx512_assembly();
+            build_avx512_rust_asm();
         }
     }
 

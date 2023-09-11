@@ -41,15 +41,15 @@ blake3_hash_many_sse2:
         pshufd  xmm0, xmm0, 0x00
         movdqa  xmmword ptr [rsp+0x130], xmm0
         movdqa  xmm1, xmm0
-        pand    xmm1, xmmword ptr [ADD0+rip]
-        pand    xmm0, xmmword ptr [ADD1+rip]
+        pand    xmm1, xmmword ptr [SSE2_ADD0+rip]
+        pand    xmm0, xmmword ptr [SSE2_ADD1+rip]
         movdqa  xmmword ptr [rsp+0x150], xmm0
         movd    xmm0, r8d
         pshufd  xmm0, xmm0, 0x00
         paddd   xmm0, xmm1
         movdqa  xmmword ptr [rsp+0x110], xmm0
-        pxor    xmm0, xmmword ptr [CMP_MSB_MASK+rip]
-        pxor    xmm1, xmmword ptr [CMP_MSB_MASK+rip]
+        pxor    xmm0, xmmword ptr [SSE2_CMP_MSB_MASK+rip]
+        pxor    xmm1, xmmword ptr [SSE2_CMP_MSB_MASK+rip]
         pcmpgtd xmm1, xmm0
         shr     r8, 32
         movd    xmm2, r8d
@@ -167,12 +167,12 @@ blake3_hash_many_sse2:
         movdqa  xmmword ptr [rsp+0xD0], xmm9
         movdqa  xmmword ptr [rsp+0xE0], xmm12
         movdqa  xmmword ptr [rsp+0xF0], xmm13
-        movdqa  xmm9, xmmword ptr [BLAKE3_IV_1+rip]
-        movdqa  xmm10, xmmword ptr [BLAKE3_IV_2+rip]
-        movdqa  xmm11, xmmword ptr [BLAKE3_IV_3+rip]
+        movdqa  xmm9, xmmword ptr [SSE2_BLAKE3_IV_1+rip]
+        movdqa  xmm10, xmmword ptr [SSE2_BLAKE3_IV_2+rip]
+        movdqa  xmm11, xmmword ptr [SSE2_BLAKE3_IV_3+rip]
         movdqa  xmm12, xmmword ptr [rsp+0x110]
         movdqa  xmm13, xmmword ptr [rsp+0x120]
-        movdqa  xmm14, xmmword ptr [BLAKE3_BLOCK_LEN+rip]
+        movdqa  xmm14, xmmword ptr [SSE2_BLAKE3_BLOCK_LEN+rip]
         movd    xmm15, eax
         pshufd  xmm15, xmm15, 0x00
         prefetcht0 [r8+rdx+0x80]
@@ -199,7 +199,7 @@ blake3_hash_many_sse2:
         pshufhw xmm14, xmm14, 0xB1
         pshuflw xmm15, xmm15, 0xB1
         pshufhw xmm15, xmm15, 0xB1
-        movdqa  xmm8, xmmword ptr [BLAKE3_IV_0+rip]
+        movdqa  xmm8, xmmword ptr [SSE2_BLAKE3_IV_0+rip]
         paddd   xmm8, xmm12
         paddd   xmm9, xmm13
         paddd   xmm10, xmm14
@@ -1624,8 +1624,8 @@ blake3_hash_many_sse2:
         movdqa  xmm0, xmm1
         paddd   xmm1, xmmword ptr [rsp+0x150]
         movdqa  xmmword ptr [rsp+0x110], xmm1
-        pxor    xmm0, xmmword ptr [CMP_MSB_MASK+rip]
-        pxor    xmm1, xmmword ptr [CMP_MSB_MASK+rip]
+        pxor    xmm0, xmmword ptr [SSE2_CMP_MSB_MASK+rip]
+        pxor    xmm1, xmmword ptr [SSE2_CMP_MSB_MASK+rip]
         pcmpgtd xmm0, xmm1
         movdqa  xmm1, xmmword ptr [rsp+0x120]
         psubd   xmm1, xmm0
@@ -1685,7 +1685,7 @@ blake3_hash_many_sse2:
         add     rdx, 64
         cmp     rdx, r15
         cmovne  eax, r14d
-        movaps  xmm2, xmmword ptr [BLAKE3_IV+rip]
+        movaps  xmm2, xmmword ptr [SSE2_BLAKE3_IV+rip]
         movaps  xmm10, xmm2
         movups  xmm4, xmmword ptr [r8+rdx-0x40]
         movups  xmm5, xmmword ptr [r8+rdx-0x30]
@@ -1844,15 +1844,15 @@ blake3_hash_many_sse2:
         pshufd  xmm4, xmm12, 0x39
         movdqa  xmm12, xmm6
         shufps  xmm12, xmm7, 250
-        pand    xmm13, xmmword ptr [PBLENDW_0x33_MASK+rip]
-        pand    xmm12, xmmword ptr [PBLENDW_0xCC_MASK+rip]
+        pand    xmm13, xmmword ptr [SSE2_PBLENDW_0x33_MASK+rip]
+        pand    xmm12, xmmword ptr [SSE2_PBLENDW_0xCC_MASK+rip]
         por     xmm13, xmm12
         movdqa  xmmword ptr [rsp+0x20], xmm13
         movdqa  xmm12, xmm7
         punpcklqdq xmm12, xmm5
         movdqa  xmm13, xmm6
-        pand    xmm12, xmmword ptr [PBLENDW_0x3F_MASK+rip]
-        pand    xmm13, xmmword ptr [PBLENDW_0xC0_MASK+rip]
+        pand    xmm12, xmmword ptr [SSE2_PBLENDW_0x3F_MASK+rip]
+        pand    xmm13, xmmword ptr [SSE2_PBLENDW_0xC0_MASK+rip]
         por     xmm12, xmm13
         pshufd  xmm12, xmm12, 0x78
         punpckhdq xmm5, xmm7
@@ -1866,15 +1866,15 @@ blake3_hash_many_sse2:
         pshufd  xmm12, xmm5, 0x39
         movdqa  xmm5, xmm14
         shufps  xmm5, xmm15, 250
-        pand    xmm6, xmmword ptr [PBLENDW_0x33_MASK+rip]
-        pand    xmm5, xmmword ptr [PBLENDW_0xCC_MASK+rip]
+        pand    xmm6, xmmword ptr [SSE2_PBLENDW_0x33_MASK+rip]
+        pand    xmm5, xmmword ptr [SSE2_PBLENDW_0xCC_MASK+rip]
         por     xmm6, xmm5
         movdqa  xmm5, xmm15
         punpcklqdq xmm5, xmm13
         movdqa  xmmword ptr [rsp+0x30], xmm2
         movdqa  xmm2, xmm14
-        pand    xmm5, xmmword ptr [PBLENDW_0x3F_MASK+rip]
-        pand    xmm2, xmmword ptr [PBLENDW_0xC0_MASK+rip]
+        pand    xmm5, xmmword ptr [SSE2_PBLENDW_0x3F_MASK+rip]
+        pand    xmm2, xmmword ptr [SSE2_PBLENDW_0xC0_MASK+rip]
         por     xmm5, xmm2
         movdqa  xmm2, xmmword ptr [rsp+0x30]
         pshufd  xmm5, xmm5, 0x78
@@ -1925,7 +1925,7 @@ blake3_hash_many_sse2:
         add     rdx, 64
         cmp     rdx, r15
         cmovne  eax, r14d
-        movaps  xmm2, xmmword ptr [BLAKE3_IV+rip]
+        movaps  xmm2, xmmword ptr [SSE2_BLAKE3_IV+rip]
         shl     rax, 32
         or      rax, 64
         movq    xmm12, rax
@@ -2008,14 +2008,14 @@ blake3_hash_many_sse2:
         pshufd  xmm4, xmm8, 0x39
         movdqa  xmm8, xmm6
         shufps  xmm8, xmm7, 250
-        pand    xmm9, xmmword ptr [PBLENDW_0x33_MASK+rip]
-        pand    xmm8, xmmword ptr [PBLENDW_0xCC_MASK+rip]
+        pand    xmm9, xmmword ptr [SSE2_PBLENDW_0x33_MASK+rip]
+        pand    xmm8, xmmword ptr [SSE2_PBLENDW_0xCC_MASK+rip]
         por     xmm9, xmm8
         movdqa  xmm8, xmm7
         punpcklqdq xmm8, xmm5
         movdqa  xmm10, xmm6
-        pand    xmm8, xmmword ptr [PBLENDW_0x3F_MASK+rip]
-        pand    xmm10, xmmword ptr [PBLENDW_0xC0_MASK+rip]
+        pand    xmm8, xmmword ptr [SSE2_PBLENDW_0x3F_MASK+rip]
+        pand    xmm10, xmmword ptr [SSE2_PBLENDW_0xC0_MASK+rip]
         por     xmm8, xmm10
         pshufd  xmm8, xmm8, 0x78
         punpckhdq xmm5, xmm7
@@ -2047,7 +2047,7 @@ _blake3_compress_in_place_sse2:
         movdqa  xmmword ptr [rsp+0x60], xmm15
         movups  xmm0, xmmword ptr [rcx]
         movups  xmm1, xmmword ptr [rcx+0x10]
-        movaps  xmm2, xmmword ptr [BLAKE3_IV+rip]
+        movaps  xmm2, xmmword ptr [SSE2_BLAKE3_IV+rip]
         movzx   eax, byte ptr [rsp+0xA0]
         movzx   r8d, r8b
         shl     rax, 32
@@ -2132,14 +2132,14 @@ _blake3_compress_in_place_sse2:
         pshufd  xmm4, xmm8, 0x39
         movdqa  xmm8, xmm6
         shufps  xmm8, xmm7, 250
-        pand    xmm9, xmmword ptr [PBLENDW_0x33_MASK+rip]
-        pand    xmm8, xmmword ptr [PBLENDW_0xCC_MASK+rip]
+        pand    xmm9, xmmword ptr [SSE2_PBLENDW_0x33_MASK+rip]
+        pand    xmm8, xmmword ptr [SSE2_PBLENDW_0xCC_MASK+rip]
         por     xmm9, xmm8
         movdqa  xmm8, xmm7
         punpcklqdq xmm8, xmm5
         movdqa  xmm14, xmm6
-        pand    xmm8, xmmword ptr [PBLENDW_0x3F_MASK+rip]
-        pand    xmm14, xmmword ptr [PBLENDW_0xC0_MASK+rip]
+        pand    xmm8, xmmword ptr [SSE2_PBLENDW_0x3F_MASK+rip]
+        pand    xmm14, xmmword ptr [SSE2_PBLENDW_0xC0_MASK+rip]
         por     xmm8, xmm14
         pshufd  xmm8, xmm8, 0x78
         punpckhdq xmm5, xmm7
@@ -2177,7 +2177,7 @@ blake3_compress_xof_sse2:
         movdqa  xmmword ptr [rsp+0x60], xmm15
         movups  xmm0, xmmword ptr [rcx]
         movups  xmm1, xmmword ptr [rcx+0x10]
-        movaps  xmm2, xmmword ptr [BLAKE3_IV+rip]
+        movaps  xmm2, xmmword ptr [SSE2_BLAKE3_IV+rip]
         movzx   eax, byte ptr [rsp+0xA0]
         movzx   r8d, r8b
         mov     r10, qword ptr [rsp+0xA8]
@@ -2263,14 +2263,14 @@ blake3_compress_xof_sse2:
         pshufd  xmm4, xmm8, 0x39
         movdqa  xmm8, xmm6
         shufps  xmm8, xmm7, 250
-        pand    xmm9, xmmword ptr [PBLENDW_0x33_MASK+rip]
-        pand    xmm8, xmmword ptr [PBLENDW_0xCC_MASK+rip]
+        pand    xmm9, xmmword ptr [SSE2_PBLENDW_0x33_MASK+rip]
+        pand    xmm8, xmmword ptr [SSE2_PBLENDW_0xCC_MASK+rip]
         por     xmm9, xmm8
         movdqa  xmm8, xmm7
         punpcklqdq xmm8, xmm5
         movdqa  xmm14, xmm6
-        pand    xmm8, xmmword ptr [PBLENDW_0x3F_MASK+rip]
-        pand    xmm14, xmmword ptr [PBLENDW_0xC0_MASK+rip]
+        pand    xmm8, xmmword ptr [SSE2_PBLENDW_0x3F_MASK+rip]
+        pand    xmm14, xmmword ptr [SSE2_PBLENDW_0xC0_MASK+rip]
         por     xmm8, xmm14
         pshufd  xmm8, xmm8, 0x78
         punpckhdq xmm5, xmm7
@@ -2303,30 +2303,30 @@ blake3_compress_xof_sse2:
 
 .section .rdata
 .p2align  6
-BLAKE3_IV:
+SSE2_BLAKE3_IV:
         .long  0x6A09E667, 0xBB67AE85
         .long  0x3C6EF372, 0xA54FF53A
-ADD0:   
+SSE2_ADD0:   
         .long  0, 1, 2, 3
-ADD1:
+SSE2_ADD1:
         .long  4, 4, 4, 4
-BLAKE3_IV_0:
+SSE2_BLAKE3_IV_0:
         .long  0x6A09E667, 0x6A09E667, 0x6A09E667, 0x6A09E667
-BLAKE3_IV_1:
+SSE2_BLAKE3_IV_1:
         .long  0xBB67AE85, 0xBB67AE85, 0xBB67AE85, 0xBB67AE85
-BLAKE3_IV_2:
+SSE2_BLAKE3_IV_2:
         .long  0x3C6EF372, 0x3C6EF372, 0x3C6EF372, 0x3C6EF372
-BLAKE3_IV_3:
+SSE2_BLAKE3_IV_3:
         .long  0xA54FF53A, 0xA54FF53A, 0xA54FF53A, 0xA54FF53A
-BLAKE3_BLOCK_LEN:
+SSE2_BLAKE3_BLOCK_LEN:
         .long  64, 64, 64, 64
-CMP_MSB_MASK:
+SSE2_CMP_MSB_MASK:
         .long  0x80000000, 0x80000000, 0x80000000, 0x80000000
-PBLENDW_0x33_MASK:
+SSE2_PBLENDW_0x33_MASK:
         .long  0xFFFFFFFF, 0x00000000, 0xFFFFFFFF, 0x00000000
-PBLENDW_0xCC_MASK:
+SSE2_PBLENDW_0xCC_MASK:
         .long  0x00000000, 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF
-PBLENDW_0x3F_MASK:
+SSE2_PBLENDW_0x3F_MASK:
         .long  0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000
-PBLENDW_0xC0_MASK:
+SSE2_PBLENDW_0xC0_MASK:
         .long  0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFF
