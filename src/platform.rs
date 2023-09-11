@@ -13,7 +13,7 @@ cfg_if::cfg_if! {
     } else if #[cfg(blake3_neon)] {
         pub const MAX_SIMD_DEGREE: usize = 4;
     } else if #[cfg(blake3_wasm32_simd)] {
-        pub const MAX_SIMD_DEGREE: usize = 8;
+        pub const MAX_SIMD_DEGREE: usize = 4;
     } else {
         pub const MAX_SIMD_DEGREE: usize = 1;
     }
@@ -109,7 +109,6 @@ impl Platform {
             #[cfg(blake3_neon)]
             Platform::NEON => 4,
             #[cfg(blake3_wasm32_simd)]
-            // TODO is it 8 or 4??? SSE4 has 4...
             Platform::WASM32_SIMD => 4,
         };
         debug_assert!(degree <= MAX_SIMD_DEGREE);
