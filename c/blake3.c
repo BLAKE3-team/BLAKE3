@@ -64,7 +64,9 @@ INLINE output_t make_output(const uint32_t input_cv[8],
                             uint8_t flags) {
   output_t ret;
   memcpy(ret.input_cv, input_cv, 32);
-  memcpy(ret.block, block, BLAKE3_BLOCK_LEN);
+  // copy out what's there and fill the rest with zeroes
+  memcpy(ret.block, block, block_len);
+  memset(ret.block + block_len, 0, BLAKE3_BLOCK_LEN - block_len);
   ret.block_len = block_len;
   ret.counter = counter;
   ret.flags = flags;
