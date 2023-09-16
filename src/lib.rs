@@ -43,6 +43,9 @@
 //! the [`Hasher::update_rayon`] method, for multithreaded hashing. However,
 //! even if this feature is enabled, all other APIs remain single-threaded.
 //!
+//! The `zeroize` feature (disabled by default, but enabled for [docs.rs]) implements
+//! [`Zeroize`](https://docs.rs/zeroize/latest/zeroize/trait.Zeroize.html) for this crate's types.
+//!
 //! The NEON implementation is enabled by default for AArch64 but requires the
 //! `neon` feature for other ARM targets. Not all ARMv7 CPUs support NEON, and
 //! enabling this feature will produce a binary that's not portable to CPUs
@@ -66,10 +69,6 @@
 //! [`signature`]: https://crates.io/crates/signature
 
 #![cfg_attr(not(feature = "std"), no_std)]
-
-#[cfg(feature = "zeroize")]
-extern crate zeroize_crate as zeroize; // Needed because `zeroize::Zeroize` assumes the crate is named `zeroize`.
-
 
 #[cfg(test)]
 mod test;
