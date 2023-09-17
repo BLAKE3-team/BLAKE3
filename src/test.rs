@@ -701,9 +701,12 @@ fn test_update_reader() -> Result<(), std::io::Error> {
     let mut tempfile = tempfile::NamedTempFile::new()?;
     tempfile.write_all(&input)?;
     tempfile.flush()?;
-    let mut hasher = crate::Hasher::new();
-    hasher.update_reader(std::fs::File::open(tempfile.path())?)?;
-    assert_eq!(hasher.finalize(), crate::hash(&input));
+    assert_eq!(
+        crate::Hasher::new()
+            .update_reader(std::fs::File::open(tempfile.path())?)?
+            .finalize(),
+        crate::hash(&input),
+    );
     Ok(())
 }
 
@@ -755,9 +758,12 @@ fn test_mmap() -> Result<(), std::io::Error> {
     let mut tempfile = tempfile::NamedTempFile::new()?;
     tempfile.write_all(&input)?;
     tempfile.flush()?;
-    let mut hasher = crate::Hasher::new();
-    hasher.update_mmap(tempfile.path())?;
-    assert_eq!(hasher.finalize(), crate::hash(&input));
+    assert_eq!(
+        crate::Hasher::new()
+            .update_mmap(tempfile.path())?
+            .finalize(),
+        crate::hash(&input),
+    );
     Ok(())
 }
 
@@ -792,8 +798,11 @@ fn test_mmap_rayon() -> Result<(), std::io::Error> {
     let mut tempfile = tempfile::NamedTempFile::new()?;
     tempfile.write_all(&input)?;
     tempfile.flush()?;
-    let mut hasher = crate::Hasher::new();
-    hasher.update_mmap_rayon(tempfile.path())?;
-    assert_eq!(hasher.finalize(), crate::hash(&input));
+    assert_eq!(
+        crate::Hasher::new()
+            .update_mmap_rayon(tempfile.path())?
+            .finalize(),
+        crate::hash(&input),
+    );
     Ok(())
 }

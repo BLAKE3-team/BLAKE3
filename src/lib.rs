@@ -1346,8 +1346,9 @@ impl Hasher {
     /// # }
     /// ```
     #[cfg(feature = "std")]
-    pub fn update_reader(&mut self, reader: impl std::io::Read) -> std::io::Result<u64> {
-        io::copy_wide(reader, self)
+    pub fn update_reader(&mut self, reader: impl std::io::Read) -> std::io::Result<&mut Self> {
+        io::copy_wide(reader, self)?;
+        Ok(self)
     }
 
     /// As [`update`](Hasher::update), but using Rayon-based multithreading
@@ -1417,14 +1418,14 @@ impl Hasher {
     /// # }
     /// ```
     #[cfg(feature = "mmap")]
-    pub fn update_mmap(&mut self, path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+    pub fn update_mmap(&mut self, path: impl AsRef<std::path::Path>) -> std::io::Result<&mut Self> {
         let file = std::fs::File::open(path.as_ref())?;
         if let Some(mmap) = io::maybe_mmap_file(&file)? {
             self.update(&mmap);
         } else {
             io::copy_wide(&file, self)?;
         }
-        Ok(())
+        Ok(self)
     }
 
     /// As [`update_rayon`](Hasher::update_rayon), but reading the contents of a file using
@@ -1469,14 +1470,17 @@ impl Hasher {
     /// ```
     #[cfg(feature = "mmap")]
     #[cfg(feature = "rayon")]
-    pub fn update_mmap_rayon(&mut self, path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+    pub fn update_mmap_rayon(
+        &mut self,
+        path: impl AsRef<std::path::Path>,
+    ) -> std::io::Result<&mut Self> {
         let file = std::fs::File::open(path.as_ref())?;
         if let Some(mmap) = io::maybe_mmap_file(&file)? {
             self.update_rayon(&mmap);
         } else {
             io::copy_wide(&file, self)?;
         }
-        Ok(())
+        Ok(self)
     }
 }
 
