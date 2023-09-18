@@ -14,6 +14,14 @@
 
 #define TRANSPOSED_STRIDE_BYTES 2 * MAX_SIMD_DEGREE * 4
 
+#define CHUNK_START         (1 << 0)
+#define CHUNK_END           (1 << 1)
+#define PARENT              (1 << 2)
+#define ROOT                (1 << 3)
+#define KEYED_HASH          (1 << 4)
+#define DERIVE_KEY_CONTEXT  (1 << 5)
+#define DERIVE_KEY_MATERIAL (1 << 6)
+
 .section .text
 
 .p2align 2
@@ -1609,45 +1617,78 @@ blake3_guts_riscv64gcv_xof_xor_partial_block:
 // a4: out_ptr
 .global blake3_guts_riscv64gcv_universal_hash
 blake3_guts_riscv64gcv_universal_hash:
-    // Prepare the padding null bytes in v8-v11, length = -input_len & 63.
-    // LMUL=4 is guaranteed to be sufficient to hold 64 bytes. Retain this
-    // length in t3.
-    neg t3, a1
-    andi t3, t3, 63
-    vsetvli zero, t3, e8, m4, ta, ma
-    vmv.v.i v8, 0
+        // t0 := full_blocks := input_len / 64
+        // TODO: handle the partial block at the end
+        srli t0, a1, 6
+        // Load the counter.
+        vsetvli zero, t0, e64, m2, ta, ma
+        vmv.v.x v8, a3
+        vid.v v10
+        vadd.vv v8, v8, v10
+        vsetvli zero, t0, e32, m1, ta, ma
+        vncvt.x.x.w v12, v8
+        li t1, 32
+        vnsrl.wx v13, v8, t1
+        // Load and transpose full message blocks. These are "strided segment
+        // loads". Each vlsseg8e32 instruction transposes 8 words from multiple
+        // message blocks into 8 registers, so we need two vlsseg8e32
+        // instructions (with the second offset by 32 bytes) to load full
+        // 64-byte blocks. The 64-byte stride equals the block size, because in
+        // this case (unlike hash_blocks) the blocks are adjacent.
+        // NOTE: These loads could be misaligned. As far as I know, the Linux
+        // RISC-V ABI allows misaligned loads and stores. If we need to support
+        // an environment that doesn't allow them (or where they're
+        // unacceptably slow), we could add a fallback here.
+        li t1, 64
+        addi t2, a0, 32
+        vlsseg8e32.v v16, (a0), t1
+        vlsseg8e32.v v24, (t2), t1
+        // Broadcast the key to v0-7.
+        lw t0, 0(a2)
+        vmv.v.x v0, t0
+        lw t0, 4(a2)
+        vmv.v.x v1, t0
+        lw t0, 8(a2)
+        vmv.v.x v2, t0
+        lw t0, 12(a2)
+        vmv.v.x v3, t0
+        lw t0, 16(a2)
+        vmv.v.x v4, t0
+        lw t0, 20(a2)
+        vmv.v.x v5, t0
+        lw t0, 24(a2)
+        vmv.v.x v6, t0
+        lw t0, 28(a2)
+        vmv.v.x v7, t0
+        // Broadcast the block length.
+        li t1, 64
+        vmv.v.x v14, t1
+        // Broadcast the flags.
+        li t1, CHUNK_START | CHUNK_END | ROOT | KEYED_HASH
+        vmv.v.x v15, t1
+        // Execute the kernel.
+        mv t6, ra
+        call blake3_guts_riscv64gcv_kernel
+        mv ra, t6
+        // XOR the first four words. The rest are dropped.
+        vxor.vv v0, v0, v8
+        vxor.vv v1, v1, v9
+        vxor.vv v2, v2, v10
+        vxor.vv v3, v3, v11
+        // XOR-reduce each vector.
+        vmv.v.i v4, 0
+        vredxor.vs v0, v0, v4
+        vredxor.vs v1, v1, v4
+        vredxor.vs v2, v2, v4
+        vredxor.vs v3, v3, v4
+        // Write the output.
+        vmv.x.s t0, v0
+        sw t0,  0(a4)
+        vmv.x.s t0, v1
+        sw t0,  4(a4)
+        vmv.x.s t0, v2
+        sw t0,  8(a4)
+        vmv.x.s t0, v3
+        sw t0, 12(a4)
 
-    // Load the input into v16-v31 and slide the padding bytes into place.
-    // Rather than checking which register group needs to be padded, just pad
-    // them both. The vslideup will be a no-op if the offset is >vl, and
-    // anything after the last block of input will ultimately be ignored.
-    vsetvli t0, a1, e8, m8, ta, ma
-    vle8.v v16, (a0)
-    add t1, a1, t3
-    vsetvli zero, t1, e8, m8, ta, ma
-    vslideup.vx v16, v8, a1
-    add a0, a0, t0
-    sub a1, a1, t0
-    vsetvli t0, a1, e8, m8, ta, ma
-    vle8.v v24, (a0)
-    add t1, a1, t3
-    vsetvli zero, t1, e8, m8, ta, ma
-    vslideup.vx v24, v8, a1
-
-    // Compute the vrgather indexes for the first of two rounds of vrgathers.
-    // We'll gather four vectors at a time, which lets us leave v0-v8
-    // untouched. That isn't a requirement in this case, but we can use the
-    // same vrgathers in hash_blocks where it is a requirement. Let W be the
-    // max number of 32-bit words per physical vector register (vlenb/4), then
-    // the gather indexes are:
-    //     0, 1, 2, 3, 16, 17, 18, 19, 32, 33, 34, 35, ...
-    //     f(i) = (i/4)*16 + (i%4)
-    vsetvli t0, zero, e16, m2, ta, ma  // VLMAX
-    vid.v v8
-    vid.v v10
-    vsrl.vi v8, v8, 2  // /4
-    vand.vi v10, v10, 3  // %4
-    vsll.vi v8, v8, 4  // *16
-    vadd.vv v8, v8, v10
-
-    ret
+        ret
