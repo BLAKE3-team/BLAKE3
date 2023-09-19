@@ -922,12 +922,6 @@ fn parent_node_output(
 
 /// An incremental hash state that can accept any number of writes.
 ///
-/// **Performance note:** The [`update`](#method.update) method can't take full
-/// advantage of SIMD optimizations if its input buffer is too small or oddly
-/// sized. Using a 16 KiB buffer, or any multiple of that, enables all currently
-/// supported SIMD instruction sets. See also
-/// [`update_reader`](Hasher::update_reader).
-///
 /// The `rayon` and `mmap` Cargo features enable additional methods on this
 /// type related to multithreading and memory-mapped IO.
 ///
@@ -1089,20 +1083,13 @@ impl Hasher {
         self.cv_stack.push(*new_cv);
     }
 
-    /// Add input bytes to the hash state. You can call this any number of
-    /// times.
+    /// Add input bytes to the hash state. You can call this any number of times.
     ///
     /// This method is always single-threaded. For multithreading support, see
-    /// [`update_rayon`](#method.update_rayon) below (enabled with the `rayon`
-    /// Cargo feature).
+    /// [`update_rayon`](#method.update_rayon) (enabled with the `rayon` Cargo feature).
     ///
-    /// Note that the degree of SIMD parallelism that `update` can use is
-    /// limited by the size of this input buffer. The 8 KiB buffer currently
-    /// used by [`std::io::copy`] is enough to leverage AVX2, for example, but
-    /// not enough to leverage AVX-512. A 16 KiB buffer is large enough to
-    /// leverage all currently supported SIMD instruction sets.
-    ///
-    /// [`std::io::copy`]: https://doc.rust-lang.org/std/io/fn.copy.html
+    /// Note that the degree of SIMD parallelism that `update` can use is limited by the size of
+    /// this input buffer. See [`update_reader`](#method.update_reader).
     pub fn update(&mut self, input: &[u8]) -> &mut Self {
         self.update_with_join::<join::SerialJoin>(input)
     }
@@ -1312,12 +1299,11 @@ impl Hasher {
     /// [`Hasher`] implements
     /// [`std::io::Write`](https://doc.rust-lang.org/std/io/trait.Write.html), so it's possible to
     /// use [`std::io::copy`](https://doc.rust-lang.org/std/io/fn.copy.html) to update a [`Hasher`]
-    /// from any reader. Unfortunately, this standard approach can limit performance, because the
-    /// [`copy`](https://doc.rust-lang.org/std/io/fn.copy.html) function currently uses an internal
-    /// 8 KiB buffer that isn't big enough to take advantage of all SIMD instruction sets. (In
-    ///   particular, [AVX-512](https://en.wikipedia.org/wiki/AVX-512) needs a
-    /// 16 KiB buffer.) `update_reader` avoids this performance problem and is slightly more
-    ///    convenient.
+    /// from any reader. Unfortunately, this standard approach can limit performance, because
+    /// `copy` currently uses an internal 8 KiB buffer that isn't big enough to take advantage of
+    /// all SIMD instruction sets. (In particular, [AVX-512](https://en.wikipedia.org/wiki/AVX-512)
+    /// needs a 16 KiB buffer.) `update_reader` avoids this performance problem and is slightly
+    /// more convenient.
     ///
     /// The internal buffer size this method uses may change at any time, and it may be different
     /// for different targets. The only guarantee is that it will be large enough for all of this
