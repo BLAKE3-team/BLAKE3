@@ -88,8 +88,8 @@ no_avx512 = []
 no_neon = []
 
 [package.metadata.docs.rs]
-# Document the rayon/mmap methods and the Zeroize impls on docs.rs.
-features = ["mmap", "rayon", "zeroize"]
+# Document the rayon/mmap methods and the Serialize/Deserialize/Zeroize impls on docs.rs.
+features = ["mmap", "rayon", "serde", "zeroize"]
 
 [dependencies]
 arrayref = "0.3.5"
@@ -110,6 +110,7 @@ rand = "0.8.0"
 rand_chacha = "0.3.0"
 reference_impl = { path = "./reference_impl" }
 tempfile = "3.8.0"
+serde_json = "1.0.107"
 
 [build-dependencies]
 cc = "1.0.4"

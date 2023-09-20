@@ -56,6 +56,11 @@
 //! [`Zeroize`](https://docs.rs/zeroize/latest/zeroize/trait.Zeroize.html) for
 //! this crate's types.
 //!
+//! The `serde` feature (disabled by default, but enabled for [docs.rs]) implements
+//! [`serde::Serialize`](https://docs.rs/serde/latest/serde/trait.Serialize.html) and
+//! [`serde::Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html)
+//! for [`Hash`](struct@Hash).
+//!
 //! The NEON implementation is enabled by default for AArch64 but requires the
 //! `neon` feature for other ARM targets. Not all ARMv7 CPUs support NEON, and
 //! enabling this feature will produce a binary that's not portable to CPUs
@@ -68,9 +73,6 @@
 //! makes no SemVer guarantees for this feature, and callers who use it should
 //! expect breaking changes between patch versions. (The "-preview" feature name
 //! follows the conventions of the RustCrypto [`signature`] crate.)
-//!
-//! The `serde` feature (disabled by default) enables serde compatibility for
-//! the `Hash` struct.
 //!
 //! [`Hasher::update_rayon`]: struct.Hasher.html#method.update_rayon
 //! [BLAKE3]: https://blake3.io

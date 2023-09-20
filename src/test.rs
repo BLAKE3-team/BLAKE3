@@ -806,3 +806,17 @@ fn test_mmap_rayon() -> Result<(), std::io::Error> {
     );
     Ok(())
 }
+
+#[test]
+#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
+fn test_serde() {
+    let hash: crate::Hash = [7; 32].into();
+    let json = serde_json::to_string(&hash).unwrap();
+    assert_eq!(
+        json,
+        "[7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7]",
+    );
+    let hash2: crate::Hash = serde_json::from_str(&json).unwrap();
+    assert_eq!(hash, hash2);
+}
