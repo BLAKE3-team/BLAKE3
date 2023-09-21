@@ -149,11 +149,10 @@ impl Platform {
             // No NEON compress_in_place() implementation yet.
             #[cfg(blake3_neon)]
             Platform::NEON => portable::compress_in_place(cv, block, block_len, counter, flags),
-            // Safe because is compiled for wasm32
             #[cfg(blake3_wasm32_simd)]
-            Platform::WASM32_SIMD => unsafe {
+            Platform::WASM32_SIMD => {
                 crate::wasm32_simd::compress_in_place(cv, block, block_len, counter, flags)
-            },
+            }
         }
     }
 
@@ -187,10 +186,9 @@ impl Platform {
             #[cfg(blake3_neon)]
             Platform::NEON => portable::compress_xof(cv, block, block_len, counter, flags),
             #[cfg(blake3_wasm32_simd)]
-            // TODO Safe because compiled for wasm32
-            Platform::WASM32_SIMD => unsafe {
+            Platform::WASM32_SIMD => {
                 crate::wasm32_simd::compress_xof(cv, block, block_len, counter, flags)
-            },
+            }
         }
     }
 
