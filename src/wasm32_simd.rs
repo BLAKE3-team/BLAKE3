@@ -170,15 +170,16 @@ fn undiagonalize(row0: &mut v128, row2: &mut v128, row3: &mut v128) {
 }
 
 #[inline(always)]
-unsafe fn compress_pre(
+fn compress_pre(
     cv: &CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
     counter: u64,
     flags: u8,
 ) -> [v128; 4] {
-    let row0 = &mut loadu(cv.as_ptr().add(0) as *const u8);
-    let row1 = &mut loadu(cv.as_ptr().add(4) as *const u8);
+    // safe because CVWords is [u32; 8]
+    let row0 = &mut unsafe { loadu(cv.as_ptr().add(0) as *const u8) };
+    let row1 = &mut unsafe { loadu(cv.as_ptr().add(4) as *const u8) };
     let row2 = &mut set4(IV[0], IV[1], IV[2], IV[3]);
     let row3 = &mut set4(
         counter_low(counter),
@@ -187,10 +188,11 @@ unsafe fn compress_pre(
         flags as u32,
     );
 
-    let mut m0 = loadu(block.as_ptr().add(0 * 4 * DEGREE));
-    let mut m1 = loadu(block.as_ptr().add(1 * 4 * DEGREE));
-    let mut m2 = loadu(block.as_ptr().add(2 * 4 * DEGREE));
-    let mut m3 = loadu(block.as_ptr().add(3 * 4 * DEGREE));
+    // safe because block is &[u8; 64]
+    let mut m0 = unsafe { loadu(block.as_ptr().add(0 * 4 * DEGREE)) };
+    let mut m1 = unsafe { loadu(block.as_ptr().add(1 * 4 * DEGREE)) };
+    let mut m2 = unsafe { loadu(block.as_ptr().add(2 * 4 * DEGREE)) };
+    let mut m3 = unsafe { loadu(block.as_ptr().add(3 * 4 * DEGREE)) };
 
     let mut t0;
     let mut t1;
@@ -356,7 +358,7 @@ unsafe fn compress_pre(
 }
 
 #[target_feature(enable = "simd128")]
-pub unsafe fn compress_in_place(
+pub fn compress_in_place(
     cv: &mut CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
@@ -365,12 +367,15 @@ pub unsafe fn compress_in_place(
 ) {
     let [row0, row1, row2, row3] = compress_pre(cv, block, block_len, counter, flags);
     // it stores in reversed order...
-    storeu(xor(row0, row2), cv.as_mut_ptr().add(0) as *mut u8);
-    storeu(xor(row1, row3), cv.as_mut_ptr().add(4) as *mut u8);
+    // safe because CVWords is [u32; 8]
+    unsafe {
+        storeu(xor(row0, row2), cv.as_mut_ptr().add(0) as *mut u8);
+        storeu(xor(row1, row3), cv.as_mut_ptr().add(4) as *mut u8);
+    }
 }
 
 #[target_feature(enable = "simd128")]
-pub unsafe fn compress_xof(
+pub fn compress_xof(
     cv: &CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
@@ -381,10 +386,12 @@ pub unsafe fn compress_xof(
         compress_pre(cv, block, block_len, counter, flags);
     row0 = xor(row0, row2);
     row1 = xor(row1, row3);
-    row2 = xor(row2, loadu(cv.as_ptr().add(0) as *const u8));
-    row3 = xor(row3, loadu(cv.as_ptr().add(4) as *const u8));
+    // safe because CVWords is [u32; 8]
+    row2 = xor(row2, unsafe { loadu(cv.as_ptr().add(0) as *const u8) });
+    row3 = xor(row3, unsafe { loadu(cv.as_ptr().add(4) as *const u8) });
     // It seems to be architecture dependent, but works.
-    core::mem::transmute([row0, row1, row2, row3])
+    // safe because sizes match, and every state of u8 is valid.
+    unsafe { core::mem::transmute([row0, row1, row2, row3]) }
 }
 
 #[inline(always)]
