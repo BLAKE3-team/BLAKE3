@@ -59,8 +59,12 @@ macro(BLAKE3_DISABLE_SIMD)
   set(BLAKE3_SIMD_AMD64_ASM OFF)
   set(BLAKE3_SIMD_X86_INTRINSICS OFF)
   set(BLAKE3_SIMD_NEON_INTRINSICS OFF)
-  set_source_files_properties(blake3_dispatch.c PROPERTIES 
-    COMPILE_DEFINITIONS BLAKE3_USE_NEON=0;BLAKE3_NO_SSE2;BLAKE3_NO_SSE41;BLAKE3_NO_AVX2;BLAKE3_NO_AVX512
+  target_compile_definitions(blake3 PRIVATE
+    BLAKE3_USE_NEON=0
+    BLAKE3_NO_SSE2
+    BLAKE3_NO_SSE41
+    BLAKE3_NO_AVX2
+    BLAKE3_NO_AVX512
   )
 endmacro()
 
@@ -131,7 +135,9 @@ elseif(CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_ARMv8_NAMES
   target_sources(blake3 PRIVATE
     blake3_neon.c
   )
-  set_source_files_properties(blake3_dispatch.c PROPERTIES COMPILE_DEFINITIONS BLAKE3_USE_NEON=1)
+  target_compile_definitions(blake3 PRIVATE
+    BLAKE3_USE_NEON=1
+  )
 
   if (DEFINED BLAKE3_CFLAGS_NEON)
     set_source_files_properties(blake3_neon.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_NEON}")
