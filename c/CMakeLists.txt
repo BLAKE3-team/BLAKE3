@@ -50,7 +50,7 @@ endif()
 target_include_directories(blake3 PUBLIC $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 set_target_properties(blake3 PROPERTIES
   VERSION ${PROJECT_VERSION}
-  SOVERSION 0
+  SOVERSION ${PROJECT_VERSION_MAJOR}
   C_VISIBILITY_PRESET hidden
 )
 
