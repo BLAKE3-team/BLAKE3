@@ -218,6 +218,11 @@ fn counter_high(counter: u64) -> u32 {
 /// [`FromStr`]: https://doc.rust-lang.org/std/str/trait.FromStr.html
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "rkyv", archive(check_bytes))]
 #[derive(Clone, Copy, Hash)]
 pub struct Hash([u8; OUT_LEN]);
 
@@ -330,6 +335,45 @@ impl PartialEq<[u8]> for Hash {
 }
 
 impl Eq for Hash {}
+
+#[cfg(feature = "rkyv")]
+/// This implementation is constant-time.
+impl PartialEq for ArchivedHash {
+    #[inline]
+    fn eq(&self, other: &ArchivedHash) -> bool {
+        constant_time_eq::constant_time_eq_32(&self.0, &other.0)
+    }
+}
+
+#[cfg(feature = "rkyv")]
+/// This implementation is constant-time.
+impl PartialEq<[u8; OUT_LEN]> for ArchivedHash {
+    #[inline]
+    fn eq(&self, other: &[u8; OUT_LEN]) -> bool {
+        constant_time_eq::constant_time_eq_32(&self.0, other)
+    }
+}
+
+#[cfg(feature = "rkyv")]
+/// This implementation is constant-time if the target is 32 bytes long.
+impl PartialEq<[u8]> for ArchivedHash {
+    #[inline]
+    fn eq(&self, other: &[u8]) -> bool {
+        constant_time_eq::constant_time_eq(&self.0, other)
+    }
+}
+
+#[cfg(feature = "rkyv")]
+/// This implementation is constant-time if the target is 32 bytes long.
+impl PartialEq<Hash> for ArchivedHash {
+    #[inline]
+    fn eq(&self, other: &Hash) -> bool {
+        constant_time_eq::constant_time_eq(&self.0, &other.0)
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl Eq for ArchivedHash {}
 
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
