@@ -176,12 +176,14 @@ See [`c/README.md`](c/README.md).
 
 We post links to third-party bindings and implementations on the
 [@BLAKE3team Twitter account](https://twitter.com/BLAKE3team) whenever
-we hear about them. Some highlights include [an optimized Go
-implementation](https://github.com/zeebo/blake3), [Wasm bindings for
-Node.js and browsers](https://github.com/connor4312/blake3), [binary
-wheels for Python](https://github.com/oconnor663/blake3-py), [.NET
-bindings](https://github.com/xoofx/Blake3.NET), and [JNI
-bindings](https://github.com/sken77/BLAKE3jni).
+we hear about them. Some highlights include:
+
+- [An optimized Go implementation](https://github.com/zeebo/blake3)
+- [Wasm bindings for Node.js and browsers](https://github.com/connor4312/blake3)
+- [Binary wheels for Python](https://github.com/oconnor663/blake3-py)
+- [.NET bindings](https://github.com/xoofx/Blake3.NET)
+- [JNI bindings](https://github.com/sken77/BLAKE3jni)
+- [Ruby bindings](https://github.com/Shopify/blake3-rb)
 
 ## Contributing
 
