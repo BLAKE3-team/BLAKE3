@@ -6,6 +6,7 @@ project(libblake3
   LANGUAGES C ASM
 )
 
+include(CheckCCompilerFlag)
 include(FeatureSummary)
 include(GNUInstallDirs)
 
@@ -138,6 +139,11 @@ elseif(CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_ARMv8_NAMES
   target_compile_definitions(blake3 PRIVATE
     BLAKE3_USE_NEON=1
   )
+
+  check_c_compiler_flag(-mfpu=neon BLAKE3_MFPU_NEON_SUPPORTED)
+  if (BLAKE3_MFPU_NEON_SUPPORTED)
+    target_compile_options(blake3 PRIVATE -mfpu=neon)
+  endif()
 
   if (DEFINED BLAKE3_CFLAGS_NEON)
     set_source_files_properties(blake3_neon.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_NEON}")
