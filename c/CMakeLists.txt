@@ -9,6 +9,10 @@ project(libblake3
 include(FeatureSummary)
 include(GNUInstallDirs)
 
+# architecture lists for which to enable assembly / SIMD sources
+set(BLAKE3_AMD64_NAMES amd64 AMD64 x86_64)
+set(BLAKE3_X86_NAMES i686 x86 X86)
+set(BLAKE3_ARMv8_NAMES aarch64 AArch64 arm64 ARM64 armv8 armv8a)
 # default SIMD compiler flag configuration (can be overriden by toolchains or CLI)
 if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
   set(BLAKE3_CFLAGS_SSE2 "/arch:SSE2" CACHE STRING "the compiler flags to enable SSE2")
@@ -24,11 +28,13 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU"
   set(BLAKE3_CFLAGS_SSE4.1 "-msse4.1" CACHE STRING "the compiler flags to enable SSE4.1")
   set(BLAKE3_CFLAGS_AVX2 "-mavx2" CACHE STRING "the compiler flags to enable AVX2")
   set(BLAKE3_CFLAGS_AVX512 "-mavx512f -mavx512vl" CACHE STRING "the compiler flags to enable AVX512")
+
+  if (CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_ARMv8_NAMES
+      AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    # 32-bit ARMv8 needs NEON to be enabled explicitly
+    set(BLAKE3_CFLAGS_NEON "-mfpu=neon" CACHE STRING "the compiler flags to enable NEON")
+  endif()
 endif()
-# architecture lists for which to enable assembly / SIMD sources
-set(BLAKE3_AMD64_NAMES amd64 AMD64 x86_64)
-set(BLAKE3_X86_NAMES i686 x86 X86)
-set(BLAKE3_ARMv8_NAMES aarch64 AArch64 arm64 ARM64 armv8 armv8a)
 
 # library target
 add_library(blake3
@@ -125,11 +131,11 @@ elseif((CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_X86_NAMES OR BLAKE3_USE_X86_INTRIN
   set_source_files_properties(blake3_sse2.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_SSE2}")
   set_source_files_properties(blake3_sse41.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_SSE4.1}")
 
-elseif(CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_ARMv8_NAMES
-        OR ((ANDROID_ABI STREQUAL "armeabi-v7a"
-            OR BLAKE3_USE_NEON_INTRINSICS)
-          AND (DEFINED BLAKE3_CFLAGS_NEON
-            OR CMAKE_SIZEOF_VOID_P EQUAL 8)))
+elseif((CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_ARMv8_NAMES
+          OR ANDROID_ABI STREQUAL "armeabi-v7a"
+          OR BLAKE3_USE_NEON_INTRINSICS)
+        AND (DEFINED BLAKE3_CFLAGS_NEON
+          OR CMAKE_SIZEOF_VOID_P EQUAL 8))
   set(BLAKE3_SIMD_NEON_INTRINSICS ON)
 
   target_sources(blake3 PRIVATE
