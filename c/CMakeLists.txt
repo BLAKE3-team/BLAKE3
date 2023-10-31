@@ -47,7 +47,7 @@ add_library(BLAKE3::blake3 ALIAS blake3)
 # library configuration
 set(BLAKE3_PKGCONFIG_CFLAGS)
 if (BUILD_SHARED_LIBS)
-  target_compile_definitions(blake3 
+  target_compile_definitions(blake3
     PUBLIC BLAKE3_DLL
     PRIVATE BLAKE3_DLL_EXPORTS
   )
@@ -109,7 +109,7 @@ if(CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_AMD64_NAMES OR BLAKE3_USE_AMD64_ASM)
       BLAKE3_DISABLE_SIMD()
     endif()
 
-  else()  
+  else()
     BLAKE3_DISABLE_SIMD()
   endif()
 
