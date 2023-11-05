@@ -314,7 +314,7 @@ jobs:
 
   # CMake build test (Library only), current macOS/Linux only.
   cmake_build:
-    name: CMake ${{ matrix.os }}
+    name: CMake ${{ matrix.os }} ${{ matrix.compiler }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
