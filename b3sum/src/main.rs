@@ -163,6 +163,44 @@ impl Args {
     }
 }
 
+fn hash_reader_parallel(
+    hasher: &mut blake3::Hasher,
+    reader: &mut (impl Read + Send),
+    len: Option<u64>,
+) -> Result<()> {
+    use read_chunks::ReadExt;
+    const BUF_SIZE: usize = 1024 * 1024;
+    const MIN_SIZE: u64 = BUF_SIZE as u64;
+
+    if len.is_some_and(|s| s < MIN_SIZE) {
+        hasher.update_reader(reader)?;
+        return Ok(());
+    }
+
+    let mut hashing = vec![0; BUF_SIZE];
+    let mut hashing_res = reader.keep_reading(&mut *hashing)?;
+
+    let mut reading_to = vec![0; BUF_SIZE];
+    let mut reading_res = None::<io::Result<usize>>;
+
+    while hashing_res != 0 {
+        rayon::scope(|s| {
+            s.spawn(|_| {
+                reading_res = Some(reader.keep_reading(&mut *reading_to));
+            });
+
+            s.spawn(|_| {
+                hasher.update_rayon(&hashing[..hashing_res]);
+            });
+        });
+
+        hashing_res = reading_res.take().unwrap()?;
+        (hashing, reading_to) = (reading_to, hashing);
+    }
+
+    Ok(())
+}
+
 fn hash_path(args: &Args, path: &Path) -> Result<blake3::OutputReader> {
     let mut hasher = args.base_hasher.clone();
     if path == Path::new("-") {
@@ -171,7 +209,9 @@ fn hash_path(args: &Args, path: &Path) -> Result<blake3::OutputReader> {
         }
         hasher.update_reader(io::stdin().lock())?;
     } else if args.no_mmap() {
-        hasher.update_reader(File::open(path)?)?;
+        let length = std::fs::metadata(path)?.len();
+
+        hash_reader_parallel(&mut hasher, &mut File::open(path)?, Some(length))?;
     } else {
         // The fast path: Try to mmap the file and hash it with multiple threads.
         hasher.update_mmap_rayon(path)?;

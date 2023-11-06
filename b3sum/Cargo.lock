@@ -85,6 +85,7 @@ dependencies = [
  "hex",
  "memmap2",
  "rayon",
+ "read_chunks",
  "tempfile",
  "wild",
 ]
@@ -361,6 +362,12 @@ dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
 ]
+
+[[package]]
+name = "read_chunks"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dda95aba172630718d3dffb3c2a3c316848fd9f2725898f56af81fdfcd3c8abf"
 
 [[package]]
 name = "redox_syscall"
