@@ -26,11 +26,3 @@ wild = "2.0.3"
 [dev-dependencies]
 duct = "0.13.3"
 tempfile = "3.1.0"
-
-
-[profile.dev]
-opt-level = 1
-
-[profile.release]
-overflow-checks = true
-lto = "thin"
