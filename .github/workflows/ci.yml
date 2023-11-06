@@ -331,6 +331,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: CMake generation
-        run: cmake -S c -B c/build -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/target
+        run: cmake -S . -B build -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/target
       - name: CMake build / install
-        run: cmake --build c/build --target install
+        run: cmake --build build --target install
