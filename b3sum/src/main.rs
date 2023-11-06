@@ -163,20 +163,36 @@ impl Args {
     }
 }
 
+/// Hashes a reader in parallel into a hasher using rayon, optionally takes a length to heuristically decide if
+/// we are better off sequentially hashing
 fn hash_reader_parallel(
     hasher: &mut blake3::Hasher,
     reader: &mut (impl Read + Send),
     len: Option<u64>,
 ) -> Result<()> {
+    // we use read_chunks here because I(ultrabear) coded it, and know it is as safe as the code here.
+    // TODO make this just a function in main.rs instead of an extra dep,
+    // but only worth doing if we want to merge the PR, this is a proof of concept
     use read_chunks::ReadExt;
+
+    // 2MiB of total buffer is not an extreme amount of memory, and performance is a good bit
+    // better with that amount, increasing this will probably equal more performance up to a
+    // certain point, and there might be a "magic" size to target (where blake3 multithreading can
+    // split evenly and have maximum possible performance without using too much memory)
     const BUF_SIZE: usize = 1024 * 1024;
+    // if anything is under 1MiB we don't want to put it through multithreading, this is probably an
+    // overshoot of where multithreading is effective (512KiB was found to also have a performance
+    // increase), but it is essential that we do not undershoot where it is effective, and risk
+    // having worse performance than before this codechange on small files.
     const MIN_SIZE: u64 = BUF_SIZE as u64;
 
+    // fallback to update_reader if the length is too small
     if len.is_some_and(|s| s < MIN_SIZE) {
         hasher.update_reader(reader)?;
         return Ok(());
     }
 
+    // allocate the double buffers and their return memory locations
     let mut hashing = vec![0; BUF_SIZE];
     let mut hashing_res = reader.keep_reading(&mut *hashing)?;
 
@@ -184,6 +200,8 @@ fn hash_reader_parallel(
     let mut reading_res = None::<io::Result<usize>>;
 
     while hashing_res != 0 {
+        // by scoping we guarantee that all tasks complete, and can get our mutable references back
+        // to do error handling and buffer swapping
         rayon::scope(|s| {
             s.spawn(|_| {
                 reading_res = Some(reader.keep_reading(&mut *reading_to));
