@@ -1643,3 +1643,42 @@ impl std::io::Seek for OutputReader {
         Ok(self.position())
     }
 }
+
+#[cfg(feature = "rand")]
+impl rand_core::SeedableRng for OutputReader {
+    type Seed = [u8; 32];
+
+    #[inline]
+    fn from_seed(seed: Self::Seed) -> Self {
+        let mut hasher = Hasher::new();
+        hasher.update(&seed);
+        hasher.finalize_xof()
+    }
+}
+
+#[cfg(feature = "rand")]
+impl rand_core::RngCore for OutputReader {
+    #[inline]
+    fn next_u32(&mut self) -> u32 {
+        rand_core::impls::next_u32_via_fill(self)
+    }
+
+    #[inline]
+    fn next_u64(&mut self) -> u64 {
+        rand_core::impls::next_u64_via_fill(self)
+    }
+
+    #[inline]
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        self.fill(dest);
+    }
+
+    #[inline]
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
+        self.fill(dest);
+        Ok(())
+    }
+}
+
+#[cfg(feature = "rand")]
+impl rand_core::CryptoRng for OutputReader {}

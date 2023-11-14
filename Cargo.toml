@@ -39,6 +39,10 @@ mmap = ["std", "dep:memmap2"]
 # Implement the zeroize::Zeroize trait for types in this crate.
 zeroize = ["dep:zeroize", "arrayvec/zeroize"]
 
+# Implement the rand_core Rng traits for OutputReader, allowing using it as
+# a rand::Rng.
+rand = ["dep:rand_core"]
+
 # This crate implements traits from the RustCrypto project, exposed here as the
 # "traits-preview" feature. However, these traits aren't stable, and they're
 # expected to change in incompatible ways before they reach 1.0. For that
@@ -101,6 +105,7 @@ memmap2 = { version = "0.7.1", optional = true }
 rayon = { version = "1.2.1", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
 zeroize = { version = "1", default-features = false, features = ["zeroize_derive"], optional = true }
+rand_core = { version = "0.6", default-features = false, optional = true }
 
 [dev-dependencies]
 hmac = "0.12.0"

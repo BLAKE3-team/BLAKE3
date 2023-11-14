@@ -820,3 +820,25 @@ fn test_serde() {
     let hash2: crate::Hash = serde_json::from_str(&json).unwrap();
     assert_eq!(hash, hash2);
 }
+
+#[test]
+#[cfg(feature = "rand")]
+fn test_rand_core() {
+    let mut seeded = crate::OutputReader::from_seed([b'0'; 32]);
+    let mut buf = [0u8; 64];
+    seeded.fill_bytes(&mut buf);
+    // Verified using: printf 00000000000000000000000000000000 | b3sum -l 76
+    assert_eq!(
+        &buf,
+        b"\
+        \x9a\x91\x3b\xc3\x24\xb1\x7e\x97\x31\x3a\x3e\x6b\x1d\x24\x05\x44\
+        \xbd\xab\xb7\x0e\xe2\xd0\xdd\x0f\x80\x25\x8c\x95\x70\x43\x1e\xb1\
+        \x43\x9a\x91\x99\xca\x39\xbe\xae\x7f\x16\xe7\x0a\x96\xc4\x60\xba\
+        \x11\x57\xb6\xc9\xd7\x85\x07\xd7\x37\xef\xae\x55\x23\x1f\x08\x6f\
+        ",
+    );
+
+    // defers to rand_core::impls, which interpret bytes little-endian.
+    assert_eq!(seeded.gen::<u32>(), 0x91bd7fa7u32);
+    assert_eq!(seeded.gen::<u64>(), 0x81f88d825bee930fu64);
+}
