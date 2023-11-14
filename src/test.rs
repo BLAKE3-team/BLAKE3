@@ -827,38 +827,38 @@ fn test_rand_core() {
     let mut seeded = crate::Rng::from_seed(*b"0123456789abcdefghijklmnopqrstuv");
     let mut buf = [0u8; 64];
     seeded.fill_bytes(&mut buf);
-    // Verified using: printf 0123456789abcdefghijklmnopqrstuv | b3sum -l 76
+    // Verified using: printf 0123456789abcdefghijklmnopqrstuv | b3sum -l 76 --keyed <(true)
     assert_eq!(
         &buf,
         b"\
-        \xa0\x82\xa1\x59\x4b\x22\xfa\x4f\x83\x8f\xc8\x19\xe1\x91\x8b\x45\
-        \xa4\xf0\x72\x7b\xad\xaa\x70\x1b\x6d\x52\x12\x11\xec\x99\x2e\x03\
-        \x12\x0a\xb6\x70\x1f\x37\x96\xaa\xb8\xb1\xc5\x9d\xd1\x4c\x19\x77\
-        \xf1\xc6\xbb\x53\x1c\x5e\x85\x4b\x08\xc8\xf9\x0a\x68\xfb\x8c\x69\
+        \x57\x63\x36\x95\x85\xc5\x58\x99\x4a\x3e\xe0\x27\x78\x87\x94\x1f\
+        \xf0\xf8\xbd\x3a\xca\x96\xfa\x00\xdb\xb8\x25\x07\x2c\x47\x67\xf1\
+        \x69\xd0\xf2\x11\x68\xff\x75\x74\x4c\x1c\x48\x8f\xee\x7a\x01\x78\
+        \x52\xcf\x04\x5d\xc2\x9e\xa1\x0e\x09\x63\x76\x18\xc3\x5f\xf6\x10\
         ",
     );
 
     // defers to rand_core::impls, which interpret bytes little-endian.
-    assert_eq!(seeded.gen::<u32>(), 0x1e8b7a2a);
-    assert_eq!(seeded.gen::<u64>(), 0x30deb2349cce4029);
+    assert_eq!(seeded.gen::<u32>(), 0xc6a18732);
+    assert_eq!(seeded.gen::<u64>(), 0x705c00977b0d7be0);
 
     // Test partial consumption, to be sure buffering doesn't cause problems
 
     let mut seeded = crate::Rng::from_seed(*b"0123456789abcdefghijklmnopqrstuv");
     let mut buf = [0u8; 63];
     seeded.fill_bytes(&mut buf);
-    // Verified using: printf 0123456789abcdefghijklmnopqrstuv | b3sum -l 76
+    // Verified using: printf 0123456789abcdefghijklmnopqrstuv | b3sum -l 76 --keyed <(true)
     assert_eq!(
         &buf,
         b"\
-        \xa0\x82\xa1\x59\x4b\x22\xfa\x4f\x83\x8f\xc8\x19\xe1\x91\x8b\x45\
-        \xa4\xf0\x72\x7b\xad\xaa\x70\x1b\x6d\x52\x12\x11\xec\x99\x2e\x03\
-        \x12\x0a\xb6\x70\x1f\x37\x96\xaa\xb8\xb1\xc5\x9d\xd1\x4c\x19\x77\
-        \xf1\xc6\xbb\x53\x1c\x5e\x85\x4b\x08\xc8\xf9\x0a\x68\xfb\x8c\
+        \x57\x63\x36\x95\x85\xc5\x58\x99\x4a\x3e\xe0\x27\x78\x87\x94\x1f\
+        \xf0\xf8\xbd\x3a\xca\x96\xfa\x00\xdb\xb8\x25\x07\x2c\x47\x67\xf1\
+        \x69\xd0\xf2\x11\x68\xff\x75\x74\x4c\x1c\x48\x8f\xee\x7a\x01\x78\
+        \x52\xcf\x04\x5d\xc2\x9e\xa1\x0e\x09\x63\x76\x18\xc3\x5f\xf6\
         ",
     );
 
     // defers to rand_core::impls, which interpret bytes little-endian.
-    assert_eq!(seeded.gen::<u32>(), 0x8b7a2a69);
-    assert_eq!(seeded.gen::<u64>(), 0xdeb2349cce40291e);
+    assert_eq!(seeded.gen::<u32>(), 0xa1873210);
+    assert_eq!(seeded.gen::<u64>(), 0x5c00977b0d7be0c6);
 }

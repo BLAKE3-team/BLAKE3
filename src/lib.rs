@@ -1762,9 +1762,7 @@ impl<const N: usize> rand_core::SeedableRng for BufOutputReader<N> {
 
     #[inline]
     fn from_seed(seed: Self::Seed) -> Self {
-        let mut hasher = Hasher::new();
-        hasher.update(&seed);
-        hasher.finalize_xof().into()
+        Hasher::new_keyed(&seed).finalize_xof().into()
     }
 }
 
@@ -1828,7 +1826,7 @@ impl<const N: usize> rand_core::CryptoRng for BufOutputReader<N> {}
 /// // Alternately, seed it as a rand::SeedableRng.
 /// let mut rng = blake3::Rng::from_seed(*b"0123456789abcdefghijklmnopqrstuv");
 /// let output: u64 = rng.gen();
-/// assert_eq!(output, 0x4ffa224b59a182a0u64);
+/// assert_eq!(output, 0x9958c58595366357u64);
 ///
 /// // In the real world, you will probably not use a static seed, but seed from
 /// // OsRng or something of the sort.
