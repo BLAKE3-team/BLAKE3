@@ -824,21 +824,41 @@ fn test_serde() {
 #[test]
 #[cfg(feature = "rand")]
 fn test_rand_core() {
-    let mut seeded = crate::OutputReader::from_seed([b'0'; 32]);
+    let mut seeded = crate::Rng::from_seed(*b"0123456789abcdefghijklmnopqrstuv");
     let mut buf = [0u8; 64];
     seeded.fill_bytes(&mut buf);
-    // Verified using: printf 00000000000000000000000000000000 | b3sum -l 76
+    // Verified using: printf 0123456789abcdefghijklmnopqrstuv | b3sum -l 76
     assert_eq!(
         &buf,
         b"\
-        \x9a\x91\x3b\xc3\x24\xb1\x7e\x97\x31\x3a\x3e\x6b\x1d\x24\x05\x44\
-        \xbd\xab\xb7\x0e\xe2\xd0\xdd\x0f\x80\x25\x8c\x95\x70\x43\x1e\xb1\
-        \x43\x9a\x91\x99\xca\x39\xbe\xae\x7f\x16\xe7\x0a\x96\xc4\x60\xba\
-        \x11\x57\xb6\xc9\xd7\x85\x07\xd7\x37\xef\xae\x55\x23\x1f\x08\x6f\
+        \xa0\x82\xa1\x59\x4b\x22\xfa\x4f\x83\x8f\xc8\x19\xe1\x91\x8b\x45\
+        \xa4\xf0\x72\x7b\xad\xaa\x70\x1b\x6d\x52\x12\x11\xec\x99\x2e\x03\
+        \x12\x0a\xb6\x70\x1f\x37\x96\xaa\xb8\xb1\xc5\x9d\xd1\x4c\x19\x77\
+        \xf1\xc6\xbb\x53\x1c\x5e\x85\x4b\x08\xc8\xf9\x0a\x68\xfb\x8c\x69\
         ",
     );
 
     // defers to rand_core::impls, which interpret bytes little-endian.
-    assert_eq!(seeded.gen::<u32>(), 0x91bd7fa7u32);
-    assert_eq!(seeded.gen::<u64>(), 0x81f88d825bee930fu64);
+    assert_eq!(seeded.gen::<u32>(), 0x1e8b7a2a);
+    assert_eq!(seeded.gen::<u64>(), 0x30deb2349cce4029);
+
+    // Test partial consumption, to be sure buffering doesn't cause problems
+
+    let mut seeded = crate::Rng::from_seed(*b"0123456789abcdefghijklmnopqrstuv");
+    let mut buf = [0u8; 63];
+    seeded.fill_bytes(&mut buf);
+    // Verified using: printf 0123456789abcdefghijklmnopqrstuv | b3sum -l 76
+    assert_eq!(
+        &buf,
+        b"\
+        \xa0\x82\xa1\x59\x4b\x22\xfa\x4f\x83\x8f\xc8\x19\xe1\x91\x8b\x45\
+        \xa4\xf0\x72\x7b\xad\xaa\x70\x1b\x6d\x52\x12\x11\xec\x99\x2e\x03\
+        \x12\x0a\xb6\x70\x1f\x37\x96\xaa\xb8\xb1\xc5\x9d\xd1\x4c\x19\x77\
+        \xf1\xc6\xbb\x53\x1c\x5e\x85\x4b\x08\xc8\xf9\x0a\x68\xfb\x8c\
+        ",
+    );
+
+    // defers to rand_core::impls, which interpret bytes little-endian.
+    assert_eq!(seeded.gen::<u32>(), 0x8b7a2a69);
+    assert_eq!(seeded.gen::<u64>(), 0xdeb2349cce40291e);
 }
