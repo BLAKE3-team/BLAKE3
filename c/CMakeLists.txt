@@ -1,4 +1,9 @@
-cmake_minimum_required(VERSION 3.9)
+cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
+
+# respect C_EXTENSIONS OFF without explicitly setting C_STANDARD
+if (POLICY CMP0128)
+  cmake_policy(SET CMP0128 NEW)
+endif()
 
 project(libblake3
   VERSION 1.5.0
@@ -61,7 +66,14 @@ set_target_properties(blake3 PROPERTIES
   VERSION ${PROJECT_VERSION}
   SOVERSION 0
   C_VISIBILITY_PRESET hidden
+  C_EXTENSIONS OFF
 )
+target_compile_features(blake3 PUBLIC c_std_99)
+# ensure C_EXTENSIONS OFF is respected without overriding CMAKE_C_STANDARD
+# which may be set by the user or toolchain file
+if (NOT POLICY CMP0128 AND NOT DEFINED CMAKE_C_STANDARD)
+  set_target_properties(blake3 PROPERTIES C_STANDARD 99)
+endif()
 
 # optional SIMD sources
 macro(BLAKE3_DISABLE_SIMD)
