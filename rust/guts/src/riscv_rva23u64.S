@@ -1,8 +1,11 @@
-// This implementation currently assumes riscv64gcv_zbb_zvbb. Zvbb in particular ("Vector
-// Bit-manipulation used in Cryptography") is a bleeding-edge extension that was only frozen a few
-// weeks ago at the time I'm writing this comment. Compiling and testing this code currently
-// requires quite a lot of effort, including building Clang from master and building QEMU from a
-// custom branch. Please don't expect this code to be usable on real hardware for some time.
+// This implementation targets the RVA23 profile, particularly V, Zvbb, and
+// Zbb, that is the vector extension and the bit-manipulation extensions. As of
+// December 2023, most real-world hardware does *not* support these extensions.
+// This implementation also assumes that misaligned vector loads and stores are
+// supported, in particular for the vlsseg8e32.v and vssseg8e32.v instructions.
+//
+// Compiling and testing this code requires very recent versions of Clang (v17)
+// and QEMU (v8.2).
 
 #define IV0 0x6A09E667
 #define IV1 0xBB67AE85

@@ -232,7 +232,7 @@ fn build_neon_c_intrinsics() {
 fn build_riscv64gcv_assembly() {
     println!("cargo:rustc-cfg=blake3_riscv64gcv_ffi");
     let mut build = new_build();
-    let asm_path = "src/riscv64gcv.S";
+    let asm_path = "src/riscv_rva23u64.S";
     build.file(asm_path);
     build.flag("--target=riscv64");
     build.flag("-march=rv64gcv_zbb_zvbb1p0");
