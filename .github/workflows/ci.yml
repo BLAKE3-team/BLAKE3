@@ -38,7 +38,7 @@ jobs:
         ]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ format('{0}-{1}', matrix.channel, matrix.target.toolchain) }}
@@ -156,7 +156,7 @@ jobs:
         ]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ format('{0}-{1}', matrix.channel, matrix.target.toolchain) }}
@@ -186,7 +186,7 @@ jobs:
           - s390x-unknown-linux-gnu
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
@@ -216,7 +216,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     # Test the intrinsics-based implementations.
     - run: make -f Makefile.testing test
       working-directory: ./c
@@ -268,7 +268,7 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
@@ -284,7 +284,7 @@ jobs:
     name: build with the Tiny C Compiler
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: install TCC
       run: sudo apt-get install -y tcc
     - name: compile
@@ -301,7 +301,7 @@ jobs:
     name: "compile and test with GCC 5.4"
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: addnab/docker-run-action@v3
       with:
         image: gcc:5.4
@@ -329,7 +329,7 @@ jobs:
           - os: macOS-latest
             compiler: msvc
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: CMake generation
         run: cmake -S c -B c/build -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/target
       - name: CMake build / install
