@@ -39,11 +39,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - uses: actions-rs/toolchain@v1
+    - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ format('{0}-{1}', matrix.channel, matrix.target.toolchain) }}
-        profile: minimal
-        override: true
     # Print the compiler version, for debugging.
     - name: print compiler version
       run: cargo run --quiet
@@ -157,11 +155,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - uses: actions-rs/toolchain@v1
+    - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ format('{0}-{1}', matrix.channel, matrix.target.toolchain) }}
-        profile: minimal
-        override: true
     # Test b3sum.
     - name: test b3sum
       run: cargo test
@@ -187,10 +183,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
+    - uses: dtolnay/rust-toolchain@stable
     - run: cargo install cross
     # Test the portable implementation on everything.
     - run: cross test --target ${{ matrix.arch }}
@@ -269,11 +262,9 @@ jobs:
       fail-fast: false
     steps:
     - uses: actions/checkout@v4
-    - uses: actions-rs/toolchain@v1
+    - uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
-        target: aarch64-apple-darwin
-        override: true
+        targets: aarch64-apple-darwin
     - name: build blake3
       run: cargo build --target aarch64-apple-darwin
     - name: build b3sum
