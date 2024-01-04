@@ -1,5 +1,34 @@
 use crate::{CVWords, IncrementCounter, BLOCK_LEN, OUT_LEN};
 
+pub unsafe fn compress_in_place(
+    cv: &mut CVWords,
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    counter: u64,
+    flags: u8,
+) {
+    ffi::blake3_compress_in_place_neon(cv.as_mut_ptr(), block.as_ptr(), block_len, counter, flags)
+}
+
+pub unsafe fn compress_xof(
+    cv: &CVWords,
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    counter: u64,
+    flags: u8,
+) -> [u8; 64] {
+    let mut out = [0u8; 64];
+    ffi::blake3_compress_xof_neon(
+        cv.as_ptr(),
+        block.as_ptr(),
+        block_len,
+        counter,
+        flags,
+        out.as_mut_ptr(),
+    );
+    out
+}
+
 // Unsafe because this may only be called on platforms supporting NEON.
 pub unsafe fn hash_many<const N: usize>(
     inputs: &[&[u8; N]],
@@ -29,31 +58,23 @@ pub unsafe fn hash_many<const N: usize>(
     )
 }
 
-// blake3_neon.c normally depends on blake3_portable.c, because the NEON
-// implementation only provides 4x compression, and it relies on the portable
-// implementation for 1x compression. However, we expose the portable Rust
-// implementation here instead, to avoid linking in unnecessary code.
-#[no_mangle]
-pub extern "C" fn blake3_compress_in_place_portable(
-    cv: *mut u32,
-    block: *const u8,
-    block_len: u8,
-    counter: u64,
-    flags: u8,
-) {
-    unsafe {
-        crate::portable::compress_in_place(
-            &mut *(cv as *mut [u32; 8]),
-            &*(block as *const [u8; 64]),
-            block_len,
-            counter,
-            flags,
-        )
-    }
-}
-
 pub mod ffi {
     extern "C" {
+        pub fn blake3_compress_in_place_neon(
+            cv: *mut u32,
+            block: *const u8,
+            block_len: u8,
+            counter: u64,
+            flags: u8,
+        );
+        pub fn blake3_compress_xof_neon(
+            cv: *const u32,
+            block: *const u8,
+            block_len: u8,
+            counter: u64,
+            flags: u8,
+            out: *mut u8,
+        );
         pub fn blake3_hash_many_neon(
             inputs: *const *const u8,
             num_inputs: usize,

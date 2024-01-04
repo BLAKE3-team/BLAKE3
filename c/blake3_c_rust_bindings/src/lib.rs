@@ -289,6 +289,21 @@ pub mod ffi {
     pub mod neon {
         extern "C" {
             // NEON low level functions
+            pub fn blake3_compress_xof_neon(
+                cv: *const u32,
+                block: *const u8,
+                block_len: u8,
+                counter: u64,
+                flags: u8,
+                out: *mut u8,
+            );
+            pub fn blake3_compress_in_place_neon(
+                cv: *mut u32,
+                block: *const u8,
+                block_len: u8,
+                counter: u64,
+                flags: u8,
+            );
             pub fn blake3_hash_many_neon(
                 inputs: *const *const u8,
                 num_inputs: usize,

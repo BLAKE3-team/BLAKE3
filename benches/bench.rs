@@ -85,6 +85,14 @@ fn bench_single_compression_avx512(b: &mut Bencher) {
     }
 }
 
+#[bench]
+#[cfg(feature = "neon")]
+fn bench_single_compression_neon(b: &mut Bencher) {
+    if let Some(platform) = Platform::neon() {
+        bench_single_compression_fn(b, platform);
+    }
+}
+
 fn bench_many_chunks_fn(b: &mut Bencher, platform: Platform) {
     let degree = platform.simd_degree();
     let mut inputs = Vec::new();

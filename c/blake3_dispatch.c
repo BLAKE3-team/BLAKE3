@@ -188,6 +188,12 @@ void blake3_compress_in_place(uint32_t cv[8],
   }
 #endif
 #endif
+
+#if BLAKE3_USE_NEON == 1
+  blake3_compress_in_place_neon(cv, block, block_len, counter, flags);
+  return;
+#endif
+
   blake3_compress_in_place_portable(cv, block, block_len, counter, flags);
 }
 
@@ -217,6 +223,12 @@ void blake3_compress_xof(const uint32_t cv[8],
   }
 #endif
 #endif
+
+#if BLAKE3_USE_NEON == 1
+  blake3_compress_xof_neon(cv, block, block_len, counter, flags, out);
+  return;
+#endif
+
   blake3_compress_xof_portable(cv, block, block_len, counter, flags, out);
 }
 
