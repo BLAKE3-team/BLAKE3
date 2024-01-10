@@ -135,9 +135,10 @@ mod join;
 
 use arrayref::{array_mut_ref, array_ref};
 use arrayvec::{ArrayString, ArrayVec};
-use core::cmp;
 use core::fmt;
+use core::{cmp, cmp::Ordering};
 use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
+use subtle::{ConditionallySelectable, ConstantTimeEq, ConstantTimeGreater};
 
 /// The number of bytes in a [`Hash`](struct.Hash.html), 32.
 pub const OUT_LEN: usize = 32;
@@ -309,7 +310,7 @@ impl core::str::FromStr for Hash {
 impl PartialEq for Hash {
     #[inline]
     fn eq(&self, other: &Hash) -> bool {
-        constant_time_eq::constant_time_eq_32(&self.0, &other.0)
+        self.0.ct_eq(&other.0).into()
     }
 }
 
@@ -317,7 +318,7 @@ impl PartialEq for Hash {
 impl PartialEq<[u8; OUT_LEN]> for Hash {
     #[inline]
     fn eq(&self, other: &[u8; OUT_LEN]) -> bool {
-        constant_time_eq::constant_time_eq_32(&self.0, other)
+        self.0.ct_eq(other).into()
     }
 }
 
@@ -325,11 +326,33 @@ impl PartialEq<[u8; OUT_LEN]> for Hash {
 impl PartialEq<[u8]> for Hash {
     #[inline]
     fn eq(&self, other: &[u8]) -> bool {
-        constant_time_eq::constant_time_eq(&self.0, other)
+        self.0.ct_eq(other).into()
     }
 }
 
 impl Eq for Hash {}
+
+/// This implementation is constant-time.
+impl PartialOrd for Hash {
+    #[inline]
+    fn partial_cmp(&self, other: &Hash) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Hash {
+    #[inline]
+    fn cmp(&self, other: &Hash) -> Ordering {
+        let l0 = u128::from_le_bytes(self.0[..16].try_into().unwrap());
+        let h0 = u128::from_le_bytes(self.0[16..].try_into().unwrap());
+        let l1 = u128::from_le_bytes(other.0[..16].try_into().unwrap());
+        let h1 = u128::from_le_bytes(other.0[16..].try_into().unwrap());
+        let h0_gt_h1 = h0.ct_gt(&h1);
+        let l0_gt_l1 = l0.ct_gt(&l1);
+        // Return `Less` if `h0 < h1` and `l0 < l1`, otherwise, return `Greater`.
+        Ordering::conditional_select(&Ordering::Greater, &Ordering::Less, !h0_gt_h1 & !l0_gt_l1)
+    }
+}
 
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
