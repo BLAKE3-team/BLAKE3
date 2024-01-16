@@ -267,6 +267,11 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
   return;
 #endif
 
+#if BLAKE3_USE_RVV == 1
+  blake3_hash_many_rvv(inputs, num_inputs, blocks, key, counter,
+                       increment_counter, flags, flags_start, flags_end, out);
+#endif
+
   blake3_hash_many_portable(inputs, num_inputs, blocks, key, counter,
                             increment_counter, flags, flags_start, flags_end,
                             out);

@@ -66,6 +66,10 @@
 //! enabling this feature will produce a binary that's not portable to CPUs
 //! without NEON support.
 //!
+//! The RVV implementation requires the `rvv` feature for RISC-V targets. Not
+//! all RISC-V CPUs support RVV, and enabling this feature will produce a binary
+//! that's not portable to CPUs without RVV support.
+//! 
 //! The `traits-preview` feature enables implementations of traits from the
 //! RustCrypto [`digest`] crate, and re-exports that crate as `traits::digest`.
 //! However, the traits aren't stable, and they're expected to change in
@@ -114,6 +118,9 @@ mod avx512;
 #[path = "ffi_neon.rs"]
 mod neon;
 mod portable;
+#[cfg(blake3_rvv)]
+#[path = "ffi_rvv.rs"]
+mod rvv;
 #[cfg(blake3_sse2_rust)]
 #[path = "rust_sse2.rs"]
 mod sse2;

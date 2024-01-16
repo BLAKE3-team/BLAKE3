@@ -192,6 +192,15 @@ fn test_compress_avx512() {
     );
 }
 
+#[test]
+#[cfg(feature = "rvv")]
+fn test_compress_rvv() {
+    test_compress_fn(
+        crate::ffi::x86::blake3_compress_in_place_rvv,
+        crate::ffi::x86::blake3_compress_xof_rvv,
+    );
+}
+
 type HashManyFn = unsafe extern "C" fn(
     inputs: *const *const u8,
     num_inputs: usize,
@@ -357,6 +366,12 @@ fn test_hash_many_avx512() {
 #[cfg(feature = "neon")]
 fn test_hash_many_neon() {
     test_hash_many_fn(crate::ffi::neon::blake3_hash_many_neon);
+}
+
+#[test]
+#[cfg(feature = "rvv")]
+fn test_hash_many_rvv() {
+    test_hash_many_fn(crate::ffi::rvv::blake3_hash_many_rvv);
 }
 
 #[test]

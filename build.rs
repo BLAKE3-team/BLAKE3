@@ -1,3 +1,4 @@
+use core::panic;
 use std::env;
 
 fn defined(var: &str) -> bool {
@@ -19,6 +20,14 @@ fn is_neon() -> bool {
 
 fn is_no_neon() -> bool {
     defined("CARGO_FEATURE_NO_NEON")
+}
+
+fn is_rvv() -> bool {
+    cfg!(feature = "rvv")
+}
+
+fn is_no_rvv() -> bool {
+    cfg!(not(feature = "rvv"))
 }
 
 fn is_ci() -> bool {
@@ -58,6 +67,18 @@ fn is_aarch64() -> bool {
 
 fn is_armv7() -> bool {
     target_components()[0] == "armv7"
+}
+
+fn is_riscv32() -> bool {
+    std::env::var("CARGO_CFG_TARGET_ARCH")
+        .map(|target_arch| target_arch == "riscv32")
+        .unwrap_or_default()
+}
+
+fn is_riscv64() -> bool {
+    std::env::var("CARGO_CFG_TARGET_ARCH")
+        .map(|target_arch| target_arch == "riscv64")
+        .unwrap_or_default()
 }
 
 fn endianness() -> String {
@@ -239,13 +260,31 @@ fn build_neon_c_intrinsics() {
     build.compile("blake3_neon");
 }
 
+fn build_rvv_c_intrinsics() {
+    let mut build = new_build();
+    build.file("c/blake3_rvv.c");
+    if is_riscv32() {
+        build.flag("-march=rv32gcv1p0");
+    }
+    if is_riscv64() {
+        build.flag("-march=rv64gcv1p0");
+    }
+    build.compile("blake3_rvv");
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if is_pure() && is_neon() {
         panic!("It doesn't make sense to enable both \"pure\" and \"neon\".");
     }
-
     if is_no_neon() && is_neon() {
         panic!("It doesn't make sense to enable both \"no_neon\" and \"neon\".");
+    }
+
+    if is_pure() && is_rvv() {
+        panic!("It doesn't make sense to enable both \"pure\" and \"rvv\".");
+    }
+    if is_no_rvv() && is_rvv() {
+        panic!("It doesn't make sense to enable both \"no_rvv\" and \"rvv\".");
     }
 
     if is_x86_64() || is_x86_32() {
@@ -276,6 +315,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         println!("cargo:rustc-cfg=blake3_neon");
         build_neon_c_intrinsics();
+    }
+
+    if (is_riscv32() || is_riscv64()) && is_rvv() {
+        println!("cargo:rustc-cfg=blake3_rvv");
+        build_rvv_c_intrinsics();
     }
 
     // The `cc` crate doesn't automatically emit rerun-if directives for the

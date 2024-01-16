@@ -51,6 +51,8 @@ pub enum Platform {
     AVX512,
     #[cfg(blake3_neon)]
     NEON,
+    #[cfg(blake3_rvv)]
+    RVV,
 }
 
 impl Platform {
@@ -80,6 +82,12 @@ impl Platform {
         {
             return Platform::NEON;
         }
+        // We don't use dynamic feature detection for RVV. If the "rvv"
+        // feature is on, RVV is assumed to be supported.
+        #[cfg(blake3_rvv)]
+        {
+            return Platform::RVV;
+        }
         Platform::Portable
     }
 
@@ -97,6 +105,8 @@ impl Platform {
             Platform::AVX512 => 16,
             #[cfg(blake3_neon)]
             Platform::NEON => 4,
+            #[cfg(blake3_rvv)]
+            Platform::RVV => todo!(),
         };
         debug_assert!(degree <= MAX_SIMD_DEGREE);
         degree
@@ -131,6 +141,10 @@ impl Platform {
             // No NEON compress_in_place() implementation yet.
             #[cfg(blake3_neon)]
             Platform::NEON => portable::compress_in_place(cv, block, block_len, counter, flags),
+            #[cfg(blake3_rvv)]
+            Platform::RVV => unsafe {
+                crate::rvv::compress_in_place(cv, block, block_len, counter, flags)
+            },
         }
     }
 
@@ -163,6 +177,11 @@ impl Platform {
             // No NEON compress_xof() implementation yet.
             #[cfg(blake3_neon)]
             Platform::NEON => portable::compress_xof(cv, block, block_len, counter, flags),
+            // No NEON compress_xof() implementation yet.
+            #[cfg(blake3_rvv)]
+            Platform::RVV => unsafe {
+                crate::rvv::compress_xof(cv, block, block_len, counter, flags)
+            },
         }
     }
 
@@ -269,6 +288,20 @@ impl Platform {
                     out,
                 )
             },
+            // Assumed to be safe if the "rvv" feature is on.
+            #[cfg(blake3_rvv)]
+            Platform::RVV => unsafe {
+                crate::rvv::hash_many(
+                    inputs,
+                    key,
+                    counter,
+                    increment_counter,
+                    flags,
+                    flags_start,
+                    flags_end,
+                    out,
+                )
+            },
         }
     }
 
@@ -319,6 +352,12 @@ impl Platform {
     pub fn neon() -> Option<Self> {
         // Assumed to be safe if the "neon" feature is on.
         Some(Self::NEON)
+    }
+
+    #[cfg(blake3_rvv)]
+    pub fn rvv() -> Option<Self> {
+        // Assumed to be safe if the "rvv" feature is on.
+        Some(Self::RVV)
     }
 }
 

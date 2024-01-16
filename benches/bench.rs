@@ -85,6 +85,14 @@ fn bench_single_compression_avx512(b: &mut Bencher) {
     }
 }
 
+#[bench]
+#[cfg(blake3_rvv)]
+fn bench_single_compression_avx512(b: &mut Bencher) {
+    if let Some(platform) = Platform::rvv() {
+        bench_single_compression_fn(b, platform);
+    }
+}
+
 fn bench_many_chunks_fn(b: &mut Bencher, platform: Platform) {
     let degree = platform.simd_degree();
     let mut inputs = Vec::new();
@@ -147,6 +155,14 @@ fn bench_many_chunks_avx512(b: &mut Bencher) {
 #[cfg(feature = "neon")]
 fn bench_many_chunks_neon(b: &mut Bencher) {
     if let Some(platform) = Platform::neon() {
+        bench_many_chunks_fn(b, platform);
+    }
+}
+
+#[bench]
+#[cfg(feature = "rvv")]
+fn bench_many_chunks_neon(b: &mut Bencher) {
+    if let Some(platform) = Platform::rvv() {
         bench_many_chunks_fn(b, platform);
     }
 }
@@ -214,6 +230,14 @@ fn bench_many_parents_avx512(b: &mut Bencher) {
 #[cfg(feature = "neon")]
 fn bench_many_parents_neon(b: &mut Bencher) {
     if let Some(platform) = Platform::neon() {
+        bench_many_parents_fn(b, platform);
+    }
+}
+
+#[bench]
+#[cfg(feature = "rvv")]
+fn bench_many_parents_rvv(b: &mut Bencher) {
+    if let Some(platform) = Platform::rvv() {
         bench_many_parents_fn(b, platform);
     }
 }
