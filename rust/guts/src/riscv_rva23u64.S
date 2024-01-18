@@ -61,8 +61,8 @@ MSG_PERMUTE:
 // a3: counter
 // a4: flags
 // a5: out_ptr
-.global blake3_guts_riscv64gcv_compress
-blake3_guts_riscv64gcv_compress:
+.global blake3_guts_riscv_rva23u64_compress
+blake3_guts_riscv_rva23u64_compress:
         // Load the message load and message permutation indexes.
         vsetivli zero, 16, e16, m2, ta, ma
         la t0, MSG_LOAD
@@ -110,7 +110,7 @@ blake3_guts_riscv64gcv_compress:
         vslide1down.vx v3, v3, a1
         vslide1down.vx v3, v3, a4
         li t0, 7  // round counter
-blake3_guts_riscv64gcv_compress_round_loop:
+blake3_guts_riscv_rva23u64_compress_round_loop:
         vadd.vv  v0, v0, v4
         vadd.vv  v0, v0, v1
         vxor.vv  v3, v3, v0
@@ -148,7 +148,7 @@ blake3_guts_riscv64gcv_compress_round_loop:
         vrgather.vv v3, v23, v13
         vrgather.vv v2, v22, v12
         addi t0, t0, -1
-        beqz t0, blake3_guts_riscv64gcv_compress_end
+        beqz t0, blake3_guts_riscv_rva23u64_compress_end
         // Shuffle message words.
         // TODO: Find a way to do this without so much movement?
         vmv.v.v v16, v4
@@ -169,8 +169,8 @@ blake3_guts_riscv64gcv_compress_round_loop:
         vmv.v.v v5, v16
         vmv.v.v v6, v20
         vmv.v.v v7, v24
-        j blake3_guts_riscv64gcv_compress_round_loop
-blake3_guts_riscv64gcv_compress_end:
+        j blake3_guts_riscv_rva23u64_compress_round_loop
+blake3_guts_riscv_rva23u64_compress_end:
         vxor.vv v0, v0, v2
         vxor.vv v1, v1, v3
         vsetivli zero, 16, e8, m1, ta, ma
@@ -180,8 +180,8 @@ blake3_guts_riscv64gcv_compress_end:
         ret
 
 
-.global blake3_guts_riscv64gcv_degree
-blake3_guts_riscv64gcv_degree:
+.global blake3_guts_riscv_rva23u64_degree
+blake3_guts_riscv_rva23u64_degree:
         csrr t0, vlenb
         srli t0, t0, 2
         li t1, MAX_SIMD_DEGREE
@@ -189,7 +189,7 @@ blake3_guts_riscv64gcv_degree:
         ret
 
 // clobbers: t0
-blake3_guts_riscv64gcv_kernel:
+blake3_guts_riscv_rva23u64_kernel:
         li t0, IV0
         vmv.v.x v8, t0
         li t0, IV1
@@ -993,7 +993,7 @@ blake3_guts_riscv64gcv_kernel:
 // a5: aligned+transposed output [unused]
 // a6: total chunks [unused]
 // a7: remaining_bytes_in_last_chunk
-blake3_guts_riscv64gcv_hash_blocks:
+blake3_guts_riscv_rva23u64_hash_blocks:
         // t0 := full_blocks := (input_len + 1024 - 64) / 1024
         addi t0, a1, 1024 - 64
         srli t0, t0, 10
@@ -1056,7 +1056,7 @@ partial_block_finished:
         vslide1down.vx v15, v15, t1
         // execute the kernel
         mv t6, ra
-        call blake3_guts_riscv64gcv_kernel
+        call blake3_guts_riscv_rva23u64_kernel
         mv ra, t6
         // xor the two halves of the state
         vxor.vv v0, v0, v8
@@ -1148,15 +1148,15 @@ vlenb_less_than_32:
 // a3: counter
 // a4: flags
 // a5: aligned+transposed output
-.global blake3_guts_riscv64gcv_hash_chunks
-blake3_guts_riscv64gcv_hash_chunks:
+.global blake3_guts_riscv_rva23u64_hash_chunks
+blake3_guts_riscv_rva23u64_hash_chunks:
         // Save the original num_chunks = (input_len+1023)/1024 in a6.
         addi a6, a1, 1023
         srli a6, a6, 10
         // Track the bytes remaining in the last chunk in a7. The initial value
         // of this is ((input_len - 1) % 1024) + 1. (The input to this function
         // is never empty.) It decrements by 64 with each call to
-        // blake3_guts_riscv64gcv_hash_chunks, but not below 0.
+        // blake3_guts_riscv_rva23u64_hash_chunks, but not below 0.
         addi a7, a1, -1
         andi a7, a7, 1023
         addi a7, a7, 1
@@ -1183,24 +1183,24 @@ blake3_guts_riscv64gcv_hash_chunks:
         // the input length.
         mv t5, ra
         ori a4, a4, 1    // set CHUNK_START
-        call blake3_guts_riscv64gcv_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
         andi a4, a4, -2  // unset CHUNK_START
-        call blake3_guts_riscv64gcv_hash_blocks
-        call blake3_guts_riscv64gcv_hash_blocks
-        call blake3_guts_riscv64gcv_hash_blocks
-        call blake3_guts_riscv64gcv_hash_blocks
-        call blake3_guts_riscv64gcv_hash_blocks
-        call blake3_guts_riscv64gcv_hash_blocks
-        call blake3_guts_riscv64gcv_hash_blocks
-        call blake3_guts_riscv64gcv_hash_blocks
-        call blake3_guts_riscv64gcv_hash_blocks
-        call blake3_guts_riscv64gcv_hash_blocks
-        call blake3_guts_riscv64gcv_hash_blocks
-        call blake3_guts_riscv64gcv_hash_blocks
-        call blake3_guts_riscv64gcv_hash_blocks
-        call blake3_guts_riscv64gcv_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
         ori a4, a4, 2    // set CHUNK_END
-        call blake3_guts_riscv64gcv_hash_blocks
+        call blake3_guts_riscv_rva23u64_hash_blocks
         mv ra, t5
         // If the final chunk is short, we need to set vl back to the total
         // number of chunks.
@@ -1228,8 +1228,8 @@ blake3_guts_riscv64gcv_hash_chunks:
 // a2: key
 // a3: flags
 // a4: out pointer
-.global blake3_guts_riscv64gcv_hash_parents
-blake3_guts_riscv64gcv_hash_parents:
+.global blake3_guts_riscv_rva23u64_hash_parents
+blake3_guts_riscv_rva23u64_hash_parents:
         // load the transposed CVs and split alternating words into the low and
         // high halves of the input vectors
         vsetvli zero, a1, e32, m1, ta, ma
@@ -1285,7 +1285,7 @@ blake3_guts_riscv64gcv_hash_parents:
 
         // execute the kernel
         mv t6, ra
-        call blake3_guts_riscv64gcv_kernel
+        call blake3_guts_riscv_rva23u64_kernel
         mv ra, t6
 
         // xor the two halves of the state
@@ -1322,7 +1322,7 @@ blake3_guts_riscv64gcv_hash_parents:
 // a4: flags
 // a5: out_ptr
 // a6: out_len
-blake3_guts_riscv64gcv_xof_inner:
+blake3_guts_riscv_rva23u64_xof_inner:
         // t1 := total_blocks := (out_len + 63) / 64
         addi t1, a6, 63
         srli t1, t1, 6
@@ -1395,7 +1395,7 @@ blake3_guts_riscv64gcv_xof_inner:
 
         // execute the kernel
         mv t6, ra
-        call blake3_guts_riscv64gcv_kernel
+        call blake3_guts_riscv_rva23u64_kernel
         mv ra, t6
 
         // reload the CV, this time into v16-23
@@ -1441,10 +1441,10 @@ blake3_guts_riscv64gcv_xof_inner:
 // a4: flags
 // a5: out_ptr
 // a6: out_len
-.global blake3_guts_riscv64gcv_xof
-blake3_guts_riscv64gcv_xof:
+.global blake3_guts_riscv_rva23u64_xof
+blake3_guts_riscv_rva23u64_xof:
         mv t5, ra
-        call blake3_guts_riscv64gcv_xof_inner
+        call blake3_guts_riscv_rva23u64_xof_inner
         mv ra, t5
 
         // t1 is now total_blocks, and t2 is full_blocks. Set vl to t2 and the
@@ -1466,9 +1466,9 @@ blake3_guts_riscv64gcv_xof:
 
         // If full_blocks != partial_blocks, we need to handle the final
         // partial block. Otherwise, we're done.
-        bne t1, t2, blake3_guts_riscv64gcv_xof_partial_block
+        bne t1, t2, blake3_guts_riscv_rva23u64_xof_partial_block
         ret
-blake3_guts_riscv64gcv_xof_partial_block:
+blake3_guts_riscv_rva23u64_xof_partial_block:
         // Collect groups of 4 words in v0, v4, v8, and v12.
         vsetivli zero, 4, e32, m1, ta, ma
         vslidedown.vx v0, v0, t2
@@ -1520,10 +1520,10 @@ blake3_guts_riscv64gcv_xof_partial_block:
 // a4: flags
 // a5: out_ptr
 // a6: out_len
-.global blake3_guts_riscv64gcv_xof_xor
-blake3_guts_riscv64gcv_xof_xor:
+.global blake3_guts_riscv_rva23u64_xof_xor
+blake3_guts_riscv_rva23u64_xof_xor:
         mv t5, ra
-        call blake3_guts_riscv64gcv_xof_inner
+        call blake3_guts_riscv_rva23u64_xof_inner
         mv ra, t5
 
         // t1 is now total_blocks, and t2 is full_blocks. Set vl to t2 and the
@@ -1564,9 +1564,9 @@ blake3_guts_riscv64gcv_xof_xor:
 
         // If full_blocks != partial_blocks, we need to handle the final
         // partial block. Otherwise, we're done.
-        bne t1, t2, blake3_guts_riscv64gcv_xof_xor_partial_block
+        bne t1, t2, blake3_guts_riscv_rva23u64_xof_xor_partial_block
         ret
-blake3_guts_riscv64gcv_xof_xor_partial_block:
+blake3_guts_riscv_rva23u64_xof_xor_partial_block:
         // Collect groups of 4 words in v0, v4, v8, and v12.
         vsetivli zero, 4, e32, m1, ta, ma
         vslidedown.vx v0, v0, t2
@@ -1618,8 +1618,8 @@ blake3_guts_riscv64gcv_xof_xor_partial_block:
 // a2: key
 // a3: counter
 // a4: out_ptr
-.global blake3_guts_riscv64gcv_universal_hash
-blake3_guts_riscv64gcv_universal_hash:
+.global blake3_guts_riscv_rva23u64_universal_hash
+blake3_guts_riscv_rva23u64_universal_hash:
         // t0 := full_blocks := input_len / 64
         srli t0, a1, 6
         // Load and transpose full message blocks. These are "strided segment
@@ -1675,7 +1675,7 @@ universal_hash_partial_block_finished:
         vmv.v.x v15, t1
         // Execute the kernel.
         mv t6, ra
-        call blake3_guts_riscv64gcv_kernel
+        call blake3_guts_riscv_rva23u64_kernel
         mv ra, t6
         // Finish the first four state vectors. The rest are dropped.
         vxor.vv v0, v0, v8

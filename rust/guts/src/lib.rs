@@ -8,7 +8,7 @@ use core::sync::atomic::{AtomicPtr, Ordering::Relaxed};
 pub mod avx512;
 pub mod portable;
 #[cfg(any(target_arch = "riscv64"))]
-pub mod riscv64gcv;
+pub mod riscv_rva23u64;
 
 #[cfg(test)]
 mod test;
@@ -46,7 +46,7 @@ cfg_if::cfg_if! {
     if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
         pub const MAX_SIMD_DEGREE: usize = avx512::DEGREE;
     } else if #[cfg(target_arch = "riscv64")] {
-        pub const MAX_SIMD_DEGREE: usize = riscv64gcv::MAX_SIMD_DEGREE;
+        pub const MAX_SIMD_DEGREE: usize = riscv_rva23u64::MAX_SIMD_DEGREE;
     } else if #[cfg(blake3_neon)] {
         pub const MAX_SIMD_DEGREE: usize = 4;
     } else {
@@ -79,7 +79,7 @@ fn detect() -> Implementation {
     }
     #[cfg(target_arch = "riscv64")]
     {
-        return riscv64gcv::implementation();
+        return riscv_rva23u64::implementation();
     }
     #[allow(unreachable_code)]
     portable::implementation()

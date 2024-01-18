@@ -229,15 +229,15 @@ fn build_neon_c_intrinsics() {
     build.compile("blake3_neon");
 }
 
-fn build_riscv64gcv_assembly() {
-    println!("cargo:rustc-cfg=blake3_riscv64gcv_ffi");
+fn build_riscv_rva23u64_assembly() {
+    println!("cargo:rustc-cfg=blake3_riscv_rva23u64_ffi");
     let mut build = new_build();
     let asm_path = "src/riscv_rva23u64.S";
     build.file(asm_path);
     build.flag("--target=riscv64");
     build.flag("-march=rv64gcv_zbb_zvbb1p0");
     build.flag("-menable-experimental-extensions");
-    build.compile("blake3_riscv64gcv_assembly");
+    build.compile("blake3_riscv_rva23u64_assembly");
     println!("cargo:rerun-if-changed={asm_path}");
 }
 
@@ -277,7 +277,7 @@ fn main() {
     // TODO: This implementation assumes some bleeding-edge extensions, and it should probably be
     // gated by a Cargo feature.
     if is_riscv64gc() && !is_pure() {
-        build_riscv64gcv_assembly();
+        build_riscv_rva23u64_assembly();
     }
 
     // The `cc` crate doesn't automatically emit rerun-if directives for the
