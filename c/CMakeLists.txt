@@ -1,5 +1,20 @@
 cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
 
+set(CMAKE_GENERATOR Ninja)
+set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_CROSSCOMPILING_EMULATOR qemu-riscv64-static)
+set(CMAKE_ASM_COMPILER clang-17)
+set(CMAKE_ASM_COMPILER_TARGET riscv64-unknown-linux-gnu)
+set(CMAKE_ASM_FLAGS_INIT "-march=rv64gcv1p0")
+set(CMAKE_C_COMPILER clang-17)
+set(CMAKE_C_COMPILER_TARGET riscv64-unknown-linux-gnu)
+set(CMAKE_C_FLAGS_INIT "-march=rv64gcv1p0")
+set(CMAKE_CXX_COMPILER clang++-17)
+set(CMAKE_CXX_COMPILER_TARGET riscv64-unknown-linux-gnu)
+set(CMAKE_CXX_FLAGS_INIT "-march=rv64gcv1p0")
+set(CMAKE_EXE_LINKER_FLAGS "-fuse-ld=lld-17")
+
 # respect C_EXTENSIONS OFF without explicitly setting C_STANDARD
 if (POLICY CMP0128)
   cmake_policy(SET CMP0128 NEW)

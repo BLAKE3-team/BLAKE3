@@ -1,0 +1,16 @@
+[env]
+CC_riscv64gc-unknown-linux-gnu = "clang-17 --target=riscv64-unknown-linux-gnu -march=rv64gcv1p0 -fuse-ld=lld-17"
+CXX_riscv64gc-unknown-linux-gnu = "clang++-17 --target=riscv64-unknown-linux-gnu -march=rv64gcv1p0 -fuse-ld=lld-17"
+
+[build]
+target = "riscv64gc-unknown-linux-gnu"
+
+[target.riscv64gc-unknown-linux-gnu]
+runner = "qemu-riscv64 -cpu rv64,v=true,vext_spec=v1.0"
+linker = "clang-17"
+rustflags = [
+  "-C", "link-arg=-fuse-ld=lld-17",
+  "-C", "link-arg=-march=rv64gcv1p0",
+  "-C", "link-arg=--target=riscv64-unknown-linux-gnu",
+  "-C", "target-feature=+v",
+]

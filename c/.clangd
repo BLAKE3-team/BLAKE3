@@ -1,0 +1,12 @@
+Diagnostics:
+  Suppress:
+    - -Wimplicit-function-declaration
+    - fatal_too_many_errors
+    - typecheck_convert_incompatible
+    - undeclared_var_use
+  UnusedIncludes: None
+InlayHints:
+  Designators: Yes
+  Enabled: Yes
+  ParameterNames: Yes
+  DeducedTypes: Yes
