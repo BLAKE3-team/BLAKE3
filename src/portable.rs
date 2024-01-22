@@ -181,10 +181,10 @@ pub fn hash_many<const N: usize>(
 pub mod test {
     use super::*;
 
-    // This is basically testing the portable implementation against itself,
-    // but it also checks that compress_in_place and compress_xof are
-    // consistent. And there are tests against the reference implementation and
-    // against hardcoded test vectors elsewhere.
+    // These are basically testing the portable implementation against itself, but we also check
+    // that compress_in_place and compress_xof are consistent. And there are tests against the
+    // reference implementation and against hardcoded test vectors elsewhere.
+
     #[test]
     fn test_compress() {
         crate::test::test_compress_fn(compress_in_place, compress_xof);
