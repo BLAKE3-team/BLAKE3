@@ -2,51 +2,65 @@
 
 ## Introduction
 
-This crate contains low-level, high-performance, platform-specific
-implementations of the BLAKE3 compression function. This API is complicated and
-unsafe, and this crate will never have a stable release. For the standard
-BLAKE3 hash function, see the [`blake3`](https://crates.io/crates/blake3)
-crate, which depends on this one.
+This [`blake3_guts`](https://crates.io/crates/blake3_guts) sub-crate contains
+low-level, high-performance, platform-specific implementations of the BLAKE3
+compression function. This API is complicated and unsafe, and this crate will
+never have a stable release. Most callers should instead use the
+[`blake3`](https://crates.io/crates/blake3) crate, which will eventually depend
+on this one internally.
 
-The most important ingredient in a high-performance implementation of BLAKE3 is
-parallelism. The BLAKE3 tree structure lets us hash different parts of the tree
-in parallel, and modern computers have a _lot_ of parallelism to offer.
-Sometimes that means using multiple threads running on multiple cores, but
-multithreading isn't appropriate for all applications, and it's not the usual
-default for library APIs. More commonly, BLAKE3 implementations use SIMD
-instructions ("Single Instruction Multiple Data") to improve the performance of
-a single thread. When we do use multithreading, the performance benefits
-multiply.
+The code you see here (as of January 2024) is an early stage of a large planned
+refactor. The motivation for this refactor is a couple of missing features in
+both the Rust and C implementations:
 
-The tricky thing about SIMD is that each instruction set works differently.
-Instead of writing portable code once and letting the compiler do most of the
-optimization work, we need to write platform-specific implementations, and
-sometimes more than one per platform. We maintain *four* different
-implementations on x86 alone (targeting SSE2, SSE4.1, AVX2, and AVX-512), in
-addition to ARM NEON and the RISC-V vector extensions. In the future we might
-add ARM SVE2.
+- The output side
+  ([`OutputReader`](https://docs.rs/blake3/latest/blake3/struct.OutputReader.html)
+  in Rust) doesn't take advantage of the most important SIMD optimizations that
+  compute multiple blocks in parallel. This blocks any project that wants to
+  use the BLAKE3 XOF as a stream cipher
+  ([[1]](https://github.com/oconnor663/bessie),
+  [[2]](https://github.com/oconnor663/blake3_aead)).
+- Low-level callers like [Bao](https://github.com/oconnor663/bao) that need
+  interior nodes of the tree also don't get those SIMD optimizations. They have
+  to use a slow, minimalistic, unstable, doc-hidden module [(also called
+  `guts`)](https://github.com/BLAKE3-team/BLAKE3/blob/master/src/guts.rs).
 
-All of that means a lot of duplicated logic and maintenance. So while the main
-goal of this API is high performance, it's also important to keep the API as
-small and simple as possible. Higher level details like the "CV stack", input
-buffering, and multithreading are handled by portable code in the main `blake3`
-crate. These are just building blocks.
+The difficulty with adding those features is that they require changes to all
+of our optimized assembly and C intrinsics code. That's a couple dozen
+different files that are large, platform-specific, difficult to understand, and
+full of duplicated code. The higher-level Rust and C implementations of BLAKE3
+both depend on these files and will need to coordinate changes.
 
-## The private API
+At the same time, it won't be long before we add support for more platforms:
 
-This is the API that each platform reimplements. It's completely `unsafe`,
-inputs and outputs are allowed to alias, and bounds checking is the caller's
-responsibility.
+- RISCV vector extensions
+- ARM SVE
+- WebAssembly SIMD
+
+It's important to get this refactor done before new platforms make it even
+harder to do.
+
+## The private guts API
+
+This is the API that each platform reimplements, so we want it to be as simple
+as possible apart from the high-performance work it needs to do. It's
+completely `unsafe`, and inputs and outputs are raw pointers that are allowed
+to alias (this matters for `hash_parents`, see below).
 
 - `degree`
 - `compress`
+    - The single compression function, for short inputs and odd-length tails.
 - `hash_chunks`
 - `hash_parents`
 - `xof`
 - `xof_xor`
+    - As `xof` but XOR'ing the result into the output buffer.
 - `universal_hash`
+    - This is a new construction specifically to support
+      [BLAKE3-AEAD](https://github.com/oconnor663/blake3_aead). Some
+      implementations might just stub it out with portable code.
 
-## The public API
+## The public guts API
 
 This is the API that this crate exposes to callers, i.e. to the main `blake3`
 crate. It's a thin, portable layer on top of the private API above. The Rust
@@ -56,7 +70,11 @@ version of this API is memory-safe.
 - `compress`
 - `hash_chunks`
 - `hash_parents`
+    - This handles most levels of the tree, where we keep hashing SIMD_DEGREE
+      parents at a time.
 - `reduce_parents`
+    - This uses the same `hash_parents` private API, but it handles the top
+      levels of the tree where we reduce in-place to the root parent node.
 - `xof`
 - `xof_xor`
 - `universal_hash`
