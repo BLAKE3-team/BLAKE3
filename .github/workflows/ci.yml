@@ -131,6 +131,17 @@ jobs:
       run: cargo test
       working-directory: ./reference_impl
 
+    # the new guts crate
+    - name: guts test
+      run: cargo test --all-features
+      working-directory: ./rust/guts
+    - name: guts no_std build
+      run: cargo build --no-default-features
+      working-directory: ./rust/guts
+    - name: guts no_std test  # note that rust/guts/src/test.rs still uses libstd
+      run: cargo test --no-default-features
+      working-directory: ./rust/guts
+
   b3sum_tests:
     name: b3sum ${{ matrix.target.name }} ${{ matrix.channel }}
     runs-on: ${{ matrix.target.os }}
