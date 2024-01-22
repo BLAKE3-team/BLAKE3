@@ -1,3 +1,44 @@
+//! # The BLAKE3 Guts API
+//!
+//! See `readme.md`.
+//!
+//! The main entrypoint into this crate is [`DETECTED_IMPL`], which is a global [`Implementation`]
+//! that atomically initializes itself the first time you use it.
+//!
+//! # Example
+//!
+//! ```rust
+//! use blake3_guts::{TransposedVectors, DETECTED_IMPL, IV_BYTES, PARENT, ROOT};
+//!
+//! // Hash an input of exactly two chunks.
+//! let input = [0u8; 2048];
+//! let mut outputs = TransposedVectors::new();
+//! let (left_outputs, _) = DETECTED_IMPL.split_transposed_vectors(&mut outputs);
+//! DETECTED_IMPL.hash_chunks(
+//!     &input,
+//!     &IV_BYTES,
+//!     0, // counter
+//!     0, // flags
+//!     left_outputs,
+//! );
+//! let root_node = outputs.extract_parent_node(0);
+//! let hash = DETECTED_IMPL.compress(
+//!     &root_node,
+//!     64, // block_len
+//!     &IV_BYTES,
+//!     0, // counter
+//!     PARENT | ROOT,
+//! );
+//!
+//! // Compute the same hash using the reference implementation.
+//! let mut reference_hasher = reference_impl::Hasher::new();
+//! reference_hasher.update(&input);
+//! let mut expected_hash = [0u8; 32];
+//! reference_hasher.finalize(&mut expected_hash);
+//!
+//! assert_eq!(hash, expected_hash);
+//! ```
+
 // Tests always require libstd.
 #![cfg_attr(all(not(feature = "std"), not(test)), no_std)]
 
