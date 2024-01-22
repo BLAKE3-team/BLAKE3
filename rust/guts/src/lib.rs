@@ -1,3 +1,6 @@
+// Tests always require libstd.
+#![cfg_attr(all(not(feature = "std"), not(test)), no_std)]
+
 use core::cmp;
 use core::marker::PhantomData;
 use core::mem;
