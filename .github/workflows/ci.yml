@@ -38,12 +38,10 @@ jobs:
         ]
 
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions-rs/toolchain@v1
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ format('{0}-{1}', matrix.channel, matrix.target.toolchain) }}
-        profile: minimal
-        override: true
     # Print the compiler version, for debugging.
     - name: print compiler version
       run: cargo run --quiet
@@ -133,6 +131,17 @@ jobs:
       run: cargo test
       working-directory: ./reference_impl
 
+    # the new guts crate
+    - name: guts test
+      run: cargo test --all-features
+      working-directory: ./rust/guts
+    - name: guts no_std build
+      run: cargo build --no-default-features
+      working-directory: ./rust/guts
+    - name: guts no_std test  # note that rust/guts/src/test.rs still uses libstd
+      run: cargo test --no-default-features
+      working-directory: ./rust/guts
+
   b3sum_tests:
     name: b3sum ${{ matrix.target.name }} ${{ matrix.channel }}
     runs-on: ${{ matrix.target.os }}
@@ -156,12 +165,10 @@ jobs:
         ]
 
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions-rs/toolchain@v1
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ format('{0}-{1}', matrix.channel, matrix.target.toolchain) }}
-        profile: minimal
-        override: true
     # Test b3sum.
     - name: test b3sum
       run: cargo test
@@ -186,11 +193,8 @@ jobs:
           - s390x-unknown-linux-gnu
 
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
     - run: cargo install cross
     # Test the portable implementation on everything.
     - run: cross test --target ${{ matrix.arch }}
@@ -216,7 +220,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     # Test the intrinsics-based implementations.
     - run: make -f Makefile.testing test
       working-directory: ./c
@@ -268,12 +272,10 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions-rs/toolchain@v1
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
-        target: aarch64-apple-darwin
-        override: true
+        targets: aarch64-apple-darwin
     - name: build blake3
       run: cargo build --target aarch64-apple-darwin
     - name: build b3sum
@@ -284,7 +286,7 @@ jobs:
     name: build with the Tiny C Compiler
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: install TCC
       run: sudo apt-get install -y tcc
     - name: compile
@@ -301,7 +303,7 @@ jobs:
     name: "compile and test with GCC 5.4"
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: addnab/docker-run-action@v3
       with:
         image: gcc:5.4
@@ -314,7 +316,7 @@ jobs:
 
   # CMake build test (Library only), current macOS/Linux only.
   cmake_build:
-    name: CMake ${{ matrix.os }}
+    name: CMake ${{ matrix.os }} ${{ matrix.compiler }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -329,7 +331,7 @@ jobs:
           - os: macOS-latest
             compiler: msvc
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: CMake generation
         run: cmake -S c -B c/build -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/target
       - name: CMake build / install
