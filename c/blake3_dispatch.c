@@ -15,6 +15,12 @@
 #endif
 #endif
 
+#ifdef __cplusplus
+#define CPPHACK_INT_TO_CPU_FEATURE(i) static_cast<enum cpu_feature>(i)
+#else
+#define CPPHACK_INT_TO_CPU_FEATURE(i) (i)
+#endif
+
 #if !defined(BLAKE3_ATOMICS)
 #if defined(__has_include)
 #if __has_include(<stdatomic.h>) && !defined(_MSC_VER)
@@ -112,7 +118,7 @@ static
     get_cpu_features(void) {
 
   /* If TSAN detects a data race here, try compiling with -DBLAKE3_ATOMICS=1 */
-  enum cpu_feature features = ATOMIC_LOAD(g_cpu_features);
+  enum cpu_feature features = ATOMIC_LOAD(CPPHACK_INT_TO_CPU_FEATURE(g_cpu_features));
   if (features != UNDEFINED) {
     return features;
   } else {
@@ -120,35 +126,35 @@ static
     uint32_t regs[4] = {0};
     uint32_t *eax = &regs[0], *ebx = &regs[1], *ecx = &regs[2], *edx = &regs[3];
     (void)edx;
-    features = 0;
+    features = CPPHACK_INT_TO_CPU_FEATURE(0);
     cpuid(regs, 0);
     const int max_id = *eax;
     cpuid(regs, 1);
 #if defined(__amd64__) || defined(_M_X64)
-    features |= SSE2;
+    features = CPPHACK_INT_TO_CPU_FEATURE(features | SSE2);
 #else
     if (*edx & (1UL << 26))
-      features |= SSE2;
+      features = CPPHACK_INT_TO_CPU_FEATURE(features | SSE2);
 #endif
     if (*ecx & (1UL << 9))
-      features |= SSSE3;
+      features = CPPHACK_INT_TO_CPU_FEATURE(features | SSSE3);
     if (*ecx & (1UL << 19))
-      features |= SSE41;
+      features = CPPHACK_INT_TO_CPU_FEATURE(features | SSE41);
 
     if (*ecx & (1UL << 27)) { // OSXSAVE
       const uint64_t mask = xgetbv();
       if ((mask & 6) == 6) { // SSE and AVX states
         if (*ecx & (1UL << 28))
-          features |= AVX;
+          features = CPPHACK_INT_TO_CPU_FEATURE(features | AVX);
         if (max_id >= 7) {
           cpuidex(regs, 7, 0);
           if (*ebx & (1UL << 5))
-            features |= AVX2;
+            features = CPPHACK_INT_TO_CPU_FEATURE(features | AVX2);
           if ((mask & 224) == 224) { // Opmask, ZMM_Hi256, Hi16_Zmm
             if (*ebx & (1UL << 31))
-              features |= AVX512VL;
+              features = CPPHACK_INT_TO_CPU_FEATURE(features | AVX512VL);
             if (*ebx & (1UL << 16))
-              features |= AVX512F;
+              features = CPPHACK_INT_TO_CPU_FEATURE(features | AVX512F);
           }
         }
       }
