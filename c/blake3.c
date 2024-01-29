@@ -351,7 +351,7 @@ INLINE void compress_subtree_to_parent_node(
   // is set on platforms where MAX_SIMD_DEGREE_OR_2 == 2, GCC emits spurious
   // warnings here. GCC 8.5 is particularly sensitive, so if you're changing
   // this code, test it against that version.
-#if  MAX_SIMD_DEGREE_OR_2 > 2
+#if MAX_SIMD_DEGREE_OR_2 > 2
   while (num_cvs > 2 && num_cvs <= MAX_SIMD_DEGREE_OR_2) {
     num_cvs =
         compress_parents_parallel(cv_array, num_cvs, key, flags, out_array);
