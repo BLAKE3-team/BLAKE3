@@ -341,7 +341,11 @@ INLINE void compress_subtree_to_parent_node(
   size_t num_cvs = blake3_compress_subtree_wide(input, input_len, key,
                                                 chunk_counter, flags, cv_array);
   assert(num_cvs <= MAX_SIMD_DEGREE_OR_2);
-
+  // This condition is always true, and we just
+  // asserted it above. But GCC can't tell that it's always true, and if NDEBUG
+  // is set on platforms where MAX_SIMD_DEGREE_OR_2 == 2, GCC emits spurious
+  // warnings here. GCC 8.5 is particularly sensitive, so if you're changing
+  // this code, test it against that version.
 #if MAX_SIMD_DEGREE_OR_2 > 2
   // If MAX_SIMD_DEGREE_OR_2 is greater than 2 and there's enough input,
   // compress_subtree_wide() returns more than 2 chaining values. Condense
