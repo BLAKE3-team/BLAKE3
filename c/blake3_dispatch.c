@@ -298,7 +298,7 @@ size_t blake3_simd_degree(void) {
   }
 #endif
 #else
-MAYBE_UNUSED(get_cpu_features)
+  MAYBE_UNUSED(get_cpu_features);
 #endif
 #if BLAKE3_USE_NEON == 1
   return 4;
