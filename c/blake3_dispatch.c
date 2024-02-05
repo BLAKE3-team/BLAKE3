@@ -159,11 +159,13 @@ static
 #elif defined(__aarch64__)
     uint64_t id_aa64pfr0_el1;
     __asm__ ("mrs %0, ID_AA64PFR0_EL1" : "=r" (id_aa64pfr0_el1));    
-    if((id_aa64pfr0_el1 >> 20) & (1<<0 | 1<<1 | 1<<2 | 1 << 3)) {
+    if(((id_aa64pfr0_el1 >> 20) & (1<<0 | 1<<1 | 1<<2 | 1 << 3)) != 15) {
+      // https://developer.arm.com/documentation/ddi0595/2021-12/AArch64-Registers/ID-AA64PFR0-EL1--AArch64-Processor-Feature-Register-0?lang=en
+      // 15 means not implemented, 0 means neon is present but float16 is missing, 1 means neon with float16 is present ?
       features = ARM_NEON;
     } else {
       features = 0;
-    }
+    }    
     ATOMIC_STORE(g_cpu_features, features);
     return features;
 #else
