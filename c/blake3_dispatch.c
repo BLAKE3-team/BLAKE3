@@ -96,6 +96,7 @@ enum cpu_feature {
   AVX2 = 1 << 4,
   AVX512F = 1 << 5,
   AVX512VL = 1 << 6,
+  ARM_NEON = 1 << 7,
   /* ... */
   UNDEFINED = 1 << 30
 };
@@ -155,8 +156,17 @@ static
     }
     ATOMIC_STORE(g_cpu_features, features);
     return features;
+#elif defined(__aarch64__)
+    uint64_t id_aa64pfr0_el1;
+    __asm__ ("mrs %0, ID_AA64PFR0_EL1" : "=r" (id_aa64pfr0_el1));    
+    if((id_aa64pfr0_el1 >> 20) & 0xF) {
+      features |= ARM_NEON;
+    } else {
+      features = 0;
+    }
+    ATOMIC_STORE(g_cpu_features, features);
+    return features;
 #else
-    /* How to detect NEON? */
     return 0;
 #endif
   }
@@ -260,11 +270,19 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
   }
 #endif
 #endif
-
 #if BLAKE3_USE_NEON == 1
   blake3_hash_many_neon(inputs, num_inputs, blocks, key, counter,
                         increment_counter, flags, flags_start, flags_end, out);
   return;
+#elif __aarch64__
+{
+  const enum cpu_feature features = get_cpu_features();
+  if(features & ARM_NEON) {
+    blake3_hash_many_neon(inputs, num_inputs, blocks, key, counter,
+                          increment_counter, flags, flags_start, flags_end, out);
+    return;
+  }
+}
 #endif
 
   blake3_hash_many_portable(inputs, num_inputs, blocks, key, counter,
