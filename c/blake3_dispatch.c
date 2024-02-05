@@ -160,7 +160,7 @@ static
     uint64_t id_aa64pfr0_el1;
     __asm__ ("mrs %0, ID_AA64PFR0_EL1" : "=r" (id_aa64pfr0_el1));    
     if((id_aa64pfr0_el1 >> 20) & 0xF) {
-      features |= ARM_NEON;
+      features = ARM_NEON;
     } else {
       features = 0;
     }
