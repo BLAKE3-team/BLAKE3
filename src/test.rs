@@ -1,6 +1,6 @@
-use crate::{CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, OUT_LEN};
-use arrayref::array_ref;
-use arrayvec::ArrayVec;
+use blake3_guts as guts;
+use guts::{CVBytes, CVWords, BLOCK_LEN, CHUNK_LEN};
+
 use core::usize;
 use rand::prelude::*;
 
@@ -46,172 +46,12 @@ pub const TEST_CASES: &[usize] = &[
 pub const TEST_CASES_MAX: usize = 100 * CHUNK_LEN;
 
 // There's a test to make sure these two are equal below.
-pub const TEST_KEY: CVBytes = *b"whats the Elvish word for friend";
-pub const TEST_KEY_WORDS: CVWords = [
-    1952540791, 1752440947, 1816469605, 1752394102, 1919907616, 1868963940, 1919295602, 1684956521,
-];
-
-// Paint the input with a repeating byte pattern. We use a cycle length of 251,
-// because that's the largest prime number less than 256. This makes it
-// unlikely to swapping any two adjacent input blocks or chunks will give the
-// same answer.
-pub fn paint_test_input(buf: &mut [u8]) {
-    for (i, b) in buf.iter_mut().enumerate() {
-        *b = (i % 251) as u8;
-    }
-}
-
-type CompressInPlaceFn =
-    unsafe fn(cv: &mut CVWords, block: &[u8; BLOCK_LEN], block_len: u8, counter: u64, flags: u8);
-
-type CompressXofFn = unsafe fn(
-    cv: &CVWords,
-    block: &[u8; BLOCK_LEN],
-    block_len: u8,
-    counter: u64,
-    flags: u8,
-) -> [u8; 64];
-
-// A shared helper function for platform-specific tests.
-pub fn test_compress_fn(compress_in_place_fn: CompressInPlaceFn, compress_xof_fn: CompressXofFn) {
-    let initial_state = TEST_KEY_WORDS;
-    let block_len: u8 = 61;
-    let mut block = [0; BLOCK_LEN];
-    paint_test_input(&mut block[..block_len as usize]);
-    // Use a counter with set bits in both 32-bit words.
-    let counter = (5u64 << 32) + 6;
-    let flags = crate::CHUNK_END | crate::ROOT | crate::KEYED_HASH;
-
-    let portable_out =
-        crate::portable::compress_xof(&initial_state, &block, block_len, counter as u64, flags);
-
-    let mut test_state = initial_state;
-    unsafe { compress_in_place_fn(&mut test_state, &block, block_len, counter as u64, flags) };
-    let test_state_bytes = crate::platform::le_bytes_from_words_32(&test_state);
-    let test_xof =
-        unsafe { compress_xof_fn(&initial_state, &block, block_len, counter as u64, flags) };
-
-    assert_eq!(&portable_out[..32], &test_state_bytes[..]);
-    assert_eq!(&portable_out[..], &test_xof[..]);
-}
-
-type HashManyFn<A> = unsafe fn(
-    inputs: &[&A],
-    key: &CVWords,
-    counter: u64,
-    increment_counter: IncrementCounter,
-    flags: u8,
-    flags_start: u8,
-    flags_end: u8,
-    out: &mut [u8],
-);
-
-// A shared helper function for platform-specific tests.
-pub fn test_hash_many_fn(
-    hash_many_chunks_fn: HashManyFn<[u8; CHUNK_LEN]>,
-    hash_many_parents_fn: HashManyFn<[u8; 2 * OUT_LEN]>,
-) {
-    // Test a few different initial counter values.
-    // - 0: The base case.
-    // - u32::MAX: The low word of the counter overflows for all inputs except the first.
-    // - i32::MAX: *No* overflow. But carry bugs in tricky SIMD code can screw this up, if you XOR
-    //   when you're supposed to ANDNOT...
-    let initial_counters = [0, u32::MAX as u64, i32::MAX as u64];
-    for counter in initial_counters {
-        #[cfg(feature = "std")]
-        dbg!(counter);
-
-        // 31 (16 + 8 + 4 + 2 + 1) inputs
-        const NUM_INPUTS: usize = 31;
-        let mut input_buf = [0; CHUNK_LEN * NUM_INPUTS];
-        crate::test::paint_test_input(&mut input_buf);
-
-        // First hash chunks.
-        let mut chunks = ArrayVec::<&[u8; CHUNK_LEN], NUM_INPUTS>::new();
-        for i in 0..NUM_INPUTS {
-            chunks.push(array_ref!(input_buf, i * CHUNK_LEN, CHUNK_LEN));
-        }
-        let mut portable_chunks_out = [0; NUM_INPUTS * OUT_LEN];
-        crate::portable::hash_many(
-            &chunks,
-            &TEST_KEY_WORDS,
-            counter,
-            IncrementCounter::Yes,
-            crate::KEYED_HASH,
-            crate::CHUNK_START,
-            crate::CHUNK_END,
-            &mut portable_chunks_out,
-        );
-
-        let mut test_chunks_out = [0; NUM_INPUTS * OUT_LEN];
-        unsafe {
-            hash_many_chunks_fn(
-                &chunks[..],
-                &TEST_KEY_WORDS,
-                counter,
-                IncrementCounter::Yes,
-                crate::KEYED_HASH,
-                crate::CHUNK_START,
-                crate::CHUNK_END,
-                &mut test_chunks_out,
-            );
-        }
-        for n in 0..NUM_INPUTS {
-            #[cfg(feature = "std")]
-            dbg!(n);
-            assert_eq!(
-                &portable_chunks_out[n * OUT_LEN..][..OUT_LEN],
-                &test_chunks_out[n * OUT_LEN..][..OUT_LEN]
-            );
-        }
-
-        // Then hash parents.
-        let mut parents = ArrayVec::<&[u8; 2 * OUT_LEN], NUM_INPUTS>::new();
-        for i in 0..NUM_INPUTS {
-            parents.push(array_ref!(input_buf, i * 2 * OUT_LEN, 2 * OUT_LEN));
-        }
-        let mut portable_parents_out = [0; NUM_INPUTS * OUT_LEN];
-        crate::portable::hash_many(
-            &parents,
-            &TEST_KEY_WORDS,
-            counter,
-            IncrementCounter::No,
-            crate::KEYED_HASH | crate::PARENT,
-            0,
-            0,
-            &mut portable_parents_out,
-        );
-
-        let mut test_parents_out = [0; NUM_INPUTS * OUT_LEN];
-        unsafe {
-            hash_many_parents_fn(
-                &parents[..],
-                &TEST_KEY_WORDS,
-                counter,
-                IncrementCounter::No,
-                crate::KEYED_HASH | crate::PARENT,
-                0,
-                0,
-                &mut test_parents_out,
-            );
-        }
-        for n in 0..NUM_INPUTS {
-            #[cfg(feature = "std")]
-            dbg!(n);
-            assert_eq!(
-                &portable_parents_out[n * OUT_LEN..][..OUT_LEN],
-                &test_parents_out[n * OUT_LEN..][..OUT_LEN]
-            );
-        }
-    }
-}
+pub const TEST_KEY: &CVBytes = b"whats the Elvish word for friend";
+pub const TEST_KEY_WORDS: &CVWords = &guts::words_from_le_bytes_32(TEST_KEY);
 
 #[test]
 fn test_key_bytes_equal_key_words() {
-    assert_eq!(
-        TEST_KEY_WORDS,
-        crate::platform::words_from_le_bytes_32(&TEST_KEY),
-    );
+    assert_eq!(TEST_KEY, &guts::le_bytes_from_words_32(TEST_KEY_WORDS),);
 }
 
 #[test]
@@ -224,52 +64,9 @@ fn test_reference_impl_size() {
     assert_eq!(1880, core::mem::size_of::<reference_impl::Hasher>());
 }
 
-#[test]
-fn test_counter_words() {
-    let counter: u64 = (1 << 32) + 2;
-    assert_eq!(crate::counter_low(counter), 2);
-    assert_eq!(crate::counter_high(counter), 1);
-}
-
-#[test]
-fn test_largest_power_of_two_leq() {
-    let input_output = &[
-        // The zero case is nonsensical, but it does work.
-        (0, 1),
-        (1, 1),
-        (2, 2),
-        (3, 2),
-        (4, 4),
-        (5, 4),
-        (6, 4),
-        (7, 4),
-        (8, 8),
-        // the largest possible usize
-        (usize::MAX, (usize::MAX >> 1) + 1),
-    ];
-    for &(input, output) in input_output {
-        assert_eq!(
-            output,
-            crate::largest_power_of_two_leq(input),
-            "wrong output for n={}",
-            input
-        );
-    }
-}
-
-#[test]
-fn test_left_len() {
-    let input_output = &[
-        (CHUNK_LEN + 1, CHUNK_LEN),
-        (2 * CHUNK_LEN - 1, CHUNK_LEN),
-        (2 * CHUNK_LEN, CHUNK_LEN),
-        (2 * CHUNK_LEN + 1, 2 * CHUNK_LEN),
-        (4 * CHUNK_LEN - 1, 2 * CHUNK_LEN),
-        (4 * CHUNK_LEN, 2 * CHUNK_LEN),
-        (4 * CHUNK_LEN + 1, 4 * CHUNK_LEN),
-    ];
-    for &(input, output) in input_output {
-        assert_eq!(crate::left_len(input), output);
+pub(crate) fn paint_test_input(buf: &mut [u8]) {
+    for (i, b) in buf.iter_mut().enumerate() {
+        *b = (i % 251) as u8;
     }
 }
 
@@ -292,18 +89,18 @@ fn test_compare_reference_impl() {
 
             // all at once
             let test_out = crate::hash(input);
-            assert_eq!(test_out, *array_ref!(expected_out, 0, 32));
+            assert_eq!(test_out, expected_out[..32]);
             // incremental
             let mut hasher = crate::Hasher::new();
             hasher.update(input);
-            assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+            assert_eq!(hasher.finalize(), expected_out[..32]);
             assert_eq!(hasher.finalize(), test_out);
             // incremental (rayon)
             #[cfg(feature = "rayon")]
             {
                 let mut hasher = crate::Hasher::new();
                 hasher.update_rayon(input);
-                assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+                assert_eq!(hasher.finalize(), expected_out[..32]);
                 assert_eq!(hasher.finalize(), test_out);
             }
             // xof
@@ -314,25 +111,25 @@ fn test_compare_reference_impl() {
 
         // keyed
         {
-            let mut reference_hasher = reference_impl::Hasher::new_keyed(&TEST_KEY);
+            let mut reference_hasher = reference_impl::Hasher::new_keyed(TEST_KEY);
             reference_hasher.update(input);
             let mut expected_out = [0; OUT];
             reference_hasher.finalize(&mut expected_out);
 
             // all at once
-            let test_out = crate::keyed_hash(&TEST_KEY, input);
-            assert_eq!(test_out, *array_ref!(expected_out, 0, 32));
+            let test_out = crate::keyed_hash(TEST_KEY, input);
+            assert_eq!(test_out, expected_out[..32]);
             // incremental
-            let mut hasher = crate::Hasher::new_keyed(&TEST_KEY);
+            let mut hasher = crate::Hasher::new_keyed(TEST_KEY);
             hasher.update(input);
-            assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+            assert_eq!(hasher.finalize(), expected_out[..32]);
             assert_eq!(hasher.finalize(), test_out);
             // incremental (rayon)
             #[cfg(feature = "rayon")]
             {
-                let mut hasher = crate::Hasher::new_keyed(&TEST_KEY);
+                let mut hasher = crate::Hasher::new_keyed(TEST_KEY);
                 hasher.update_rayon(input);
-                assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
+                assert_eq!(hasher.finalize(), expected_out[..32]);
                 assert_eq!(hasher.finalize(), test_out);
             }
             // xof
@@ -355,15 +152,15 @@ fn test_compare_reference_impl() {
             // incremental
             let mut hasher = crate::Hasher::new_derive_key(context);
             hasher.update(input);
-            assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
-            assert_eq!(hasher.finalize(), *array_ref!(test_out, 0, 32));
+            assert_eq!(hasher.finalize(), expected_out[..32]);
+            assert_eq!(hasher.finalize(), test_out[..32]);
             // incremental (rayon)
             #[cfg(feature = "rayon")]
             {
                 let mut hasher = crate::Hasher::new_derive_key(context);
                 hasher.update_rayon(input);
-                assert_eq!(hasher.finalize(), *array_ref!(expected_out, 0, 32));
-                assert_eq!(hasher.finalize(), *array_ref!(test_out, 0, 32));
+                assert_eq!(hasher.finalize(), expected_out[..32]);
+                assert_eq!(hasher.finalize(), test_out[..32]);
             }
             // xof
             let mut extended = [0; OUT];
@@ -423,9 +220,9 @@ fn test_fuzz_hasher() {
     let mut input_buf = [0; 3 * INPUT_MAX];
     paint_test_input(&mut input_buf);
 
-    // Don't do too many iterations in debug mode, to keep the tests under a
-    // second or so. CI should run tests in release mode also. Provide an
-    // environment variable for specifying a larger number of fuzz iterations.
+    // Don't do too many iterations in debug mode, to keep the tests under a second or so. CI
+    // should run tests in release mode also.
+    // TODO: Provide an environment variable for specifying a larger number of fuzz iterations?
     let num_tests = if cfg!(debug_assertions) { 100 } else { 10_000 };
 
     // Use a fixed RNG seed for reproducibility.
@@ -494,6 +291,133 @@ fn test_xof_seek() {
 }
 
 #[test]
+fn test_xof_xor() {
+    for step in [32, 63, 64, 128, 303] {
+        #[cfg(feature = "std")]
+        dbg!(step);
+        let mut ref_hasher = reference_impl::Hasher::new();
+        ref_hasher.update(b"foo");
+        let mut ref_output = [0u8; 1000];
+        ref_hasher.finalize(&mut ref_output);
+
+        let mut hasher = crate::Hasher::new();
+        hasher.update(b"foo");
+        let mut reader = hasher.finalize_xof();
+
+        let mut test_output = [0u8; 1000];
+        for chunk in test_output.chunks_mut(step) {
+            reader.fill(chunk);
+        }
+        assert_eq!(ref_output, test_output);
+        // Xor'ing the same output should zero the buffer.
+        reader.set_position(0);
+        for chunk in test_output.chunks_mut(step) {
+            reader.fill_xor(chunk);
+        }
+        assert_eq!([0u8; 1000], test_output);
+        // Xor'ing the same output again should reproduce the original.
+        reader.set_position(0);
+        for chunk in test_output.chunks_mut(step) {
+            reader.fill_xor(chunk);
+        }
+        assert_eq!(ref_output, test_output);
+
+        // Repeat the same test but starting at offset 500.
+        reader.set_position(500);
+        for chunk in test_output[..500].chunks_mut(step) {
+            reader.fill(chunk);
+        }
+        assert_eq!(ref_output[500..], test_output[..500]);
+        reader.set_position(500);
+        for chunk in test_output[..500].chunks_mut(step) {
+            reader.fill_xor(chunk);
+        }
+        assert_eq!([0u8; 500], test_output[..500]);
+        reader.set_position(500);
+        for chunk in test_output[..500].chunks_mut(step) {
+            reader.fill_xor(chunk);
+        }
+        assert_eq!(ref_output[500..], test_output[..500]);
+    }
+}
+
+#[test]
+#[cfg(feature = "std")]
+fn test_fuzz_xof() {
+    // Use a fixed RNG seed for reproducibility.
+    let mut rng = rand_chacha::ChaCha8Rng::from_seed([99; 32]);
+    let random_key: [u8; 32] = rng.gen();
+
+    let possible_seeks = [-64i64, -63 - 1, 0, 1, 63, 64, 127, 128, 129];
+
+    const MAX_LEN: usize = 1100;
+    let possible_lengths = [0usize, 1, 63, 64, 65, 128, 256, 512, 1024, MAX_LEN];
+    assert!(possible_lengths.into_iter().all(|x| x <= MAX_LEN));
+
+    let mut xof_output = crate::Hasher::new_keyed(&random_key).finalize_xof();
+    let mut xof_xor_output = crate::Hasher::new_keyed(&random_key).finalize_xof();
+
+    // Don't do too many iterations in debug mode, to keep the tests under a second or so. CI
+    // should run tests in release mode also.
+    // TODO: Provide an environment variable for specifying a larger number of fuzz iterations?
+    let num_tests = if cfg!(debug_assertions) {
+        1_000
+    } else {
+        100_000
+    };
+
+    let mut position = 0;
+    let mut ref_output = Vec::new();
+    for test_i in 0..num_tests {
+        eprintln!("--- test {test_i} ---");
+        // Do a random relative seek maybe. Could be zero.
+        let relative_seek: i64 = *possible_seeks.choose(&mut rng).unwrap();
+        dbg!(relative_seek);
+        if relative_seek != 0 {
+            let new_position = position as i64 + relative_seek;
+            if 0 <= new_position && new_position <= MAX_LEN as i64 {
+                position = new_position as u64;
+            } else {
+                position = 0;
+            }
+            assert_eq!(xof_output.position(), xof_xor_output.position());
+            xof_output.set_position(position as u64);
+            xof_xor_output.set_position(position as u64);
+        }
+        dbg!(position);
+
+        // Generate a random number of output bytes. If the amount of output we've gotten from the
+        // reference_impl isn't enough, double it.
+        let len: usize = *possible_lengths.choose(&mut rng).unwrap();
+        dbg!(len);
+        if position as usize + len > ref_output.len() {
+            let new_len = core::cmp::max(MAX_LEN, 2 * ref_output.len());
+            ref_output = vec![0u8; new_len];
+            eprintln!("grow reference output length to {}", ref_output.len());
+            let ref_hasher = reference_impl::Hasher::new_keyed(&random_key);
+            ref_hasher.finalize(&mut ref_output);
+        }
+        let mut buf = [0u8; MAX_LEN];
+        xof_output.fill(&mut buf[..len]);
+        assert_eq!(ref_output[position as usize..][..len], buf[..len]);
+        assert_eq!([0u8; MAX_LEN][..MAX_LEN - len], buf[len..]);
+
+        // Xor over the output with a random byte value, and then confirm that xof_xor() recovers
+        // that value.
+        let random_byte: u8 = rng.gen();
+        dbg!(random_byte);
+        for i in 0..len {
+            buf[i] ^= random_byte;
+        }
+        xof_xor_output.fill_xor(&mut buf[..len]);
+        assert_eq!([random_byte; MAX_LEN][..len], buf[..len]);
+        assert_eq!([0u8; MAX_LEN][..MAX_LEN - len], buf[len..]);
+
+        position += len as u64;
+    }
+}
+
+#[test]
 fn test_msg_schedule_permutation() {
     let permutation = [2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8];
 
@@ -506,7 +430,7 @@ fn test_msg_schedule_permutation() {
         }
     }
 
-    assert_eq!(generated, crate::MSG_SCHEDULE);
+    assert_eq!(generated, guts::MSG_SCHEDULE);
 }
 
 #[test]
@@ -640,53 +564,43 @@ fn test_zeroize() {
 
     let mut hasher = crate::Hasher {
         chunk_state: crate::ChunkState {
-            cv: [42; 8],
+            cv: [42; 32],
             chunk_counter: 42,
             buf: [42; 64],
             buf_len: 42,
             blocks_compressed: 42,
             flags: 42,
-            platform: crate::Platform::Portable,
         },
-        key: [42; 8],
+        key: [42; 32],
         cv_stack: [[42; 32]; { crate::MAX_DEPTH + 1 }].into(),
     };
     hasher.zeroize();
-    assert_eq!(hasher.chunk_state.cv, [0; 8]);
+    assert_eq!(hasher.chunk_state.cv, [0; 32]);
     assert_eq!(hasher.chunk_state.chunk_counter, 0);
     assert_eq!(hasher.chunk_state.buf, [0; 64]);
     assert_eq!(hasher.chunk_state.buf_len, 0);
     assert_eq!(hasher.chunk_state.blocks_compressed, 0);
     assert_eq!(hasher.chunk_state.flags, 0);
-    assert!(matches!(
-        hasher.chunk_state.platform,
-        crate::Platform::Portable
-    ));
-    assert_eq!(hasher.key, [0; 8]);
+    assert_eq!(hasher.key, [0; 32]);
     assert_eq!(&*hasher.cv_stack, &[[0u8; 32]; 0]);
 
     let mut output_reader = crate::OutputReader {
         inner: crate::Output {
-            input_chaining_value: [42; 8],
+            input_chaining_value: [42; 32],
             block: [42; 64],
             counter: 42,
             block_len: 42,
             flags: 42,
-            platform: crate::Platform::Portable,
         },
         position_within_block: 42,
     };
 
     output_reader.zeroize();
-    assert_eq!(output_reader.inner.input_chaining_value, [0; 8]);
+    assert_eq!(output_reader.inner.input_chaining_value, [0; 32]);
     assert_eq!(output_reader.inner.block, [0; 64]);
     assert_eq!(output_reader.inner.counter, 0);
     assert_eq!(output_reader.inner.block_len, 0);
     assert_eq!(output_reader.inner.flags, 0);
-    assert!(matches!(
-        output_reader.inner.platform,
-        crate::Platform::Portable
-    ));
     assert_eq!(output_reader.position_within_block, 0);
 }
 
@@ -732,7 +646,7 @@ fn test_update_reader_interrupted() -> std::io::Result<()> {
                 self.already_interrupted = true;
                 return Err(io::Error::from(io::ErrorKind::Interrupted));
             }
-            let take = std::cmp::min(self.slice.len(), buf.len());
+            let take = core::cmp::min(self.slice.len(), buf.len());
             buf[..take].copy_from_slice(&self.slice[..take]);
             self.slice = &self.slice[take..];
             Ok(take)

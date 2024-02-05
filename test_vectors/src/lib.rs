@@ -1,4 +1,4 @@
-use blake3::guts::{BLOCK_LEN, CHUNK_LEN};
+use blake3_guts::{BLOCK_LEN, CHUNK_LEN};
 use serde::{Deserialize, Serialize};
 
 // A non-multiple of 4 is important, since one possible bug is to fail to emit
