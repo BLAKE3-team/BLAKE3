@@ -159,7 +159,7 @@ static
 #elif defined(__aarch64__)
     uint64_t id_aa64pfr0_el1;
     __asm__ ("mrs %0, ID_AA64PFR0_EL1" : "=r" (id_aa64pfr0_el1));    
-    if((id_aa64pfr0_el1 >> 20) & 0xF) {
+    if((id_aa64pfr0_el1 >> 20) & (1<<0 | 1<<1 | 1<<2 | 1 << 3)) {
       features = ARM_NEON;
     } else {
       features = 0;
