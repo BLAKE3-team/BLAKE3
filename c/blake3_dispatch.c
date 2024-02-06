@@ -320,6 +320,11 @@ size_t blake3_simd_degree(void) {
 #endif
 #if BLAKE3_USE_NEON == 1
   return 4;
+#elif defined(__aarch64__)
+  const enum cpu_feature features = get_cpu_features();
+  if(features & ARM_NEON) {
+    return 4;
+  }
 #endif
   return 1;
 }
