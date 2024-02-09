@@ -9,13 +9,13 @@
 #endif
 
 INLINE uint32x4_t loadu_128(const uint8_t src[16]) {
-    // vld1q_u32 has alignment requirements. Don't use it.
-    return vreinterpretq_u32_u8(vld1q_u8(src));
+  // vld1q_u32 has alignment requirements. Don't use it.
+  return vreinterpretq_u32_u8(vld1q_u8(src));
 }
 
 INLINE void storeu_128(uint32x4_t src, uint8_t dest[16]) {
-    // vst1q_u32 has alignment requirements. Don't use it.
-    vst1q_u8(dest, vreinterpretq_u8_u32(src));
+  // vst1q_u32 has alignment requirements. Don't use it.
+  vst1q_u8(dest, vreinterpretq_u8_u32(src));
 }
 
 INLINE uint32x4_t add_128(uint32x4_t a, uint32x4_t b) {
