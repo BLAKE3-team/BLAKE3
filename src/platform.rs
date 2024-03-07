@@ -56,6 +56,11 @@ pub enum Platform {
 impl Platform {
     #[allow(unreachable_code)]
     pub fn detect() -> Self {
+        #[cfg(miri)]
+        {
+            return Platform::Portable;
+        }
+
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             #[cfg(blake3_avx512_ffi)]
@@ -329,6 +334,10 @@ impl Platform {
 #[inline(always)]
 #[allow(unreachable_code)]
 pub fn avx512_detected() -> bool {
+    if cfg!(miri) {
+        return false;
+    }
+
     // A testing-only short-circuit.
     if cfg!(feature = "no_avx512") {
         return false;
@@ -352,6 +361,10 @@ pub fn avx512_detected() -> bool {
 #[inline(always)]
 #[allow(unreachable_code)]
 pub fn avx2_detected() -> bool {
+    if cfg!(miri) {
+        return false;
+    }
+
     // A testing-only short-circuit.
     if cfg!(feature = "no_avx2") {
         return false;
@@ -375,6 +388,10 @@ pub fn avx2_detected() -> bool {
 #[inline(always)]
 #[allow(unreachable_code)]
 pub fn sse41_detected() -> bool {
+    if cfg!(miri) {
+        return false;
+    }
+
     // A testing-only short-circuit.
     if cfg!(feature = "no_sse41") {
         return false;
@@ -398,6 +415,10 @@ pub fn sse41_detected() -> bool {
 #[inline(always)]
 #[allow(unreachable_code)]
 pub fn sse2_detected() -> bool {
+    if cfg!(miri) {
+        return false;
+    }
+
     // A testing-only short-circuit.
     if cfg!(feature = "no_sse2") {
         return false;
