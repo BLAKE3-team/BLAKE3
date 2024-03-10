@@ -336,3 +336,16 @@ jobs:
         run: cmake -S c -B c/build -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/target
       - name: CMake build / install
         run: cmake --build c/build --target install
+
+  miri_smoketest:
+    name: Miri smoketest
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: miri
+    # Currently the test search "miri" only matches "test_miri_smoketest", but
+    # we might add more. If this accidentally picks up anything incompatible or
+    # slow, we can narrow it.
+    - run: cargo miri test miri

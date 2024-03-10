@@ -818,3 +818,21 @@ fn test_serde() {
     let hash2: crate::Hash = serde_json::from_str(&json).unwrap();
     assert_eq!(hash, hash2);
 }
+
+// `cargo +nightly miri test` currently works, but it takes forever, because some of our test
+// inputs are quite large. Most of our unsafe code is platform specific and incompatible with Miri
+// anyway, but we'd like it to be possible for callers to run their own tests under Miri, assuming
+// they don't use incompatible features like Rayon or mmap. This test should get reasonable
+// coverage of our public API without using any large inputs, so we can run it in CI and catch
+// obvious breaks. (For example, constant_time_eq is not compatible with Miri.)
+#[test]
+fn test_miri_smoketest() {
+    let mut hasher = crate::Hasher::new_derive_key("Miri smoketest");
+    hasher.update(b"foo");
+    #[cfg(feature = "std")]
+    hasher.update_reader(&b"bar"[..]).unwrap();
+    assert_eq!(hasher.finalize(), hasher.finalize());
+    let mut reader = hasher.finalize_xof();
+    reader.set_position(999999);
+    reader.fill(&mut [0]);
+}
