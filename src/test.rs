@@ -695,16 +695,10 @@ fn test_zeroize() {
 fn test_update_reader() -> Result<(), std::io::Error> {
     // This is a brief test, since update_reader() is mostly a wrapper around update(), which already
     // has substantial testing.
-    use std::io::prelude::*;
     let mut input = vec![0; 1_000_000];
     paint_test_input(&mut input);
-    let mut tempfile = tempfile::NamedTempFile::new()?;
-    tempfile.write_all(&input)?;
-    tempfile.flush()?;
     assert_eq!(
-        crate::Hasher::new()
-            .update_reader(std::fs::File::open(tempfile.path())?)?
-            .finalize(),
+        crate::Hasher::new().update_reader(&input[..])?.finalize(),
         crate::hash(&input),
     );
     Ok(())
@@ -749,6 +743,8 @@ fn test_update_reader_interrupted() -> std::io::Result<()> {
 
 #[test]
 #[cfg(feature = "mmap")]
+// NamedTempFile isn't Miri-compatible
+#[cfg(not(miri))]
 fn test_mmap() -> Result<(), std::io::Error> {
     // This is a brief test, since update_mmap() is mostly a wrapper around update(), which already
     // has substantial testing.
@@ -789,6 +785,8 @@ fn test_mmap_virtual_file() -> Result<(), std::io::Error> {
 #[test]
 #[cfg(feature = "mmap")]
 #[cfg(feature = "rayon")]
+// NamedTempFile isn't Miri-compatible
+#[cfg(not(miri))]
 fn test_mmap_rayon() -> Result<(), std::io::Error> {
     // This is a brief test, since update_mmap_rayon() is mostly a wrapper around update_rayon(),
     // which already has substantial testing.
