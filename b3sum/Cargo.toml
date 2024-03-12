@@ -19,6 +19,7 @@ blake3 = { version = "1", path = "..", features = ["mmap", "rayon"] }
 clap = { version = "4.0.8", features = ["derive", "wrap_help"] }
 hex = "0.4.0"
 rayon = "1.2.1"
+read_chunks = "0.2.0"
 wild = "2.0.3"
 
 [dev-dependencies]

@@ -611,3 +611,53 @@ fn test_globbing() {
         .unwrap();
     assert_eq!(expected, output);
 }
+
+#[test]
+// tests that hash_reader_parallel fallsback correctly and hashes multithreaded correctly
+fn test_hash_reader_parallel() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let file1 = dir.path().join("file1");
+    fs::write(&file1, b"foobar").unwrap();
+
+    let expected = blake3::hash(b"foobar");
+
+    let output = cmd!(b3sum_exe(), "--no-mmap", &file1)
+        .stdout_capture()
+        .run()
+        .unwrap()
+        .stdout;
+
+    let expected = format!("{}  {}\n", expected.to_hex(), file1.display());
+
+    // fallback test
+    assert_eq!(output, expected.as_bytes());
+
+    // tests multithread gives correct results
+
+    let file2 = dir.path().join("file2");
+    let mut f = fs::File::create(&file2).unwrap();
+
+    let mut expected = blake3::Hasher::new();
+
+    // 20_000 * 62 is 1.2MiB, which passes the threshold of using multithreading
+
+    for _ in 0..20_000 {
+        // we use a big string here to avoid looping many times, which is bad for opt-level=0
+        const WRITE: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        assert_eq!(WRITE.len(), 62);
+
+        f.write_all(WRITE).unwrap();
+        expected.update(WRITE);
+    }
+
+    let output = cmd!(b3sum_exe(), "--no-mmap", &file2)
+        .stdout_capture()
+        .run()
+        .unwrap()
+        .stdout;
+
+    let expected = format!("{}  {}\n", expected.finalize().to_hex(), file2.display());
+
+    assert_eq!(output, expected.as_bytes());
+}
