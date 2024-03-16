@@ -20,6 +20,14 @@ enum blake3_flags {
   DERIVE_KEY_MATERIAL = 1 << 6,
 };
 
+#ifdef BLAKE3_FORCE_PORTABLE
+#define BLAKE3_NO_SSE2
+#define BLAKE3_NO_SSE41
+#define BLAKE3_NO_AVX2
+#define BLAKE3_NO_AVX512
+#define BLAKE3_USE_NEON 0
+#endif
+
 // This C implementation tries to support recent versions of GCC, Clang, and
 // MSVC.
 #if defined(_MSC_VER)
