@@ -133,9 +133,11 @@ impl Platform {
             Platform::AVX512 => unsafe {
                 crate::avx512::compress_in_place(cv, block, block_len, counter, flags)
             },
-            // No NEON compress_in_place() implementation yet.
+            // Safe because detect() checked for platform support.
             #[cfg(blake3_neon)]
-            Platform::NEON => portable::compress_in_place(cv, block, block_len, counter, flags),
+            Platform::NEON => unsafe {
+                crate::neon::compress_in_place(cv, block, block_len, counter, flags)
+            },
         }
     }
 
@@ -165,9 +167,11 @@ impl Platform {
             Platform::AVX512 => unsafe {
                 crate::avx512::compress_xof(cv, block, block_len, counter, flags)
             },
-            // No NEON compress_xof() implementation yet.
+            // Safe because detect() checked for platform support.
             #[cfg(blake3_neon)]
-            Platform::NEON => portable::compress_xof(cv, block, block_len, counter, flags),
+            Platform::NEON => unsafe {
+                crate::neon::compress_xof(cv, block, block_len, counter, flags)
+            },
         }
     }
 
