@@ -207,14 +207,27 @@ smell](https://en.wikipedia.org/wiki/Design_smell) in any case.
 
 # Building
 
-This implementation is just C and assembly files. It doesn't include a
-public-facing build system. (The `Makefile` in this directory is only
-for testing.) Instead, the intention is that you can include these files
-in whatever build system you're already using. This section describes
-the commands your build system should execute, or which you can execute
-by hand. Note that these steps may change in future versions.
+This implementation is just C and assembly files. It comes with a CMake 
+buildsystem even though you can simply include the source files in 
+whatever build system you're already using. (The `Makefile` in this 
+directory is only for testing.) This section is split in two parts; the
+first describes how to use the CMake buildsystem while the second
+specifies the commands necessary to build the library by hand with gcc 
+for various platforms (you may use these as a guideline for integrating
+the source files into your own buildsystem). Note that these steps may 
+change in future versions.
 
-## x86
+If you use the [vcpkg](https://vcpkg.io/) as your package manager, you
+can simply reference the `blake3` port from your manifest or install it
+via `./vcpkg install blake3`
+
+## CMake
+
+### CMake Options
+
+## Manual Build Instructions
+
+### x86
 
 Dynamic dispatch is enabled by default on x86. The implementation will
 query the CPU at runtime to detect SIMD support, and it will use the
@@ -268,7 +281,7 @@ gcc -shared -O3 -o libblake3.so -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_A
     -DBLAKE3_NO_AVX512 blake3.c blake3_dispatch.c blake3_portable.c
 ```
 
-## ARM NEON
+### ARM NEON
 
 The NEON implementation is enabled by default on AArch64, but not on
 other ARM targets, since not all of them support it. To enable it, set
@@ -300,7 +313,7 @@ in call to always_inline ‘vaddq_u32’: target specific option mismatch
 ...then you may need to add something like `-mfpu=neon-vfpv4
 -mfloat-abi=hard`.
 
-## Other Platforms
+### Other Platforms
 
 The portable implementation should work on most other architectures. For
 example:
