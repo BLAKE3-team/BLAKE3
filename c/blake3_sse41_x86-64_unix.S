@@ -1,3 +1,4 @@
+#if defined(__x86_64__)
 #if defined(__ELF__) && defined(__linux__)
 .section .note.GNU-stack,"",%progbits
 #endif
@@ -2026,3 +2027,4 @@ BLAKE3_BLOCK_LEN:
 	.long  64, 64, 64, 64
 CMP_MSB_MASK:
 	.long  0x80000000, 0x80000000, 0x80000000, 0x80000000
+#endif
