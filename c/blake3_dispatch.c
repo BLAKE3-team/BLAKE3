@@ -89,6 +89,7 @@ static void cpuidex(uint32_t out[4], uint32_t id, uint32_t sid) {
 #endif
 
 enum cpu_feature {
+  NONE = 0,
   SSE2 = 1 << 0,
   SSSE3 = 1 << 1,
   SSE41 = 1 << 2,
@@ -265,11 +266,11 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
   blake3_hash_many_neon(inputs, num_inputs, blocks, key, counter,
                         increment_counter, flags, flags_start, flags_end, out);
   return;
-#endif
-
+#else
   blake3_hash_many_portable(inputs, num_inputs, blocks, key, counter,
                             increment_counter, flags, flags_start, flags_end,
                             out);
+#endif
 }
 
 // The dynamically detected SIMD degree of the current platform.
