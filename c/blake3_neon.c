@@ -1,4 +1,5 @@
 #include "blake3_impl.h"
+#if BLAKE3_USE_NEON
 
 #include <arm_neon.h>
 
@@ -364,3 +365,5 @@ void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
     out = &out[BLAKE3_OUT_LEN];
   }
 }
+
+#endif
