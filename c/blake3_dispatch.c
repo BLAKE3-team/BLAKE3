@@ -4,9 +4,12 @@
 
 #include "blake3_impl.h"
 
-#if defined(IS_X86)
 #if defined(_MSC_VER)
 #include <Windows.h>
+#endif
+
+#if defined(IS_X86)
+#if defined(_MSC_VER)
 #include <intrin.h>
 #elif defined(__GNUC__)
 #include <immintrin.h>
