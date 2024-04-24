@@ -69,3 +69,7 @@ On Linux for example, Cargo will put the compiled binary in
 If you want to install directly from this directory, you can run `cargo
 install --path .`. Or you can just build with `cargo build --release`,
 which puts the binary at `./target/release/b3sum`.
+
+Also, shell completions and a man page are generated at build time. The
+output directory can be found by running `find ./target -path
+'*/b3sum-*/out' -type d`.
