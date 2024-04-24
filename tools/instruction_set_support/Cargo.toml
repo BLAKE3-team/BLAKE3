@@ -2,5 +2,6 @@
 name = "instruction_set_support"
 version = "0.0.0"
 edition = "2021"
+rust-version = "1.56.0"
 
 [dependencies]

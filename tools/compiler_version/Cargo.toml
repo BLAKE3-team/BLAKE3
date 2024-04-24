@@ -2,6 +2,7 @@
 name = "compiler_version"
 version = "0.0.0"
 edition = "2021"
+rust-version = "1.56.0"
 
 [build-dependencies]
 cc = "1.0.50"
