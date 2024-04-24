@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, ValueHint};
 use std::path::PathBuf;
 
 const DERIVE_KEY_ARG: &str = "derive_key";
@@ -17,6 +17,7 @@ pub struct Inner {
     /// Files to hash, or checkfiles to check
     ///
     /// When no file is given, or when - is given, read standard input.
+    #[arg(value_hint(ValueHint::FilePath))]
     pub file: Vec<PathBuf>,
 
     /// Use the keyed mode, reading the 32-byte key from stdin
