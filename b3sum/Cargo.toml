@@ -24,3 +24,8 @@ wild = "2.0.3"
 [dev-dependencies]
 duct = "0.13.3"
 tempfile = "3.1.0"
+
+[build-dependencies]
+blake3 = { version = "1", path = ".." }
+clap = { version = "4.0.8", features = ["derive"] }
+clap_mangen = "0.2.20"
