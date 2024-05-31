@@ -193,8 +193,12 @@ The Rust code is copyright Jack O'Connor, 2019-2020. The C code is
 copyright Samuel Neves and Jack O'Connor, 2019-2020. The assembly code
 is copyright Samuel Neves, 2019-2020.
 
-This work is released into the public domain with CC0 1.0.
-Alternatively, it is licensed under the Apache License 2.0.
+This code is multi-licensed under
+
+* [CC0](./LICENCE_CC0)
+* [Apache 2.0](./LICENSE_A2).
+* [Apache 2.0 with LLVM exceptions](./LICENSE_A2LLVM).
+
 
 ## Adoption & deployment
 
