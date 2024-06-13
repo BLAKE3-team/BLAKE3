@@ -7,6 +7,7 @@ repository = "https://github.com/BLAKE3-team/BLAKE3"
 license = "CC0-1.0 OR Apache-2.0"
 readme = "README.md"
 edition = "2021"
+rust-version = "1.74.1"
 
 [features]
 neon = ["blake3/neon"]
@@ -14,13 +15,19 @@ prefer_intrinsics = ["blake3/prefer_intrinsics"]
 pure = ["blake3/pure"]
 
 [dependencies]
-anyhow = "1.0.25"
+anyhow = "1.0.82"
 blake3 = { version = "1", path = "..", features = ["mmap", "rayon"] }
-clap = { version = "4.0.8", features = ["derive", "wrap_help"] }
-hex = "0.4.0"
-rayon = "1.2.1"
-wild = "2.0.3"
+clap = { version = "4.5.4", features = ["derive", "wrap_help"] }
+hex = "0.4.3"
+rayon = "1.10.0"
+wild = "2.2.1"
 
 [dev-dependencies]
-duct = "0.13.3"
-tempfile = "3.1.0"
+duct = "0.13.7"
+tempfile = "3.10.1"
+
+[build-dependencies]
+blake3 = { version = "1", path = ".." }
+clap = { version = "4.5.4", features = ["derive"] }
+clap_complete = "4.5.2"
+clap_mangen = "0.2.20"

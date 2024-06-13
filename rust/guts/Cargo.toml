@@ -8,6 +8,7 @@ license = "CC0-1.0 OR Apache-2.0"
 documentation = "https://docs.rs/blake3_guts"
 readme = "readme.md"
 edition = "2021"
+rust-version = "1.56.0"
 
 [dev-dependencies]
 hex = "0.4.3"
