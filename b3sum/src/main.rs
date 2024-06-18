@@ -475,7 +475,7 @@ fn check_one_checkfile(path: &Path, args: &Args, files_failed: &mut u64) -> Resu
 
 fn main() -> Result<()> {
     let args = Args::parse()?;
-    let mut thread_pool_builder = rayon::ThreadPoolBuilder::new();
+    let mut thread_pool_builder = rayon_core::ThreadPoolBuilder::new();
     if let Some(num_threads) = args.num_threads() {
         thread_pool_builder = thread_pool_builder.num_threads(num_threads);
     }
