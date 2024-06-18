@@ -89,7 +89,7 @@ fn is_windows_gnu() -> bool {
     // Some targets are only two components long, so check in steps.
     target_components()[1] == "pc"
         && target_components()[2] == "windows"
-        && target_components()[3] == "gnu"
+        && target_components()[3] != "msvc"
 }
 
 fn new_build() -> cc::Build {
