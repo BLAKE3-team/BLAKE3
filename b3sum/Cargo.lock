@@ -77,7 +77,7 @@ dependencies = [
  "clap",
  "duct",
  "hex",
- "rayon",
+ "rayon-core",
  "tempfile",
  "wild",
 ]
@@ -98,7 +98,7 @@ dependencies = [
  "cfg-if",
  "constant_time_eq",
  "memmap2",
- "rayon",
+ "rayon-core",
 ]
 
 [[package]]
@@ -204,12 +204,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "either"
-version = "1.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11157ac094ffbdde99aa67b23417ebdd801842852b500e395a45a9c0aac03e4a"
-
-[[package]]
 name = "errno"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -296,16 +290,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "291ec9ab5efd934aaf503a6466c5d5251535d108ee747472c3977cc5acc868ef"
 dependencies = [
  "proc-macro2",
-]
-
-[[package]]
-name = "rayon"
-version = "1.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4963ed1bc86e4f3ee217022bd855b297cef07fb9eac5dfa1f788b220b49b3bd"
-dependencies = [
- "either",
- "rayon-core",
 ]
 
 [[package]]
