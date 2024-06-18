@@ -135,9 +135,10 @@ mod join;
 
 use arrayref::{array_mut_ref, array_ref};
 use arrayvec::{ArrayString, ArrayVec};
-use core::cmp;
 use core::fmt;
+use core::{cmp, cmp::Ordering};
 use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
+use subtle::{ConditionallySelectable, ConstantTimeEq, ConstantTimeGreater, ConstantTimeLess};
 
 /// The number of bytes in a [`Hash`](struct.Hash.html), 32.
 pub const OUT_LEN: usize = 32;
@@ -327,7 +328,7 @@ impl PartialEq for Hash {
         #[cfg(miri)]
         return constant_time_eq_miri(&self.0, &other.0);
         #[cfg(not(miri))]
-        constant_time_eq::constant_time_eq_32(&self.0, &other.0)
+        self.0.ct_eq(&other.0).into()
     }
 }
 
@@ -338,7 +339,7 @@ impl PartialEq<[u8; OUT_LEN]> for Hash {
         #[cfg(miri)]
         return constant_time_eq_miri(&self.0, other);
         #[cfg(not(miri))]
-        constant_time_eq::constant_time_eq_32(&self.0, other)
+        self.0.ct_eq(other).into()
     }
 }
 
@@ -349,11 +350,50 @@ impl PartialEq<[u8]> for Hash {
         #[cfg(miri)]
         return constant_time_eq_miri(&self.0, other);
         #[cfg(not(miri))]
-        constant_time_eq::constant_time_eq(&self.0, other)
+        self.0.ct_eq(other).into()
     }
 }
 
 impl Eq for Hash {}
+
+/// This implementation is constant-time.
+impl PartialOrd for Hash {
+    #[inline]
+    fn partial_cmp(&self, other: &Hash) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Hash {
+    #[inline]
+    fn cmp(&self, other: &Hash) -> Ordering {
+        let self_low = u128::from_le_bytes(self.0[..16].try_into().unwrap());
+        let self_high = u128::from_le_bytes(self.0[16..].try_into().unwrap());
+        let other_low = u128::from_le_bytes(other.0[..16].try_into().unwrap());
+        let other_high = u128::from_le_bytes(other.0[16..].try_into().unwrap());
+        let ordering = Ordering::conditional_select(
+            &Ordering::Less,
+            &Ordering::Greater,
+            self_high.ct_gt(&other_high),
+        );
+        let ordering = Ordering::conditional_select(
+            &ordering,
+            &Ordering::Greater,
+            self_high.ct_eq(&other_high) & self_low.ct_gt(&other_low),
+        );
+        let ordering = Ordering::conditional_select(
+            &ordering,
+            &Ordering::Equal,
+            self_high.ct_eq(&other_high) & self_low.ct_eq(&other_low),
+        );
+        let ordering = Ordering::conditional_select(
+            &ordering,
+            &Ordering::Less,
+            self_high.ct_eq(&other_high) & self_low.ct_lt(&other_low),
+        );
+        Ordering::conditional_select(&ordering, &Ordering::Less, self_high.ct_lt(&other_high))
+    }
+}
 
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
