@@ -168,6 +168,17 @@ else()
   BLAKE3_DISABLE_SIMD()
 endif()
 
+# cmake test support
+if (BLAKE3_BUILD_TESTING)
+  find_package(Python3 REQUIRED)
+  get_target_property(BLAKE3_SOURCES blake3 SOURCES)
+  add_executable(blake3-testing ${BLAKE3_SOURCES} main.c)
+  set_property(TARGET blake3-testing PROPERTY OUTPUT_NAME blake3)
+  target_compile_definitions(blake3-testing PRIVATE BLAKE3_TESTING=1)
+  enable_testing()
+  add_test(test_vectors "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test.py" WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+
 # cmake install support
 install(FILES blake3.h DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 install(TARGETS blake3 EXPORT blake3-targets)

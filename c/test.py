@@ -2,7 +2,7 @@
 
 from binascii import hexlify
 import json
-from os import path
+from os import getcwd, path
 import subprocess
 
 HERE = path.dirname(__file__)
@@ -11,7 +11,7 @@ TEST_VECTORS = json.load(open(TEST_VECTORS_PATH))
 
 
 def run_blake3(args, input):
-    output = subprocess.run([path.join(HERE, "blake3")] + args,
+    output = subprocess.run([path.join(getcwd(), "blake3")] + args,
                             input=input,
                             stdout=subprocess.PIPE,
                             check=True)
