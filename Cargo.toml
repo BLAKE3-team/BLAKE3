@@ -29,6 +29,9 @@ std = []
 # `update_rayon` and (in combination with `mmap` below) `update_mmap_rayon`
 # methods, for multithreaded hashing. However, even if this feature is enabled,
 # all other APIs remain single-threaded.
+#
+# Implementation detail: We take a dependency on rayon-core instead of rayon,
+# because it builds faster and still includes all the APIs we need.
 rayon = ["dep:rayon-core", "std"]
 
 # The `mmap` feature (disabled by default, but enabled for docs.rs) adds the
