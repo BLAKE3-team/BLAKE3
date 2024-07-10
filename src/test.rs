@@ -809,12 +809,14 @@ fn test_mmap_rayon() -> Result<(), std::io::Error> {
 #[cfg(feature = "std")]
 #[cfg(feature = "serde")]
 fn test_serde() {
-    let hash: crate::Hash = [255; 32].into();
+    // Henrik suggested that we use 0xfe / 254 for byte test data instead of 0xff / 255, due to the
+    // fact that 0xfe is not a well formed CBOR item.
+    let hash: crate::Hash = [0xfe; 32].into();
 
     let json = serde_json::to_string(&hash).unwrap();
     assert_eq!(
         json,
-        "[255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255]",
+        "[254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254]",
     );
     let hash2: crate::Hash = serde_json::from_str(&json).unwrap();
     assert_eq!(hash, hash2);
@@ -824,20 +826,22 @@ fn test_serde() {
     assert_eq!(
         cbor,
         [
-            88, 32, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255
+            0x58, 0x20, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,
+            0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,
+            0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe
         ]
     );
     let hash_from_cbor: crate::Hash = ciborium::from_reader(&cbor[..]).unwrap();
     assert_eq!(hash_from_cbor, hash);
 
-    // Before we used serde_bytes, the hash [255; 32] would serialize as an array instead of a
+    // Before we used serde_bytes, the hash [254; 32] would serialize as an array instead of a
     // byte string, like this. Make sure we can still deserialize this representation.
     let old_cbor: &[u8] = &[
-        152, 32, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255,
-        24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255,
-        24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255,
-        24, 255, 24, 255, 24, 255,
+        0x98, 0x20, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18,
+        0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe,
+        0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18,
+        0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe,
+        0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe,
     ];
     let hash_from_old_cbor: crate::Hash = ciborium::from_reader(old_cbor).unwrap();
     assert_eq!(hash_from_old_cbor, hash);
