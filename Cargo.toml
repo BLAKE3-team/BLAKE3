@@ -42,6 +42,8 @@ mmap = ["std", "dep:memmap2"]
 # Implement the zeroize::Zeroize trait for types in this crate.
 zeroize = ["dep:zeroize", "arrayvec/zeroize"]
 
+serde = ["dep:serde", "dep:serde_bytes"]
+
 # This crate implements traits from the RustCrypto project, exposed here as the
 # "traits-preview" feature. However, these traits aren't stable, and they're
 # expected to change in incompatible ways before they reach 1.0. For that
@@ -49,7 +51,7 @@ zeroize = ["dep:zeroize", "arrayvec/zeroize"]
 # who use it should expect breaking changes between patch versions of this
 # crate. (The "*-preview" feature name follows the conventions of the RustCrypto
 # "signature" crate.)
-traits-preview = ["digest"]
+traits-preview = ["dep:digest"]
 
 # ---------- Features below this line are undocumented and unstable. ----------
 # The following features are mainly intended for testing and benchmarking, and
@@ -103,6 +105,7 @@ digest = { version = "0.10.1", features = [ "mac" ], optional = true }
 memmap2 = { version = "0.9", optional = true }
 rayon-core = { version = "1.12.1", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
+serde_bytes = { version = "0.11.15", optional = true }
 zeroize = { version = "1", default-features = false, features = ["zeroize_derive"], optional = true }
 
 [dev-dependencies]
@@ -114,6 +117,7 @@ rand_chacha = "0.3.0"
 reference_impl = { path = "./reference_impl" }
 tempfile = "3.8.0"
 serde_json = "1.0.107"
+ciborium = "0.2.2"
 
 [build-dependencies]
 cc = "1.0.4"

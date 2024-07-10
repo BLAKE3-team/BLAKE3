@@ -809,14 +809,38 @@ fn test_mmap_rayon() -> Result<(), std::io::Error> {
 #[cfg(feature = "std")]
 #[cfg(feature = "serde")]
 fn test_serde() {
-    let hash: crate::Hash = [7; 32].into();
+    let hash: crate::Hash = [255; 32].into();
+
     let json = serde_json::to_string(&hash).unwrap();
     assert_eq!(
         json,
-        "[7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7]",
+        "[255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255]",
     );
     let hash2: crate::Hash = serde_json::from_str(&json).unwrap();
     assert_eq!(hash, hash2);
+
+    let mut cbor = Vec::<u8>::new();
+    ciborium::into_writer(&hash, &mut cbor).unwrap();
+    assert_eq!(
+        cbor,
+        [
+            88, 32, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255
+        ]
+    );
+    let hash_from_cbor: crate::Hash = ciborium::from_reader(&cbor[..]).unwrap();
+    assert_eq!(hash_from_cbor, hash);
+
+    // Before we used serde_bytes, the hash [255; 32] would serialize as an array instead of a
+    // byte string, like this. Make sure we can still deserialize this representation.
+    let old_cbor: &[u8] = &[
+        152, 32, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255,
+        24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255,
+        24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255, 24, 255,
+        24, 255, 24, 255, 24, 255,
+    ];
+    let hash_from_old_cbor: crate::Hash = ciborium::from_reader(old_cbor).unwrap();
+    assert_eq!(hash_from_old_cbor, hash);
 }
 
 // `cargo +nightly miri test` currently works, but it takes forever, because some of our test
