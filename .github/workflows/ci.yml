@@ -34,7 +34,7 @@ jobs:
           # https://github.com/rust-lang/libs-team/issues/72.
           # This test target is here so that we notice if we accidentally bump
           # the MSRV, but it's not a promise that we won't bump it.
-          "1.67.1",
+          "1.70.0",
         ]
 
     steps:
