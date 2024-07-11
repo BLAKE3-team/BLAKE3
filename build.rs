@@ -97,6 +97,11 @@ fn new_build() -> cc::Build {
     if !is_windows_msvc() {
         build.flag("-std=c11");
     }
+    // Do NOT trigger a rebuild any time the env changes (e.g. $PATH).
+    // This prevents all downstream crates from being rebuilt when `cargo check`
+    // or `cargo build` are run in different environments, like Rust Analyzer
+    // vs. in the terminal vs. in a Git pre-commit hook.
+    build.emit_rerun_if_env_changed(false);
     build
 }
 
