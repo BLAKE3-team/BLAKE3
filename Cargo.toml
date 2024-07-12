@@ -1,6 +1,6 @@
 [package]
 name = "blake3"
-version = "1.5.1"
+version = "1.5.2"
 authors = ["Jack O'Connor <oconnor663@gmail.com>", "Samuel Neves"]
 description = "the BLAKE3 hash function"
 repository = "https://github.com/BLAKE3-team/BLAKE3"
