@@ -74,7 +74,7 @@ fn is_big_endian() -> bool {
     endianness() == "big"
 }
 
-// Windows targets may be using the MSVC toolchain or the GNU toolchain. The
+// Windows targets may be using the MSVC toolchain or the MinGW toolchain. The
 // right compiler flags to use depend on the toolchain. (And we don't want to
 // use flag_if_supported, because we don't want features to be silently
 // disabled by old compilers.)
@@ -85,11 +85,15 @@ fn is_windows_msvc() -> bool {
         && target_components()[3] == "msvc"
 }
 
+// MinGW toolchain uses 2 different targets depending on the main compiler.
+// Target for a general MinGW toolchain ends with `-gnu` (GCC is used as C
+// compiler). Target for a LLVM-MinGW toolchain (Clang is used as C compiler)
+// ends with `-gnullvm`.
 fn is_windows_gnu() -> bool {
     // Some targets are only two components long, so check in steps.
     target_components()[1] == "pc"
         && target_components()[2] == "windows"
-        && target_components()[3] == "gnu"
+        && target_components()[3] != "msvc"
 }
 
 fn new_build() -> cc::Build {
