@@ -4,7 +4,7 @@ version = "1.5.3"
 authors = ["Jack O'Connor <oconnor663@gmail.com>"]
 description = "a command line implementation of the BLAKE3 hash function"
 repository = "https://github.com/BLAKE3-team/BLAKE3"
-license = "CC0-1.0 OR Apache-2.0"
+license = "CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 edition = "2021"
 
