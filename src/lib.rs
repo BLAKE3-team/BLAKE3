@@ -1667,3 +1667,197 @@ impl std::io::Seek for OutputReader {
         Ok(self.position())
     }
 }
+
+/// A buffering wrapper around [`OutputReader`].
+///
+/// This fills some of the simpler niches of a [`std::io::BufReader`] for no_std
+/// and rng use-cases that don't need a full [`std::io::BufReader`].  If you
+/// need the [`std::io`] traits with buffering, you're probably better off with
+/// a full [`std::io::BufReader`] wrapper around [`OutputReader`].
+///
+/// With the `rand` feature, this struct implements [`rand_core::RngCore`],
+/// [`rand_core::SeedableRng`], and [`rand_core::CryptoRng`], allowing this
+/// type to be used as a full [`rand::Rng`].  A [`Rng`] type alias is given as a
+/// convenient suggested buffer size for Rng use.
+///
+/// [`std::io`]: https://doc.rust-lang.org/std/io/index.html
+/// [`std::io::BufReader`]: https://doc.rust-lang.org/std/io/struct.BufReader.html
+/// [`OutputReader`]: struct.OutputReader.html
+/// [`rand_core::RngCore`]: https://rust-random.github.io/rand/rand_core/trait.RngCore.html
+/// [`rand_core::SeedableRng`]: https://rust-random.github.io/rand/rand_core/trait.SeedableRng.html
+/// [`rand_core::CryptoRng`]: https://rust-random.github.io/rand/rand_core/trait.CryptoRng.html
+/// [`rand::Rng`]: https://docs.rs/rand/latest/rand/trait.Rng.html
+/// [`Rng`]: type.Rng.html
+#[derive(Clone, Debug)]
+pub struct BufOutputReader<const N: usize = 64> {
+    reader: OutputReader,
+    buffer: [u8; N],
+
+    /// The amount of buffer that has been read already.
+    offset: usize,
+}
+
+impl<const N: usize> BufOutputReader<N> {
+    #[inline]
+    pub fn new(reader: OutputReader) -> Self {
+        reader.into()
+    }
+
+    /// The position in the output stream, minus the remaining characters in
+    /// the buffer.
+    #[inline]
+    pub fn position(&self) -> u64 {
+        let buffered = (N - self.offset) as u64;
+        self.reader.position() - buffered
+    }
+
+    /// Drop what's remaining in the buffer and give a mutable reference to the
+    /// inner reader, so it can be seeked or otherwise manipulated.
+    #[inline]
+    pub fn output_reader(&mut self) -> &mut OutputReader {
+        self.offset = N;
+        &mut self.reader
+    }
+
+    /// Efficiently fill the destination buffer, calling the underlying
+    /// [`OutputReader::fill`] as few times as possible.
+    ///
+    /// [`OutputReader::fill`]: struct.OutputReader.html#method.fill
+    pub fn fill(&mut self, mut dest: &mut [u8]) {
+        if dest.is_empty() {
+            return;
+        }
+
+        let buffer_remaining = N - self.offset;
+
+        if dest.len() <= buffer_remaining {
+            // There are enough bytes left in the buffer to consume without
+            // reading.
+            let end = self.offset + dest.len();
+            dest.copy_from_slice(&self.buffer[self.offset..end]);
+            self.offset = end;
+        } else {
+            // First empty the buffer.
+            if buffer_remaining > 0 {
+                dest[..buffer_remaining].copy_from_slice(&self.buffer[self.offset..N]);
+                let copied = N - self.offset;
+                dest = &mut dest[copied..];
+            }
+
+            let buffers = dest.len() / N;
+            let remainder = dest.len() % N;
+
+            // Copy full-sized chunks directly to the destination, bypassing
+            // the buffer.
+            if buffers > 0 {
+                let buffers_bytes = buffers * N;
+                self.reader.fill(&mut dest[..buffers_bytes]);
+                dest = &mut dest[buffers_bytes..];
+            }
+
+            // Fill the buffer for the remainder, if there is any.
+            if remainder > 0 {
+                self.reader.fill(&mut self.buffer);
+                dest.copy_from_slice(&self.buffer[..remainder]);
+                self.offset = remainder;
+            } else {
+                // We have emptied the remaining buffer, so mark this empty.
+                self.offset = N;
+            }
+        }
+    }
+}
+
+impl<const N: usize> From<OutputReader> for BufOutputReader<N> {
+    fn from(value: OutputReader) -> Self {
+        Self {
+            reader: value,
+            buffer: [0u8; N],
+
+            // Start buffer unfilled.
+            offset: N,
+        }
+    }
+}
+
+#[cfg(feature = "rand")]
+impl<const N: usize> rand_core::SeedableRng for BufOutputReader<N> {
+    type Seed = [u8; 32];
+
+    #[inline]
+    fn from_seed(seed: Self::Seed) -> Self {
+        Hasher::new_keyed(&seed).finalize_xof().into()
+    }
+}
+
+#[cfg(feature = "rand")]
+impl<const N: usize> rand_core::RngCore for BufOutputReader<N> {
+    #[inline]
+    fn next_u32(&mut self) -> u32 {
+        rand_core::impls::next_u32_via_fill(self)
+    }
+
+    #[inline]
+    fn next_u64(&mut self) -> u64 {
+        rand_core::impls::next_u64_via_fill(self)
+    }
+
+    #[inline]
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        self.fill(dest);
+    }
+
+    #[inline]
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
+        self.fill(dest);
+        Ok(())
+    }
+}
+
+#[cfg(feature = "rand")]
+impl<const N: usize> rand_core::block::BlockRngCore for BufOutputReader<N>
+where
+    [u8; N]: Default,
+{
+    type Item = u8;
+    type Results = [u8; N];
+
+    fn generate(&mut self, results: &mut Self::Results) {
+        self.fill(results);
+    }
+}
+
+#[cfg(feature = "rand")]
+impl<const N: usize> rand_core::CryptoRng for BufOutputReader<N> {}
+
+#[cfg(feature = "rand")]
+/// A convenience type alias for the recommended Rng buffer size.
+///
+/// # Examples
+///
+/// ```
+/// # use rand::{Rng as _, SeedableRng as _};
+/// # fn main() {
+/// // Hash input and convert the output stream to an rng.
+/// let mut hasher = blake3::Hasher::new();
+/// hasher.update(b"foo");
+/// hasher.update(b"bar");
+/// hasher.update(b"baz");
+/// let mut rng: blake3::Rng = hasher.finalize_xof().into();
+/// let output: u64 = rng.gen();
+/// assert_eq!(output, 0xfb61f3c9e0fe9ac0u64);
+///
+/// // Alternately, seed it as a rand::SeedableRng.
+/// let mut rng = blake3::Rng::from_seed(*b"0123456789abcdefghijklmnopqrstuv");
+/// let output: u64 = rng.gen();
+/// assert_eq!(output, 0x9958c58595366357u64);
+///
+/// // In the real world, you will probably not use a static seed, but seed from
+/// // OsRng or something of the sort.
+/// let mut seed = [0u8; 32];
+/// rand::rngs::OsRng.fill(&mut seed);
+/// let mut rng = blake3::Rng::from_seed(seed);
+/// let _output: u64 = rng.gen();
+/// # }
+/// ```
+pub type Rng = BufOutputReader<64>;
