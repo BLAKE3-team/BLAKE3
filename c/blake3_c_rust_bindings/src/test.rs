@@ -425,6 +425,7 @@ fn test_xof_many_portable() {
 }
 
 #[test]
+#[cfg(unix)]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn test_xof_many_avx512() {
     if !crate::avx512_detected() {

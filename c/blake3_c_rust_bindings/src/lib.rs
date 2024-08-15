@@ -291,6 +291,7 @@ pub mod ffi {
                 flags_end: u8,
                 out: *mut u8,
             );
+            #[cfg(unix)]
             pub fn blake3_xof_many_avx512(
                 cv: *const u32,
                 block: *const u8,

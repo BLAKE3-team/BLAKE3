@@ -230,7 +230,7 @@ void blake3_xof_many(const uint32_t cv[8],
                      uint8_t out[64], size_t outblocks) {
 #if defined(IS_X86)
   const enum cpu_feature features = get_cpu_features();
-#if !defined(BLAKE3_NO_AVX512)
+#if defined(__unix__) && !defined(BLAKE3_NO_AVX512)
   if (features & AVX512VL) {
     blake3_xof_many_avx512(cv, block, block_len, counter, flags, out, outblocks);
     return;

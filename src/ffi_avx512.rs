@@ -61,6 +61,7 @@ pub unsafe fn hash_many<const N: usize>(
 }
 
 // Unsafe because this may only be called on platforms supporting AVX-512.
+#[cfg(unix)]
 pub unsafe fn xof_many(
     cv: &CVWords,
     block: &[u8; BLOCK_LEN],
@@ -109,6 +110,7 @@ pub mod ffi {
             flags_end: u8,
             out: *mut u8,
         );
+        #[cfg(unix)]
         pub fn blake3_xof_many_avx512(
             cv: *const u32,
             block: *const u8,
@@ -141,6 +143,7 @@ mod test {
         crate::test::test_hash_many_fn(hash_many, hash_many);
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_xof_many() {
         if !crate::platform::avx512_detected() {
