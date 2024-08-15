@@ -378,7 +378,6 @@ pub fn test_xof_many_fn(xof_many_function: XofManyFunction) {
     //   when you're supposed to ANDNOT...
     let initial_counters = [0, u32::MAX as u64, i32::MAX as u64];
     for counter in initial_counters {
-        #[cfg(feature = "std")]
         dbg!(counter);
 
         let mut block = [0; BLOCK_LEN];
