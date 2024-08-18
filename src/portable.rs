@@ -185,6 +185,7 @@ pub fn xof_many(
     flags: u8,
     out: &mut [u8],
 ) {
+    debug_assert_eq!(0, out.len() % BLOCK_LEN, "whole blocks only");
     for out_block in out.chunks_exact_mut(64) {
         out_block.copy_from_slice(&compress_xof(cv, block, block_len, counter, flags));
         counter += 1;

@@ -286,6 +286,7 @@ impl Platform {
         flags: u8,
         out: &mut [u8],
     ) {
+        debug_assert_eq!(0, out.len() % BLOCK_LEN, "whole blocks only");
         if out.is_empty() {
             // The current assembly implementation always outputs at least 1 block.
             return;

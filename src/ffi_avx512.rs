@@ -70,6 +70,7 @@ pub unsafe fn xof_many(
     flags: u8,
     out: &mut [u8],
 ) {
+    debug_assert_eq!(0, out.len() % BLOCK_LEN, "whole blocks only");
     ffi::blake3_xof_many_avx512(
         cv.as_ptr(),
         block.as_ptr(),
