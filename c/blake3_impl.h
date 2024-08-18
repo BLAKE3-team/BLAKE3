@@ -222,14 +222,6 @@ void blake3_compress_xof_portable(const uint32_t cv[8],
                                   uint8_t block_len, uint64_t counter,
                                   uint8_t flags, uint8_t out[64]);
 
-// This function is test-only. When blake3_xof_many doesn't have an optimized implementation,
-// it loops over blake3_compress_xof instead of falling back to this, so it still benefits
-// from compress optimizations.
-void blake3_xof_many_portable(const uint32_t cv[8],
-                              const uint8_t block[BLAKE3_BLOCK_LEN],
-                              uint8_t block_len, uint64_t counter, uint8_t flags,
-                              uint8_t out[64], size_t outblocks);
-
 void blake3_hash_many_portable(const uint8_t *const *inputs, size_t num_inputs,
                                size_t blocks, const uint32_t key[8],
                                uint64_t counter, bool increment_counter,

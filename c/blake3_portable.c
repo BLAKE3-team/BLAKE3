@@ -122,16 +122,6 @@ void blake3_compress_xof_portable(const uint32_t cv[8],
   store32(&out[15 * 4], state[15] ^ cv[7]);
 }
 
-void blake3_xof_many_portable(const uint32_t cv[8],
-                              const uint8_t block[BLAKE3_BLOCK_LEN],
-                              uint8_t block_len, uint64_t counter, uint8_t flags,
-                              uint8_t out[BLAKE3_BLOCK_LEN], size_t outblocks)
-{
-  for(size_t i = 0; i < outblocks; ++i) {
-    blake3_compress_xof_portable(cv, block, block_len, counter + i, flags, out + 64*i);
-  }
-}
-
 INLINE void hash_one_portable(const uint8_t *input, size_t blocks,
                               const uint32_t key[8], uint64_t counter,
                               uint8_t flags, uint8_t flags_start,

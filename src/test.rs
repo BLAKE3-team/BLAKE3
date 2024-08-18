@@ -206,6 +206,7 @@ pub fn test_hash_many_fn(
     }
 }
 
+#[allow(unused)]
 type XofManyFunction = unsafe fn(
     cv: &CVWords,
     block: &[u8; BLOCK_LEN],
@@ -216,6 +217,7 @@ type XofManyFunction = unsafe fn(
 );
 
 // A shared helper function for platform-specific tests.
+#[allow(unused)]
 pub fn test_xof_many_fn(xof_many_function: XofManyFunction) {
     let mut block = [0; BLOCK_LEN];
     let block_len = 42;
@@ -237,14 +239,15 @@ pub fn test_xof_many_fn(xof_many_function: XofManyFunction) {
         const OUTPUT_SIZE: usize = 31 * BLOCK_LEN;
 
         let mut portable_out = [0u8; OUTPUT_SIZE];
-        crate::portable::xof_many(
-            &cv,
-            &block,
-            block_len as u8,
-            counter,
-            flags,
-            &mut portable_out,
-        );
+        for (i, out_block) in portable_out.chunks_exact_mut(64).enumerate() {
+            out_block.copy_from_slice(&crate::portable::compress_xof(
+                &cv,
+                &block,
+                block_len as u8,
+                counter + i as u64,
+                flags,
+            ));
+        }
 
         let mut test_out = [0u8; OUTPUT_SIZE];
         unsafe {

@@ -359,6 +359,7 @@ fn test_hash_many_neon() {
     test_hash_many_fn(crate::ffi::neon::blake3_hash_many_neon);
 }
 
+#[allow(unused)]
 type XofManyFunction = unsafe extern "C" fn(
     cv: *const u32,
     block: *const u8,
@@ -370,6 +371,7 @@ type XofManyFunction = unsafe extern "C" fn(
 );
 
 // A shared helper function for platform-specific tests.
+#[allow(unused)]
 pub fn test_xof_many_fn(xof_many_function: XofManyFunction) {
     let mut block = [0; BLOCK_LEN];
     let block_len = 42;
@@ -390,16 +392,17 @@ pub fn test_xof_many_fn(xof_many_function: XofManyFunction) {
         const OUTPUT_SIZE: usize = 31 * BLOCK_LEN;
 
         let mut portable_out = [0u8; OUTPUT_SIZE];
-        unsafe {
-            crate::ffi::blake3_xof_many_portable(
-                cv.as_ptr(),
-                block.as_ptr(),
-                block_len as u8,
-                counter,
-                flags,
-                portable_out.as_mut_ptr(),
-                OUTPUT_SIZE / BLOCK_LEN,
-            );
+        for (i, out_block) in portable_out.chunks_exact_mut(BLOCK_LEN).enumerate() {
+            unsafe {
+                crate::ffi::blake3_compress_xof_portable(
+                    cv.as_ptr(),
+                    block.as_ptr(),
+                    block_len as u8,
+                    counter + i as u64,
+                    flags,
+                    out_block.as_mut_ptr(),
+                );
+            }
         }
 
         let mut test_out = [0u8; OUTPUT_SIZE];
@@ -443,12 +446,6 @@ pub fn test_xof_many_fn(xof_many_function: XofManyFunction) {
             }
         }
     }
-}
-
-// Testing the portable implementation against itself is circular, but why not.
-#[test]
-fn test_xof_many_portable() {
-    test_xof_many_fn(crate::ffi::blake3_xof_many_portable);
 }
 
 #[test]

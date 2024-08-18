@@ -177,25 +177,6 @@ pub fn hash_many<const N: usize>(
     }
 }
 
-// This function is test-only. When platform::xof_many() doesn't have an optimized implementation,
-// it loops over platform::compress_xof() instead of falling back to this, so it still benefits
-// from compress optimizations.
-#[cfg(test)]
-pub fn xof_many(
-    cv: &CVWords,
-    block: &[u8; BLOCK_LEN],
-    block_len: u8,
-    mut counter: u64,
-    flags: u8,
-    out: &mut [u8],
-) {
-    debug_assert_eq!(0, out.len() % BLOCK_LEN, "whole blocks only");
-    for out_block in out.chunks_exact_mut(64) {
-        out_block.copy_from_slice(&compress_xof(cv, block, block_len, counter, flags));
-        counter += 1;
-    }
-}
-
 #[cfg(test)]
 pub mod test {
     use super::*;
@@ -213,11 +194,5 @@ pub mod test {
     #[test]
     fn test_hash_many() {
         crate::test::test_hash_many_fn(hash_many, hash_many);
-    }
-
-    // Ditto.
-    #[test]
-    fn test_xof_many() {
-        crate::test::test_xof_many_fn(xof_many);
     }
 }
