@@ -371,6 +371,12 @@ type XofManyFunction = unsafe extern "C" fn(
 
 // A shared helper function for platform-specific tests.
 pub fn test_xof_many_fn(xof_many_function: XofManyFunction) {
+    let mut block = [0; BLOCK_LEN];
+    let block_len = 42;
+    crate::test::paint_test_input(&mut block[..block_len]);
+    let cv = [40, 41, 42, 43, 44, 45, 46, 47];
+    let flags = KEYED_HASH;
+
     // Test a few different initial counter values.
     // - 0: The base case.
     // - u32::MAX: The low word of the counter overflows for all inputs except the first.
@@ -380,11 +386,6 @@ pub fn test_xof_many_fn(xof_many_function: XofManyFunction) {
     for counter in initial_counters {
         dbg!(counter);
 
-        let mut block = [0; BLOCK_LEN];
-        let block_len = 42;
-        crate::test::paint_test_input(&mut block[..block_len]);
-        let cv = [40, 41, 42, 43, 44, 45, 46, 47];
-        let flags = KEYED_HASH;
         // 31 (16 + 8 + 4 + 2 + 1) outputs
         const OUTPUT_SIZE: usize = 31 * BLOCK_LEN;
 
@@ -415,6 +416,32 @@ pub fn test_xof_many_fn(xof_many_function: XofManyFunction) {
         }
 
         assert_eq!(portable_out, test_out);
+    }
+
+    // Test that xof_many doesn't write more blocks than requested. Note that the current assembly
+    // implementation always outputs at least one block, so we don't test the zero case.
+    for block_count in 1..=32 {
+        let mut array = [0; BLOCK_LEN * 33];
+        let output_start = 17;
+        let output_len = block_count * BLOCK_LEN;
+        let output_end = output_start + output_len;
+        let output = &mut array[output_start..output_end];
+        unsafe {
+            xof_many_function(
+                cv.as_ptr(),
+                block.as_ptr(),
+                block_len as u8,
+                0,
+                flags,
+                output.as_mut_ptr(),
+                block_count,
+            );
+        }
+        for i in 0..array.len() {
+            if i < output_start || output_end <= i {
+                assert_eq!(0, array[i], "index {i}");
+            }
+        }
     }
 }
 

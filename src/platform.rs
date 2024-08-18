@@ -286,6 +286,10 @@ impl Platform {
         flags: u8,
         out: &mut [u8],
     ) {
+        if out.is_empty() {
+            // The current assembly implementation always outputs at least 1 block.
+            return;
+        }
         match self {
             // Safe because detect() checked for platform support.
             #[cfg(blake3_avx512_ffi)]
