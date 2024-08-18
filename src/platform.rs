@@ -282,7 +282,7 @@ impl Platform {
         cv: &CVWords,
         block: &[u8; BLOCK_LEN],
         block_len: u8,
-        counter: u64,
+        mut counter: u64,
         flags: u8,
         out: &mut [u8],
     ) {
@@ -299,7 +299,16 @@ impl Platform {
             Platform::AVX512 => unsafe {
                 crate::avx512::xof_many(cv, block, block_len, counter, flags, out)
             },
-            _ => crate::portable::xof_many(cv, block, block_len, counter, flags, out),
+            _ => {
+                // For platforms without an optimized xof_many, fall back to a loop over
+                // compress_xof. This is still faster than portable code.
+                for out_block in out.chunks_exact_mut(BLOCK_LEN) {
+                    // TODO: Use array_chunks_mut here once that's stable.
+                    let out_array: &mut [u8; BLOCK_LEN] = out_block.try_into().unwrap();
+                    *out_array = self.compress_xof(cv, block, block_len, counter, flags);
+                    counter += 1;
+                }
+            }
         }
     }
 

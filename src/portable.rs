@@ -177,6 +177,10 @@ pub fn hash_many<const N: usize>(
     }
 }
 
+// This function is test-only. When platform::xof_many() doesn't have an optimized implementation,
+// it loops over platform::compress_xof() instead of falling back to this, so it still benefits
+// from compress optimizations.
+#[cfg(test)]
 pub fn xof_many(
     cv: &CVWords,
     block: &[u8; BLOCK_LEN],

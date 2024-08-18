@@ -241,7 +241,9 @@ void blake3_xof_many(const uint32_t cv[8],
   }
 #endif
 #endif
-  blake3_xof_many_portable(cv, block, block_len, counter, flags, out, outblocks);
+  for(size_t i = 0; i < outblocks; ++i) {
+    blake3_compress_xof(cv, block, block_len, counter + i, flags, out + 64*i);
+  }
 }
 
 void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
