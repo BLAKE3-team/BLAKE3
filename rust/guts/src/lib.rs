@@ -49,6 +49,8 @@ use core::ptr;
 use core::sync::atomic::{AtomicPtr, Ordering::Relaxed};
 
 pub mod portable;
+#[cfg(any(target_arch = "riscv64"))]
+pub mod riscv_rva23u64;
 
 #[cfg(test)]
 mod test;
@@ -82,8 +84,14 @@ pub const MSG_SCHEDULE: [[usize; 16]; 7] = [
     [11, 15, 5, 0, 1, 9, 8, 6, 14, 10, 2, 12, 3, 4, 7, 13],
 ];
 
-// never less than 2
-pub const MAX_SIMD_DEGREE: usize = 2;
+cfg_if::cfg_if! {
+    if #[cfg(target_arch = "riscv64")] {
+        pub const MAX_SIMD_DEGREE: usize = riscv_rva23u64::MAX_SIMD_DEGREE;
+    } else {
+        // never less than 2
+        pub const MAX_SIMD_DEGREE: usize = 2;
+    }
+}
 
 pub type CVBytes = [u8; 32];
 pub type CVWords = [u32; 8];
@@ -101,6 +109,11 @@ pub static DETECTED_IMPL: Implementation = Implementation::new(
 );
 
 fn detect() -> Implementation {
+    #[cfg(target_arch = "riscv64")]
+    {
+        return riscv_rva23u64::implementation();
+    }
+    #[allow(unreachable_code)]
     portable::implementation()
 }
 
