@@ -904,8 +904,17 @@ fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8) -> Ou
 
 /// The default hash function.
 ///
-/// For an incremental version that accepts multiple writes, see
-/// [`Hasher::update`].
+/// For an incremental version that accepts multiple writes, see [`Hasher::new`],
+/// [`Hasher::update`], and [`Hasher::finalize`]. These two lines are equivalent:
+///
+/// ```
+/// let hash = blake3::hash(b"foo");
+/// # let hash1 = hash;
+///
+/// let hash = blake3::Hasher::new().update(b"foo").finalize();
+/// # let hash2 = hash;
+/// # assert_eq!(hash1, hash2);
+/// ```
 ///
 /// For output sizes other than 32 bytes, see [`Hasher::finalize_xof`] and
 /// [`OutputReader`].
@@ -924,11 +933,22 @@ pub fn hash(input: &[u8]) -> Hash {
 /// requirement, and callers need to be careful not to compare MACs as raw
 /// bytes.
 ///
-/// For output sizes other than 32 bytes, see [`Hasher::new_keyed`],
-/// [`Hasher::finalize_xof`], and [`OutputReader`].
+/// For an incremental version that accepts multiple writes, see [`Hasher::new_keyed`],
+/// [`Hasher::update`], and [`Hasher::finalize`]. These two lines are equivalent:
+///
+/// ```
+/// # const KEY: &[u8; 32] = &[0; 32];
+/// let mac = blake3::keyed_hash(KEY, b"foo");
+/// # let mac1 = mac;
+///
+/// let mac = blake3::Hasher::new_keyed(KEY).update(b"foo").finalize();
+/// # let mac2 = mac;
+/// # assert_eq!(mac1, mac2);
+/// ```
+///
+/// For output sizes other than 32 bytes, see [`Hasher::finalize_xof`], and [`OutputReader`].
 ///
 /// This function is always single-threaded. For multithreading support, see
-/// [`Hasher::new_keyed`] and
 /// [`Hasher::update_rayon`](struct.Hasher.html#method.update_rayon).
 pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
     let key_words = platform::words_from_le_bytes_32(key);
@@ -962,11 +982,25 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 /// [Argon2]. Password hashes are entirely different from generic hash
 /// functions, with opposite design requirements.
 ///
-/// For output sizes other than 32 bytes, see [`Hasher::new_derive_key`],
-/// [`Hasher::finalize_xof`], and [`OutputReader`].
+/// For an incremental version that accepts multiple writes, see [`Hasher::new_derive_key`],
+/// [`Hasher::update`], and [`Hasher::finalize`]. These two statements are equivalent:
+///
+/// ```
+/// # const CONTEXT: &str = "example.com 2019-12-25 16:18:03 session tokens v1";
+/// let key = blake3::derive_key(CONTEXT, b"key material, not a password");
+/// # let key1 = key;
+///
+/// let key: [u8; 32] = blake3::Hasher::new_derive_key(CONTEXT)
+///     .update(b"key material, not a password")
+///     .finalize()
+///     .into();
+/// # let key2 = key;
+/// # assert_eq!(key1, key2);
+/// ```
+///
+/// For output sizes other than 32 bytes, see [`Hasher::finalize_xof`], and [`OutputReader`].
 ///
 /// This function is always single-threaded. For multithreading support, see
-/// [`Hasher::new_derive_key`] and
 /// [`Hasher::update_rayon`](struct.Hasher.html#method.update_rayon).
 ///
 /// [Argon2]: https://en.wikipedia.org/wiki/Argon2
