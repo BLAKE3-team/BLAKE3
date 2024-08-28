@@ -90,6 +90,17 @@ no_avx2 = []
 no_avx512 = []
 no_neon = []
 
+# For developers who encountered `derive_key(&str)`, read the Blake3 paper,
+# and read and fully comprehended this comment:
+#
+#   https://github.com/BLAKE3-team/BLAKE3/issues/13#issuecomment-573219903
+#
+# and are willing to own both halves when their design breaks.
+#
+# Note: The *only* reason to add this is so that developers don't need to
+# maintain out-of-tree hacked up patches.
+i_know_what_i_am_doing = []
+
 [package.metadata.docs.rs]
 # Document the rayon/mmap methods and the Serialize/Deserialize/Zeroize impls on docs.rs.
 features = ["mmap", "rayon", "serde", "zeroize"]
