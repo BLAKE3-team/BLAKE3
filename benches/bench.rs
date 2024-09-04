@@ -526,7 +526,7 @@ fn bench_xof(b: &mut Bencher, len: usize) {
 
 #[bench]
 fn bench_xof_01_block(b: &mut Bencher) {
-    bench_xof(b, BLOCK_LEN);
+    bench_xof(b, 1 * BLOCK_LEN);
 }
 
 #[bench]
@@ -535,13 +535,68 @@ fn bench_xof_02_blocks(b: &mut Bencher) {
 }
 
 #[bench]
+fn bench_xof_03_blocks(b: &mut Bencher) {
+    bench_xof(b, 3 * BLOCK_LEN);
+}
+
+#[bench]
 fn bench_xof_04_blocks(b: &mut Bencher) {
     bench_xof(b, 4 * BLOCK_LEN);
 }
 
 #[bench]
+fn bench_xof_05_blocks(b: &mut Bencher) {
+    bench_xof(b, 5 * BLOCK_LEN);
+}
+
+#[bench]
+fn bench_xof_06_blocks(b: &mut Bencher) {
+    bench_xof(b, 6 * BLOCK_LEN);
+}
+
+#[bench]
+fn bench_xof_07_blocks(b: &mut Bencher) {
+    bench_xof(b, 7 * BLOCK_LEN);
+}
+
+#[bench]
 fn bench_xof_08_blocks(b: &mut Bencher) {
     bench_xof(b, 8 * BLOCK_LEN);
+}
+
+#[bench]
+fn bench_xof_09_blocks(b: &mut Bencher) {
+    bench_xof(b, 9 * BLOCK_LEN);
+}
+
+#[bench]
+fn bench_xof_10_blocks(b: &mut Bencher) {
+    bench_xof(b, 10 * BLOCK_LEN);
+}
+
+#[bench]
+fn bench_xof_11_blocks(b: &mut Bencher) {
+    bench_xof(b, 11 * BLOCK_LEN);
+}
+
+#[bench]
+fn bench_xof_12_blocks(b: &mut Bencher) {
+    bench_xof(b, 12 * BLOCK_LEN);
+}
+
+#[bench]
+fn bench_xof_13_blocks(b: &mut Bencher) {
+    bench_xof(b, 13 * BLOCK_LEN);
+}
+
+#[bench]
+fn bench_xof_14_blocks(b: &mut Bencher) {
+    bench_xof(b, 14 * BLOCK_LEN);
+}
+
+#[bench]
+fn bench_xof_15_blocks(b: &mut Bencher) {
+    bench_xof(b, 15 * BLOCK_LEN);
 }
 
 #[bench]
