@@ -22,16 +22,16 @@ _blake3_hash_many_avx512 PROC
         push r15
         mov rbp, rsp
         sub rsp, 1E8h
-        movdqa xmmword ptr [rbp-0A8h], xmm6
-        movdqa xmmword ptr [rbp-98h], xmm7
-        movdqa xmmword ptr [rbp-88h], xmm8
-        movdqa xmmword ptr [rbp-78h], xmm9
-        movdqa xmmword ptr [rbp-68h], xmm10
-        movdqa xmmword ptr [rbp-58h], xmm11
-        movdqa xmmword ptr [rbp-48h], xmm12
-        movdqa xmmword ptr [rbp-38h], xmm13
-        movdqa xmmword ptr [rbp-28h], xmm14
-        movdqa xmmword ptr [rbp-18h], xmm15
+        movaps xmmword ptr [rbp-0A8h], xmm6
+        movaps xmmword ptr [rbp-98h], xmm7
+        movaps xmmword ptr [rbp-88h], xmm8
+        movaps xmmword ptr [rbp-78h], xmm9
+        movaps xmmword ptr [rbp-68h], xmm10
+        movaps xmmword ptr [rbp-58h], xmm11
+        movaps xmmword ptr [rbp-48h], xmm12
+        movaps xmmword ptr [rbp-38h], xmm13
+        movaps xmmword ptr [rbp-28h], xmm14
+        movaps xmmword ptr [rbp-18h], xmm15
         and rsp, -40h
         mov rax, qword ptr [rbp+68h]
         movzx ebx, byte ptr [rbp+70h]
@@ -40,7 +40,7 @@ _blake3_hash_many_avx512 PROC
         vpbroadcastd ymm0, eax
         shr rax, 20h
         vpbroadcastd ymm1, eax
-        vmovdqa32 ymm2 {k1} {z}, ymmword ptr [ADD0]
+        vmovdqa32 ymm2 {k1} {z}, ymmword ptr [ADD0+0]
         vmovdqa32 ymm3 {k1} {z}, ymmword ptr [ADD0+32]
         vpaddd ymm2, ymm0, ymm2
         vmovdqa ymmword ptr [rsp], ymm2
@@ -55,9 +55,9 @@ _blake3_hash_many_avx512 PROC
         vmovdqa ymmword ptr [rsp+60h], ymm1
         shl r8, 6h
         mov qword ptr [rsp+100h], r8
-        cmp rdx, 10h
-        jb final15blocks
-ALIGN   16
+        cmp rdx, 8h
+        jbe final8blocks
+ALIGN 16
 outerloop16:
         vpbroadcastd zmm0, dword ptr [r9]
         vpbroadcastd zmm1, dword ptr [r9+4h]
@@ -83,39 +83,60 @@ innerloop16:
         mov rdi, qword ptr [rcx+10h]
         mov r8, qword ptr [rcx+18h]
         mov r10, qword ptr [rcx+40h]
-        mov r11, qword ptr [rcx+48h]
-        mov r12, qword ptr [rcx+50h]
-        mov r13, qword ptr [rcx+58h]
         vmovdqu32 ymm8, ymmword ptr [rax+rbx*1-40h]
         vinserti64x4 zmm8, zmm8, ymmword ptr [r10+rbx*1-40h], 1h
         vmovdqu32 ymm9, ymmword ptr [rsi+rbx*1-40h]
+        cmp rdx, 0Ah
+        jb @F
+        mov r11, qword ptr [rcx+48h]
         vinserti64x4 zmm9, zmm9, ymmword ptr [r11+rbx*1-40h], 1h
+@@:
         vpunpckldq zmm10, zmm8, zmm9
         vpunpckhdq zmm11, zmm8, zmm9
         vmovdqu32 ymm8, ymmword ptr [rdi+rbx*1-40h]
+        cmp rdx, 0Bh
+        jb @F
+        mov r12, qword ptr [rcx+50h]
         vinserti64x4 zmm8, zmm8, ymmword ptr [r12+rbx*1-40h], 1h
+@@:
         vmovdqu32 ymm9, ymmword ptr [r8+rbx*1-40h]
+        cmp rdx, 0Ch
+        jb @F
+        mov r13, qword ptr [rcx+58h]
         vinserti64x4 zmm9, zmm9, ymmword ptr [r13+rbx*1-40h], 1h
+@@:
         vpunpckldq zmm12, zmm8, zmm9
         vpunpckhdq zmm13, zmm8, zmm9
         mov rax, qword ptr [rcx+20h]
         mov rsi, qword ptr [rcx+28h]
         mov rdi, qword ptr [rcx+30h]
         mov r8, qword ptr [rcx+38h]
-        mov r10, qword ptr [rcx+60h]
-        mov r11, qword ptr [rcx+68h]
-        mov r12, qword ptr [rcx+70h]
-        mov r13, qword ptr [rcx+78h]
         vmovdqu32 ymm8, ymmword ptr [rax+rbx*1-40h]
+        cmp rdx, 0Dh
+        jb @F
+        mov r10, qword ptr [rcx+60h]
         vinserti64x4 zmm8, zmm8, ymmword ptr [r10+rbx*1-40h], 1h
+@@:
         vmovdqu32 ymm9, ymmword ptr [rsi+rbx*1-40h]
+        cmp rdx, 0Eh
+        jb @F
+        mov r11, qword ptr [rcx+68h]
         vinserti64x4 zmm9, zmm9, ymmword ptr [r11+rbx*1-40h], 1h
+@@:
         vpunpckldq zmm14, zmm8, zmm9
         vpunpckhdq zmm15, zmm8, zmm9
         vmovdqu32 ymm8, ymmword ptr [rdi+rbx*1-40h]
+        cmp rdx, 0Fh
+        jb @F
+        mov r12, qword ptr [rcx+70h]
         vinserti64x4 zmm8, zmm8, ymmword ptr [r12+rbx*1-40h], 1h
+@@:
         vmovdqu32 ymm9, ymmword ptr [r8+rbx*1-40h]
+        cmp rdx, 10h
+        jb @F
+        mov r13, qword ptr [rcx+78h]
         vinserti64x4 zmm9, zmm9, ymmword ptr [r13+rbx*1-40h], 1h
+@@:
         vpunpckldq zmm16, zmm8, zmm9
         vpunpckhdq zmm17, zmm8, zmm9
         vmovdqa32 zmm8, zmmword ptr [INDEX0]
@@ -145,19 +166,31 @@ innerloop16:
         mov rdi, qword ptr [rcx+10h]
         mov r8, qword ptr [rcx+18h]
         mov r10, qword ptr [rcx+40h]
-        mov r11, qword ptr [rcx+48h]
-        mov r12, qword ptr [rcx+50h]
-        mov r13, qword ptr [rcx+58h]
         vmovdqu32 ymm11, ymmword ptr [rax+rbx*1-20h]
         vinserti64x4 zmm11, zmm11, ymmword ptr [r10+rbx*1-20h], 1h
         vmovdqu32 ymm13, ymmword ptr [rsi+rbx*1-20h]
+        cmp rdx, 0Ah
+        jb @F
+        mov r11, qword ptr [rcx+48h]
         vinserti64x4 zmm13, zmm13, ymmword ptr [r11+rbx*1-20h], 1h
+        prefetcht0 byte ptr [r11+rbx*1+80h]
+@@:
         vpunpckldq zmm15, zmm11, zmm13
         vpunpckhdq zmm17, zmm11, zmm13
         vmovdqu32 ymm11, ymmword ptr [rdi+rbx*1-20h]
+        cmp rdx, 0Bh
+        jb @F
+        mov r12, qword ptr [rcx+50h]
         vinserti64x4 zmm11, zmm11, ymmword ptr [r12+rbx*1-20h], 1h
+        prefetcht0 byte ptr [r13+rbx*1+80h]
+@@:
         vmovdqu32 ymm13, ymmword ptr [r8+rbx*1-20h]
+        cmp rdx, 0Ch
+        jb @F
+        mov r13, qword ptr [rcx+58h]
         vinserti64x4 zmm13, zmm13, ymmword ptr [r13+rbx*1-20h], 1h
+        prefetcht0 byte ptr [r13+rbx*1+80h]
+@@:
         vpunpckldq zmm22, zmm11, zmm13
         vpunpckhdq zmm23, zmm11, zmm13
         prefetcht0 byte ptr [rax+rbx*1+80h]
@@ -165,33 +198,42 @@ innerloop16:
         prefetcht0 byte ptr [rdi+rbx*1+80h]
         prefetcht0 byte ptr [r8+rbx*1+80h]
         prefetcht0 byte ptr [r10+rbx*1+80h]
-        prefetcht0 byte ptr [r11+rbx*1+80h]
-        prefetcht0 byte ptr [r12+rbx*1+80h]
-        prefetcht0 byte ptr [r13+rbx*1+80h]
         mov rax, qword ptr [rcx+20h]
         mov rsi, qword ptr [rcx+28h]
         mov rdi, qword ptr [rcx+30h]
         mov r8, qword ptr [rcx+38h]
-        mov r10, qword ptr [rcx+60h]
-        mov r11, qword ptr [rcx+68h]
-        mov r12, qword ptr [rcx+70h]
-        mov r13, qword ptr [rcx+78h]
         vmovdqu32 ymm11, ymmword ptr [rax+rbx*1-20h]
+        cmp rdx, 0Dh
+        jb @F
+        mov r10, qword ptr [rcx+60h]
         vinserti64x4 zmm11, zmm11, ymmword ptr [r10+rbx*1-20h], 1h
+        prefetcht0 byte ptr [r10+rbx*1+80h]
+@@:
         vmovdqu32 ymm13, ymmword ptr [rsi+rbx*1-20h]
+        cmp rdx, 0Eh
+        jb @F
+        mov r11, qword ptr [rcx+68h]
         vinserti64x4 zmm13, zmm13, ymmword ptr [r11+rbx*1-20h], 1h
+        prefetcht0 byte ptr [r11+rbx*1+80h]
+@@:
         vpunpckldq zmm24, zmm11, zmm13
         vpunpckhdq zmm25, zmm11, zmm13
         vmovdqu32 ymm11, ymmword ptr [rdi+rbx*1-20h]
+        cmp rdx, 0Fh
+        jb @F
+        mov r12, qword ptr [rcx+70h]
         vinserti64x4 zmm11, zmm11, ymmword ptr [r12+rbx*1-20h], 1h
+        prefetcht0 byte ptr [r12+rbx*1+80h]
+@@:
         vmovdqu32 ymm13, ymmword ptr [r8+rbx*1-20h]
+        cmp rdx, 10h
+        jb @F
+        mov r13, qword ptr [rcx+78h]
         vinserti64x4 zmm13, zmm13, ymmword ptr [r13+rbx*1-20h], 1h
+        prefetcht0 byte ptr [r13+rbx*1+80h]
+@@:
         vpunpckldq zmm26, zmm11, zmm13
         vpunpckhdq zmm27, zmm11, zmm13
-        prefetcht0 byte ptr [rax+rbx*1+80h]
-        prefetcht0 byte ptr [rsi+rbx*1+80h]
-        prefetcht0 byte ptr [rdi+rbx*1+80h]
-        prefetcht0 byte ptr [r8+rbx*1+80h]
         prefetcht0 byte ptr [r10+rbx*1+80h]
         prefetcht0 byte ptr [r11+rbx*1+80h]
         prefetcht0 byte ptr [r12+rbx*1+80h]
@@ -366,6 +408,7 @@ innerloop16:
         vpxord zmm6, zmm6, zmm30
         vpxord zmm7, zmm7, zmm31
         movzx eax, byte ptr [rbp+78h]
+        cmp rbx, qword ptr [rsp+100h]
         jb innerloop16
         mov rsi, qword ptr [rbp+90h]
         vpunpckldq zmm8, zmm0, zmm2
@@ -384,8 +427,8 @@ innerloop16:
         vpunpckhdq zmm5, zmm12, zmm14
         vpunpckldq zmm6, zmm13, zmm15
         vpunpckhdq zmm7, zmm13, zmm15
-        vmovdqa32 zmm16, zmmword ptr [$+1BDh]
-        vmovdqa32 zmm18, zmmword ptr [$+1F3h]
+        vmovdqa32 zmm16, zmmword ptr [INDEX0]
+        vmovdqa32 zmm18, zmmword ptr [INDEX1]
         vmovdqa32 zmm8, zmm0
         vpermt2d zmm8, zmm16, zmm4
         vpermt2d zmm0, zmm18, zmm4
@@ -407,12 +450,26 @@ innerloop16:
         vextracti64x4 ymmword ptr [rsi+0C0h], zmm2, 0h
         vextracti64x4 ymmword ptr [rsi+0E0h], zmm3, 0h
         vextracti64x4 ymmword ptr [rsi+100h], zmm8, 1h
+        cmp rdx, 0Ah
+        jb unwind
         vextracti64x4 ymmword ptr [rsi+120h], zmm10, 1h
+        cmp rdx, 0Bh
+        jb unwind
         vextracti64x4 ymmword ptr [rsi+140h], zmm12, 1h
+        cmp rdx, 0Ch
+        jb unwind
         vextracti64x4 ymmword ptr [rsi+160h], zmm14, 1h
+        cmp rdx, 0Dh
+        jb unwind
         vextracti64x4 ymmword ptr [rsi+180h], zmm0, 1h
+        cmp rdx, 0Eh
+        jb unwind
         vextracti64x4 ymmword ptr [rsi+1A0h], zmm1, 1h
+        cmp rdx, 0Fh
+        jb unwind
         vextracti64x4 ymmword ptr [rsi+1C0h], zmm2, 1h
+        cmp rdx, 10h
+        jb unwind
         vextracti64x4 ymmword ptr [rsi+1E0h], zmm3, 1h
         vmovdqa32 zmm8, zmmword ptr [rsp]
         vmovdqa32 zmm9, zmmword ptr [rsp+40h]
@@ -426,22 +483,22 @@ innerloop16:
         mov qword ptr [rbp+90h], rsi
         add rcx, 80h
         sub rdx, 10h
-        cmp rdx, 10h
-        jnb outerloop16
+        cmp rdx, 8h
+        jnbe outerloop16
         test rdx, rdx
-        jnz final15blocks
+        jnz final8blocks
 unwind:
         vzeroupper
-        movdqa xmm6, xmmword ptr [rbp-0A8h]
-        movdqa xmm7, xmmword ptr [rbp-98h]
-        movdqa xmm8, xmmword ptr [rbp-88h]
-        movdqa xmm9, xmmword ptr [rbp-78h]
-        movdqa xmm10, xmmword ptr [rbp-68h]
-        movdqa xmm11, xmmword ptr [rbp-58h]
-        movdqa xmm12, xmmword ptr [rbp-48h]
-        movdqa xmm13, xmmword ptr [rbp-38h]
-        movdqa xmm14, xmmword ptr [rbp-28h]
-        movdqa xmm15, xmmword ptr [rbp-18h]
+        movaps xmm6, xmmword ptr [rbp-0A8h]
+        movaps xmm7, xmmword ptr [rbp-98h]
+        movaps xmm8, xmmword ptr [rbp-88h]
+        movaps xmm9, xmmword ptr [rbp-78h]
+        movaps xmm10, xmmword ptr [rbp-68h]
+        movaps xmm11, xmmword ptr [rbp-58h]
+        movaps xmm12, xmmword ptr [rbp-48h]
+        movaps xmm13, xmmword ptr [rbp-38h]
+        movaps xmm14, xmmword ptr [rbp-28h]
+        movaps xmm15, xmmword ptr [rbp-18h]
         mov rsp, rbp
         pop r15
         pop r14
@@ -453,10 +510,9 @@ unwind:
         pop rbx
         ret
 ALIGN 16
-final15blocks:
-        mov rax, rsp
-        test dl, 8h
-        jz final7blocks
+final8blocks:
+        cmp dl, 4h
+        jbe final4blocks
         vpbroadcastd ymm0, dword ptr [r9]
         vpbroadcastd ymm1, dword ptr [r9+4h]
         vpbroadcastd ymm2, dword ptr [r9+8h]
@@ -465,45 +521,50 @@ final15blocks:
         vpbroadcastd ymm5, dword ptr [r9+14h]
         vpbroadcastd ymm6, dword ptr [r9+18h]
         vpbroadcastd ymm7, dword ptr [r9+1Ch]
-        movzx ebx, byte ptr [rbp+78h]
-        movzx esi, byte ptr [rbp+80h]
-        or ebx, esi
-        xor esi, esi
+        movzx eax, byte ptr [rbp+78h]
+        movzx ebx, byte ptr [rbp+80h]
+        or eax, ebx
+        xor ebx, ebx
 innerloop8:
-        movzx edi, byte ptr [rbp+88h]
-        or edi, ebx
-        add rsi, 40h
-        cmp rsi, qword ptr [rsp+100h]
-        cmovz ebx, edi
-        mov dword ptr [rsp+80h], ebx
-        mov ebx, 0CCh
-        kmovw k2, ebx
-        mov ebx, 33h
-        kmovw k3, ebx
-        mov rbx, qword ptr [rcx]
-        mov rdi, qword ptr [rcx+20h]
-        vmovups xmm8, xmmword ptr [rbx+rsi*1-40h]
-        vinserti32x4 ymm8, ymm8, xmmword ptr [rdi+rsi*1-40h], 1h
-        vmovups xmm12, xmmword ptr [rbx+rsi*1-30h]
-        vinserti32x4 ymm12, ymm12, xmmword ptr [rdi+rsi*1-30h], 1h
-        mov rbx, qword ptr [rcx+8h]
-        mov rdi, qword ptr [rcx+28h]
-        vmovups xmm9, xmmword ptr [rbx+rsi*1-40h]
-        vinserti32x4 ymm9, ymm9, xmmword ptr [rdi+rsi*1-40h], 1h
-        vmovups xmm13, xmmword ptr [rbx+rsi*1-30h]
-        vinserti32x4 ymm13, ymm13, xmmword ptr [rdi+rsi*1-30h], 1h
-        mov rbx, qword ptr [rcx+10h]
-        mov rdi, qword ptr [rcx+30h]
-        vmovups xmm10, xmmword ptr [rbx+rsi*1-40h]
-        vinserti32x4 ymm10, ymm10, xmmword ptr [rdi+rsi*1-40h], 1h
-        vmovups xmm14, xmmword ptr [rbx+rsi*1-30h]
-        vinserti32x4 ymm14, ymm14, xmmword ptr [rdi+rsi*1-30h], 1h
-        mov rbx, qword ptr [rcx+18h]
-        mov rdi, qword ptr [rcx+38h]
-        vmovups xmm11, xmmword ptr [rbx+rsi*1-40h]
-        vinserti32x4 ymm11, ymm11, xmmword ptr [rdi+rsi*1-40h], 1h
-        vmovups xmm15, xmmword ptr [rbx+rsi*1-30h]
-        vinserti32x4 ymm15, ymm15, xmmword ptr [rdi+rsi*1-30h], 1h
+        movzx esi, byte ptr [rbp+88h]
+        or esi, eax
+        add rbx, 40h
+        cmp rbx, qword ptr [rsp+100h]
+        cmovz eax, esi
+        mov dword ptr [rsp+80h], eax
+        mov rax, qword ptr [rcx]
+        mov rsi, qword ptr [rcx+20h]
+        vmovups xmm8, xmmword ptr [rax+rbx*1-40h]
+        vinserti32x4 ymm8, ymm8, xmmword ptr [rsi+rbx*1-40h], 1h
+        vmovups xmm12, xmmword ptr [rax+rbx*1-30h]
+        vinserti32x4 ymm12, ymm12, xmmword ptr [rsi+rbx*1-30h], 1h
+        mov rax, qword ptr [rcx+8h]
+        vmovups xmm9, xmmword ptr [rax+rbx*1-40h]
+        vmovups xmm13, xmmword ptr [rax+rbx*1-30h]
+        cmp dl, 6h
+        jb @F
+        mov rsi, qword ptr [rcx+28h]
+        vinserti32x4 ymm9, ymm9, xmmword ptr [rsi+rbx*1-40h], 1h
+        vinserti32x4 ymm13, ymm13, xmmword ptr [rsi+rbx*1-30h], 1h
+@@:
+        mov rax, qword ptr [rcx+10h]
+        vmovups xmm10, xmmword ptr [rax+rbx*1-40h]
+        vmovups xmm14, xmmword ptr [rax+rbx*1-30h]
+        cmp dl, 7h
+        jb @F
+        mov rsi, qword ptr [rcx+30h]
+        vinserti32x4 ymm10, ymm10, xmmword ptr [rsi+rbx*1-40h], 1h
+        vinserti32x4 ymm14, ymm14, xmmword ptr [rsi+rbx*1-30h], 1h
+@@:
+        mov rax, qword ptr [rcx+18h]
+        vmovups xmm11, xmmword ptr [rax+rbx*1-40h]
+        vmovups xmm15, xmmword ptr [rax+rbx*1-30h]
+        cmp dl, 8h
+        jb @F
+        mov rsi, qword ptr [rcx+38h]
+        vinserti32x4 ymm11, ymm11, xmmword ptr [rsi+rbx*1-40h], 1h
+        vinserti32x4 ymm15, ymm15, xmmword ptr [rsi+rbx*1-30h], 1h
+@@:
         vpunpckldq ymm24, ymm8, ymm9
         vpunpckhdq ymm9, ymm8, ymm9
         vpunpckldq ymm8, ymm10, ymm11
@@ -520,30 +581,39 @@ innerloop8:
         vshufps ymm12, ymm10, ymm12, 0EEh
         vshufps ymm10, ymm13, ymm15, 44h
         vshufps ymm15, ymm13, ymm15, 0EEh
-        mov rbx, qword ptr [rcx]
-        mov rdi, qword ptr [rcx+20h]
-        vmovups xmm16, xmmword ptr [rbx+rsi*1-20h]
-        vinserti32x4 ymm16, ymm16, xmmword ptr [rdi+rsi*1-20h], 1h
-        vmovups xmm20, xmmword ptr [rbx+rsi*1-10h]
-        vinserti32x4 ymm20, ymm20, xmmword ptr [rdi+rsi*1-10h], 1h
-        mov rbx, qword ptr [rcx+8h]
-        mov rdi, qword ptr [rcx+28h]
-        vmovups xmm17, xmmword ptr [rbx+rsi*1-20h]
-        vinserti32x4 ymm17, ymm17, xmmword ptr [rdi+rsi*1-20h], 1h
-        vmovups xmm21, xmmword ptr [rbx+rsi*1-10h]
-        vinserti32x4 ymm21, ymm21, xmmword ptr [rdi+rsi*1-10h], 1h
-        mov rbx, qword ptr [rcx+10h]
-        mov rdi, qword ptr [rcx+30h]
-        vmovups xmm18, xmmword ptr [rbx+rsi*1-20h]
-        vinserti32x4 ymm18, ymm18, xmmword ptr [rdi+rsi*1-20h], 1h
-        vmovups xmm22, xmmword ptr [rbx+rsi*1-10h]
-        vinserti32x4 ymm22, ymm22, xmmword ptr [rdi+rsi*1-10h], 1h
-        mov rbx, qword ptr [rcx+18h]
-        mov rdi, qword ptr [rcx+38h]
-        vmovups xmm19, xmmword ptr [rbx+rsi*1-20h]
-        vinserti32x4 ymm19, ymm19, xmmword ptr [rdi+rsi*1-20h], 1h
-        vmovups xmm23, xmmword ptr [rbx+rsi*1-10h]
-        vinserti32x4 ymm23, ymm23, xmmword ptr [rdi+rsi*1-10h], 1h
+        mov rax, qword ptr [rcx]
+        mov rsi, qword ptr [rcx+20h]
+        vmovups xmm16, xmmword ptr [rax+rbx*1-20h]
+        vinserti32x4 ymm16, ymm16, xmmword ptr [rsi+rbx*1-20h], 1h
+        vmovups xmm20, xmmword ptr [rax+rbx*1-10h]
+        vinserti32x4 ymm20, ymm20, xmmword ptr [rsi+rbx*1-10h], 1h
+        mov rax, qword ptr [rcx+8h]
+        vmovups xmm17, xmmword ptr [rax+rbx*1-20h]
+        vmovups xmm21, xmmword ptr [rax+rbx*1-10h]
+        cmp dl, 6h
+        jb @F
+        mov rsi, qword ptr [rcx+28h]
+        vinserti32x4 ymm17, ymm17, xmmword ptr [rsi+rbx*1-20h], 1h
+        vinserti32x4 ymm21, ymm21, xmmword ptr [rsi+rbx*1-10h], 1h
+@@:
+        mov rax, qword ptr [rcx+10h]
+        vmovups xmm18, xmmword ptr [rax+rbx*1-20h]
+        vmovups xmm22, xmmword ptr [rax+rbx*1-10h]
+        cmp dl, 7h
+        jb @F
+        mov rsi, qword ptr [rcx+30h]
+        vinserti32x4 ymm18, ymm18, xmmword ptr [rsi+rbx*1-20h], 1h
+        vinserti32x4 ymm22, ymm22, xmmword ptr [rsi+rbx*1-10h], 1h
+@@:
+        mov rax, qword ptr [rcx+18h]
+        vmovups xmm19, xmmword ptr [rax+rbx*1-20h]
+        vmovups xmm23, xmmword ptr [rax+rbx*1-10h]
+        cmp dl, 8h
+        jb @F
+        mov rsi, qword ptr [rcx+38h]
+        vinserti32x4 ymm19, ymm19, xmmword ptr [rsi+rbx*1-20h], 1h
+        vinserti32x4 ymm23, ymm23, xmmword ptr [rsi+rbx*1-10h], 1h
+@@:
         vpunpckldq ymm13, ymm16, ymm17
         vpunpckhdq ymm17, ymm16, ymm17
         vpunpckldq ymm16, ymm18, ymm19
@@ -564,11 +634,11 @@ innerloop8:
         vpbroadcastd ymm25, dword ptr [BLAKE3_IV_1]
         vpbroadcastd ymm26, dword ptr [BLAKE3_IV_2]
         vpbroadcastd ymm27, dword ptr [BLAKE3_IV_3]
-        vmovdqa32 ymm28, ymmword ptr [rax]
-        vmovdqa32 ymm29, ymmword ptr [rax+40h]
+        vmovdqa32 ymm28, ymmword ptr [rsp]
+        vmovdqa32 ymm29, ymmword ptr [rsp+40h]
         vpbroadcastd ymm30, dword ptr [BLAKE3_BLOCK_LEN]
         vpbroadcastd ymm31, dword ptr [rsp+80h]
-        mov bl, 7h
+        mov al, 7h
 @@:
         vpaddd ymm0, ymm0, ymm14
         vpaddd ymm1, ymm1, ymm24
@@ -700,7 +770,7 @@ innerloop8:
         vprord ymm7, ymm7, 7h
         vprord ymm4, ymm4, 7h
         vmovdqa32 ymm8, ymmword ptr [rsp+0C0h]
-        dec bl
+        dec al
         jnz @B
         vpxord ymm0, ymm0, ymm21
         vpxord ymm1, ymm1, ymm25
@@ -710,79 +780,85 @@ innerloop8:
         vpxord ymm5, ymm5, ymm29
         vpxord ymm6, ymm6, ymm30
         vpxord ymm7, ymm7, ymm31
-        movzx ebx, byte ptr [rbp+78h]
+        movzx eax, byte ptr [rbp+78h]
+        cmp rbx, qword ptr [rsp+100h]
         jb innerloop8
-        mov rdi, qword ptr [rbp+90h]
-        vunpcklps ymm8, ymm0, ymm1
-        vunpcklps ymm9, ymm2, ymm3
-        vunpckhps ymm10, ymm0, ymm1
-        vunpcklps ymm11, ymm4, ymm5
-        vunpcklps ymm0, ymm6, ymm7
+        mov rsi, qword ptr [rbp+90h]
+        vpunpckldq ymm8, ymm0, ymm1
+        vpunpckldq ymm9, ymm2, ymm3
+        vpunpckhdq ymm10, ymm0, ymm1
+        vpunpckldq ymm11, ymm4, ymm5
+        vpunpckldq ymm0, ymm6, ymm7
         vshufps ymm12, ymm8, ymm9, 4Eh
-        vblendps ymm1, ymm8, ymm12, 0CCh
+        vpblendd ymm1, ymm8, ymm12, 0CCh
         vshufps ymm8, ymm11, ymm0, 4Eh
-        vunpckhps ymm13, ymm2, ymm3
-        vblendps ymm2, ymm11, ymm8, 0CCh
-        vblendps ymm3, ymm12, ymm9, 0CCh
-        vperm2f128 ymm12, ymm1, ymm2, 20h
-        vmovups ymmword ptr [rdi], ymm12
-        vunpckhps ymm14, ymm4, ymm5
-        vblendps ymm4, ymm8, ymm0, 0CCh
-        vunpckhps ymm15, ymm6, ymm7
-        vperm2f128 ymm7, ymm3, ymm4, 20h
-        vmovups ymmword ptr [rdi+20h], ymm7
+        vpunpckhdq ymm13, ymm2, ymm3
+        vpblendd ymm2, ymm11, ymm8, 0CCh
+        vpblendd ymm3, ymm12, ymm9, 0CCh
+        vperm2i128 ymm12, ymm1, ymm2, 20h
+        vmovdqu ymmword ptr [rsi], ymm12
+        vpunpckhdq ymm14, ymm4, ymm5
+        vpblendd ymm4, ymm8, ymm0, 0CCh
+        vpunpckhdq ymm15, ymm6, ymm7
+        vperm2i128 ymm7, ymm3, ymm4, 20h
+        vmovdqu ymmword ptr [rsi+20h], ymm7
         vshufps ymm5, ymm10, ymm13, 4Eh
-        vblendps ymm6, ymm5, ymm13, 0CCh
+        vpblendd ymm6, ymm5, ymm13, 0CCh
         vshufps ymm13, ymm14, ymm15, 4Eh
-        vblendps ymm10, ymm10, ymm5, 0CCh
-        vblendps ymm14, ymm14, ymm13, 0CCh
-        vperm2f128 ymm8, ymm10, ymm14, 20h
-        vmovups ymmword ptr [rdi+40h], ymm8
-        vblendps ymm15, ymm13, ymm15, 0CCh
-        vperm2f128 ymm13, ymm6, ymm15, 20h
-        vmovups ymmword ptr [rdi+60h], ymm13
-        vperm2f128 ymm9, ymm1, ymm2, 31h
-        vperm2f128 ymm11, ymm3, ymm4, 31h
-        vmovups ymmword ptr [rdi+80h], ymm9
-        vperm2f128 ymm14, ymm10, ymm14, 31h
-        vperm2f128 ymm15, ymm6, ymm15, 31h
-        vmovups ymmword ptr [rdi+0A0h], ymm11
-        vmovups ymmword ptr [rdi+0C0h], ymm14
-        vmovups ymmword ptr [rdi+0E0h], ymm15
-        lea r8, qword ptr [rax+20h]
-        kortestw k1, k1
-        cmovnz rax, r8
-        add rdi, 100h
-        mov qword ptr [rbp+90h], rdi
-        add rcx, 40h
-final7blocks:
+        vpblendd ymm10, ymm10, ymm5, 0CCh
+        vpblendd ymm14, ymm14, ymm13, 0CCh
+        vperm2i128 ymm8, ymm10, ymm14, 20h
+        vmovdqu ymmword ptr [rsi+40h], ymm8
+        vpblendd ymm15, ymm13, ymm15, 0CCh
+        vperm2i128 ymm13, ymm6, ymm15, 20h
+        vmovdqu ymmword ptr [rsi+60h], ymm13
+        vperm2i128 ymm9, ymm1, ymm2, 31h
+        vmovdqu ymmword ptr [rsi+80h], ymm9
+        cmp dl, 6h
+        jb @F
+        vperm2i128 ymm11, ymm3, ymm4, 31h
+        vmovdqu ymmword ptr [rsi+0A0h], ymm11
+        cmp dl, 7h
+        jb @F
+        vperm2i128 ymm14, ymm10, ymm14, 31h
+        vmovdqu ymmword ptr [rsi+0C0h], ymm14
+        cmp dl, 8h
+        jb @F
+        vperm2i128 ymm15, ymm6, ymm15, 31h
+        vmovdqu ymmword ptr [rsi+0E0h], ymm15
+@@:
+        jmp unwind
+final4blocks:
+        mov rax, qword ptr [rsp+100h]
         mov rbx, qword ptr [rbp+90h]
         movzx esi, byte ptr [rbp+78h]
         movzx edi, byte ptr [rbp+88h]
-        test dl, 4h
-        jz final3blocks
+        mov r8d, 0AAAAh
+        kmovw k2, r8d
+        mov r8d, 8888h
+        kmovw k3, r8d
+        cmp dl, 2h
+        jbe final2blocks
         vbroadcasti32x4 zmm0, xmmword ptr [r9]
         vbroadcasti32x4 zmm1, xmmword ptr [r9+10h]
         vbroadcasti32x4 zmm4, xmmword ptr [BLAKE3_IV]
         mov r8d, 4444h
-        kmovw k2, r8d
-        vmovdqa xmm6, xmmword ptr [rax]
-        vmovdqa xmm7, xmmword ptr [rax+40h]
+        kmovw k4, r8d
+        vmovdqa xmm6, xmmword ptr [rsp]
+        vmovdqa xmm7, xmmword ptr [rsp+40h]
+        vpbroadcastd zmm5, dword ptr [BLAKE3_BLOCK_LEN]
         vpunpckldq xmm8, xmm6, xmm7
-        vpunpckhdq xmm9, xmm6, xmm7
-        vpermq ymm8, ymm8, 0DCh
-        vpermq ymm9, ymm9, 0DCh
-        vpbroadcastd zmm6, dword ptr [BLAKE3_BLOCK_LEN]
-        vinserti64x4 zmm5, zmm8, ymm9, 1h
-        vpblendmd zmm5 {k2}, zmm5, zmm6
+        vpunpckhdq xmm7, xmm6, xmm7
+        vinserti64x4 zmm8, zmm8, ymm7, 1h
+        vpermq zmm8, zmm8, 0DCh
+        vpblendmd zmm5 {k4}, zmm8, zmm5
         mov r8, qword ptr [rcx]
         mov r10, qword ptr [rcx+8h]
         mov r11, qword ptr [rcx+10h]
+        cmp dl, 4h
+        jb @F
         mov r12, qword ptr [rcx+18h]
-        mov r13d, 0AAAAh
-        kmovw k2, r13d
-        mov r13d, 8888h
-        kmovw k3, r13d
+@@:
         movzx r13d, byte ptr [rbp+80h]
         or r13d, esi
         xor r14d, r14d
@@ -790,32 +866,34 @@ innerloop4:
         movzx r15d, byte ptr [rbp+88h]
         or r15d, r13d
         add r14, 40h
-        cmp r14, qword ptr [rsp+100h]
+        cmp r14, rax
         cmovz r13d, r15d
         mov dword ptr [rsp+80h], r13d
         vmovdqa32 zmm2, zmm4
-        vpbroadcastd zmm6, dword ptr [rsp+80h]
-        vpblendmd zmm3 {k3}, zmm5, zmm6
+        vpblendmd zmm3 {k3}, zmm5, dword bcst [rsp+80h]
         vmovdqu32 zmm10, zmmword ptr [r8+r14*1-40h]
-        vinserti32x4 zmm10, zmm10, xmmword ptr [r10+r14*1-40h], 1h
-        vinserti32x4 zmm10, zmm10, xmmword ptr [r11+r14*1-40h], 2h
-        vinserti32x4 zmm10, zmm10, xmmword ptr [r12+r14*1-40h], 3h
         vmovdqu32 zmm11, zmmword ptr [r8+r14*1-30h]
+        vmovdqu32 zmm12, zmmword ptr [r8+r14*1-20h]
+        vmovdqu32 zmm13, zmmword ptr [r8+r14*1-10h]
+        vinserti32x4 zmm10, zmm10, xmmword ptr [r10+r14*1-40h], 1h
         vinserti32x4 zmm11, zmm11, xmmword ptr [r10+r14*1-30h], 1h
+        vinserti32x4 zmm12, zmm12, xmmword ptr [r10+r14*1-20h], 1h
+        vinserti32x4 zmm13, zmm13, xmmword ptr [r10+r14*1-10h], 1h
+        vinserti32x4 zmm10, zmm10, xmmword ptr [r11+r14*1-40h], 2h
         vinserti32x4 zmm11, zmm11, xmmword ptr [r11+r14*1-30h], 2h
+        vinserti32x4 zmm12, zmm12, xmmword ptr [r11+r14*1-20h], 2h
+        vinserti32x4 zmm13, zmm13, xmmword ptr [r11+r14*1-10h], 2h
+        cmp dl, 4h
+        jb @F
+        vinserti32x4 zmm10, zmm10, xmmword ptr [r12+r14*1-40h], 3h
         vinserti32x4 zmm11, zmm11, xmmword ptr [r12+r14*1-30h], 3h
+        vinserti32x4 zmm12, zmm12, xmmword ptr [r12+r14*1-20h], 3h
+        vinserti32x4 zmm13, zmm13, xmmword ptr [r12+r14*1-10h], 3h
+@@:
         vshufps zmm6, zmm10, zmm11, 88h
         vshufps zmm7, zmm10, zmm11, 0DDh
-        vmovdqu32 zmm10, zmmword ptr [r8+r14*1-20h]
-        vinserti32x4 zmm10, zmm10, xmmword ptr [r10+r14*1-20h], 1h
-        vinserti32x4 zmm10, zmm10, xmmword ptr [r11+r14*1-20h], 2h
-        vinserti32x4 zmm10, zmm10, xmmword ptr [r12+r14*1-20h], 3h
-        vmovdqu32 zmm11, zmmword ptr [r8+r14*1-10h]
-        vinserti32x4 zmm11, zmm11, xmmword ptr [r10+r14*1-10h], 1h
-        vinserti32x4 zmm11, zmm11, xmmword ptr [r11+r14*1-10h], 2h
-        vinserti32x4 zmm11, zmm11, xmmword ptr [r12+r14*1-10h], 3h
-        vshufps zmm8, zmm10, zmm11, 88h
-        vshufps zmm9, zmm10, zmm11, 0DDh
+        vshufps zmm8, zmm12, zmm13, 88h
+        vshufps zmm9, zmm12, zmm13, 0DDh
         vpshufd zmm8, zmm8, 93h
         vpshufd zmm9, zmm9, 93h
         mov r15b, 7h
@@ -856,24 +934,25 @@ innerloop4:
         vpshufd zmm2, zmm2, 93h
         dec r15b
         jz @F
-        vshufps zmm12, zmm6, zmm7, 0D6h
-        vpshufd zmm13, zmm6, 0Fh
-        vpshufd zmm6, zmm12, 39h
-        vshufps zmm12, zmm8, zmm9, 0FAh
-        vpblendmd zmm13 {k2}, zmm13, zmm12
-        vpunpcklqdq zmm12, zmm9, zmm7
-        vpblendmd zmm12 {k3}, zmm12, zmm8
-        vpshufd zmm12, zmm12, 78h
+        vshufps zmm14, zmm6, zmm7, 0D6h
+        vpshufd zmm15, zmm6, 0Fh
+        vpshufd zmm6, zmm14, 39h
+        vshufps zmm14, zmm8, zmm9, 0FAh
+        vpblendmd zmm15 {k2}, zmm15, zmm14
+        vpunpcklqdq zmm14, zmm9, zmm7
+        vpblendmd zmm14 {k3}, zmm14, zmm8
+        vpshufd zmm14, zmm14, 78h
         vpunpckhdq zmm7, zmm7, zmm9
         vpunpckldq zmm8, zmm8, zmm7
         vpshufd zmm9, zmm8, 1Eh
-        vmovdqa32 zmm7, zmm13
-        vmovdqa32 zmm8, zmm12
+        vmovdqa32 zmm7, zmm15
+        vmovdqa32 zmm8, zmm14
         jmp @B
 @@:
         vpxord zmm0, zmm0, zmm2
         vpxord zmm1, zmm1, zmm3
         mov r13d, esi
+        cmp r14, rax
         jb innerloop4
         vmovdqu xmmword ptr [rbx], xmm0
         vmovdqu xmmword ptr [rbx+10h], xmm1
@@ -881,28 +960,33 @@ innerloop4:
         vextracti128 xmmword ptr [rbx+30h], ymm1, 1h
         vextracti32x4 xmmword ptr [rbx+40h], zmm0, 2h
         vextracti32x4 xmmword ptr [rbx+50h], zmm1, 2h
+        cmp dl, 4h
+        jb @F
         vextracti32x4 xmmword ptr [rbx+60h], zmm0, 3h
         vextracti32x4 xmmword ptr [rbx+70h], zmm1, 3h
-        lea r15, qword ptr [rax+10h]
-        kortestw k1, k1
-        cmovnz rax, r15
-        add rbx, 80h
-        add rcx, 20h
-final3blocks:
-        test dl, 2h
-        jz final1block
+@@:
+        jmp unwind
+final2blocks:
+        test dl, dl
+        jz unwind
         vbroadcasti128 ymm0, xmmword ptr [r9]
         vbroadcasti128 ymm1, xmmword ptr [r9+10h]
         vbroadcasti128 ymm4, xmmword ptr [BLAKE3_IV]
-        vmovd xmm5, dword ptr [rax]
-        vpinsrd xmm5, xmm5, dword ptr [rax+40h], 1h
-        vpinsrd xmm5, xmm5, dword ptr [BLAKE3_BLOCK_LEN], 2h
-        vmovd xmm6, dword ptr [rax+4h]
-        vpinsrd xmm6, xmm6, dword ptr [rax+44h], 1h
-        vpinsrd xmm6, xmm6, dword ptr [BLAKE3_BLOCK_LEN], 2h
-        vinserti128 ymm5, ymm5, xmm6, 1h
+        vmovdqa xmm6, xmmword ptr [rsp]
+        vmovdqa xmm7, xmmword ptr [rsp+40h]
+        mov r8d, 40h
+        vpbroadcastq ymm5, r8
+        mov r8d, 55h
+        kmovw k4, r8d
+        vpunpckldq xmm8, xmm6, xmm7
+        vpunpckhdq xmm7, xmm6, xmm7
+        vinserti128 ymm8, ymm8, xmm7, 1h
+        vpermq ymm5 {k4}, ymm8, 0DCh
         mov r8, qword ptr [rcx]
+        cmp dl, 2h
+        jb @F
         mov r10, qword ptr [rcx+8h]
+@@:
         mov r11d, esi
         movzx r12d, byte ptr [rbp+80h]
         or r11d, r12d
@@ -911,24 +995,26 @@ innerloop2:
         movzx r13d, byte ptr [rbp+88h]
         or r13d, r11d
         add r12, 40h
-        cmp r12, qword ptr [rsp+100h]
+        cmp r12, rax
         cmovz r11d, r13d
         mov dword ptr [rsp+80h], r11d
         vmovdqa ymm2, ymm4
-        vpbroadcastd ymm6, dword ptr [rsp+80h]
-        vpblendd ymm3, ymm5, ymm6, 88h
+        vpblendmd ymm3 {k3}, ymm5, dword bcst [rsp+80h]
         vmovdqu ymm10, ymmword ptr [r8+r12*1-40h]
-        vinserti128 ymm10, ymm10, xmmword ptr [r10+r12*1-40h], 1h
         vmovdqu ymm11, ymmword ptr [r8+r12*1-30h]
+        vmovdqu ymm12, ymmword ptr [r8+r12*1-20h]
+        vmovdqu ymm13, ymmword ptr [r8+r12*1-10h]
+        cmp dl, 2h
+        jb @F
+        vinserti128 ymm10, ymm10, xmmword ptr [r10+r12*1-40h], 1h
         vinserti128 ymm11, ymm11, xmmword ptr [r10+r12*1-30h], 1h
+        vinserti128 ymm12, ymm12, xmmword ptr [r10+r12*1-20h], 1h
+        vinserti128 ymm13, ymm13, xmmword ptr [r10+r12*1-10h], 1h
+@@:
         vshufps ymm6, ymm10, ymm11, 88h
         vshufps ymm7, ymm10, ymm11, 0DDh
-        vmovdqu ymm10, ymmword ptr [r8+r12*1-20h]
-        vinserti128 ymm10, ymm10, xmmword ptr [r10+r12*1-20h], 1h
-        vmovdqu ymm11, ymmword ptr [r8+r12*1-10h]
-        vinserti128 ymm11, ymm11, xmmword ptr [r10+r12*1-10h], 1h
-        vshufps ymm8, ymm10, ymm11, 88h
-        vshufps ymm9, ymm10, ymm11, 0DDh
+        vshufps ymm8, ymm12, ymm13, 88h
+        vshufps ymm9, ymm12, ymm13, 0DDh
         vpshufd ymm8, ymm8, 93h
         vpshufd ymm9, ymm9, 93h
         mov r13b, 7h
@@ -987,107 +1073,15 @@ innerloop2:
         vpxor ymm0, ymm0, ymm2
         vpxor ymm1, ymm1, ymm3
         mov r11d, esi
+        cmp r12, rax
         jb innerloop2
         vmovdqu xmmword ptr [rbx], xmm0
         vmovdqu xmmword ptr [rbx+10h], xmm1
+        cmp dl, 2h
+        jb @F
         vextracti128 xmmword ptr [rbx+20h], ymm0, 1h
         vextracti128 xmmword ptr [rbx+30h], ymm1, 1h
-        lea r13, qword ptr [rax+8h]
-        kortestw k1, k1
-        cmovnz rax, r13
-        add rbx, 40h
-        add rcx, 10h
-final1block:
-        test dl, 1h
-        jz unwind
-        vmovdqu xmm0, xmmword ptr [r9]
-        vmovdqu xmm1, xmmword ptr [r9+10h]
-        vmovdqa xmm4, xmmword ptr [BLAKE3_IV]
-        vmovd xmm5, dword ptr [rax]
-        vpinsrd xmm5, xmm5, dword ptr [rax+40h], 1h
-        vpinsrd xmm5, xmm5, dword ptr [BLAKE3_BLOCK_LEN], 2h
-        mov r8, qword ptr [rcx]
-        mov r10d, esi
-        movzx r11d, byte ptr [rbp+80h]
-        or r10d, r11d
-        xor r11d, r11d
-innerloop1:
-        movzx r12d, byte ptr [rbp+88h]
-        or r12d, r10d
-        add r11, 40h
-        cmp r11, qword ptr [rsp+100h]
-        cmovz r10d, r12d
-        vmovdqa xmm2, xmm4
-        vpinsrd xmm3, xmm5, r10d, 3h
-        vmovdqu xmm10, xmmword ptr [r8+r11*1-40h]
-        vmovdqu xmm11, xmmword ptr [r8+r11*1-30h]
-        vshufps xmm6, xmm10, xmm11, 88h
-        vshufps xmm7, xmm10, xmm11, 0DDh
-        vmovdqu xmm10, xmmword ptr [r8+r11*1-20h]
-        vmovdqu xmm11, xmmword ptr [r8+r11*1-10h]
-        vshufps xmm8, xmm10, xmm11, 88h
-        vshufps xmm9, xmm10, xmm11, 0DDh
-        vpshufd xmm8, xmm8, 93h
-        vpshufd xmm9, xmm9, 93h
-        mov r12b, 7h
 @@:
-        vpaddd xmm0, xmm0, xmm6
-        vpaddd xmm0, xmm0, xmm1
-        vpxord xmm3, xmm3, xmm0
-        vprord xmm3, xmm3, 10h
-        vpaddd xmm2, xmm2, xmm3
-        vpxord xmm1, xmm1, xmm2
-        vprord xmm1, xmm1, 0Ch
-        vpaddd xmm0, xmm0, xmm7
-        vpaddd xmm0, xmm0, xmm1
-        vpxord xmm3, xmm3, xmm0
-        vprord xmm3, xmm3, 8h
-        vpaddd xmm2, xmm2, xmm3
-        vpxord xmm1, xmm1, xmm2
-        vprord xmm1, xmm1, 7h
-        vpshufd xmm0, xmm0, 93h
-        vpshufd xmm3, xmm3, 4Eh
-        vpshufd xmm2, xmm2, 39h
-        vpaddd xmm0, xmm0, xmm8
-        vpaddd xmm0, xmm0, xmm1
-        vpxord xmm3, xmm3, xmm0
-        vprord xmm3, xmm3, 10h
-        vpaddd xmm2, xmm2, xmm3
-        vpxord xmm1, xmm1, xmm2
-        vprord xmm1, xmm1, 0Ch
-        vpaddd xmm0, xmm0, xmm9
-        vpaddd xmm0, xmm0, xmm1
-        vpxord xmm3, xmm3, xmm0
-        vprord xmm3, xmm3, 8h
-        vpaddd xmm2, xmm2, xmm3
-        vpxord xmm1, xmm1, xmm2
-        vprord xmm1, xmm1, 7h
-        vpshufd xmm0, xmm0, 39h
-        vpshufd xmm3, xmm3, 4Eh
-        vpshufd xmm2, xmm2, 93h
-        dec r12b
-        jz @F
-        vshufps xmm10, xmm6, xmm7, 0D6h
-        vpshufd xmm11, xmm6, 0Fh
-        vpshufd xmm6, xmm10, 39h
-        vshufps xmm10, xmm8, xmm9, 0FAh
-        vpblendd xmm11, xmm11, xmm10, 0AAh
-        vpunpcklqdq xmm10, xmm9, xmm7
-        vpblendd xmm10, xmm10, xmm8, 88h
-        vpshufd xmm10, xmm10, 78h
-        vpunpckhdq xmm7, xmm7, xmm9
-        vpunpckldq xmm8, xmm8, xmm7
-        vpshufd xmm9, xmm8, 1Eh
-        vmovdqa xmm7, xmm11
-        vmovdqa xmm8, xmm10
-        jmp @B
-@@:
-        vpxor xmm0, xmm0, xmm2
-        vpxor xmm1, xmm1, xmm3
-        mov r10d, esi
-        jb innerloop1
-        vmovdqu xmmword ptr [rbx], xmm0
-        vmovdqu xmmword ptr [rbx+10h], xmm1
         jmp unwind
 _blake3_hash_many_avx512 ENDP
 blake3_hash_many_avx512 ENDP
@@ -1293,10 +1287,10 @@ _blake3_xof_many_avx512 PROC
         cmp rax, 1h
         jnbe slowpath
         sub rsp, 48h
-        movdqa xmmword ptr [rsp], xmm6
-        movdqa xmmword ptr [rsp+10h], xmm7
-        movdqa xmmword ptr [rsp+20h], xmm8
-        movdqa xmmword ptr [rsp+30h], xmm9
+        movaps xmmword ptr [rsp], xmm6
+        movaps xmmword ptr [rsp+10h], xmm7
+        movaps xmmword ptr [rsp+20h], xmm8
+        movaps xmmword ptr [rsp+30h], xmm9
         vmovdqu xmm0, xmmword ptr [rcx]
         vmovdqu xmm1, xmmword ptr [rcx+10h]
         movzx r8d, r8b
@@ -1380,26 +1374,26 @@ _blake3_xof_many_avx512 PROC
         vmovdqu xmmword ptr [r8+20h], xmm2
         vmovdqu xmmword ptr [r8+30h], xmm3
         vzeroupper
-        movdqa xmm6, xmmword ptr [rsp]
-        movdqa xmm7, xmmword ptr [rsp+10h]
-        movdqa xmm8, xmmword ptr [rsp+20h]
-        movdqa xmm9, xmmword ptr [rsp+30h]
+        movaps xmm6, xmmword ptr [rsp]
+        movaps xmm7, xmmword ptr [rsp+10h]
+        movaps xmm8, xmmword ptr [rsp+20h]
+        movaps xmm9, xmmword ptr [rsp+30h]
         add rsp, 48h
         ret
 slowpath:
         push rbp
         mov rbp, rsp
         sub rsp, 1A0h
-        movdqa xmmword ptr [rbp-0A0h], xmm6
-        movdqa xmmword ptr [rbp-90h], xmm7
-        movdqa xmmword ptr [rbp-80h], xmm8
-        movdqa xmmword ptr [rbp-70h], xmm9
-        movdqa xmmword ptr [rbp-60h], xmm10
-        movdqa xmmword ptr [rbp-50h], xmm11
-        movdqa xmmword ptr [rbp-40h], xmm12
-        movdqa xmmword ptr [rbp-30h], xmm13
-        movdqa xmmword ptr [rbp-20h], xmm14
-        movdqa xmmword ptr [rbp-10h], xmm15
+        movaps xmmword ptr [rbp-0A0h], xmm6
+        movaps xmmword ptr [rbp-90h], xmm7
+        movaps xmmword ptr [rbp-80h], xmm8
+        movaps xmmword ptr [rbp-70h], xmm9
+        movaps xmmword ptr [rbp-60h], xmm10
+        movaps xmmword ptr [rbp-50h], xmm11
+        movaps xmmword ptr [rbp-40h], xmm12
+        movaps xmmword ptr [rbp-30h], xmm13
+        movaps xmmword ptr [rbp-20h], xmm14
+        movaps xmmword ptr [rbp-10h], xmm15
         and rsp, -40h
         vpbroadcastd zmm0, r9d
         shr r9, 20h
@@ -1711,23 +1705,23 @@ innerloop16:
         vmovdqa32 zmmword ptr [rsp], zmm2
         vmovdqa32 zmmword ptr [rsp+40h], zmm1
         add r9, 400h
-        cmp rax, 18h
-        lea rax, qword ptr [rax-10h]
+        sub rax, 10h
+        cmp rax, 8h
         jnbe innerloop16
         test al, al
         jnz final8blocks
 unwind:
         vzeroupper
-        movdqa xmm6, xmmword ptr [rbp-0A0h]
-        movdqa xmm7, xmmword ptr [rbp-90h]
-        movdqa xmm8, xmmword ptr [rbp-80h]
-        movdqa xmm9, xmmword ptr [rbp-70h]
-        movdqa xmm10, xmmword ptr [rbp-60h]
-        movdqa xmm11, xmmword ptr [rbp-50h]
-        movdqa xmm12, xmmword ptr [rbp-40h]
-        movdqa xmm13, xmmword ptr [rbp-30h]
-        movdqa xmm14, xmmword ptr [rbp-20h]
-        movdqa xmm15, xmmword ptr [rbp-10h]
+        movaps xmm6, xmmword ptr [rbp-0A0h]
+        movaps xmm7, xmmword ptr [rbp-90h]
+        movaps xmm8, xmmword ptr [rbp-80h]
+        movaps xmm9, xmmword ptr [rbp-70h]
+        movaps xmm10, xmmword ptr [rbp-60h]
+        movaps xmm11, xmmword ptr [rbp-50h]
+        movaps xmm12, xmmword ptr [rbp-40h]
+        movaps xmm13, xmmword ptr [rbp-30h]
+        movaps xmm14, xmmword ptr [rbp-20h]
+        movaps xmm15, xmmword ptr [rbp-10h]
         mov rsp, rbp
         pop rbp
         ret
