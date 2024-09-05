@@ -68,10 +68,10 @@ This repository is the official implementation of BLAKE3. It includes:
 
 BLAKE3 was designed by:
 
-* [@oconnor663 ](https://github.com/oconnor663) (Jack O'Connor)
-* [@sneves](https://github.com/sneves) (Samuel Neves)
-* [@veorq](https://github.com/veorq) (Jean-Philippe Aumasson)
-* [@zookozcash](https://github.com/zookozcash) (Zooko)
+* [@oconnor663] (Jack O'Connor)
+* [@sneves] (Samuel Neves)
+* [@veorq] (Jean-Philippe Aumasson)
+* [@zookozcash] (Zooko)
 
 The development of BLAKE3 was sponsored by [Electric Coin Company](https://electriccoin.co).
 
@@ -218,6 +218,10 @@ Here's a (non-exhaustive) list of protocols and software that use BLAKE3:
 
 ## Miscellany
 
-- [@veorq](https://github.com/veorq) and
-  [@oconnor663](https://github.com/oconnor663) did [a podcast
-  interview](https://www.cryptography.fm/3) about designing BLAKE3.
+- [@veorq] and [@oconnor663] did [an interview with Cryptography FM](https://www.cryptography.fm/3).
+- [@oconnor663] did [an interview with Saito](https://www.youtube.com/watch?v=cJkmIt7yN_E).
+
+[@oconnor663]: https://github.com/oconnor663
+[@sneves]: https://github.com/sneves
+[@veorq]: https://github.com/veorq
+[@zookozcash]: https://github.com/zookozcash
