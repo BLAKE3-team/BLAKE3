@@ -71,13 +71,52 @@ fn permute(m: &mut [u32; 16]) {
     *m = permuted;
 }
 
+fn print_words(words: &[u32]) {
+    for &w in words {
+        print!(" {:08x}", w);
+    }
+    println!();
+}
+
+#[derive(Copy, Clone)]
+enum PrintMode {
+    Block(u8),
+    Parent,
+}
+
 fn compress(
     chaining_value: &[u32; 8],
     block_words: &[u32; 16],
     counter: u64,
     block_len: u32,
     flags: u32,
+    print_mode: PrintMode,
 ) -> [u32; 16] {
+    match print_mode {
+        PrintMode::Block(block_index) => println!(
+            " == COMPRESS: CHUNK {:>2}, BLOCK {:>2} ==\n",
+            counter, block_index,
+        ),
+        PrintMode::Parent => println!(" == COMPRESS: PARENT ==\n"),
+    }
+    println!(" h:");
+    print_words(chaining_value);
+    println!();
+    if matches!(print_mode, PrintMode::Block(0) | PrintMode::Parent) {
+        println!(" m:");
+        print_words(&block_words[..8]);
+        print_words(&block_words[8..]);
+        println!();
+        println!(" t:");
+        let t_words = [counter as u32, (counter >> 32) as u32];
+        print_words(&t_words);
+        println!();
+    }
+    if matches!(print_mode, PrintMode::Block(0 | 1 | 15) | PrintMode::Parent) {
+        println!(" flags:");
+        println!(" {:02x}", flags as u8);
+        println!();
+    }
     let counter_low = counter as u32;
     let counter_high = (counter >> 32) as u32;
     #[rustfmt::skip]
@@ -107,6 +146,9 @@ fn compress(
         state[i] ^= state[i + 8];
         state[i + 8] ^= chaining_value[i];
     }
+    println!(" compress output:");
+    print_words(&state[..8]);
+    println!();
     state
 }
 
@@ -130,6 +172,7 @@ struct Output {
     counter: u64,
     block_len: u32,
     flags: u32,
+    print_mode: PrintMode,
 }
 
 impl Output {
@@ -140,6 +183,7 @@ impl Output {
             self.counter,
             self.block_len,
             self.flags,
+            self.print_mode,
         ))
     }
 
@@ -152,6 +196,7 @@ impl Output {
                 output_block_counter,
                 self.block_len,
                 self.flags | ROOT,
+                self.print_mode,
             );
             // The output length might not be a multiple of 4.
             for (word, out_word) in words.iter().zip(out_block.chunks_mut(4)) {
@@ -208,6 +253,7 @@ impl ChunkState {
                     self.chunk_counter,
                     BLOCK_LEN as u32,
                     self.flags | self.start_flag(),
+                    PrintMode::Block(self.blocks_compressed),
                 ));
                 self.blocks_compressed += 1;
                 self.block = [0; BLOCK_LEN];
@@ -232,6 +278,7 @@ impl ChunkState {
             counter: self.chunk_counter,
             block_len: self.block_len as u32,
             flags: self.flags | self.start_flag() | CHUNK_END,
+            print_mode: PrintMode::Block(self.blocks_compressed),
         }
     }
 }
@@ -251,6 +298,7 @@ fn parent_output(
         counter: 0,                  // Always 0 for parent nodes.
         block_len: BLOCK_LEN as u32, // Always BLOCK_LEN (64) for parent nodes.
         flags: PARENT | flags,
+        print_mode: PrintMode::Parent,
     }
 }
 
@@ -370,5 +418,11 @@ impl Hasher {
             );
         }
         output.root_output_bytes(out_slice);
+        println!(" hash value:");
+        print!(" ");
+        for b in out_slice {
+            print!("{b:02x}");
+        }
+        println!();
     }
 }
