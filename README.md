@@ -1,4 +1,4 @@
-# <a href="#"><img src="media/BLAKE3.svg" alt="BLAKE3" height=50></a>
+# BLAKE3
 
 BLAKE3 is a cryptographic hash function that is:
 
@@ -74,6 +74,9 @@ BLAKE3 was designed by:
 * [@zookozcash] (Zooko)
 
 The development of BLAKE3 was sponsored by [Electric Coin Company](https://electriccoin.co).
+
+BLAKE3 is also [specified](https://c2sp.org/BLAKE3) in the [Community
+Cryptography Specification Project (C2SP)](https://c2sp.org).
 
 *NOTE: BLAKE3 is not a password hashing algorithm, because it's
 designed to be fast, whereas password hashing should not be fast. If you
