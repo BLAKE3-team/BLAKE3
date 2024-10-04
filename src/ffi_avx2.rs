@@ -33,6 +33,10 @@ pub unsafe fn hash_many<const N: usize>(
 }
 
 pub mod ffi {
+    #[cfg_attr(
+        blake3_avx2_ffi,
+        link(name = "blake3_sse2_sse41_avx2_assembly", kind = "static")
+    )]
     extern "C" {
         pub fn blake3_hash_many_avx2(
             inputs: *const *const u8,
