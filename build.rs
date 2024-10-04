@@ -189,6 +189,7 @@ fn build_avx512_c_intrinsics() {
     // This is required on 32-bit x86 targets, since the assembly
     // implementation doesn't support those.
     println!("cargo:rustc-cfg=blake3_avx512_ffi");
+    println!("cargo:rustc-cfg=blake3_avx512_ffi_intrinsics");
     let mut build = new_build();
     build.file("c/blake3_avx512.c");
     if is_windows_msvc() {
@@ -209,6 +210,7 @@ fn build_avx512_assembly() {
     // only supports x86_64.
     assert!(is_x86_64());
     println!("cargo:rustc-cfg=blake3_avx512_ffi");
+    println!("cargo:rustc-cfg=blake3_avx512_ffi_assembly");
     let mut build = new_build();
     if is_windows_msvc() {
         build.file("c/blake3_avx512_x86-64_windows_msvc.asm");
@@ -230,6 +232,7 @@ fn build_avx512_assembly() {
 }
 
 fn build_neon_c_intrinsics() {
+    println!("cargo:rustc-cfg=blake3_neon_ffi");
     let mut build = new_build();
     // Note that blake3_neon.c normally depends on the blake3_portable.c
     // for the single-instance compression function, but we expose
@@ -254,7 +257,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "blake3_avx2_ffi",
         "blake3_avx2_rust",
         "blake3_avx512_ffi",
-        "blake3_neon",
+        "blake3_avx512_ffi_assembly",
+        "blake3_avx512_ffi_intrinsics",
+        "blake3_neon_ffi",
     ];
     for cfg_name in all_cfgs {
         // TODO: Switch this whole file to the new :: syntax when our MSRV reaches 1.77.
@@ -296,7 +301,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if (is_arm() && is_neon())
         || (!is_no_neon() && !is_pure() && is_aarch64() && is_little_endian())
     {
-        println!("cargo:rustc-cfg=blake3_neon");
         build_neon_c_intrinsics();
     }
 

@@ -61,6 +61,10 @@ pub unsafe fn hash_many<const N: usize>(
 }
 
 pub mod ffi {
+    #[cfg_attr(
+        blake3_sse41_ffi,
+        link(name = "blake3_sse2_sse41_avx2_assembly", kind = "static")
+    )]
     extern "C" {
         pub fn blake3_compress_in_place_sse41(
             cv: *mut u32,
