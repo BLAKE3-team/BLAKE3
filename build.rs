@@ -80,7 +80,7 @@ fn is_big_endian() -> bool {
 // disabled by old compilers.)
 fn is_windows_msvc() -> bool {
     // Some targets are only two components long, so check in steps.
-    target_components()[1] == "pc"
+    matches!(target_components()[1].as_str(), "pc" | "win7")
         && target_components()[2] == "windows"
         && target_components()[3] == "msvc"
 }
