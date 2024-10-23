@@ -17,6 +17,7 @@ const LENGTH_ARG: &str = "length";
 const NO_NAMES_ARG: &str = "no_names";
 const RAW_ARG: &str = "raw";
 const CHECK_ARG: &str = "check";
+const TAG_ARG: &str = "tag";
 
 #[derive(Parser)]
 #[command(version, max_term_width(100))]
@@ -89,6 +90,10 @@ struct Inner {
     /// Must be used with --check.
     #[arg(long, requires(CHECK_ARG))]
     quiet: bool,
+
+    /// Create a BSD-style checksum.
+    #[arg(long, requires(TAG_ARG))]
+    tag: bool,
 }
 
 struct Args {
@@ -160,6 +165,10 @@ impl Args {
 
     fn quiet(&self) -> bool {
         self.inner.quiet
+    }
+
+    fn tag(&self) -> bool {
+        self.inner.tag
     }
 }
 
@@ -391,8 +400,14 @@ fn hash_one_input(path: &Path, args: &Args) -> Result<()> {
     if is_escaped {
         print!("\\");
     }
-    write_hex_output(output, args)?;
-    println!("  {}", filepath_string);
+    if args.tag() {
+        print!("BLAKE3 ({}) = ", filepath_string);
+        write_hex_output(output, args)?;
+        println!("");
+    } else {
+        write_hex_output(output, args)?;
+        println!("  {}", filepath_string);
+    }
     Ok(())
 }
 

@@ -16,6 +16,13 @@ fn test_hash_one() {
 }
 
 #[test]
+fn test_hash_one_tag() {
+    let expected = format!("BLAKE3 (-) = {}", blake3::hash(b"foo").to_hex());
+    let output = cmd!(b3sum_exe(), "--tag").stdin_bytes("foo").read().unwrap();
+    assert_eq!(&*expected, output);
+}
+
+#[test]
 fn test_hash_one_raw() {
     let expected = blake3::hash(b"foo").as_bytes().to_owned();
     let output = cmd!(b3sum_exe(), "--raw")
@@ -53,6 +60,28 @@ fn test_hash_many() {
         .unwrap();
     let expected_no_names = format!("{}\n{}", foo_hash.to_hex(), bar_hash.to_hex(),);
     assert_eq!(expected_no_names, output_no_names);
+}
+
+#[test]
+fn test_hash_many_tag() {
+    let dir = tempfile::tempdir().unwrap();
+    let file1 = dir.path().join("file1");
+    fs::write(&file1, b"foo").unwrap();
+    let file2 = dir.path().join("file2");
+    fs::write(&file2, b"bar").unwrap();
+
+    let output = cmd!(b3sum_exe(), "--tag", &file1, &file2).read().unwrap();
+    let foo_hash = blake3::hash(b"foo");
+    let bar_hash = blake3::hash(b"bar");
+    let expected = format!(
+        "BLAKE3 ({}) = {}\nBLAKE3 ({}) = {}",
+        // account for slash normalization on Windows
+        file1.to_string_lossy().replace("\\", "/"),
+        foo_hash.to_hex(),
+        file2.to_string_lossy().replace("\\", "/"),
+        bar_hash.to_hex(),
+    );
+    assert_eq!(expected, output);
 }
 
 #[test]
