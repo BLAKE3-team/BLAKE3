@@ -365,6 +365,15 @@ impl fmt::Debug for Hash {
     }
 }
 
+#[cfg(feature = "defmt")]
+impl defmt::Format for Hash {
+    fn format(&self, fmt: defmt::Formatter) {
+        for v in self.0.iter() {
+            defmt::write!(fmt, "{:02x}", v)
+        }
+    }
+}
+
 /// The error type for [`Hash::from_hex`].
 ///
 /// The `.to_string()` representation of this error currently distinguishes between bad length
