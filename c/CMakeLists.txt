@@ -115,6 +115,7 @@ add_library(blake3
   blake3.c
   blake3_dispatch.c
   blake3_portable.c
+  blake3_thread.c
 )
 add_library(BLAKE3::blake3 ALIAS blake3)
 
