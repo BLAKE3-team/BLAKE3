@@ -55,6 +55,15 @@ traits-preview = ["dep:digest"]
 # The following features are mainly intended for testing and benchmarking, and
 # they might change or disappear at any time without a major version bump.
 
+# It wasn't originally intended to expose "digest" as its own feature, but the
+# traits-preview feature above predated the "dep:" syntax in Cargo. Version
+# 1.5.2 of this crate started using "dep:" syntax, but that broke some callers
+# in the wild (https://solana.stackexchange.com/q/17787/29050). This feature
+# unbreaks those callers. When Cargo gains the ability to deprecate features,
+# this feature will be deprecated. Note that the relevant trait implementations
+# are still gated by "traits-preview".
+digest = ["dep:digest"]
+
 # By default on x86_64, this crate uses Samuel Neves' hand-written assembly
 # implementations for SSE4.1, AVX2, and AVX512. (These provide both the best
 # runtime performance, and the fastest build times.) And by default on 32-bit
