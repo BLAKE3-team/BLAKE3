@@ -23,7 +23,7 @@ neon = []
 # --no-default-features, the only way to use the SIMD implementations in this
 # crate is to enable the corresponding instruction sets statically for the
 # entire build, with e.g. RUSTFLAGS="-C target-cpu=native".
-std = []
+std = ["subtle/std"]
 
 # The `rayon` feature (disabled by default, but enabled for docs.rs) adds the
 # `update_rayon` and (in combination with `mmap` below) `update_mmap_rayon`
@@ -112,6 +112,7 @@ digest = { version = "0.10.1", features = [ "mac" ], optional = true }
 memmap2 = { version = "0.9", optional = true }
 rayon-core = { version = "1.12.1", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
+subtle = { version = "2.6", default-features = false }
 zeroize = { version = "1", default-features = false, optional = true }
 
 [dev-dependencies]
