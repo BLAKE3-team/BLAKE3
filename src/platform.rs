@@ -10,7 +10,7 @@ cfg_if::cfg_if! {
                 pub const MAX_SIMD_DEGREE: usize = 8;
             }
         }
-    } else if #[cfg(blake3_neon)] {
+    } else if #[cfg(blake3_neon_ffi)] {
         pub const MAX_SIMD_DEGREE: usize = 4;
     } else {
         pub const MAX_SIMD_DEGREE: usize = 1;
@@ -30,7 +30,7 @@ cfg_if::cfg_if! {
                 pub const MAX_SIMD_DEGREE_OR_2: usize = 8;
             }
         }
-    } else if #[cfg(blake3_neon)] {
+    } else if #[cfg(blake3_neon_ffi)] {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 4;
     } else {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 2;
@@ -49,7 +49,7 @@ pub enum Platform {
     #[cfg(blake3_avx512_ffi)]
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     AVX512,
-    #[cfg(blake3_neon)]
+    #[cfg(blake3_neon_ffi)]
     NEON,
 }
 
@@ -81,7 +81,7 @@ impl Platform {
         }
         // We don't use dynamic feature detection for NEON. If the "neon"
         // feature is on, NEON is assumed to be supported.
-        #[cfg(blake3_neon)]
+        #[cfg(blake3_neon_ffi)]
         {
             return Platform::NEON;
         }
@@ -100,7 +100,7 @@ impl Platform {
             #[cfg(blake3_avx512_ffi)]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => 16,
-            #[cfg(blake3_neon)]
+            #[cfg(blake3_neon_ffi)]
             Platform::NEON => 4,
         };
         debug_assert!(degree <= MAX_SIMD_DEGREE);
@@ -134,7 +134,7 @@ impl Platform {
                 crate::avx512::compress_in_place(cv, block, block_len, counter, flags)
             },
             // No NEON compress_in_place() implementation yet.
-            #[cfg(blake3_neon)]
+            #[cfg(blake3_neon_ffi)]
             Platform::NEON => portable::compress_in_place(cv, block, block_len, counter, flags),
         }
     }
@@ -166,7 +166,7 @@ impl Platform {
                 crate::avx512::compress_xof(cv, block, block_len, counter, flags)
             },
             // No NEON compress_xof() implementation yet.
-            #[cfg(blake3_neon)]
+            #[cfg(blake3_neon_ffi)]
             Platform::NEON => portable::compress_xof(cv, block, block_len, counter, flags),
         }
     }
@@ -261,7 +261,7 @@ impl Platform {
                 )
             },
             // Assumed to be safe if the "neon" feature is on.
-            #[cfg(blake3_neon)]
+            #[cfg(blake3_neon_ffi)]
             Platform::NEON => unsafe {
                 crate::neon::hash_many(
                     inputs,
@@ -355,7 +355,7 @@ impl Platform {
         }
     }
 
-    #[cfg(blake3_neon)]
+    #[cfg(blake3_neon_ffi)]
     pub fn neon() -> Option<Self> {
         // Assumed to be safe if the "neon" feature is on.
         Some(Self::NEON)

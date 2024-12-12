@@ -83,6 +83,14 @@ pub unsafe fn xof_many(
 }
 
 pub mod ffi {
+    #[cfg_attr(
+        blake3_avx512_ffi_assembly,
+        link(name = "blake3_avx512_assembly", kind = "static")
+    )]
+    #[cfg_attr(
+        blake3_avx512_ffi_intrinsics,
+        link(name = "blake3_avx512_intrinsics", kind = "static")
+    )]
     extern "C" {
         pub fn blake3_compress_in_place_avx512(
             cv: *mut u32,
