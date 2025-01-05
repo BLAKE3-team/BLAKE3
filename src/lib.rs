@@ -185,12 +185,12 @@ const DERIVE_KEY_CONTEXT: u8 = 1 << 5;
 const DERIVE_KEY_MATERIAL: u8 = 1 << 6;
 
 #[inline]
-fn counter_low(counter: u64) -> u32 {
+const fn counter_low(counter: u64) -> u32 {
     counter as u32
 }
 
 #[inline]
-fn counter_high(counter: u64) -> u32 {
+const fn counter_high(counter: u64) -> u32 {
     (counter >> 32) as u32
 }
 
@@ -623,7 +623,7 @@ pub enum IncrementCounter {
 
 impl IncrementCounter {
     #[inline]
-    fn yes(&self) -> bool {
+    const fn yes(&self) -> bool {
         match self {
             IncrementCounter::Yes => true,
             IncrementCounter::No => false,
