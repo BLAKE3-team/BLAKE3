@@ -120,7 +120,7 @@ pub fn compress_xof(
     crate::platform::le_bytes_from_words_64(&state)
 }
 
-pub fn hash1<const N: usize>(
+fn hash1<const N: usize>(
     input: &[u8; N],
     key: &CVWords,
     counter: u64,
