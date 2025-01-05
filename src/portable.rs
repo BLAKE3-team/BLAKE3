@@ -2,10 +2,9 @@ use crate::{
     counter_high, counter_low, CVBytes, CVWords, IncrementCounter, BLOCK_LEN, IV, MSG_SCHEDULE,
     OUT_LEN,
 };
-use arrayref::{array_mut_ref, array_ref};
 
 #[inline(always)]
-fn g(state: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize, x: u32, y: u32) {
+const fn g(state: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize, x: u32, y: u32) {
     state[a] = state[a].wrapping_add(state[b]).wrapping_add(x);
     state[d] = (state[d] ^ state[a]).rotate_right(16);
     state[c] = state[c].wrapping_add(state[d]);
@@ -17,7 +16,7 @@ fn g(state: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize, x: u32, y: u
 }
 
 #[inline(always)]
-fn round(state: &mut [u32; 16], msg: &[u32; 16], round: usize) {
+const fn round(state: &mut [u32; 16], msg: &[u32; 16], round: usize) {
     // Select the message schedule based on the round.
     let schedule = MSG_SCHEDULE[round];
 
@@ -35,7 +34,7 @@ fn round(state: &mut [u32; 16], msg: &[u32; 16], round: usize) {
 }
 
 #[inline(always)]
-fn compress_pre(
+const fn compress_pre(
     cv: &CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
@@ -74,7 +73,7 @@ fn compress_pre(
     state
 }
 
-pub fn compress_in_place(
+pub const fn compress_in_place(
     cv: &mut CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
@@ -93,7 +92,7 @@ pub fn compress_in_place(
     cv[7] = state[7] ^ state[15];
 }
 
-pub fn compress_xof(
+pub const fn compress_xof(
     cv: &CVWords,
     block: &[u8; BLOCK_LEN],
     block_len: u8,
@@ -120,7 +119,7 @@ pub fn compress_xof(
     crate::platform::le_bytes_from_words_64(&state)
 }
 
-fn hash1<const N: usize>(
+const fn hash1<const N: usize>(
     input: &[u8; N],
     key: &CVWords,
     counter: u64,
@@ -129,48 +128,51 @@ fn hash1<const N: usize>(
     flags_end: u8,
     out: &mut CVBytes,
 ) {
-    debug_assert_eq!(N % BLOCK_LEN, 0, "uneven blocks");
+    debug_assert!(N % BLOCK_LEN == 0, "uneven blocks");
     let mut cv = *key;
     let mut block_flags = flags | flags_start;
-    let mut slice = &input[..];
+    let mut slice = input.as_slice();
     while slice.len() >= BLOCK_LEN {
-        if slice.len() == BLOCK_LEN {
+        let block;
+        (block, slice) = slice.split_at(BLOCK_LEN);
+        if slice.is_empty() {
             block_flags |= flags_end;
         }
-        compress_in_place(
-            &mut cv,
-            array_ref!(slice, 0, BLOCK_LEN),
-            BLOCK_LEN as u8,
-            counter,
-            block_flags,
-        );
+        let block = {
+            let ptr = block.as_ptr() as *const [u8; BLOCK_LEN];
+            // SAFETY: Sliced off correct length above
+            unsafe { &*ptr }
+        };
+
+        compress_in_place(&mut cv, block, BLOCK_LEN as u8, counter, block_flags);
         block_flags = flags;
-        slice = &slice[BLOCK_LEN..];
     }
     *out = crate::platform::le_bytes_from_words_32(&cv);
 }
 
-pub fn hash_many<const N: usize>(
-    inputs: &[&[u8; N]],
+pub const fn hash_many<const N: usize>(
+    mut inputs: &[&[u8; N]],
     key: &CVWords,
     mut counter: u64,
     increment_counter: IncrementCounter,
     flags: u8,
     flags_start: u8,
     flags_end: u8,
-    out: &mut [u8],
+    mut out: &mut [u8],
 ) {
     debug_assert!(out.len() >= inputs.len() * OUT_LEN, "out too short");
-    for (&input, output) in inputs.iter().zip(out.chunks_exact_mut(OUT_LEN)) {
-        hash1(
-            input,
-            key,
-            counter,
-            flags,
-            flags_start,
-            flags_end,
-            array_mut_ref!(output, 0, OUT_LEN),
-        );
+    while !inputs.is_empty() {
+        let input;
+        (input, inputs) = inputs.split_first().expect("Not empty; qed");
+        let o;
+        (o, out) = out.split_at_mut(OUT_LEN);
+        let o = {
+            let ptr = o.as_mut_ptr() as *mut [u8; OUT_LEN];
+            // SAFETY: Sliced off correct length above
+            unsafe { &mut *ptr }
+        };
+
+        hash1(input, key, counter, flags, flags_start, flags_end, o);
         if increment_counter.yes() {
             counter += 1;
         }
