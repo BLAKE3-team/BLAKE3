@@ -26,7 +26,7 @@ impl ChunkState {
 
     #[inline]
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.0.count()
     }
 
     #[inline]

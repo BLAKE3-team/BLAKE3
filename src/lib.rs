@@ -504,7 +504,7 @@ impl ChunkState {
         }
     }
 
-    fn len(&self) -> usize {
+    fn count(&self) -> usize {
         BLOCK_LEN * self.blocks_compressed as usize + self.buf_len as usize
     }
 
@@ -561,7 +561,7 @@ impl ChunkState {
 
         self.fill_buf(&mut input);
         debug_assert!(input.is_empty());
-        debug_assert!(self.len() <= CHUNK_LEN);
+        debug_assert!(self.count() <= CHUNK_LEN);
         self
     }
 
@@ -582,7 +582,7 @@ impl ChunkState {
 impl fmt::Debug for ChunkState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("ChunkState")
-            .field("len", &self.len())
+            .field("count", &self.count())
             .field("chunk_counter", &self.chunk_counter)
             .field("flags", &self.flags)
             .field("platform", &self.platform)
@@ -1201,8 +1201,8 @@ impl Hasher {
     fn update_with_join<J: join::Join>(&mut self, mut input: &[u8]) -> &mut Self {
         // If we have some partial chunk bytes in the internal chunk_state, we
         // need to finish that chunk first.
-        if self.chunk_state.len() > 0 {
-            let want = CHUNK_LEN - self.chunk_state.len();
+        if self.chunk_state.count() > 0 {
+            let want = CHUNK_LEN - self.chunk_state.count();
             let take = cmp::min(want, input.len());
             self.chunk_state.update(&input[..take]);
             input = &input[take..];
@@ -1210,7 +1210,7 @@ impl Hasher {
                 // We've filled the current chunk, and there's more input
                 // coming, so we know it's not the root and we can finalize it.
                 // Then we'll proceed to hashing whole chunks below.
-                debug_assert_eq!(self.chunk_state.len(), CHUNK_LEN);
+                debug_assert_eq!(self.chunk_state.count(), CHUNK_LEN);
                 let chunk_cv = self.chunk_state.output().chaining_value();
                 self.push_cv(&chunk_cv, self.chunk_state.chunk_counter);
                 self.chunk_state = ChunkState::new(
@@ -1238,7 +1238,7 @@ impl Hasher {
         // Because we might need to break up the input to form powers of 2, or
         // to evenly divide what we already have, this part runs in a loop.
         while input.len() > CHUNK_LEN {
-            debug_assert_eq!(self.chunk_state.len(), 0, "no partial chunk data");
+            debug_assert_eq!(self.chunk_state.count(), 0, "no partial chunk data");
             debug_assert_eq!(CHUNK_LEN.count_ones(), 1, "power of 2 chunk len");
             let mut subtree_len = largest_power_of_two_leq(input.len());
             let count_so_far = self.chunk_state.chunk_counter * CHUNK_LEN as u64;
@@ -1341,11 +1341,11 @@ impl Hasher {
         // the empty chunk is taken care of above.
         let mut output: Output;
         let mut num_cvs_remaining = self.cv_stack.len();
-        if self.chunk_state.len() > 0 {
+        if self.chunk_state.count() > 0 {
             debug_assert_eq!(
                 self.cv_stack.len(),
                 self.chunk_state.chunk_counter.count_ones() as usize,
-                "cv stack does not need a merge"
+                "cv stack does not need a merge",
             );
             output = self.chunk_state.output();
         } else {
@@ -1394,7 +1394,7 @@ impl Hasher {
 
     /// Return the total number of bytes hashed so far.
     pub fn count(&self) -> u64 {
-        self.chunk_state.chunk_counter * CHUNK_LEN as u64 + self.chunk_state.len() as u64
+        self.chunk_state.chunk_counter * CHUNK_LEN as u64 + self.chunk_state.count() as u64
     }
 
     /// As [`update`](Hasher::update), but reading from a
