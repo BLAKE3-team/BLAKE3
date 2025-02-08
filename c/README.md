@@ -84,6 +84,8 @@ Initialize a `blake3_hasher` in the default hashing mode.
 
 ---
 
+### Single-threaded update
+
 ```c
 void blake3_hasher_update(
   blake3_hasher *self,
@@ -91,7 +93,39 @@ void blake3_hasher_update(
   size_t input_len);
 ```
 
-Add input to the hasher. This can be called any number of times.
+Add input to the hasher with single-threaded update. This can be called any number of times.
+
+### Multi-threaded update
+
+```c
+void blake3_hasher_update_tbb(
+  blake3_hasher *self,
+  const void *input,
+  size_t input_len);
+```
+
+NOTE: This function is only enabled when the library is compiled with CMake option `BLAKE3_USE_TBB`
+and when the oneTBB library is detected on the host system. See the building instructions for
+further details.
+
+NOTE: macOS and Linux users should probably install TBB through their package manager but Windows
+users, or users with special deployment scenarios, may wish to enable `BLAKE3_FETCH_TBB` in
+order to automatically fetch, build, and install TBB directly alongside BLAKE3.
+
+Add input to the hasher with multi-threaded update. This can be called any number of times.
+
+This update function uses [oneTBB](https://uxlfoundation.github.io/oneTBB/) task groups
+across which the input data is partitioned and dispatched for further processing.
+
+Input buffers as large as possible should be preferred in order to minimize additional
+overhead inherent in coordinating parallel tasks. If the input buffer is too small,
+the performance of this update function may be no faster than the single-threaded
+implementation or may even be slower.
+
+This implementation does not require configuration of thread resources and will use as
+many cores as possible by default. If the update function is used within the context of a
+larger program which uses the [oneTBB] API, more fine-grained control of resources is
+possible.
 
 ---
 
@@ -184,10 +218,7 @@ void blake3_hasher_reset(
 
 Reset the hasher to its initial state, prior to any calls to
 `blake3_hasher_update`. Currently this is no different from calling
-`blake3_hasher_init` or similar again. However, if this implementation gains
-multithreading support in the future, and if `blake3_hasher` holds (optional)
-threading resources, this function will reuse those resources. Until then, this
-is mainly for feature compatibility with the Rust implementation.
+`blake3_hasher_init` or similar again.
 
 # Security Notes
 
@@ -207,12 +238,57 @@ smell](https://en.wikipedia.org/wiki/Design_smell) in any case.
 
 # Building
 
-This implementation is just C and assembly files. It doesn't include a
-public-facing build system. (The `Makefile` in this directory is only
-for testing.) Instead, the intention is that you can include these files
-in whatever build system you're already using. This section describes
-the commands your build system should execute, or which you can execute
-by hand. Note that these steps may change in future versions.
+The easiest and most complete method of compiling the BLAKE3 library is with CMake.
+
+This is the method described in the next section.
+
+Toward the end of the building section there are more in depth notes about compiling manually and
+things that are useful to understand if you need to adapt the implementation to some pre-existing
+custom build system.
+
+## CMake
+
+The BLAKE3 library requires a minimum version of CMake 3.9.
+
+The following invocation will compile and install `libblake3`:
+
+With recent CMake:
+
+```bash
+cmake -S c -B c/build "-DCMAKE_INSTALL_PREFIX=/usr/local"
+cmake --build c/build --target install
+```
+
+With an older CMake:
+
+```bash
+cd c
+mkdir build
+cd build
+cmake .. "-DCMAKE_INSTALL_PREFIX=/usr/local"
+cmake --build . --target install
+```
+
+The following options are available when compiling with CMake:
+
+- `BLAKE3_USE_TBB`: Enable oneTBB parallelism (Requires a C++20 capable compiler)
+- `BLAKE3_FETCH_TBB`: Allow fetching oneTBB from GitHub (only if not found on system)
+- `BLAKE3_EXAMPLES`: Compile and install example programs
+
+These can be enabled in the following way:
+
+```bash
+cmake -S c -B c/build "-DCMAKE_INSTALL_PREFIX=/usr/local" -DCMAKE_USE_TBB=1 -DCMAKE_FETCH_TBB=1
+```
+
+## Building manually
+
+This implementation is mostly C and assembly files with some minor parts in C++ for optional
+features.
+
+The intention is that the implementation is simply enough that it can be easily compiled by hand
+without a build system or the sources adapted to whatever custom build system you may happen to be
+using without much difficulty.
 
 ## x86
 
@@ -300,6 +376,23 @@ in call to always_inline ‘vaddq_u32’: target specific option mismatch
 ...then you may need to add something like `-mfpu=neon-vfpv4
 -mfloat-abi=hard`.
 
+## oneTBB-based multi-threading
+
+Optional multi-threading support with performance similar to the Rust Rayon implementation is
+available when using the oneTBB library and compiling the optional C++ support file:
+
+```bash
+g++ -c -O3 -fno-exceptions -fno-rtti -DBLAKE3_USE_TBB $(pkg-config --libs --cflags tbb) -o blake3_tbb.o blake3_tbb.cpp
+gcc -O3 -o example -lstdc++ -DBLAKE3_USE_TBB $(pkg-config --libs --cflags tbb) blake3_tbb.o \
+    example.c blake3.c blake3_dispatch.c blake3_portable.c \
+    blake3_sse2_x86-64_unix.S blake3_sse41_x86-64_unix.S blake3_avx2_x86-64_unix.S blake3_avx512_x86-64_unix.S
+```
+
+NOTE: Compiling `blake3_tbb.cpp` with C++ exceptions _disabled_ is required in order to satisfy the
+behavior that this implementation expects. The public API methods with external C linkage are marked
+`noexcept`. Attempting to compile this file with exceptions _enabled_ will fail and emit a static
+assertion message. Compiling with RTTI disabled is not mandatory but recommended for code size.
+
 ## Other Platforms
 
 The portable implementation should work on most other architectures. For
@@ -308,14 +401,3 @@ example:
 ```bash
 gcc -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c
 ```
-
-# Multithreading
-
-Unlike the Rust implementation, the C implementation doesn't currently support
-multithreading. A future version of this library could add support by taking an
-optional dependency on OpenMP or similar. Alternatively, we could expose a
-lower-level API to allow callers to implement concurrency themselves. The
-former would be more convenient and less error-prone, but the latter would give
-callers the maximum possible amount of control. The best choice here depends on
-the specific use case, so if you have a use case for multithreaded hashing in
-C, please file a GitHub issue and let us know.
