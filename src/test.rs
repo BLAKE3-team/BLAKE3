@@ -763,6 +763,16 @@ fn test_hash_conversions() {
     let hex = hash1.to_hex();
     let hash3 = crate::Hash::from_hex(hex.as_bytes()).unwrap();
     assert_eq!(hash1, hash3);
+
+    let slice1: &[u8] = bytes1.as_slice();
+    let hash4 = crate::Hash::from_slice(slice1).expect("correct length");
+    assert_eq!(hash1, hash4);
+
+    assert!(crate::Hash::from_slice(&[]).is_err());
+    assert!(crate::Hash::from_slice(&[42]).is_err());
+    assert!(crate::Hash::from_slice([42; 31].as_slice()).is_err());
+    assert!(crate::Hash::from_slice([42; 33].as_slice()).is_err());
+    assert!(crate::Hash::from_slice([42; 100].as_slice()).is_err());
 }
 
 #[test]
