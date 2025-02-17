@@ -1,4 +1,4 @@
-use crate::{CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, OUT_LEN};
+use crate::{CVBytes, CVWords, Hash, IncrementCounter, BLOCK_LEN, CHUNK_LEN, OUT_LEN};
 use arrayref::array_ref;
 use arrayvec::ArrayVec;
 use core::usize;
@@ -480,7 +480,7 @@ fn test_xof_partial_blocks() {
     assert_eq!(reference_out, partial_out);
 }
 
-fn reference_hash(input: &[u8]) -> crate::Hash {
+fn reference_hash(input: &[u8]) -> Hash {
     let mut hasher = reference_impl::Hasher::new();
     hasher.update(input);
     let mut bytes = [0; 32];
@@ -690,29 +690,29 @@ fn test_hex_encoding_decoding() {
     assert_eq!(digest.to_string(), digest_str);
 
     // Test round trip
-    let digest = crate::Hash::from_hex(digest_str).unwrap();
+    let digest = Hash::from_hex(digest_str).unwrap();
     assert_eq!(digest.to_hex().as_str(), digest_str);
 
     // Test uppercase
-    let digest = crate::Hash::from_hex(digest_str.to_uppercase()).unwrap();
+    let digest = Hash::from_hex(digest_str.to_uppercase()).unwrap();
     assert_eq!(digest.to_hex().as_str(), digest_str);
 
     // Test string parsing via FromStr
-    let digest: crate::Hash = digest_str.parse().unwrap();
+    let digest: Hash = digest_str.parse().unwrap();
     assert_eq!(digest.to_hex().as_str(), digest_str);
 
     // Test errors
     let bad_len = "04e0bb39f30b1";
-    let _result = crate::Hash::from_hex(bad_len).unwrap_err();
+    let _result = Hash::from_hex(bad_len).unwrap_err();
     #[cfg(feature = "std")]
     assert_eq!(_result.to_string(), "expected 64 hex bytes, received 13");
 
     let bad_char = "Z4e0bb39f30b1a3feb89f536c93be15055482df748674b00d26e5a75777702e9";
-    let _result = crate::Hash::from_hex(bad_char).unwrap_err();
+    let _result = Hash::from_hex(bad_char).unwrap_err();
     #[cfg(feature = "std")]
     assert_eq!(_result.to_string(), "invalid hex character: 'Z'");
 
-    let _result = crate::Hash::from_hex([128; 64]).unwrap_err();
+    let _result = Hash::from_hex([128; 64]).unwrap_err();
     #[cfg(feature = "std")]
     assert_eq!(_result.to_string(), "invalid hex character: 0x80");
 }
@@ -750,35 +750,42 @@ fn test_issue_206_windows_sse2() {
 #[test]
 fn test_hash_conversions() {
     let bytes1 = [42; 32];
-    let hash1: crate::Hash = bytes1.into();
+    let hash1: Hash = bytes1.into();
     let bytes2: [u8; 32] = hash1.into();
     assert_eq!(bytes1, bytes2);
 
     let bytes3 = *hash1.as_bytes();
     assert_eq!(bytes1, bytes3);
 
-    let hash2 = crate::Hash::from_bytes(bytes1);
+    let hash2 = Hash::from_bytes(bytes1);
     assert_eq!(hash1, hash2);
 
     let hex = hash1.to_hex();
-    let hash3 = crate::Hash::from_hex(hex.as_bytes()).unwrap();
+    let hash3 = Hash::from_hex(hex.as_bytes()).unwrap();
     assert_eq!(hash1, hash3);
 
     let slice1: &[u8] = bytes1.as_slice();
-    let hash4 = crate::Hash::from_slice(slice1).expect("correct length");
+    let hash4 = Hash::from_slice(slice1).expect("correct length");
     assert_eq!(hash1, hash4);
+    let hash5: Hash = slice1.try_into().expect("correct length");
+    assert_eq!(hash1, hash5);
 
-    assert!(crate::Hash::from_slice(&[]).is_err());
-    assert!(crate::Hash::from_slice(&[42]).is_err());
-    assert!(crate::Hash::from_slice([42; 31].as_slice()).is_err());
-    assert!(crate::Hash::from_slice([42; 33].as_slice()).is_err());
-    assert!(crate::Hash::from_slice([42; 100].as_slice()).is_err());
+    assert!(Hash::from_slice(&[]).is_err());
+    assert!(Hash::try_from(&[][..]).is_err());
+    assert!(Hash::from_slice(&[42]).is_err());
+    assert!(Hash::try_from(&[42][..]).is_err());
+    assert!(Hash::from_slice([42; 31].as_slice()).is_err());
+    assert!(Hash::try_from([42; 31].as_slice()).is_err());
+    assert!(Hash::from_slice([42; 33].as_slice()).is_err());
+    assert!(Hash::try_from([42; 33].as_slice()).is_err());
+    assert!(Hash::from_slice([42; 100].as_slice()).is_err());
+    assert!(Hash::try_from([42; 100].as_slice()).is_err());
 }
 
 #[test]
 const fn test_hash_const_conversions() {
     let bytes = [42; 32];
-    let hash = crate::Hash::from_bytes(bytes);
+    let hash = Hash::from_bytes(bytes);
     _ = hash.as_bytes();
 }
 
@@ -787,7 +794,7 @@ const fn test_hash_const_conversions() {
 fn test_zeroize() {
     use zeroize::Zeroize;
 
-    let mut hash = crate::Hash([42; 32]);
+    let mut hash = Hash([42; 32]);
     hash.zeroize();
     assert_eq!(hash.0, [0u8; 32]);
 
@@ -964,14 +971,14 @@ fn test_mmap_rayon() -> Result<(), std::io::Error> {
 fn test_serde() {
     // Henrik suggested that we use 0xfe / 254 for byte test data instead of 0xff / 255, due to the
     // fact that 0xfe is not a well formed CBOR item.
-    let hash: crate::Hash = [0xfe; 32].into();
+    let hash: Hash = [0xfe; 32].into();
 
     let json = serde_json::to_string(&hash).unwrap();
     assert_eq!(
         json,
         "[254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254,254]",
     );
-    let hash2: crate::Hash = serde_json::from_str(&json).unwrap();
+    let hash2: Hash = serde_json::from_str(&json).unwrap();
     assert_eq!(hash, hash2);
 
     let mut cbor = Vec::<u8>::new();
@@ -986,7 +993,7 @@ fn test_serde() {
             0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe, 0x18, 0xfe,
         ]
     );
-    let hash_from_cbor: crate::Hash = ciborium::from_reader(&cbor[..]).unwrap();
+    let hash_from_cbor: Hash = ciborium::from_reader(&cbor[..]).unwrap();
     assert_eq!(hash_from_cbor, hash);
 
     // Version 1.5.2 of this crate changed the default serialization format to a bytestring
@@ -999,7 +1006,7 @@ fn test_serde() {
         0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,
         0xfe, 0xfe, 0xfe, 0xfe,
     ];
-    let hash_from_bytestring_cbor: crate::Hash = ciborium::from_reader(bytestring_cbor).unwrap();
+    let hash_from_bytestring_cbor: Hash = ciborium::from_reader(bytestring_cbor).unwrap();
     assert_eq!(hash_from_bytestring_cbor, hash);
 }
 

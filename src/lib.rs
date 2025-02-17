@@ -135,6 +135,7 @@ mod join;
 
 use arrayref::{array_mut_ref, array_ref};
 use arrayvec::{ArrayString, ArrayVec};
+use core::array::TryFromSliceError;
 use core::cmp;
 use core::fmt;
 use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
@@ -239,7 +240,7 @@ impl Hash {
     /// Create a `Hash` from its raw bytes representation as a slice.
     ///
     /// Returns an error if the slice is not exactly 32 bytes long.
-    pub fn from_slice(bytes: &[u8]) -> Result<Self, core::array::TryFromSliceError> {
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, TryFromSliceError> {
         Ok(Self::from_bytes(bytes.try_into()?))
     }
 
@@ -302,6 +303,14 @@ impl From<Hash> for [u8; OUT_LEN] {
     #[inline]
     fn from(hash: Hash) -> Self {
         hash.0
+    }
+}
+
+impl TryFrom<&[u8]> for Hash {
+    type Error = TryFromSliceError;
+
+    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
+        Self::from_slice(slice)
     }
 }
 
