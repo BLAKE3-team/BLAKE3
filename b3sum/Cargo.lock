@@ -72,7 +72,7 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
 name = "b3sum"
-version = "1.5.5"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -92,7 +92,7 @@ checksum = "8f68f53c83ab957f72c32642f3868eec03eb974d1fb82e453128456482613d36"
 
 [[package]]
 name = "blake3"
-version = "1.5.5"
+version = "1.6.0"
 dependencies = [
  "arrayref",
  "arrayvec",
