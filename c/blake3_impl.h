@@ -32,12 +32,6 @@ enum blake3_flags {
 #define INLINE static inline __attribute__((always_inline))
 #endif
 
-#ifdef __cplusplus
-#define NOEXCEPT noexcept
-#else
-#define NOEXCEPT
-#endif
-
 #if (defined(__x86_64__) || defined(_M_X64)) && !defined(_M_ARM64EC)
 #define IS_X86
 #define IS_X86_64
@@ -234,8 +228,12 @@ BLAKE3_PRIVATE void blake3_compress_subtree_wide_join_tbb(
     uint8_t *l_cvs, size_t *l_n,
     // right-hand side params
     const uint8_t *r_input, size_t r_input_len, uint64_t r_chunk_counter,
-    uint8_t *r_cvs, size_t *r_n) NOEXCEPT;
+    uint8_t *r_cvs, size_t *r_n) BLAKE3_NOEXCEPT;
 #endif
+
+BLAKE3_PRIVATE void blake3_hasher_update_base(blake3_hasher *self,
+                                              const void *input,
+                                              size_t input_len, bool use_tbb);
 
 // Declarations for implementation-specific functions.
 void blake3_compress_in_place_portable(uint32_t cv[8],

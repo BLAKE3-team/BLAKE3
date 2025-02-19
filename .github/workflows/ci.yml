@@ -319,7 +319,7 @@ jobs:
 
   # CMake build test (Library only).
   cmake_current_build:
-    name: CMake ${{ matrix.os }} CC=${{ matrix.toolchain.cc }} CXX=${{ matrix.toolchain.cxx }} TBB=${{ matrix.use_tbb }}
+    name: CMake ${{ matrix.os }} CC=${{ matrix.toolchain.cc }} CXX=${{ matrix.toolchain.cxx }} LLFIO=${{ matrix.use_llfio }} TBB=${{ matrix.use_tbb }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -333,6 +333,7 @@ jobs:
           { cc: clang-cl, cxx: clang-cl },
           { cc: gcc, cxx: g++ },
         ]
+        use_llfio: [OFF, ON]
         use_tbb: [OFF, ON]
         exclude:
           - os: macOS-latest
@@ -346,6 +347,9 @@ jobs:
           - os: windows-latest
             toolchain: { cc: clang, cxx: clang++ }
             use_tbb: ON
+          - os: windows-latest
+            toolchain: { cc: gcc, cxx: g++ }
+            use_llfio: ON
           - os: windows-latest
             toolchain: { cc: gcc, cxx: g++ }
             use_tbb: ON
@@ -368,7 +372,7 @@ jobs:
       - name: CMake generation, build, install
         run: |
           ${{ matrix.os != 'windows-latest' || '& "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/Common7/Tools/Launch-VsDevShell.ps1" -Arch amd64 -SkipAutomaticLocation' }}
-          cmake -S c -B c/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/target -DCMAKE_C_COMPILER=${{ matrix.toolchain.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.toolchain.cxx }} -DBLAKE3_USE_TBB=${{ matrix.use_tbb }} -DBLAKE3_FETCH_TBB=-DBLAKE3_FETCH_TBB=${{ matrix.os == 'windows-latest' && 'YES' || 'NO' }} -DBLAKE3_EXAMPLES=ON
+          cmake -S c -B c/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/target -DCMAKE_C_COMPILER=${{ matrix.toolchain.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.toolchain.cxx }} -DBLAKE3_USE_LLFIO=${{ matrix.use_llfio }} -DBLAKE3_USE_TBB=${{ matrix.use_tbb }} -DBLAKE3_FETCH_TBB=${{ matrix.os == 'windows-latest' && 'YES' || 'NO' }} -DBLAKE3_EXAMPLES=ON
           cmake --build c/build --target install
   cmake_3-9_build:
     name: CMake 3.9.6 ubuntu-latest

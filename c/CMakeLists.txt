@@ -17,7 +17,10 @@ project(libblake3
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+option(BLAKE3_USE_LLFIO "Enable llfio mmap support" OFF)
 option(BLAKE3_USE_TBB "Enable oneTBB parallelism" OFF)
+
+option(BLAKE3_FETCH_LLFIO "Allow fetching llfio from GitHub if not found on system" OFF)
 option(BLAKE3_FETCH_TBB "Allow fetching oneTBB from GitHub if not found on system" OFF)
 
 include(CTest)
@@ -217,6 +220,16 @@ else()
   message(FATAL_ERROR "BLAKE3_SIMD_TYPE is set to an unknown value: '${BLAKE3_SIMD_TYPE}'")
 endif()
 
+if(BLAKE3_USE_LLFIO)
+  if(NOT TARGET llfio::hl)
+    set(BLAKE3_USE_LLFIO OFF)
+  else()
+    target_link_libraries(blake3 PRIVATE llfio::hl)
+    target_compile_definitions(blake3 PUBLIC BLAKE3_USE_LLFIO)
+    target_sources(blake3 PRIVATE blake3_llfio.cpp)
+  endif()
+endif()
+
 if(BLAKE3_USE_TBB)
   find_package(TBB 2021.11.0 QUIET)
   if(NOT TBB_FOUND AND NOT TARGET TBB::tbb)
@@ -242,7 +255,7 @@ if(BLAKE3_USE_TBB)
   endif()
 endif()
 
-if(BLAKE3_USE_TBB)
+if(BLAKE3_USE_LLFIO OR BLAKE3_USE_TBB)
   # Define some scratch variables for building appropriate flags per compiler
   if(CMAKE_VERSION VERSION_LESS 3.12)
     set(APPEND BLAKE3_CXX_STANDARD_FLAGS_GNU -std=c++20)
@@ -342,6 +355,7 @@ add_feature_info("AMD64 assembly" BLAKE3_SIMD_AMD64_ASM "The library uses hand w
 add_feature_info("x86 SIMD intrinsics" BLAKE3_SIMD_X86_INTRINSICS "The library uses x86 SIMD intrinsics.")
 add_feature_info("NEON SIMD intrinsics" BLAKE3_SIMD_NEON_INTRINSICS "The library uses NEON SIMD intrinsics.")
 add_feature_info("oneTBB parallelism" BLAKE3_USE_TBB "The library uses oneTBB parallelism.")
+add_feature_info("llfio mmap support" BLAKE3_USE_LLFIO "The library uses llfio for mmap support.")
 feature_summary(WHAT ENABLED_FEATURES)
 
 if(BLAKE3_EXAMPLES)
