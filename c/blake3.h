@@ -27,6 +27,12 @@
 #endif
 
 #ifdef __cplusplus
+#define BLAKE3_NOEXCEPT noexcept
+#else
+#define BLAKE3_NOEXCEPT
+#endif
+
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -69,9 +75,17 @@ BLAKE3_API void blake3_hasher_init_derive_key_raw(blake3_hasher *self, const voi
                                                   size_t context_len);
 BLAKE3_API void blake3_hasher_update(blake3_hasher *self, const void *input,
                                      size_t input_len);
+#if defined(BLAKE3_USE_LLFIO)
+BLAKE3_API void blake3_hasher_update_mmap(blake3_hasher *self,
+                                          const char *path) BLAKE3_NOEXCEPT;
+#endif // BLAKE3_USE_LLFIO
 #if defined(BLAKE3_USE_TBB)
 BLAKE3_API void blake3_hasher_update_tbb(blake3_hasher *self, const void *input,
                                          size_t input_len);
+#if defined(BLAKE3_USE_LLFIO)
+BLAKE3_API void blake3_hasher_update_mmap_tbb(blake3_hasher *self,
+                                              const char *path) BLAKE3_NOEXCEPT;
+#endif // BLAKE3_USE_LLFIO
 #endif // BLAKE3_USE_TBB
 BLAKE3_API void blake3_hasher_finalize(const blake3_hasher *self, uint8_t *out,
                                        size_t out_len);

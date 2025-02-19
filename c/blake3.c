@@ -472,8 +472,8 @@ INLINE void hasher_push_cv(blake3_hasher *self, uint8_t new_cv[BLAKE3_OUT_LEN],
   self->cv_stack_len += 1;
 }
 
-INLINE void blake3_hasher_update_base(blake3_hasher *self, const void *input,
-                                      size_t input_len, bool use_tbb) {
+void blake3_hasher_update_base(blake3_hasher *self, const void *input,
+                               size_t input_len, bool use_tbb) {
   // Explicitly checking for zero avoids causing UB by passing a null pointer
   // to memcpy. This comes up in practice with things like:
   //   std::vector<uint8_t> v;
