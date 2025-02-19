@@ -272,6 +272,7 @@ cmake --build . --target install
 
 The following options are available when compiling with CMake:
 
+- `BLAKE3_USE_LLFIO`: Enable llfio memory-mapped IO (Requires a C++20 capable compiler)
 - `BLAKE3_USE_TBB`: Enable oneTBB parallelism (Requires a C++20 capable compiler)
 - `BLAKE3_FETCH_TBB`: Allow fetching oneTBB from GitHub (only if not found on system)
 - `BLAKE3_EXAMPLES`: Compile and install example programs

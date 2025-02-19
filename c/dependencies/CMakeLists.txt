@@ -1,3 +1,6 @@
+if(BLAKE3_USE_LLFIO)
+    add_subdirectory(llfio)
+endif()
 if(BLAKE3_USE_TBB)
     add_subdirectory(tbb)
 endif()
