@@ -9,14 +9,18 @@
 
 #include "blake3.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // internal flags
 enum blake3_flags {
-  CHUNK_START         = 1 << 0,
-  CHUNK_END           = 1 << 1,
-  PARENT              = 1 << 2,
-  ROOT                = 1 << 3,
-  KEYED_HASH          = 1 << 4,
-  DERIVE_KEY_CONTEXT  = 1 << 5,
+  CHUNK_START = 1 << 0,
+  CHUNK_END = 1 << 1,
+  PARENT = 1 << 2,
+  ROOT = 1 << 3,
+  KEYED_HASH = 1 << 4,
+  DERIVE_KEY_CONTEXT = 1 << 5,
   DERIVE_KEY_MATERIAL = 1 << 6,
 };
 
@@ -48,17 +52,17 @@ enum blake3_flags {
 #endif
 #endif
 
-#if !defined(BLAKE3_USE_NEON) 
-  // If BLAKE3_USE_NEON not manually set, autodetect based on AArch64ness
-  #if defined(IS_AARCH64)
-    #if defined(__ARM_BIG_ENDIAN)
-      #define BLAKE3_USE_NEON 0
-    #else
-      #define BLAKE3_USE_NEON 1
-    #endif
-  #else
-    #define BLAKE3_USE_NEON 0
-  #endif
+#if !defined(BLAKE3_USE_NEON)
+// If BLAKE3_USE_NEON not manually set, autodetect based on AArch64ness
+#if defined(IS_AARCH64)
+#if defined(__ARM_BIG_ENDIAN)
+#define BLAKE3_USE_NEON 0
+#else
+#define BLAKE3_USE_NEON 1
+#endif
+#else
+#define BLAKE3_USE_NEON 0
+#endif
 #endif
 
 #if defined(IS_X86)
@@ -97,7 +101,7 @@ static unsigned int highest_one(uint64_t x) {
   _BitScanReverse64(&index, x);
   return index;
 #elif defined(_MSC_VER) && defined(IS_X86_32)
-  if(x >> 32) {
+  if (x >> 32) {
     unsigned long index;
     _BitScanReverse(&index, (unsigned long)(x >> 32));
     return 32 + index;
@@ -108,12 +112,29 @@ static unsigned int highest_one(uint64_t x) {
   }
 #else
   unsigned int c = 0;
-  if(x & 0xffffffff00000000ULL) { x >>= 32; c += 32; }
-  if(x & 0x00000000ffff0000ULL) { x >>= 16; c += 16; }
-  if(x & 0x000000000000ff00ULL) { x >>=  8; c +=  8; }
-  if(x & 0x00000000000000f0ULL) { x >>=  4; c +=  4; }
-  if(x & 0x000000000000000cULL) { x >>=  2; c +=  2; }
-  if(x & 0x0000000000000002ULL) {           c +=  1; }
+  if (x & 0xffffffff00000000ULL) {
+    x >>= 32;
+    c += 32;
+  }
+  if (x & 0x00000000ffff0000ULL) {
+    x >>= 16;
+    c += 16;
+  }
+  if (x & 0x000000000000ff00ULL) {
+    x >>= 8;
+    c += 8;
+  }
+  if (x & 0x00000000000000f0ULL) {
+    x >>= 4;
+    c += 4;
+  }
+  if (x & 0x000000000000000cULL) {
+    x >>= 2;
+    c += 2;
+  }
+  if (x & 0x0000000000000002ULL) {
+    c += 1;
+  }
   return c;
 #endif
 }
@@ -133,7 +154,7 @@ INLINE unsigned int popcnt(uint64_t x) {
 }
 
 // Largest power of two less than or equal to x. As a special case, returns 1
-// when x is 0. 
+// when x is 0.
 INLINE uint64_t round_down_to_power_of_2(uint64_t x) {
   return 1ULL << highest_one(x | 1);
 }
@@ -165,7 +186,7 @@ INLINE void load_key_words(const uint8_t key[BLAKE3_KEY_LEN],
 INLINE void load_block_words(const uint8_t block[BLAKE3_BLOCK_LEN],
                              uint32_t block_words[16]) {
   for (size_t i = 0; i < 16; i++) {
-      block_words[i] = load32(&block[i * 4]);
+    block_words[i] = load32(&block[i * 4]);
   }
 }
 
@@ -199,9 +220,9 @@ void blake3_compress_xof(const uint32_t cv[8],
                          uint8_t out[64]);
 
 void blake3_xof_many(const uint32_t cv[8],
-                     const uint8_t block[BLAKE3_BLOCK_LEN],
-                     uint8_t block_len, uint64_t counter, uint8_t flags,
-                     uint8_t out[64], size_t outblocks);
+                     const uint8_t block[BLAKE3_BLOCK_LEN], uint8_t block_len,
+                     uint64_t counter, uint8_t flags, uint8_t out[64],
+                     size_t outblocks);
 
 void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
                       size_t blocks, const uint32_t key[8], uint64_t counter,
@@ -210,6 +231,25 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
 
 size_t blake3_simd_degree(void);
 
+BLAKE3_PRIVATE size_t blake3_compress_subtree_wide(
+    const uint8_t *input, size_t input_len, const uint32_t key[8],
+    uint64_t chunk_counter, uint8_t flags, uint8_t *out, bool use_tbb);
+
+#if defined(BLAKE3_USE_TBB)
+BLAKE3_PRIVATE void blake3_compress_subtree_wide_join_tbb(
+    // shared params
+    const uint32_t key[8], uint8_t flags, bool use_tbb,
+    // left-hand side params
+    const uint8_t *l_input, size_t l_input_len, uint64_t l_chunk_counter,
+    uint8_t *l_cvs, size_t *l_n,
+    // right-hand side params
+    const uint8_t *r_input, size_t r_input_len, uint64_t r_chunk_counter,
+    uint8_t *r_cvs, size_t *r_n) BLAKE3_NOEXCEPT;
+#endif
+
+BLAKE3_PRIVATE void blake3_hasher_update_base(blake3_hasher *self,
+                                              const void *input,
+                                              size_t input_len, bool use_tbb);
 
 // Declarations for implementation-specific functions.
 void blake3_compress_in_place_portable(uint32_t cv[8],
@@ -287,7 +327,7 @@ void blake3_hash_many_avx512(const uint8_t *const *inputs, size_t num_inputs,
 void blake3_xof_many_avx512(const uint32_t cv[8],
                             const uint8_t block[BLAKE3_BLOCK_LEN],
                             uint8_t block_len, uint64_t counter, uint8_t flags,
-                            uint8_t* out, size_t outblocks);
+                            uint8_t *out, size_t outblocks);
 #endif
 #endif
 #endif
@@ -300,5 +340,8 @@ void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
                            uint8_t flags_end, uint8_t *out);
 #endif
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* BLAKE3_IMPL_H */
