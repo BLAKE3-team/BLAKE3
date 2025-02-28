@@ -347,6 +347,42 @@ fn parse_check_line(mut line: &str) -> Result<ParsedCheckLine> {
         is_escaped = true;
         line = &line[1..];
     }
+
+    if line.starts_with("BLAKE3 (") {
+        match line.rsplit_once(')') {
+            Some((file, hash_hex)) => {
+                ensure!(hash_hex.starts_with(" = "), "Invalid tagged line");
+                let file_string = file[8..].to_string();
+                let file_path_string = if is_escaped {
+                    // If we detected a backslash at the start of the line earlier, now we
+                    // need to unescape backslashes and newlines.
+                    unescape(&file_string)?
+                } else {
+                    file_string.clone().into()
+                };
+                // Decode the hash hex.
+                let mut hash_bytes = [0; blake3::OUT_LEN];
+                let mut hex_chars = hash_hex[3..].chars();
+                let hash_hex_len = 2 * blake3::OUT_LEN;
+                ensure!(hash_hex.len() - 3 == hash_hex_len, "Wrong hash length");
+                for byte in &mut hash_bytes {
+                    let high_char = hex_chars.next().unwrap();
+                    let low_char = hex_chars.next().unwrap();
+                    *byte = 16 * hex_half_byte(high_char)? + hex_half_byte(low_char)?;
+                }
+                let expected_hash: blake3::Hash = hash_bytes.into();
+                check_for_invalid_characters(&file_path_string)?;
+                return Ok(ParsedCheckLine {
+                    file_string,
+                    is_escaped,
+                    file_path: file_path_string.into(),
+                    expected_hash,
+                });
+            }
+            None => ensure!(false, "Invalid tagged line"),
+        }
+    }
+
     // The front of the line must be a hash of the usual length, followed by
     // two spaces. The hex characters in the hash must be lowercase for now,
     // though we could support uppercase too if we wanted to.
