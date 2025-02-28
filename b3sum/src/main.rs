@@ -1,4 +1,4 @@
-use anyhow::{bail, ensure, Result};
+use anyhow::{bail, ensure};
 use clap::Parser;
 use std::cmp;
 use std::fs::File;
@@ -104,7 +104,7 @@ struct Args {
 }
 
 impl Args {
-    fn parse() -> Result<Self> {
+    fn parse() -> anyhow::Result<Self> {
         // wild::args_os() is equivalent to std::env::args_os() on Unix,
         // but on Windows it adds support for globbing.
         let inner = Inner::parse_from(wild::args_os());
@@ -173,7 +173,7 @@ impl Args {
     }
 }
 
-fn hash_path(args: &Args, path: &Path) -> Result<blake3::OutputReader> {
+fn hash_path(args: &Args, path: &Path) -> anyhow::Result<blake3::OutputReader> {
     let mut hasher = args.base_hasher.clone();
     if path == Path::new("-") {
         if args.keyed() {
@@ -191,7 +191,7 @@ fn hash_path(args: &Args, path: &Path) -> Result<blake3::OutputReader> {
     Ok(output_reader)
 }
 
-fn write_hex_output(mut output: blake3::OutputReader, args: &Args) -> Result<()> {
+fn write_hex_output(mut output: blake3::OutputReader, args: &Args) -> anyhow::Result<()> {
     // Encoding multiples of the 64 bytes is most efficient.
     // TODO: This computes each output block twice when the --seek argument isn't a multiple of 64.
     // We'll refactor all of this soon anyway, once SIMD optimizations are available for the XOF.
@@ -207,7 +207,7 @@ fn write_hex_output(mut output: blake3::OutputReader, args: &Args) -> Result<()>
     Ok(())
 }
 
-fn write_raw_output(output: blake3::OutputReader, args: &Args) -> Result<()> {
+fn write_raw_output(output: blake3::OutputReader, args: &Args) -> anyhow::Result<()> {
     let mut output = output.take(args.len());
     let stdout = std::io::stdout();
     let mut handler = stdout.lock();
@@ -216,7 +216,7 @@ fn write_raw_output(output: blake3::OutputReader, args: &Args) -> Result<()> {
     Ok(())
 }
 
-fn read_key_from_stdin() -> Result<[u8; blake3::KEY_LEN]> {
+fn read_key_from_stdin() -> anyhow::Result<[u8; blake3::KEY_LEN]> {
     let mut bytes = Vec::with_capacity(blake3::KEY_LEN + 1);
     let n = std::io::stdin()
         .lock()
@@ -267,7 +267,7 @@ fn filepath_to_string(filepath: &Path) -> FilepathString {
     }
 }
 
-fn hex_half_byte(c: char) -> Result<u8> {
+fn hex_half_byte(c: char) -> anyhow::Result<u8> {
     // The hex characters in the hash must be lowercase for now, though we
     // could support uppercase too if we wanted to.
     if '0' <= c && c <= '9' {
@@ -284,7 +284,7 @@ fn hex_half_byte(c: char) -> Result<u8> {
 // to ever succeed when it shouldn't (a false positive). By forbidding certain
 // characters in checked filepaths, we avoid a class of false positives where
 // two different filepaths can get confused with each other.
-fn check_for_invalid_characters(utf8_path: &str) -> Result<()> {
+fn check_for_invalid_characters(utf8_path: &str) -> anyhow::Result<()> {
     // Null characters in paths should never happen, but they can result in a
     // path getting silently truncated on Unix.
     if utf8_path.contains('\0') {
@@ -308,7 +308,7 @@ fn check_for_invalid_characters(utf8_path: &str) -> Result<()> {
     Ok(())
 }
 
-fn unescape(mut path: &str) -> Result<String> {
+fn unescape(mut path: &str) -> anyhow::Result<String> {
     let mut unescaped = String::with_capacity(2 * path.len());
     while let Some(i) = path.find('\\') {
         ensure!(i < path.len() - 1, "Invalid backslash escape");
@@ -346,7 +346,7 @@ fn split_tagged_check_line(line_after_slash: &str) -> Option<(&str, &str)> {
     line_after_slash[prefix.len()..].split_once(") = ")
 }
 
-fn parse_check_line(mut line: &str) -> Result<ParsedCheckLine> {
+fn parse_check_line(mut line: &str) -> anyhow::Result<ParsedCheckLine> {
     // Trim off the trailing newlines, if any.
     line = line.trim_end_matches(['\r', '\n']);
     // If there's a backslash at the front of the line, that means we need to
@@ -406,7 +406,7 @@ fn parse_check_line(mut line: &str) -> Result<ParsedCheckLine> {
     })
 }
 
-fn hash_one_input(path: &Path, args: &Args) -> Result<()> {
+fn hash_one_input(path: &Path, args: &Args) -> anyhow::Result<()> {
     let output = hash_path(args, path)?;
     if args.raw() {
         write_raw_output(output, args)?;
@@ -481,7 +481,7 @@ fn check_one_line(line: &str, args: &Args) -> bool {
     }
 }
 
-fn check_one_checkfile(path: &Path, args: &Args, files_failed: &mut u64) -> Result<()> {
+fn check_one_checkfile(path: &Path, args: &Args, files_failed: &mut u64) -> anyhow::Result<()> {
     let mut file;
     let stdin;
     let mut stdin_lock;
@@ -512,7 +512,7 @@ fn check_one_checkfile(path: &Path, args: &Args, files_failed: &mut u64) -> Resu
     }
 }
 
-fn main() -> Result<()> {
+fn main() -> anyhow::Result<()> {
     let args = Args::parse()?;
     let mut thread_pool_builder = rayon_core::ThreadPoolBuilder::new();
     if let Some(num_threads) = args.num_threads() {
