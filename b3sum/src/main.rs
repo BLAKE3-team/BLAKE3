@@ -73,7 +73,7 @@ struct Inner {
     #[arg(long)]
     raw: bool,
 
-    /// Prefix output with `BLAKE3 (...) =`
+    /// Output BSD-style checksums: BLAKE3 ([FILE]) = [HASH]
     #[arg(long)]
     tag: bool,
 
@@ -364,7 +364,7 @@ fn parse_check_line(mut line: &str) -> Result<ParsedCheckLine> {
         line_after_slash = line;
     }
 
-    // Split the line. It might be "<hash>  <file>" or "BLAKE3(<file>) = <hash>". The latter comes
+    // Split the line. It might be "<hash>  <file>" or "BLAKE3 (<file>) = <hash>". The latter comes
     // from the --tag flag.
     let hash_hex;
     let file_str;
