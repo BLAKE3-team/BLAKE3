@@ -16,6 +16,7 @@ const KEYED_ARG: &str = "keyed";
 const LENGTH_ARG: &str = "length";
 const NO_NAMES_ARG: &str = "no_names";
 const RAW_ARG: &str = "raw";
+const TAG_ARG: &str = "tag";
 const CHECK_ARG: &str = "check";
 
 #[derive(Parser)]
@@ -72,6 +73,10 @@ struct Inner {
     #[arg(long)]
     raw: bool,
 
+    /// Prefix output with `BLAKE3 (...) =`
+    #[arg(long)]
+    tag: bool,
+
     /// Read BLAKE3 sums from the [FILE]s and check them
     #[arg(
         short,
@@ -80,6 +85,7 @@ struct Inner {
         conflicts_with(KEYED_ARG),
         conflicts_with(LENGTH_ARG),
         conflicts_with(RAW_ARG),
+        conflicts_with(TAG_ARG),
         conflicts_with(NO_NAMES_ARG)
     )]
     check: bool,
@@ -136,6 +142,10 @@ impl Args {
 
     fn raw(&self) -> bool {
         self.inner.raw
+    }
+
+    fn tag(&self) -> bool {
+        self.inner.tag
     }
 
     fn no_mmap(&self) -> bool {
@@ -392,6 +402,12 @@ fn hash_one_input(path: &Path, args: &Args) -> Result<()> {
     } = filepath_to_string(path);
     if is_escaped {
         print!("\\");
+    }
+    if args.tag() {
+        print!("BLAKE3 ({}) = ", filepath_string);
+        write_hex_output(output, args)?;
+        println!();
+        return Ok(());
     }
     write_hex_output(output, args)?;
     println!("  {}", filepath_string);
