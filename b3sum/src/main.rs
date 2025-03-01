@@ -335,15 +335,19 @@ struct ParsedCheckLine {
 }
 
 fn split_untagged_check_line(line_after_slash: &str) -> Option<(&str, &str)> {
+    // Of the form "<hash>  <file>". The file might contain "  ", so we need to split from the
+    // left.
     line_after_slash.split_once("  ")
 }
 
 fn split_tagged_check_line(line_after_slash: &str) -> Option<(&str, &str)> {
+    // Of the form "BLAKE3 (<file>) = <hash>". The file might contain ") = ", so we need to split
+    // from the *right*.
     let prefix = "BLAKE3 (";
     if !line_after_slash.starts_with(prefix) {
         return None;
     }
-    line_after_slash[prefix.len()..].split_once(") = ")
+    line_after_slash[prefix.len()..].rsplit_once(") = ")
 }
 
 fn parse_check_line(mut line: &str) -> anyhow::Result<ParsedCheckLine> {
