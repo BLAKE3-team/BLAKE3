@@ -34,7 +34,7 @@ jobs:
           # https://github.com/rust-lang/libs-team/issues/72.
           # This test target is here so that we notice if we accidentally bump
           # the MSRV, but it's not a promise that we won't bump it.
-          "1.66.1",
+          "1.70.0",
         ]
 
     steps:
@@ -126,21 +126,30 @@ jobs:
     - name: cargo test C bindings intrinsics
       run: cargo test --features=prefer_intrinsics
       working-directory: ./c/blake3_c_rust_bindings
+    - name: cargo test C bindings no AVX-512
+      run: cargo test
+      working-directory: ./c/blake3_c_rust_bindings
+      env:
+        CFLAGS: -DBLAKE3_NO_AVX512
+    - name: cargo test C bindings no AVX2
+      run: cargo test
+      working-directory: ./c/blake3_c_rust_bindings
+      env:
+        CFLAGS: -DBLAKE3_NO_AVX512 -DBLAKE3_NO_AVX2
+    - name: cargo test C bindings no SSE41
+      run: cargo test
+      working-directory: ./c/blake3_c_rust_bindings
+      env:
+        CFLAGS: -DBLAKE3_NO_AVX512 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_SSE41
+    - name: cargo test C bindings no SSE2
+      run: cargo test
+      working-directory: ./c/blake3_c_rust_bindings
+      env:
+        CFLAGS: -DBLAKE3_NO_AVX512 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_SSE2
     # Reference impl doc test.
     - name: reference impl doc test
       run: cargo test
       working-directory: ./reference_impl
-
-    # the new guts crate
-    - name: guts test
-      run: cargo test --all-features
-      working-directory: ./rust/guts
-    - name: guts no_std build
-      run: cargo build --no-default-features
-      working-directory: ./rust/guts
-    - name: guts no_std test  # note that rust/guts/src/test.rs still uses libstd
-      run: cargo test --no-default-features
-      working-directory: ./rust/guts
 
   b3sum_tests:
     name: b3sum ${{ matrix.target.name }} ${{ matrix.channel }}
@@ -161,7 +170,7 @@ jobs:
           # The b3sum MSRV is sometimes higher than the blake3 crate's, because
           # b3sum depends on Clap. We check in the b3sum Cargo.lock, so Clap
           # update shouldn't randomly break us here.
-          "1.70.0",
+          "1.74.1",
         ]
 
     steps:
@@ -315,7 +324,7 @@ jobs:
           ~/.cargo/bin/cargo test --features prefer_intrinsics
 
   # CMake build test (Library only), current macOS/Linux only.
-  cmake_build:
+  cmake_current_build:
     name: CMake ${{ matrix.os }} ${{ matrix.compiler }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -336,3 +345,32 @@ jobs:
         run: cmake -S c -B c/build -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/target
       - name: CMake build / install
         run: cmake --build c/build --target install
+  cmake_3-9_build:
+    name: CMake 3.9.6 ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: lukka/get-cmake@5f6e04f5267c8133f1273bf2103583fc72c46b17
+        with:
+          cmakeVersion: 3.9.6
+      - name: Create build directory
+        run: mkdir c/build
+      - name: CMake generation
+        run: cmake .. -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/target
+        working-directory: c/build
+      - name: CMake build / install
+        run: make install
+        working-directory: c/build
+
+  miri_smoketest:
+    name: Miri smoketest
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: miri
+    # Currently the test search "miri" only matches "test_miri_smoketest", but
+    # we might add more. If this accidentally picks up anything incompatible or
+    # slow, we can narrow it.
+    - run: cargo miri test miri

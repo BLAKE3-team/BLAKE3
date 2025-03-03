@@ -142,6 +142,8 @@ use arrayvec::{ArrayString, ArrayVec};
 use core::cmp;
 use core::fmt;
 use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
+#[cfg(feature = "zeroize")]
+use zeroize::Zeroize;
 
 /// The number of bytes in a [`Hash`](struct.Hash.html), 32.
 pub const OUT_LEN: usize = 32;
@@ -220,7 +222,6 @@ fn counter_high(counter: u64) -> u32 {
 /// [`from_hex`]: #method.from_hex
 /// [`Display`]: https://doc.rust-lang.org/std/fmt/trait.Display.html
 /// [`FromStr`]: https://doc.rust-lang.org/std/str/trait.FromStr.html
-#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Hash)]
 pub struct Hash([u8; OUT_LEN]);
@@ -237,6 +238,13 @@ impl Hash {
     /// Create a `Hash` from its raw bytes representation.
     pub const fn from_bytes(bytes: [u8; OUT_LEN]) -> Self {
         Self(bytes)
+    }
+
+    /// Create a `Hash` from its raw bytes representation as a slice.
+    ///
+    /// Returns an error if the slice is not exactly 32 bytes long.
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, core::array::TryFromSliceError> {
+        Ok(Self::from_bytes(bytes.try_into()?))
     }
 
     /// Encode a `Hash` in lowercase hexadecimal.
@@ -306,6 +314,15 @@ impl core::str::FromStr for Hash {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Hash::from_hex(s)
+    }
+}
+
+#[cfg(feature = "zeroize")]
+impl Zeroize for Hash {
+    fn zeroize(&mut self) {
+        // Destructuring to trigger compile error as a reminder to update this impl.
+        let Self(bytes) = self;
+        bytes.zeroize();
     }
 }
 
@@ -396,7 +413,6 @@ impl std::error::Error for HexError {}
 // Each chunk or parent node can produce either a 32-byte chaining value or, by
 // setting the ROOT flag, any number of final output bytes. The Output struct
 // captures the state just prior to choosing between those two possibilities.
-#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 #[derive(Clone)]
 struct Output {
     input_chaining_value: CVWords,
@@ -404,7 +420,6 @@ struct Output {
     block_len: u8,
     counter: u64,
     flags: u8,
-    #[cfg_attr(feature = "zeroize", zeroize(skip))]
     platform: Platform,
 }
 
@@ -440,8 +455,28 @@ impl Output {
     }
 }
 
+#[cfg(feature = "zeroize")]
+impl Zeroize for Output {
+    fn zeroize(&mut self) {
+        // Destructuring to trigger compile error as a reminder to update this impl.
+        let Self {
+            input_chaining_value,
+            block,
+            block_len,
+            counter,
+            flags,
+            platform: _,
+        } = self;
+
+        input_chaining_value.zeroize();
+        block.zeroize();
+        block_len.zeroize();
+        counter.zeroize();
+        flags.zeroize();
+    }
+}
+
 #[derive(Clone)]
-#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 struct ChunkState {
     cv: CVWords,
     chunk_counter: u64,
@@ -449,7 +484,6 @@ struct ChunkState {
     buf_len: u8,
     blocks_compressed: u8,
     flags: u8,
-    #[cfg_attr(feature = "zeroize", zeroize(skip))]
     platform: Platform,
 }
 
@@ -549,6 +583,29 @@ impl fmt::Debug for ChunkState {
             .field("flags", &self.flags)
             .field("platform", &self.platform)
             .finish()
+    }
+}
+
+#[cfg(feature = "zeroize")]
+impl Zeroize for ChunkState {
+    fn zeroize(&mut self) {
+        // Destructuring to trigger compile error as a reminder to update this impl.
+        let Self {
+            cv,
+            chunk_counter,
+            buf,
+            buf_len,
+            blocks_compressed,
+            flags,
+            platform: _,
+        } = self;
+
+        cv.zeroize();
+        chunk_counter.zeroize();
+        buf.zeroize();
+        buf_len.zeroize();
+        blocks_compressed.zeroize();
+        flags.zeroize();
     }
 }
 
@@ -834,8 +891,17 @@ fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8) -> Ou
 
 /// The default hash function.
 ///
-/// For an incremental version that accepts multiple writes, see
-/// [`Hasher::update`].
+/// For an incremental version that accepts multiple writes, see [`Hasher::new`],
+/// [`Hasher::update`], and [`Hasher::finalize`]. These two lines are equivalent:
+///
+/// ```
+/// let hash = blake3::hash(b"foo");
+/// # let hash1 = hash;
+///
+/// let hash = blake3::Hasher::new().update(b"foo").finalize();
+/// # let hash2 = hash;
+/// # assert_eq!(hash1, hash2);
+/// ```
 ///
 /// For output sizes other than 32 bytes, see [`Hasher::finalize_xof`] and
 /// [`OutputReader`].
@@ -854,11 +920,22 @@ pub fn hash(input: &[u8]) -> Hash {
 /// requirement, and callers need to be careful not to compare MACs as raw
 /// bytes.
 ///
-/// For output sizes other than 32 bytes, see [`Hasher::new_keyed`],
-/// [`Hasher::finalize_xof`], and [`OutputReader`].
+/// For an incremental version that accepts multiple writes, see [`Hasher::new_keyed`],
+/// [`Hasher::update`], and [`Hasher::finalize`]. These two lines are equivalent:
+///
+/// ```
+/// # const KEY: &[u8; 32] = &[0; 32];
+/// let mac = blake3::keyed_hash(KEY, b"foo");
+/// # let mac1 = mac;
+///
+/// let mac = blake3::Hasher::new_keyed(KEY).update(b"foo").finalize();
+/// # let mac2 = mac;
+/// # assert_eq!(mac1, mac2);
+/// ```
+///
+/// For output sizes other than 32 bytes, see [`Hasher::finalize_xof`], and [`OutputReader`].
 ///
 /// This function is always single-threaded. For multithreading support, see
-/// [`Hasher::new_keyed`] and
 /// [`Hasher::update_rayon`](struct.Hasher.html#method.update_rayon).
 pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
     let key_words = platform::words_from_le_bytes_32(key);
@@ -892,11 +969,25 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 /// [Argon2]. Password hashes are entirely different from generic hash
 /// functions, with opposite design requirements.
 ///
-/// For output sizes other than 32 bytes, see [`Hasher::new_derive_key`],
-/// [`Hasher::finalize_xof`], and [`OutputReader`].
+/// For an incremental version that accepts multiple writes, see [`Hasher::new_derive_key`],
+/// [`Hasher::update`], and [`Hasher::finalize`]. These two statements are equivalent:
+///
+/// ```
+/// # const CONTEXT: &str = "example.com 2019-12-25 16:18:03 session tokens v1";
+/// let key = blake3::derive_key(CONTEXT, b"key material, not a password");
+/// # let key1 = key;
+///
+/// let key: [u8; 32] = blake3::Hasher::new_derive_key(CONTEXT)
+///     .update(b"key material, not a password")
+///     .finalize()
+///     .into();
+/// # let key2 = key;
+/// # assert_eq!(key1, key2);
+/// ```
+///
+/// For output sizes other than 32 bytes, see [`Hasher::finalize_xof`], and [`OutputReader`].
 ///
 /// This function is always single-threaded. For multithreading support, see
-/// [`Hasher::new_derive_key`] and
 /// [`Hasher::update_rayon`](struct.Hasher.html#method.update_rayon).
 ///
 /// [Argon2]: https://en.wikipedia.org/wiki/Argon2
@@ -965,7 +1056,6 @@ fn parent_node_output(
 /// # }
 /// ```
 #[derive(Clone)]
-#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 pub struct Hasher {
     key: CVWords,
     chunk_state: ChunkState,
@@ -1070,7 +1160,7 @@ impl Hasher {
     //    the root node of the whole tree, and it would need to be ROOT
     //    finalized. We can't compress it until we know.
     // 2) This 64 KiB input might complete a larger tree, whose root node is
-    //    similarly going to be the the root of the whole tree. For example,
+    //    similarly going to be the root of the whole tree. For example,
     //    maybe we have 196 KiB (that is, 128 + 64) hashed so far. We can't
     //    compress the node at the root of the 256 KiB subtree until we know
     //    how to finalize it.
@@ -1512,6 +1602,22 @@ impl std::io::Write for Hasher {
     }
 }
 
+#[cfg(feature = "zeroize")]
+impl Zeroize for Hasher {
+    fn zeroize(&mut self) {
+        // Destructuring to trigger compile error as a reminder to update this impl.
+        let Self {
+            key,
+            chunk_state,
+            cv_stack,
+        } = self;
+
+        key.zeroize();
+        chunk_state.zeroize();
+        cv_stack.zeroize();
+    }
+}
+
 /// An incremental reader for extended output, returned by
 /// [`Hasher::finalize_xof`](struct.Hasher.html#method.finalize_xof).
 ///
@@ -1535,7 +1641,6 @@ impl std::io::Write for Hasher {
 /// from an unknown position in the output stream to recover its block index. Callers with strong
 /// secret keys aren't affected in practice, but secret offsets are a [design
 /// smell](https://en.wikipedia.org/wiki/Design_smell) in any case.
-#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 #[derive(Clone)]
 pub struct OutputReader {
     inner: Output,
@@ -1548,6 +1653,23 @@ impl OutputReader {
             inner,
             position_within_block: 0,
         }
+    }
+
+    // This helper function handles both the case where the output buffer is
+    // shorter than one block, and the case where our position_within_block is
+    // non-zero.
+    fn fill_one_block(&mut self, buf: &mut &mut [u8]) {
+        let output_block: [u8; BLOCK_LEN] = self.inner.root_output_block();
+        let output_bytes = &output_block[self.position_within_block as usize..];
+        let take = cmp::min(buf.len(), output_bytes.len());
+        buf[..take].copy_from_slice(&output_bytes[..take]);
+        self.position_within_block += take as u8;
+        if self.position_within_block == BLOCK_LEN as u8 {
+            self.inner.counter += 1;
+            self.position_within_block = 0;
+        }
+        // Advance the dest buffer. mem::take() is a borrowck workaround.
+        *buf = &mut core::mem::take(buf)[take..];
     }
 
     /// Fill a buffer with output bytes and advance the position of the
@@ -1566,17 +1688,35 @@ impl OutputReader {
     ///
     /// [`Read::read`]: #method.read
     pub fn fill(&mut self, mut buf: &mut [u8]) {
-        while !buf.is_empty() {
-            let block: [u8; BLOCK_LEN] = self.inner.root_output_block();
-            let output_bytes = &block[self.position_within_block as usize..];
-            let take = cmp::min(buf.len(), output_bytes.len());
-            buf[..take].copy_from_slice(&output_bytes[..take]);
-            buf = &mut buf[take..];
-            self.position_within_block += take as u8;
-            if self.position_within_block == BLOCK_LEN as u8 {
-                self.inner.counter += 1;
-                self.position_within_block = 0;
-            }
+        if buf.is_empty() {
+            return;
+        }
+
+        // If we're partway through a block, try to get to a block boundary.
+        if self.position_within_block != 0 {
+            self.fill_one_block(&mut buf);
+        }
+
+        let full_blocks = buf.len() / BLOCK_LEN;
+        let full_blocks_len = full_blocks * BLOCK_LEN;
+        if full_blocks > 0 {
+            debug_assert_eq!(0, self.position_within_block);
+            self.inner.platform.xof_many(
+                &self.inner.input_chaining_value,
+                &self.inner.block,
+                self.inner.block_len,
+                self.inner.counter,
+                self.inner.flags | ROOT,
+                &mut buf[..full_blocks_len],
+            );
+            self.inner.counter += full_blocks as u64;
+            buf = &mut buf[full_blocks * BLOCK_LEN..];
+        }
+
+        if !buf.is_empty() {
+            debug_assert!(buf.len() < BLOCK_LEN);
+            self.fill_one_block(&mut buf);
+            debug_assert!(buf.is_empty());
         }
     }
 
@@ -1645,5 +1785,19 @@ impl std::io::Seek for OutputReader {
         }
         self.set_position(cmp::min(target_position, max_position) as u64);
         Ok(self.position())
+    }
+}
+
+#[cfg(feature = "zeroize")]
+impl Zeroize for OutputReader {
+    fn zeroize(&mut self) {
+        // Destructuring to trigger compile error as a reminder to update this impl.
+        let Self {
+            inner,
+            position_within_block,
+        } = self;
+
+        inner.zeroize();
+        position_within_block.zeroize();
     }
 }
