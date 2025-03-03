@@ -309,6 +309,18 @@ example:
 gcc -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c
 ```
 
+## Installing from vcpkg
+
+You can download and install `blake3` using the [vcpkg](https://github.com/Microsoft/vcpkg) dependency manager:
+```sh
+git clone https://github.com/Microsoft/vcpkg.git
+cd vcpkg
+./bootstrap-vcpkg.sh #.\bootstrap-vcpkg.bat(for windows)
+./vcpkg integrate install
+./vcpkg install blake3
+```
+The `blake3` port in vcpkg is kept up to date by Microsoft team members and community contributors. If the version is out of date, please [create an issue or pull request](https://github.com/Microsoft/vcpkg) on the vcpkg repository.
+
 # Multithreading
 
 Unlike the Rust implementation, the C implementation doesn't currently support
