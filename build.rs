@@ -311,6 +311,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "blake3_avx2_rust",
         "blake3_avx512_ffi",
         "blake3_neon",
+        "blake3_wasm32_simd",
     ];
     for cfg_name in all_cfgs {
         // TODO: Switch this whole file to the new :: syntax when our MSRV reaches 1.77.
