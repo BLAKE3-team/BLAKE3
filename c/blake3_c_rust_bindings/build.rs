@@ -86,14 +86,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if cfg!(feature = "tbb") {
         base_build.define("BLAKE3_USE_TBB", "1");
     }
+    if cfg!(feature = "llfio") {
+        base_build.define("BLAKE3_USE_LLFIO", "1");
+    }
     base_build.compile("blake3_base");
 
     if cfg!(feature = "tbb") {
         let mut tbb_build = new_cpp_build();
         tbb_build.define("BLAKE3_USE_TBB", "1");
+        if cfg!(feature = "llfio") {
+            tbb_build.define("BLAKE3_USE_LLFIO", "1");
+        }
         tbb_build.file(c_dir_path("blake3_tbb.cpp"));
         tbb_build.compile("blake3_tbb");
         println!("cargo::rustc-link-lib=tbb");
+    }
+
+    if cfg!(feature = "llfio") {
+        let mut llfio_build = new_cpp_build();
+        llfio_build.define("BLAKE3_USE_LLFIO", "1");
+        llfio_build.define("LLFIO_EXPERIMENTAL_STATUS_CODE", "2");
+        if cfg!(feature = "tbb") {
+            llfio_build.define("BLAKE3_USE_TBB", "1");
+        }
+        llfio_build.file(c_dir_path("blake3_llfio.cpp"));
+        llfio_build.compile("blake3_llfio");
     }
 
     if is_x86_64() && !defined("CARGO_FEATURE_PREFER_INTRINSICS") {

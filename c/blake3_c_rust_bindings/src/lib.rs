@@ -6,6 +6,11 @@
 use std::ffi::{c_void, CString};
 use std::mem::MaybeUninit;
 
+#[cfg(feature = "llfio")]
+use std::ffi::c_char;
+#[cfg(feature = "llfio")]
+use std::path::Path;
+
 #[cfg(test)]
 mod test;
 
@@ -93,6 +98,32 @@ impl Hasher {
         }
     }
 
+    // TODO: This should return a Result.
+    #[cfg(feature = "llfio")]
+    pub fn update_mmap(&mut self, path: impl AsRef<Path>) {
+        if !path.as_ref().as_os_str().is_ascii() {
+            unimplemented!("non-ASCII path support is TODO");
+        }
+        let path_str = path.as_ref().to_str().unwrap();
+        let path_cstring = CString::new(path_str.as_bytes()).expect("no null characters allowed");
+        unsafe {
+            ffi::blake3_hasher_update_mmap(&mut self.0, path_cstring.as_ptr() as *const c_char);
+        }
+    }
+
+    // TODO: This should return a Result.
+    #[cfg(all(feature = "tbb", feature = "llfio"))]
+    pub fn update_mmap_tbb(&mut self, path: impl AsRef<Path>) {
+        if !path.as_ref().as_os_str().is_ascii() {
+            unimplemented!("non-ASCII path support is TODO");
+        }
+        let path_str = path.as_ref().to_str().unwrap();
+        let path_cstring = CString::new(path_str.as_bytes()).expect("no null characters allowed");
+        unsafe {
+            ffi::blake3_hasher_update_mmap_tbb(&mut self.0, path_cstring.as_ptr() as *const c_char);
+        }
+    }
+
     pub fn finalize(&self, output: &mut [u8]) {
         unsafe {
             ffi::blake3_hasher_finalize(&self.0, output.as_mut_ptr(), output.len());
@@ -156,6 +187,16 @@ pub mod ffi {
             self_: *mut blake3_hasher,
             input: *const ::std::os::raw::c_void,
             input_len: usize,
+        );
+        #[cfg(feature = "llfio")]
+        pub fn blake3_hasher_update_mmap(
+            self_: *mut blake3_hasher,
+            path: *const ::std::os::raw::c_char,
+        );
+        #[cfg(all(feature = "tbb", feature = "llfio"))]
+        pub fn blake3_hasher_update_mmap_tbb(
+            self_: *mut blake3_hasher,
+            path: *const ::std::os::raw::c_char,
         );
         pub fn blake3_hasher_finalize(self_: *const blake3_hasher, out: *mut u8, out_len: usize);
         pub fn blake3_hasher_finalize_seek(

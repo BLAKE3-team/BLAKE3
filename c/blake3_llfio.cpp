@@ -13,10 +13,9 @@ template <class... Ts> struct overloads : Ts... {
 // NOTE: deduction guide only needed for Apple Clang now.
 template <class... Ts> overloads(Ts...) -> overloads<Ts...>;
 
-INLINE auto copy_wide(blake3_hasher *self, llfio::path_view path,
-                      llfio::file_handle &file) noexcept
+INLINE auto copy_wide(blake3_hasher *self, llfio::file_handle &file) noexcept
     -> llfio::result<std::uint64_t> {
-  std::array<std::byte, 65535> buffer{};
+  std::array<std::byte, 65536> buffer{};
   std::uint64_t total = 0;
   while (true) {
     auto result = llfio::read(file, total, {buffer});
@@ -75,7 +74,7 @@ INLINE void blake3_hasher_update_mmap_base(blake3_hasher *self,
                          return llfio::success();
                        },
                        [=](llfio::file_handle &file) -> llfio::result<void> {
-                         OUTCOME_TRY(copy_wide(self, path, file));
+                         OUTCOME_TRY(copy_wide(self, file));
                          return llfio::success();
                        },
                    },
@@ -89,14 +88,15 @@ INLINE void blake3_hasher_update_mmap_base(blake3_hasher *self,
   }
 }
 
-void blake3_hasher_update_mmap(blake3_hasher *self, char const *path) noexcept {
+extern "C" void blake3_hasher_update_mmap(blake3_hasher *self,
+                                          char const *path) noexcept {
   bool use_tbb = false;
   blake3_hasher_update_mmap_base(self, path, use_tbb);
 }
 
 #if defined(BLAKE3_USE_TBB)
-void blake3_hasher_update_mmap_tbb(blake3_hasher *self,
-                                   char const *path) noexcept {
+extern "C" void blake3_hasher_update_mmap_tbb(blake3_hasher *self,
+                                              char const *path) noexcept {
   bool use_tbb = true;
   blake3_hasher_update_mmap_base(self, path, use_tbb);
 }

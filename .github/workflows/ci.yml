@@ -150,6 +150,7 @@ jobs:
     - name: cargo test C bindings with TBB
       run: cargo test --features=tbb
       working-directory: ./c/blake3_c_rust_bindings
+    # TODO: How to fetch LLFIO for testing here?
     # Reference impl doc test.
     - name: reference impl doc test
       run: cargo test

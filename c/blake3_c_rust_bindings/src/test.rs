@@ -694,3 +694,49 @@ fn test_reset() {
         assert_eq!(reference_hash, output);
     }
 }
+
+#[test]
+#[cfg(feature = "llfio")]
+fn test_mmap() -> Result<(), std::io::Error> {
+    // This is a brief test, since update_mmap_rayon() is mostly a wrapper around update(),
+    // which already has substantial testing.
+    use std::io::prelude::*;
+    let mut input = vec![0; 1_000_000];
+    paint_test_input(&mut input);
+    let mut reference_hasher = reference_impl::Hasher::new();
+    reference_hasher.update(&input);
+    let mut reference_hash = [0; 32];
+    reference_hasher.finalize(&mut reference_hash);
+    let mut tempfile = tempfile::NamedTempFile::new()?;
+    tempfile.write_all(&input)?;
+    tempfile.flush()?;
+    let mut hasher = crate::Hasher::new();
+    hasher.update_mmap(tempfile.path());
+    let mut hash = [0; 32];
+    hasher.finalize(&mut hash);
+    assert_eq!(hash, reference_hash);
+    Ok(())
+}
+
+#[test]
+#[cfg(all(feature = "llfio", feature = "tbb"))]
+fn test_mmap_tbb() -> Result<(), std::io::Error> {
+    // This is a brief test, since update_mmap_rayon() is mostly a wrapper around update_rayon(),
+    // which already has substantial testing.
+    use std::io::prelude::*;
+    let mut input = vec![0; 1_000_000];
+    paint_test_input(&mut input);
+    let mut reference_hasher = reference_impl::Hasher::new();
+    reference_hasher.update(&input);
+    let mut reference_hash = [0; 32];
+    reference_hasher.finalize(&mut reference_hash);
+    let mut tempfile = tempfile::NamedTempFile::new()?;
+    tempfile.write_all(&input)?;
+    tempfile.flush()?;
+    let mut hasher = crate::Hasher::new();
+    hasher.update_mmap_tbb(tempfile.path());
+    let mut hash = [0; 32];
+    hasher.finalize(&mut hash);
+    assert_eq!(hash, reference_hash);
+    Ok(())
+}
