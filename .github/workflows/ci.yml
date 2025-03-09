@@ -76,6 +76,13 @@ jobs:
     - run: cargo test --features= --release
     - run: cargo test --features=prefer_intrinsics --release
     - run: cargo test --features=pure --release
+    # const fn
+    - run: cargo test --features=const
+      # Only supports 1.85.0+
+      if: matrix.channel != '1.78.0'
+    - run: cargo test --features=const --release
+      # Only supports 1.85.0+
+      if: matrix.channel != '1.78.0'
     # No AVX-512.
     - run: cargo test --features=no_avx512
     - run: cargo test --features=no_avx512,prefer_intrinsics
