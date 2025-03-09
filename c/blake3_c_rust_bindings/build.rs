@@ -178,12 +178,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-env-changed=CC");
     println!("cargo:rerun-if-env-changed=CFLAGS");
 
-    // Ditto for source files, though these shouldn't change as often.
-    for file in std::fs::read_dir("..")? {
-        println!(
-            "cargo:rerun-if-changed={}",
-            file?.path().to_str().expect("utf-8")
-        );
+    // Ditto for source files, though these shouldn't change as often. `ignore::Walk` respects
+    // .gitignore, so this doesn't traverse target/.
+    for result in ignore::Walk::new("..") {
+        let result = result?;
+        let path = result.path();
+        if path.is_file() {
+            println!("cargo:rerun-if-changed={}", path.to_str().unwrap());
+        }
     }
 
     Ok(())

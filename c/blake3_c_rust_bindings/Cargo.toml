@@ -27,3 +27,4 @@ reference_impl = { path = "../../reference_impl" }
 
 [build-dependencies]
 cc = "1.0.48"
+ignore = "0.4.23"
