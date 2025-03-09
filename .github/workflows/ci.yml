@@ -146,6 +146,10 @@ jobs:
       working-directory: ./c/blake3_c_rust_bindings
       env:
         CFLAGS: -DBLAKE3_NO_AVX512 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_SSE2
+    - run: sudo apt-get install libtbb-dev libtbb12
+    - name: cargo test C bindings with TBB
+      run: cargo test --features=tbb
+      working-directory: ./c/blake3_c_rust_bindings
     # Reference impl doc test.
     - name: reference impl doc test
       run: cargo test
