@@ -249,7 +249,7 @@ if(BLAKE3_USE_TBB)
     set(APPEND BLAKE3_CXX_STANDARD_FLAGS_MSVC /std:c++20)
   endif()
   set(BLAKE3_CXXFLAGS_GNU "-fno-exceptions;-fno-rtti;${BLAKE3_CXX_STANDARD_FLAGS_GNU}" CACHE STRING "C++ flags used for compiling private BLAKE3 library components with GNU-like compiler frontends.")
-  set(BLAKE3_CXXFLAGS_MSVC "/EHs-c-;/GR;${BLAKE3_CXX_STANDARD_FLAGS_MSVC}" CACHE STRING "C++ flags used for compiling private BLAKE3 library components with MSVC-like compiler frontends.")
+  set(BLAKE3_CXXFLAGS_MSVC "/EHs-c-;/GR-;${BLAKE3_CXX_STANDARD_FLAGS_MSVC}" CACHE STRING "C++ flags used for compiling private BLAKE3 library components with MSVC-like compiler frontends.")
   # Get the C++ compiler name without extension
   get_filename_component(BLAKE3_CMAKE_CXX_COMPILER_NAME "${CMAKE_CXX_COMPILER}" NAME_WE)
   # Strip any trailing versioning from the C++ compiler name

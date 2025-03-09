@@ -52,6 +52,21 @@ fn new_build() -> cc::Build {
     build
 }
 
+fn new_cpp_build() -> cc::Build {
+    let mut build = cc::Build::new();
+    build.cpp(true);
+    if is_windows_msvc() {
+        build.flag("/std:c++20");
+        build.flag("/EHs-c-");
+        build.flag("/GR-");
+    } else {
+        build.flag("-std=c++20");
+        build.flag("-fno-exceptions");
+        build.flag("-fno-rtti");
+    }
+    build
+}
+
 fn c_dir_path(filename: &str) -> String {
     // The `cross` tool doesn't support reading files in parent directories. As a hacky workaround
     // in `cross_test.sh`, we move the c/ directory around and set BLAKE3_C_DIR_OVERRIDE. Regular
@@ -68,7 +83,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     base_build.file(c_dir_path("blake3.c"));
     base_build.file(c_dir_path("blake3_dispatch.c"));
     base_build.file(c_dir_path("blake3_portable.c"));
+    if cfg!(feature = "tbb") {
+        base_build.define("BLAKE3_USE_TBB", "1");
+    }
     base_build.compile("blake3_base");
+
+    if cfg!(feature = "tbb") {
+        let mut tbb_build = new_cpp_build();
+        tbb_build.define("BLAKE3_USE_TBB", "1");
+        tbb_build.file(c_dir_path("blake3_tbb.cpp"));
+        tbb_build.compile("blake3_tbb");
+        println!("cargo::rustc-link-lib=tbb");
+    }
 
     if is_x86_64() && !defined("CARGO_FEATURE_PREFER_INTRINSICS") {
         // On 64-bit, use the assembly implementations, unless the
