@@ -399,3 +399,28 @@ jobs:
     # we might add more. If this accidentally picks up anything incompatible or
     # slow, we can narrow it.
     - run: cargo miri test miri
+
+  tbb_rust_bindings_tests:
+    name: TBB test bindings ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "macOS-latest"]
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - name: install TBB
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install libtbb-dev libtbb12
+    - name: install TBB
+      if: matrix.os == 'macOS-latest'
+      run: |
+        brew install tbb
+        echo "CXXFLAGS=-I$(brew --prefix)/include $CPPFLAGS" >> $GITHUB_ENV
+        echo "RUSTFLAGS=-L$(brew --prefix)/lib $RUSTFLAGS" >> $GITHUB_ENV
+    - name: cargo test C bindings with TBB
+      run: cargo test --features=tbb
+      working-directory: ./c/blake3_c_rust_bindings
