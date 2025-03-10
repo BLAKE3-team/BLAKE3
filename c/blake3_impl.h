@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "blake3.h"
+#include "blake3_thread.h"
 
 // internal flags
 enum blake3_flags {
@@ -300,5 +301,6 @@ void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
                            uint8_t flags_end, uint8_t *out);
 #endif
 
+blake3_thread_pool *blake3_get_thread_pool(void);
 
 #endif /* BLAKE3_IMPL_H */

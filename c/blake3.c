@@ -4,6 +4,7 @@
 
 #include "blake3.h"
 #include "blake3_impl.h"
+#include "blake3_thread.h"
 
 const char *blake3_version(void) { return BLAKE3_VERSION_STRING; }
 
@@ -11,7 +12,6 @@ INLINE void chunk_state_init(blake3_chunk_state *self, const uint32_t key[8],
                              uint8_t flags) {
   memcpy(self->cv, key, BLAKE3_KEY_LEN);
   self->chunk_counter = 0;
-  memset(self->buf, 0, BLAKE3_BLOCK_LEN);
   self->buf_len = 0;
   self->blocks_compressed = 0;
   self->flags = flags;
@@ -22,7 +22,6 @@ INLINE void chunk_state_reset(blake3_chunk_state *self, const uint32_t key[8],
   memcpy(self->cv, key, BLAKE3_KEY_LEN);
   self->chunk_counter = chunk_counter;
   self->blocks_compressed = 0;
-  memset(self->buf, 0, BLAKE3_BLOCK_LEN);
   self->buf_len = 0;
 }
 
@@ -65,7 +64,9 @@ INLINE output_t make_output(const uint32_t input_cv[8],
                             uint8_t flags) {
   output_t ret;
   memcpy(ret.input_cv, input_cv, 32);
-  memcpy(ret.block, block, BLAKE3_BLOCK_LEN);
+  // copy out what's there and fill the rest with zeroes
+  memcpy(ret.block, block, block_len);
+  memset(ret.block + block_len, 0, BLAKE3_BLOCK_LEN - block_len);
   ret.block_len = block_len;
   ret.counter = counter;
   ret.flags = flags;
@@ -127,7 +128,6 @@ INLINE void chunk_state_update(blake3_chunk_state *self, const uint8_t *input,
           self->flags | chunk_state_maybe_start_flag(self));
       self->blocks_compressed += 1;
       self->buf_len = 0;
-      memset(self->buf, 0, BLAKE3_BLOCK_LEN);
     }
   }
 
@@ -248,6 +248,44 @@ INLINE size_t compress_parents_parallel(const uint8_t *child_chaining_values,
   }
 }
 
+
+// the state for the thread when doing compress subtree
+typedef struct {
+  // inputs
+  const uint8_t *input;
+  size_t input_len;
+  const uint32_t *key;
+  uint64_t chunk_counter;
+  uint8_t flags;
+  // outputs
+  uint8_t *out;
+  size_t n;
+} blake3_compress_subtree_state;
+
+static size_t blake3_compress_subtree_wide(const uint8_t *input,
+                                           size_t input_len,
+                                           const uint32_t key[8],
+                                           uint64_t chunk_counter,
+                                           uint8_t flags, uint8_t *out);
+
+static bool blake3_compress_subtree_wide_work_check(const void *arg) {
+  const blake3_compress_subtree_state *s = arg;
+
+  /* only off-load to thread if we have enough input (8 chunks at least) */
+  return s->input_len >= 8 * BLAKE3_CHUNK_LEN;
+}
+
+static void blake3_compress_subtree_wide_thread(void *arg) {
+  blake3_compress_subtree_state *s = arg;
+
+  s->n = blake3_compress_subtree_wide(
+              s->input, s->input_len,
+              s->key,
+              s->chunk_counter,
+              s->flags,
+              s->out);
+}
+
 // The wide helper function returns (writes out) an array of chaining values
 // and returns the length of that array. The number of chaining values returned
 // is the dynamically detected SIMD degree, at most MAX_SIMD_DEGREE. Or fewer,
@@ -303,12 +341,32 @@ static size_t blake3_compress_subtree_wide(const uint8_t *input,
   }
   uint8_t *right_cvs = &cv_array[degree * BLAKE3_OUT_LEN];
 
-  // Recurse! If this implementation adds multi-threading support in the
-  // future, this is where it will go.
-  size_t left_n = blake3_compress_subtree_wide(input, left_input_len, key,
-                                               chunk_counter, flags, cv_array);
-  size_t right_n = blake3_compress_subtree_wide(
-      right_input, right_input_len, key, right_chunk_counter, flags, right_cvs);
+  // Recurse! this is the multi-threaded implementation
+  blake3_compress_subtree_state states[2];
+
+  /* common */
+  states[0].key = states[1].key = key;
+  states[0].flags = states[1].flags = flags;
+
+  /* left */
+  states[0].input = input;
+  states[0].input_len = left_input_len;
+  states[0].chunk_counter = chunk_counter;
+  states[0].out = cv_array;
+
+  /* right */
+  states[1].input = right_input;
+  states[1].input_len = right_input_len;
+  states[1].chunk_counter = right_chunk_counter;
+  states[1].out = right_cvs;
+
+  blake3_thread_arg_array_join(blake3_get_thread_pool(),
+      blake3_compress_subtree_wide_thread,
+      blake3_compress_subtree_wide_work_check,
+      states, sizeof(states[0]), 2);
+
+  size_t left_n = states[0].n;
+  size_t right_n = states[1].n;
 
   // The special case again. If simd_degree=1, then we'll have left_n=1 and
   // right_n=1. Rather than compressing them into a single output, return
@@ -368,6 +426,7 @@ INLINE void compress_subtree_to_parent_node(
 
 INLINE void hasher_init_base(blake3_hasher *self, const uint32_t key[8],
                              uint8_t flags) {
+  memset(self, 0, sizeof(*self));
   memcpy(self->key, key, BLAKE3_KEY_LEN);
   chunk_state_init(&self->chunk, key, flags);
   self->cv_stack_len = 0;
