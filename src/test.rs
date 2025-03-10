@@ -1,7 +1,7 @@
 use crate::{CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, OUT_LEN};
 use arrayref::array_ref;
 use arrayvec::ArrayVec;
-use core::usize;
+use core::{cmp::Ordering, usize};
 use rand::prelude::*;
 
 // Interesting input lengths to run tests on.
@@ -486,6 +486,26 @@ fn reference_hash(input: &[u8]) -> crate::Hash {
     let mut bytes = [0; 32];
     hasher.finalize(&mut bytes);
     bytes.into()
+}
+
+#[test]
+fn test_ordering() {
+    // Test equality behavior
+    let hash = reference_hash(&[0]);
+    assert_eq!(hash.0.cmp(&hash.0), Ordering::Equal);
+    assert_eq!(hash.cmp(&hash), Ordering::Equal);
+
+    // Test less-than behavior
+    let l = reference_hash(&[0]);
+    let r = reference_hash(&[1]);
+    assert_eq!(l.0.cmp(&r.0), Ordering::Less);
+    assert_eq!(l.cmp(&r), Ordering::Less);
+
+    // Test greater-than behavior
+    let l = reference_hash(&[3]);
+    let r = reference_hash(&[4]);
+    assert_eq!(l.0.cmp(&r.0), Ordering::Greater);
+    assert_eq!(l.cmp(&r), Ordering::Greater);
 }
 
 #[test]
