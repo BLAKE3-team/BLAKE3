@@ -84,8 +84,6 @@ Initialize a `blake3_hasher` in the default hashing mode.
 
 ---
 
-### Single-threaded update
-
 ```c
 void blake3_hasher_update(
   blake3_hasher *self,
@@ -93,39 +91,10 @@ void blake3_hasher_update(
   size_t input_len);
 ```
 
-Add input to the hasher with single-threaded update. This can be called any number of times.
+Add input to the hasher. This can be called any number of times. This function
+is always single-threaded; for multithreading see `blake3_hasher_update_tbb`
+below.
 
-### Multi-threaded update
-
-```c
-void blake3_hasher_update_tbb(
-  blake3_hasher *self,
-  const void *input,
-  size_t input_len);
-```
-
-NOTE: This function is only enabled when the library is compiled with CMake option `BLAKE3_USE_TBB`
-and when the oneTBB library is detected on the host system. See the building instructions for
-further details.
-
-NOTE: macOS and Linux users should probably install TBB through their package manager but Windows
-users, or users with special deployment scenarios, may wish to enable `BLAKE3_FETCH_TBB` in
-order to automatically fetch, build, and install TBB directly alongside BLAKE3.
-
-Add input to the hasher with multi-threaded update. This can be called any number of times.
-
-This update function uses [oneTBB](https://uxlfoundation.github.io/oneTBB/) task groups
-across which the input data is partitioned and dispatched for further processing.
-
-Input buffers as large as possible should be preferred in order to minimize additional
-overhead inherent in coordinating parallel tasks. If the input buffer is too small,
-the performance of this update function may be no faster than the single-threaded
-implementation or may even be slower.
-
-This implementation does not require configuration of thread resources and will use as
-many cores as possible by default. If the update function is used within the context of a
-larger program which uses the [oneTBB] API, more fine-grained control of resources is
-possible.
 
 ---
 
@@ -197,6 +166,43 @@ violating the requirement that context strings should be hardcoded.
 ---
 
 ```c
+void blake3_hasher_update_tbb(
+  blake3_hasher *self,
+  const void *input,
+  size_t input_len);
+```
+
+Add input to the hasher, using [oneTBB] to process large inputs using multiple
+threads. This can be called any number of times. This gives the same result as
+`blake3_hasher_update` above.
+
+[oneTBB]: https://uxlfoundation.github.io/oneTBB/
+
+NOTE: This function is only enabled when the library is compiled with CMake option `BLAKE3_USE_TBB`
+and when the oneTBB library is detected on the host system. See the building instructions for
+further details.
+
+To get any performance benefit from multithreading, the input buffer needs to
+be large. As a rule of thumb on x86_64, `blake3_hasher_update_tbb` is _slower_
+than `blake3_hasher_update` for inputs under 128 KiB. That threshold varies
+quite a lot across different processors, and it's important to benchmark your
+specific use case.
+
+Hashing large files with this function typically requires
+[memory-mapping](https://en.wikipedia.org/wiki/Memory-mapped_file), since
+copying a file into memory is a single-threaded operation that takes longer
+than hashing the resulting buffer with this function. Note that hashing a
+memory-mapped file leads to a lot of "random" disk reads, which perform well on
+SSD but _very poorly_ on spinning disks. Again it's important to benchmark your
+specific use case.
+
+This implementation doesn't require configuration of thread resources and will
+use as many cores as possible by default. More fine-grained control of
+resources is possible using the [oneTBB] API.
+
+---
+
+```c
 void blake3_hasher_finalize_seek(
   const blake3_hasher *self,
   uint64_t seek,
@@ -238,21 +244,16 @@ smell](https://en.wikipedia.org/wiki/Design_smell) in any case.
 
 # Building
 
-The easiest and most complete method of compiling the BLAKE3 library is with CMake.
-
-This is the method described in the next section.
-
-Toward the end of the building section there are more in depth notes about compiling manually and
-things that are useful to understand if you need to adapt the implementation to some pre-existing
-custom build system.
+The easiest and most complete method of compiling this library is with CMake.
+This is the method described in the next section. Toward the end of the
+building section there are more in depth notes about compiling manually and
+things that are useful to understand if you need to integrate this library with
+another build system.
 
 ## CMake
 
-The BLAKE3 library requires a minimum version of CMake 3.9.
-
-The following invocation will compile and install `libblake3`:
-
-With recent CMake:
+The minimum version of CMake is 3.9. The following invocations will compile and
+install `libblake3`. With recent CMake:
 
 ```bash
 cmake -S c -B c/build "-DCMAKE_INSTALL_PREFIX=/usr/local"
@@ -275,7 +276,7 @@ The following options are available when compiling with CMake:
 - `BLAKE3_FETCH_TBB`: Allow fetching oneTBB from GitHub (only if not found on system)
 - `BLAKE3_EXAMPLES`: Compile and install example programs
 
-These can be enabled in the following way:
+Options can be enabled like this:
 
 ```bash
 cmake -S c -B c/build "-DCMAKE_INSTALL_PREFIX=/usr/local" -DCMAKE_USE_TBB=1 -DCMAKE_FETCH_TBB=1
@@ -283,14 +284,12 @@ cmake -S c -B c/build "-DCMAKE_INSTALL_PREFIX=/usr/local" -DCMAKE_USE_TBB=1 -DCM
 
 ## Building manually
 
-This implementation is mostly C and assembly files with some minor parts in C++ for optional
-features.
+We try to keep the build simple enough that you can compile this library "by
+hand", and it's expected that many callers will integrate it with their
+pre-existing build systems. See the `gcc` one-liner in the "Example" section
+above.
 
-The intention is that the implementation is simply enough that it can be easily compiled by hand
-without a build system or the sources adapted to whatever custom build system you may happen to be
-using without much difficulty.
-
-## x86
+### x86
 
 Dynamic dispatch is enabled by default on x86. The implementation will
 query the CPU at runtime to detect SIMD support, and it will use the
@@ -344,7 +343,7 @@ gcc -shared -O3 -o libblake3.so -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_A
     -DBLAKE3_NO_AVX512 blake3.c blake3_dispatch.c blake3_portable.c
 ```
 
-## ARM NEON
+### ARM NEON
 
 The NEON implementation is enabled by default on AArch64, but not on
 other ARM targets, since not all of them support it. To enable it, set
@@ -376,10 +375,12 @@ in call to always_inline ‘vaddq_u32’: target specific option mismatch
 ...then you may need to add something like `-mfpu=neon-vfpv4
 -mfloat-abi=hard`.
 
-## oneTBB-based multi-threading
+### oneTBB-based multi-threading
 
-Optional multi-threading support with performance similar to the Rust Rayon implementation is
-available when using the oneTBB library and compiling the optional C++ support file:
+Optional multi-threading support with performance similar to [the Rust Rayon
+implementation](https://docs.rs/blake3/latest/blake3/struct.Hasher.html#method.update_rayon)
+is available when using the oneTBB library and compiling the optional C++
+support file:
 
 ```bash
 g++ -c -O3 -fno-exceptions -fno-rtti -DBLAKE3_USE_TBB $(pkg-config --libs --cflags tbb) -o blake3_tbb.o blake3_tbb.cpp
@@ -388,12 +389,16 @@ gcc -O3 -o example -lstdc++ -DBLAKE3_USE_TBB $(pkg-config --libs --cflags tbb) b
     blake3_sse2_x86-64_unix.S blake3_sse41_x86-64_unix.S blake3_avx2_x86-64_unix.S blake3_avx512_x86-64_unix.S
 ```
 
+Note that while this _builds_ the multithreaded implementation, `example.c`
+doesn't _use_ multithreading, because it doesn't call
+`blake3_hasher_update_tbb`.
+
 NOTE: Compiling `blake3_tbb.cpp` with C++ exceptions _disabled_ is required in order to satisfy the
 behavior that this implementation expects. The public API methods with external C linkage are marked
 `noexcept`. Attempting to compile this file with exceptions _enabled_ will fail and emit a static
 assertion message. Compiling with RTTI disabled is not mandatory but recommended for code size.
 
-## Other Platforms
+### Other Platforms
 
 The portable implementation should work on most other architectures. For
 example:

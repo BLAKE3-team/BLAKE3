@@ -43,9 +43,9 @@ This repository is the official implementation of BLAKE3. It includes:
   making it an order of magnitude faster than e.g. `sha256sum` on
   typical desktop hardware.
 
-* The [C implementation](c), which like the Rust implementation includes
-  SIMD code and runtime CPU feature detection on x86. The `BLAKE3_USE_TBB`
-  CMAKE option enables multithreading. See [`c/README.md`](c/README.md).
+* The [C implementation](c), which like the Rust implementation includes SIMD,
+  CPU feature detection on x86, and optional multithreading. See
+  [`c/README.md`](c/README.md).
 
 * The [Rust reference implementation](reference_impl/reference_impl.rs),
   which is discussed in Section 5.1 of the [BLAKE3
