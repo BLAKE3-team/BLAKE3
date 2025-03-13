@@ -18,15 +18,29 @@ fn is_windows_target() -> bool {
 }
 
 fn use_msvc_asm() -> bool {
-    // cc assumes if it is passed .asm and targetting MSVC that it can use the
-    // Microsoft assemblers, which isn't true when we're not on a Windows
-    // host, but are cross-compiling with clang-cl, so we explicitly check if
-    // we're on a Windows host (with the assumption they'll have the MSVC
-    // toolchain installed if they are, though that's not necessarily true)
-    if env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default() == "gnu" {
+    const MSVC_NAMES: &[&str] = &["", "cl", "cl.exe"];
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    let target_windows_msvc = target_os == "windows" && target_env == "msvc";
+    let host_triple = env::var("HOST").unwrap_or_default();
+    let target_triple = env::var("TARGET").unwrap_or_default();
+    let cross_compiling = host_triple != target_triple;
+    let cc = env::var("CC").unwrap_or_default().to_ascii_lowercase();
+    if !target_windows_msvc {
+        // We are not building for Windows with the MSVC toolchain.
         false
+    } else if !cross_compiling && MSVC_NAMES.contains(&&*cc) {
+        // We are building on Windows with the MSVC toolchain (and not cross-compiling for another architecture or target).
+        true
     } else {
-        env::var("HOST").unwrap_or_default().contains("-windows-")
+        // We are cross-compiling to Windows with the MSVC toolchain.
+        let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+        let target_vendor = env::var("CARGO_CFG_TARGET_VENDOR").unwrap_or_default();
+        let cc = env::var(format!("CC_{target_arch}_{target_vendor}_windows_msvc"))
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        // Check if we are using the MSVC compiler.
+        MSVC_NAMES.contains(&&*cc)
     }
 }
 
