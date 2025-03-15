@@ -9,7 +9,6 @@ result:
 #include "blake3.h"
 #include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -28,7 +27,7 @@ int main(void) {
       break; // end of file
     } else {
       fprintf(stderr, "read failed: %s\n", strerror(errno));
-      exit(1);
+      return 1;
     }
   }
 
@@ -188,13 +187,12 @@ than `blake3_hasher_update` for inputs under 128 KiB. That threshold varies
 quite a lot across different processors, and it's important to benchmark your
 specific use case.
 
-Hashing large files with this function typically requires
+Hashing large files with this function usually requires
 [memory-mapping](https://en.wikipedia.org/wiki/Memory-mapped_file), since
-copying a file into memory is a single-threaded operation that takes longer
-than hashing the resulting buffer with this function. Note that hashing a
-memory-mapped file leads to a lot of "random" disk reads, which perform well on
-SSD but _very poorly_ on spinning disks. Again it's important to benchmark your
-specific use case.
+reading a file into memory in a single-threaded loop takes longer than hashing
+the resulting buffer. Note that hashing a memory-mapped file with this function
+produces a "random" pattern of disk reads, which can be slow on spinning disks.
+Again it's important to benchmark your specific use case.
 
 This implementation doesn't require configuration of thread resources and will
 use as many cores as possible by default. More fine-grained control of
@@ -375,29 +373,6 @@ in call to always_inline ‘vaddq_u32’: target specific option mismatch
 ...then you may need to add something like `-mfpu=neon-vfpv4
 -mfloat-abi=hard`.
 
-### oneTBB-based multi-threading
-
-Optional multi-threading support with performance similar to [the Rust Rayon
-implementation](https://docs.rs/blake3/latest/blake3/struct.Hasher.html#method.update_rayon)
-is available when using the oneTBB library and compiling the optional C++
-support file:
-
-```bash
-g++ -c -O3 -fno-exceptions -fno-rtti -DBLAKE3_USE_TBB $(pkg-config --libs --cflags tbb) -o blake3_tbb.o blake3_tbb.cpp
-gcc -O3 -o example -lstdc++ -DBLAKE3_USE_TBB $(pkg-config --libs --cflags tbb) blake3_tbb.o \
-    example.c blake3.c blake3_dispatch.c blake3_portable.c \
-    blake3_sse2_x86-64_unix.S blake3_sse41_x86-64_unix.S blake3_avx2_x86-64_unix.S blake3_avx512_x86-64_unix.S
-```
-
-Note that while this _builds_ the multithreaded implementation, `example.c`
-doesn't _use_ multithreading, because it doesn't call
-`blake3_hasher_update_tbb`.
-
-NOTE: Compiling `blake3_tbb.cpp` with C++ exceptions _disabled_ is required in order to satisfy the
-behavior that this implementation expects. The public API methods with external C linkage are marked
-`noexcept`. Attempting to compile this file with exceptions _enabled_ will fail and emit a static
-assertion message. Compiling with RTTI disabled is not mandatory but recommended for code size.
-
 ### Other Platforms
 
 The portable implementation should work on most other architectures. For
@@ -406,3 +381,23 @@ example:
 ```bash
 gcc -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c
 ```
+
+### Multithreading
+
+Multithreading is available using [oneTBB], by compiling the optional C++
+support file [`blake3_tbb.cpp`](./blake3_tbb.cpp). For an example of using
+`mmap` (non-Windows) and `blake3_hasher_update_tbb` to get large-file
+performance on par with [`b3sum`](../b3sum), see
+[`example_tbb.c`](./example_tbb.c). You can build it like this:
+
+```bash
+g++ -c -O3 -fno-exceptions -fno-rtti -DBLAKE3_USE_TBB -o blake3_tbb.o blake3_tbb.cpp
+gcc -O3 -o example_tbb -lstdc++ -ltbb -DBLAKE3_USE_TBB blake3_tbb.o example_tbb.c blake3.c \
+    blake3_dispatch.c blake3_portable.c blake3_sse2_x86-64_unix.S blake3_sse41_x86-64_unix.S \
+    blake3_avx2_x86-64_unix.S blake3_avx512_x86-64_unix.S
+```
+
+NOTE: `-fno-exceptions` or equivalent is required to compile `blake3_tbb.cpp`,
+and public API methods with external C linkage are marked `noexcept`. Compiling
+that file with exceptions enabled will fail. Compiling with RTTI disabled isn't
+required but is recommended for code size.

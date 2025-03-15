@@ -271,7 +271,7 @@ jobs:
         cat c/build/Testing/Temporary/LastTest.log
     # Build the example with TBB disabled/enabled.
     - run: |
-        cmake --fresh -S c -B c/build -G Ninja -DBLAKE3_TESTING=ON -DBLAKE3_TESTING_CI=ON -DBLAKE3_EXAMPLES=ON
+        cmake --fresh -S c -B c/build -G Ninja -DBLAKE3_TESTING=ON -DBLAKE3_TESTING_CI=ON -DBLAKE3_EXAMPLES=ON "-DBLAKE3_USE_TBB=${{ matrix.use_tbb }}"
         cmake --build c/build --target blake3-example
 
   # Note that this jobs builds AArch64 binaries from an x86_64 host.
@@ -376,6 +376,7 @@ jobs:
           ${{ matrix.os != 'windows-latest' || '& "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/Common7/Tools/Launch-VsDevShell.ps1" -Arch amd64 -SkipAutomaticLocation' }}
           cmake -S c -B c/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/target -DCMAKE_C_COMPILER=${{ matrix.toolchain.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.toolchain.cxx }} -DBLAKE3_USE_TBB=${{ matrix.use_tbb }} -DBLAKE3_FETCH_TBB=${{ matrix.os == 'windows-latest' && 'YES' || 'NO' }} -DBLAKE3_EXAMPLES=ON
           cmake --build c/build --target install
+
   cmake_3-9_build:
     name: CMake 3.9.6 ubuntu-latest
     runs-on: ubuntu-latest
