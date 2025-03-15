@@ -25,17 +25,7 @@ jobs:
           { "os": "windows-latest", "toolchain": "x86_64-pc-windows-msvc",   "name": "Windows MSVC" },
           { "os": "windows-latest", "toolchain": "x86_64-pc-windows-gnu",    "name": "Windows GNU" }
         ]
-        channel: [
-          "stable",
-          "beta",
-          "nightly",
-          # The current MSRV. This crate doesn't have an official MSRV policy,
-          # but in practice we'll probably do what libc does:
-          # https://github.com/rust-lang/libs-team/issues/72.
-          # This test target is here so that we notice if we accidentally bump
-          # the MSRV, but it's not a promise that we won't bump it.
-          "1.78.0",
-        ]
+        channel: ["stable", "beta", "nightly"]
 
     steps:
     - uses: actions/checkout@v4
@@ -151,6 +141,23 @@ jobs:
       run: cargo test
       working-directory: ./reference_impl
 
+  msrv_build:
+    name: MSRV build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "macOS-latest", "windows-latest"]
+    steps:
+    - uses: actions/checkout@v4
+    # The current MSRV. This crate doesn't have an official MSRV policy,
+    # but in practice we'll probably do what libc does:
+    # https://github.com/rust-lang/libs-team/issues/72.
+    # This test target is here so that we notice if we accidentally bump
+    # the MSRV, but it's not a promise that we won't bump it.
+    - uses: dtolnay/rust-toolchain@1.66.1
+    - run: cargo build --features=mmap,rayon,traits-preview,serde,zeroize
+
   b3sum_tests:
     name: b3sum ${{ matrix.target.name }} ${{ matrix.channel }}
     runs-on: ${{ matrix.target.os }}
@@ -163,15 +170,7 @@ jobs:
           { "os": "windows-latest", "toolchain": "x86_64-pc-windows-msvc",   "name": "Windows MSVC" },
           { "os": "windows-latest", "toolchain": "x86_64-pc-windows-gnu",    "name": "Windows GNU" }
         ]
-        channel: [
-          "stable",
-          "beta",
-          "nightly",
-          # The b3sum MSRV is sometimes higher than the blake3 crate's, because
-          # b3sum depends on Clap. We check in the b3sum Cargo.lock, so Clap
-          # update shouldn't randomly break us here.
-          "1.74.1",
-        ]
+        channel: ["stable", "beta", "nightly"]
 
     steps:
     - uses: actions/checkout@v4
