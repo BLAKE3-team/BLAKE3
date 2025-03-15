@@ -53,7 +53,7 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU"
   set(BLAKE3_CFLAGS_AVX2 "-mavx2" CACHE STRING "the compiler flags to enable AVX2")
   set(BLAKE3_CFLAGS_AVX512 "-mavx512f -mavx512vl" CACHE STRING "the compiler flags to enable AVX512")
 
-  if (WIN32)
+  if (WIN32 OR CYGWIN)
     set(BLAKE3_AMD64_ASM_SOURCES
       blake3_avx2_x86-64_windows_gnu.S
       blake3_avx512_x86-64_windows_gnu.S
