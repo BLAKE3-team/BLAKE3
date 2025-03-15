@@ -222,12 +222,12 @@ jobs:
     - run: ./c/blake3_c_rust_bindings/cross_test.sh --target ${{ matrix.arch }} --features=neon
       if: startsWith(matrix.arch, 'armv7-') || startsWith(matrix.arch, 'aarch64-')
 
-  cargo_xwin_build:
-    name: cargo xwin build
+  cargo_xwin_test:
+    name: cargo xwin test
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - run: docker run -v $(pwd):/io -w /io messense/cargo-xwin cargo xwin build --target x86_64-pc-windows-msvc
+    - run: docker run -v $(pwd):/io -w /io messense/cargo-xwin cargo xwin test --target x86_64-pc-windows-msvc --features=mmap,rayon,traits-preview,serde,zeroize
 
   # Currently only on x86.
   c_tests:
