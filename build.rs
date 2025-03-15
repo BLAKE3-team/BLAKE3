@@ -21,6 +21,10 @@ fn is_no_neon() -> bool {
     defined("CARGO_FEATURE_NO_NEON")
 }
 
+fn is_wasm32_simd() -> bool {
+    defined("CARGO_FEATURE_WASM32_SIMD")
+}
+
 fn is_ci() -> bool {
     defined("BLAKE3_CI")
 }
@@ -90,6 +94,11 @@ fn is_aarch64() -> bool {
 fn is_armv7() -> bool {
     target_components()[0] == "armv7"
 }
+
+fn is_wasm32() -> bool {
+    target_components()[0] == "wasm32"
+}
+
 
 fn endianness() -> String {
     let endianness = env::var("CARGO_CFG_TARGET_ENDIAN").unwrap();
@@ -285,6 +294,13 @@ fn build_neon_c_intrinsics() {
     build.compile("blake3_neon");
 }
 
+fn build_wasm32_simd() {
+    assert!(is_wasm32());
+    // No C code to compile here. Set the cfg flags that enable the Wasm SIMD.
+    // The regular Cargo build will compile it.
+    println!("cargo:rustc-cfg=blake3_wasm32_simd");
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // As of Rust 1.80, unrecognized config names are warnings. Give Cargo all of our config names.
     let all_cfgs = [
@@ -296,6 +312,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "blake3_avx2_rust",
         "blake3_avx512_ffi",
         "blake3_neon",
+        "blake3_wasm32_simd",
     ];
     for cfg_name in all_cfgs {
         // TODO: Switch this whole file to the new :: syntax when our MSRV reaches 1.77.
@@ -339,6 +356,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         println!("cargo:rustc-cfg=blake3_neon");
         build_neon_c_intrinsics();
+    }
+
+    if is_wasm32() && is_wasm32_simd() {
+        build_wasm32_simd();
     }
 
     // The `cc` crate doesn't automatically emit rerun-if directives for the
