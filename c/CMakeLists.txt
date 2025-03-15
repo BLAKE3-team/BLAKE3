@@ -17,6 +17,12 @@ project(libblake3
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+option(BLAKE3_USE_LLFIO "Enable llfio mmap support" OFF)
+set(BLAKE3_USE_LLFIO_DIR "" CACHE STRING "CMake subdirectory for existing llfio")
+set(BLAKE3_USE_LLFIO_TARGET "llfio_hl" CACHE STRING "Library target to use for llfio")
+option(BLAKE3_USE_LLFIO_EXPERIMENTAL_STATUS_CODE "Enable llfio experimental SG14 status code support" ON)
+option(BLAKE3_FETCH_LLFIO "Allow fetching llfio from GitHub if not found on system" OFF)
+
 option(BLAKE3_USE_TBB "Enable oneTBB parallelism" OFF)
 option(BLAKE3_FETCH_TBB "Allow fetching oneTBB from GitHub if not found on system" OFF)
 
@@ -217,6 +223,26 @@ else()
   message(FATAL_ERROR "BLAKE3_SIMD_TYPE is set to an unknown value: '${BLAKE3_SIMD_TYPE}'")
 endif()
 
+if(BLAKE3_USE_LLFIO)
+  if(NOT TARGET llfio::hl)
+    message(FATAL_ERROR
+      "llfio not found:\n"
+      "- Specify BLAKE3_USE_LLFIO_DIR to add llfio from a given directory\n"
+      "- Specify BLAKE3_FETCH_LLFIO to automatically fetch and build llfio\n"
+    )
+  else()
+    target_link_libraries(blake3 PRIVATE ${BLAKE3_USE_LLFIO_TARGET})
+    if(WIN32)
+      # Needed on Win32 to convert NTSTATUS codes to Win32 codes
+      target_link_libraries(blake3 PRIVATE ntdll)
+    endif()
+    target_compile_definitions(blake3 PUBLIC BLAKE3_USE_LLFIO)
+    target_sources(blake3 PRIVATE blake3_llfio.cpp)
+    # Disable pre-compiled headers; avoids issues with includes mixing C and C++ 
+    set_property(TARGET blake3 PROPERTY DISABLE_PRECOMPILE_HEADERS ON)
+  endif()
+endif()
+
 if(BLAKE3_USE_TBB)
   find_package(TBB 2021.11.0 QUIET)
   if(NOT TBB_FOUND AND NOT TARGET TBB::tbb)
@@ -242,7 +268,7 @@ if(BLAKE3_USE_TBB)
   endif()
 endif()
 
-if(BLAKE3_USE_TBB)
+if(BLAKE3_USE_LLFIO OR BLAKE3_USE_TBB)
   # Define some scratch variables for building appropriate flags per compiler
   if(CMAKE_VERSION VERSION_LESS 3.12)
     set(APPEND BLAKE3_CXX_STANDARD_FLAGS_GNU -std=c++20)
@@ -342,6 +368,7 @@ add_feature_info("AMD64 assembly" BLAKE3_SIMD_AMD64_ASM "The library uses hand w
 add_feature_info("x86 SIMD intrinsics" BLAKE3_SIMD_X86_INTRINSICS "The library uses x86 SIMD intrinsics.")
 add_feature_info("NEON SIMD intrinsics" BLAKE3_SIMD_NEON_INTRINSICS "The library uses NEON SIMD intrinsics.")
 add_feature_info("oneTBB parallelism" BLAKE3_USE_TBB "The library uses oneTBB parallelism.")
+add_feature_info("llfio mmap support" BLAKE3_USE_LLFIO "The library uses llfio for mmap support.")
 feature_summary(WHAT ENABLED_FEATURES)
 
 if(BLAKE3_EXAMPLES)

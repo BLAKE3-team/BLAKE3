@@ -11,3 +11,10 @@ if(NOT WIN32)
     install(TARGETS blake3-example-tbb)
   endif()
 endif()
+
+if(BLAKE3_USE_LLFIO)
+  add_executable(blake3-example-mmap
+    example-mmap.c)
+  target_link_libraries(blake3-example-mmap PRIVATE blake3)
+  install(TARGETS blake3-example-mmap)
+endif()
