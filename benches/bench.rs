@@ -146,9 +146,13 @@ fn bench_many_chunks_avx512(b: &mut Bencher) {
 #[bench]
 #[cfg(feature = "neon")]
 fn bench_many_chunks_neon(b: &mut Bencher) {
-    if let Some(platform) = Platform::neon() {
-        bench_many_chunks_fn(b, platform);
-    }
+    bench_many_chunks_fn(b, Platform::neon().unwrap());
+}
+
+#[bench]
+#[cfg(feature = "wasm32_simd")]
+fn bench_many_chunks_wasm(b: &mut Bencher) {
+    bench_many_chunks_fn(b, Platform::wasm32_simd().unwrap());
 }
 
 // TODO: When we get const generics we can unify this with the chunks code.
@@ -213,9 +217,13 @@ fn bench_many_parents_avx512(b: &mut Bencher) {
 #[bench]
 #[cfg(feature = "neon")]
 fn bench_many_parents_neon(b: &mut Bencher) {
-    if let Some(platform) = Platform::neon() {
-        bench_many_parents_fn(b, platform);
-    }
+    bench_many_parents_fn(b, Platform::neon().unwrap());
+}
+
+#[bench]
+#[cfg(feature = "wasm32_simd")]
+fn bench_many_parents_wasm(b: &mut Bencher) {
+    bench_many_parents_fn(b, Platform::wasm32_simd().unwrap());
 }
 
 fn bench_atonce(b: &mut Bencher, len: usize) {
