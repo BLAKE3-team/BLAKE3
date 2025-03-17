@@ -43,9 +43,8 @@ This repository is the official implementation of BLAKE3. It includes:
   making it an order of magnitude faster than e.g. `sha256sum` on
   typical desktop hardware.
 
-* The [C implementation](c), which like the Rust implementation includes
-  SIMD code and runtime CPU feature detection on x86. Unlike the Rust
-  implementation, it's [not currently multithreaded](c#multithreading). See
+* The [C implementation](c), which like the Rust implementation includes SIMD,
+  CPU feature detection on x86, and optional multithreading. See
   [`c/README.md`](c/README.md).
 
 * The [Rust reference implementation](reference_impl/reference_impl.rs),
@@ -209,6 +208,7 @@ Here's a (non-exhaustive) list of protocols and software that use BLAKE3:
 * [IPFS](https://github.com/ipfs/go-verifcid/issues/13)
 * [Farcaster](https://www.farcaster.xyz/)
 * [LLVM](https://reviews.llvm.org/D121510)
+* [Nix](https://github.com/NixOS/nix/pull/12379)
 * [Nym](https://github.com/nymtech/nym/blob/59056a22c5e6b01a38da2124662bd1fa3c8abef2/common/nymsphinx/params/src/lib.rs#L5)
 * [OpenZFS](https://github.com/openzfs/zfs/)
 * [Redox](https://www.redox-os.org/news/pkgar-introduction/)
