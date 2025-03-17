@@ -222,6 +222,34 @@ jobs:
     - run: ./c/blake3_c_rust_bindings/cross_test.sh --target ${{ matrix.arch }} --features=neon
       if: startsWith(matrix.arch, 'armv7-') || startsWith(matrix.arch, 'aarch64-')
 
+  wasm_tests:
+    name: WASM tests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-wasip1
+    - name: install Wasmtime
+      run: |
+        curl https://wasmtime.dev/install.sh -sSf | bash
+        echo PATH: $PATH
+        mkdir -p ~/.local/bin
+        ln -s ~/.wasmtime/bin/wasmtime ~/.local/bin/wasmtime
+    - run: cargo test --target wasm32-wasip1
+    - run: cargo test --target wasm32-wasip1 --no-default-features
+    - run: cargo test --target wasm32-wasip1 --features wasm32_simd
+    - run: cargo test --target wasm32-wasip1 --no-default-features --features wasm32_simd
+    - run: cargo test --target wasm32-wasip1 --benches --features=wasm32_simd
+      env:
+        RUSTC_BOOTSTRAP: 1
+    - name: test vectors w/o SIMD
+      run: cargo test --target wasm32-wasip1
+      working-directory: ./test_vectors
+    - name: test vectors w/ SIMD
+      run: cargo test --target wasm32-wasip1 --features wasm32_simd
+      working-directory: ./test_vectors
+
   cargo_xwin_test:
     name: cargo xwin test
     runs-on: ubuntu-latest
