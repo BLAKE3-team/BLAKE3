@@ -20,7 +20,8 @@ neon = []
 
 # The Wasm SIMD implementation does not participate in dynamic feature detection,
 # which is currently x86-only. If "wasm_simd" is on, Wasm SIMD support is assumed.
-# Note that not all Wasm implementation may support Wasm SIMD specification.
+# Note that not all Wasm implementations support the Wasm SIMD specification.
+# This may become the default in the future.
 wasm32_simd = []
 
 # This crate uses libstd for std::io trait implementations, and also for

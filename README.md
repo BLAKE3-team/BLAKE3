@@ -35,7 +35,7 @@ This repository is the official implementation of BLAKE3. It includes:
 
 * The [`blake3`](https://crates.io/crates/blake3) Rust crate, which
   includes optimized implementations for SSE2, SSE4.1, AVX2, AVX-512,
-  NEON and Wasm SIMD, with automatic runtime CPU feature detection on x86.
+  NEON, and WASM, with automatic runtime CPU feature detection on x86.
   The `rayon` feature provides multithreading.
 
 * The [`b3sum`](https://crates.io/crates/b3sum) Rust crate, which
@@ -43,9 +43,9 @@ This repository is the official implementation of BLAKE3. It includes:
   making it an order of magnitude faster than e.g. `sha256sum` on
   typical desktop hardware.
 
-* The [C implementation](c), which like the Rust implementation includes SIMD,
-  CPU feature detection on x86, and optional multithreading. See
-  [`c/README.md`](c/README.md).
+* The [C implementation](c), which like the Rust implementation includes SIMD
+  optimizations (all except WASM), CPU feature detection on x86, and optional
+  multithreading. See [`c/README.md`](c/README.md).
 
 * The [Rust reference implementation](reference_impl/reference_impl.rs),
   which is discussed in Section 5.1 of the [BLAKE3
