@@ -66,6 +66,10 @@
 //! enabling this feature will produce a binary that's not portable to CPUs
 //! without NEON support.
 //!
+//! The `wasm32_simd` feature enables the WASM SIMD implementation for all `wasm32-`
+//! targets. Similar to the `neon` feature, if `wasm32_simd` is enabled, WASM SIMD
+//! support is assumed. This may become the default in the future.
+//!
 //! The `traits-preview` feature enables implementations of traits from the
 //! RustCrypto [`digest`] crate, and re-exports that crate as `traits::digest`.
 //! However, the traits aren't stable, and they're expected to change in
