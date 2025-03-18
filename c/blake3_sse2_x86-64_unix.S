@@ -75,10 +75,17 @@ blake3_hash_many_sse2:
         pshufd  xmm5, xmm7, 0x55
         pshufd  xmm6, xmm7, 0xAA
         pshufd  xmm7, xmm7, 0xFF
+#ifndef __ILP32__
         mov     r8, qword ptr [rdi]
         mov     r9, qword ptr [rdi+0x8]
         mov     r10, qword ptr [rdi+0x10]
         mov     r11, qword ptr [rdi+0x18]
+#else
+        mov     r8d, dword ptr [rdi]
+        mov     r9d, dword ptr [rdi+0x4]
+        mov     r10d, dword ptr [rdi+0x8]
+        mov     r11d, dword ptr [rdi+0xc]
+#endif
         movzx   eax, byte ptr [rbp+0x40]
         or      eax, r13d
         xor     edx, edx
@@ -1632,7 +1639,11 @@ blake3_hash_many_sse2:
         psubd   xmm1, xmm0
         movdqa  xmmword ptr [rsp+0x120], xmm1
         add     rbx, 128
+#ifndef __ILP32__
         add     rdi, 32
+#else
+        add     rdi, 16
+#endif
         sub     rsi, 4
         cmp     rsi, 4
         jnc     2b
@@ -1663,8 +1674,13 @@ blake3_hash_many_sse2:
         movd    xmm13, dword ptr [rsp+0x124]
         punpckldq xmm14, xmm13
         movaps  xmmword ptr [rsp+0x10], xmm14
+#ifndef __ILP32__
         mov     r8, qword ptr [rdi]
         mov     r9, qword ptr [rdi+0x8]
+#else
+        mov     r8d, dword ptr [rdi]
+        mov     r9d, dword ptr [rdi+0x4]
+#endif
         movzx   eax, byte ptr [rbp+0x40]
         or      eax, r13d
         xor     edx, edx
@@ -1893,7 +1909,11 @@ blake3_hash_many_sse2:
         mov    r11d, dword ptr [rsp+0x120+8*rax]
         mov dword ptr [rsp+0x110], r10d
         mov dword ptr [rsp+0x120], r11d
+#ifndef __ILP32__
         add     rdi, 16
+#else
+        add     rdi, 8
+#endif
         add     rbx, 64
         sub     rsi, 2
 3:
@@ -1904,7 +1924,11 @@ blake3_hash_many_sse2:
         movd    xmm13, dword ptr [rsp+0x110]
         movd    xmm14, dword ptr [rsp+0x120]
         punpckldq xmm13, xmm14
+#ifndef __IPL32__
         mov     r8, qword ptr [rdi]
+#else
+        mov     r8d, dword ptr [rdi]
+#endif
         movzx   eax, byte ptr [rbp+0x40]
         or      eax, r13d
         xor     edx, edx
