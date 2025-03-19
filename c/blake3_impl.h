@@ -23,6 +23,12 @@ enum blake3_flags {
   DERIVE_KEY_CONTEXT  = 1 << 5,
   DERIVE_KEY_MATERIAL = 1 << 6,
 };
+// internal parallelism flags
+enum blake3_parallel {
+  USE_NONE = 0,
+  USE_TBB = 1,
+  USE_OPENMP = 2,
+};
 
 // This C implementation tries to support recent versions of GCC, Clang, and
 // MSVC.
@@ -223,12 +229,12 @@ size_t blake3_simd_degree(void);
 BLAKE3_PRIVATE size_t blake3_compress_subtree_wide(const uint8_t *input, size_t input_len,
                                                    const uint32_t key[8],
                                                    uint64_t chunk_counter, uint8_t flags,
-                                                   uint8_t *out, bool use_tbb, bool use_openmp);
+                                                   uint8_t *out, uint8_t parallel);
 
 #if defined(BLAKE3_USE_TBB)
 BLAKE3_PRIVATE void blake3_compress_subtree_wide_join_tbb(
     // shared params
-    const uint32_t key[8], uint8_t flags, bool use_tbb,
+    const uint32_t key[8], uint8_t flags, uint8_t parallel,
     // left-hand side params
     const uint8_t *l_input, size_t l_input_len, uint64_t l_chunk_counter,
     uint8_t *l_cvs, size_t *l_n,
@@ -239,7 +245,7 @@ BLAKE3_PRIVATE void blake3_compress_subtree_wide_join_tbb(
 #if defined(BLAKE3_USE_OPENMP)
 BLAKE3_PRIVATE void blake3_compress_subtree_wide_join_openmp(
     // shared params
-    const uint32_t key[8], uint8_t flags, bool use_openmp,
+    const uint32_t key[8], uint8_t flags, uint8_t parallel,
     // left-hand side params
     const uint8_t *l_input, size_t l_input_len, uint64_t l_chunk_counter,
     uint8_t *l_cvs, size_t *l_n,
