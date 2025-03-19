@@ -6,6 +6,9 @@
 use std::ffi::{c_void, CString};
 use std::mem::MaybeUninit;
 
+#[cfg(feature = "openmp")]
+extern crate openmp_sys;
+
 #[cfg(test)]
 mod test;
 
@@ -93,6 +96,17 @@ impl Hasher {
         }
     }
 
+    #[cfg(feature = "openmp")]
+    pub fn update_openmp(&mut self, input: &[u8]) {
+        unsafe {
+            ffi::blake3_hasher_update_openmp(
+                &mut self.0,
+                input.as_ptr() as *const c_void,
+                input.len(),
+            );
+        }
+    }
+
     pub fn finalize(&self, output: &mut [u8]) {
         unsafe {
             ffi::blake3_hasher_finalize(&self.0, output.as_mut_ptr(), output.len());
@@ -153,6 +167,12 @@ pub mod ffi {
         );
         #[cfg(feature = "tbb")]
         pub fn blake3_hasher_update_tbb(
+            self_: *mut blake3_hasher,
+            input: *const ::std::os::raw::c_void,
+            input_len: usize,
+        );
+        #[cfg(feature = "openmp")]
+        pub fn blake3_hasher_update_openmp(
             self_: *mut blake3_hasher,
             input: *const ::std::os::raw::c_void,
             input_len: usize,

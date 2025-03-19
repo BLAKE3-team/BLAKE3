@@ -110,6 +110,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if cfg!(feature = "tbb") {
         base_build.define("BLAKE3_USE_TBB", "1");
     }
+    if cfg!(feature = "openmp") {
+        base_build.define("BLAKE3_USE_OPENMP", "1");
+    }
+    if cfg!(feature = "openmp") {
+        base_build.file(c_dir_path("blake3_openmp.c"));
+        env::var("DEP_OPENMP_FLAG").unwrap().split(" ").for_each(|f| { base_build.flag(f); });
+    }
     base_build.compile("blake3_base");
 
     if cfg!(feature = "tbb") {
@@ -118,6 +125,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         tbb_build.file(c_dir_path("blake3_tbb.cpp"));
         tbb_build.compile("blake3_tbb");
         println!("cargo::rustc-link-lib=tbb");
+    }
+
+    if cfg!(feature = "openmp") {
+        if let Some(link) = env::var_os("DEP_OPENMP_CARGO_LINK_INSTRUCTIONS") {
+            for i in env::split_paths(&link) {
+                println!("cargo:{}", i.display());
+            }
+        }
     }
 
     if is_x86_64() && !defined("CARGO_FEATURE_PREFER_INTRINSICS") {
