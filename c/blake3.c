@@ -268,7 +268,8 @@ INLINE size_t compress_parents_parallel(const uint8_t *child_chaining_values,
 size_t blake3_compress_subtree_wide(const uint8_t *input, size_t input_len,
                                     const uint32_t key[8],
                                     uint64_t chunk_counter, uint8_t flags,
-                                    uint8_t *out, bool use_tbb) {
+                                    uint8_t *out, bool use_tbb,
+                                    bool use_openmp) {
   // Note that the single chunk case does *not* bump the SIMD degree up to 2
   // when it is 1. If this implementation adds multi-threading in the future,
   // this gives us the option of multi-threading even the 2-chunk case, which
@@ -306,20 +307,38 @@ size_t blake3_compress_subtree_wide(const uint8_t *input, size_t input_len,
   size_t left_n = -1;
   size_t right_n = -1;
 
+  do {
 #if defined(BLAKE3_USE_TBB)
-  blake3_compress_subtree_wide_join_tbb(
-      key, flags, use_tbb,
-      // left-hand side
-      input, left_input_len, chunk_counter, cv_array, &left_n,
-      // right-hand side
-      right_input, right_input_len, right_chunk_counter, right_cvs, &right_n);
-#else
-  left_n = blake3_compress_subtree_wide(
-      input, left_input_len, key, chunk_counter, flags, cv_array, use_tbb);
-  right_n = blake3_compress_subtree_wide(right_input, right_input_len, key,
-                                         right_chunk_counter, flags, right_cvs,
-                                         use_tbb);
-#endif // BLAKE3_USE_TBB
+    if (use_tbb) {
+      blake3_compress_subtree_wide_join_tbb(
+          key, flags, use_tbb,
+          // left-hand side
+          input, left_input_len, chunk_counter, cv_array, &left_n,
+          // right-hand side
+          right_input, right_input_len, right_chunk_counter, right_cvs,
+          &right_n);
+      break;
+    }
+#endif
+#if defined(BLAKE3_USE_OPENMP)
+    if (use_openmp) {
+      blake3_compress_subtree_wide_join_openmp(
+          key, flags, use_openmp,
+          // left-hand side
+          input, left_input_len, chunk_counter, cv_array, &left_n,
+          // right-hand side
+          right_input, right_input_len, right_chunk_counter, right_cvs,
+          &right_n);
+      break;
+    }
+#endif
+    left_n =
+        blake3_compress_subtree_wide(input, left_input_len, key, chunk_counter,
+                                     flags, cv_array, use_tbb, use_openmp);
+    right_n = blake3_compress_subtree_wide(right_input, right_input_len, key,
+                                           right_chunk_counter, flags,
+                                           right_cvs, use_tbb, use_openmp);
+  } while (0);
 
   // The special case again. If simd_degree=1, then we'll have left_n=1 and
   // right_n=1. Rather than compressing them into a single output, return
@@ -349,14 +368,15 @@ INLINE void
 compress_subtree_to_parent_node(const uint8_t *input, size_t input_len,
                                 const uint32_t key[8], uint64_t chunk_counter,
                                 uint8_t flags, uint8_t out[2 * BLAKE3_OUT_LEN],
-                                bool use_tbb) {
+                                bool use_tbb, bool use_openmp) {
 #if defined(BLAKE3_TESTING)
   assert(input_len > BLAKE3_CHUNK_LEN);
 #endif
 
   uint8_t cv_array[MAX_SIMD_DEGREE_OR_2 * BLAKE3_OUT_LEN];
   size_t num_cvs = blake3_compress_subtree_wide(input, input_len, key,
-                                                chunk_counter, flags, cv_array, use_tbb);
+                                                chunk_counter, flags, cv_array,
+                                                use_tbb, use_openmp);
   assert(num_cvs <= MAX_SIMD_DEGREE_OR_2);
   // The following loop never executes when MAX_SIMD_DEGREE_OR_2 is 2, because
   // as we just asserted, num_cvs will always be <=2 in that case. But GCC
@@ -473,7 +493,8 @@ INLINE void hasher_push_cv(blake3_hasher *self, uint8_t new_cv[BLAKE3_OUT_LEN],
 }
 
 INLINE void blake3_hasher_update_base(blake3_hasher *self, const void *input,
-                                      size_t input_len, bool use_tbb) {
+                                      size_t input_len, bool use_tbb,
+                                      bool use_openmp) {
   // Explicitly checking for zero avoids causing UB by passing a null pointer
   // to memcpy. This comes up in practice with things like:
   //   std::vector<uint8_t> v;
@@ -559,7 +580,8 @@ INLINE void blake3_hasher_update_base(blake3_hasher *self, const void *input,
       uint8_t cv_pair[2 * BLAKE3_OUT_LEN];
       compress_subtree_to_parent_node(input_bytes, subtree_len, self->key,
                                       self->chunk.chunk_counter,
-                                      self->chunk.flags, cv_pair, use_tbb);
+                                      self->chunk.flags, cv_pair, use_tbb,
+                                      use_openmp);
       hasher_push_cv(self, cv_pair, self->chunk.chunk_counter);
       hasher_push_cv(self, &cv_pair[BLAKE3_OUT_LEN],
                      self->chunk.chunk_counter + (subtree_chunks / 2));
@@ -584,16 +606,30 @@ INLINE void blake3_hasher_update_base(blake3_hasher *self, const void *input,
 void blake3_hasher_update(blake3_hasher *self, const void *input,
                           size_t input_len) {
   bool use_tbb = false;
-  blake3_hasher_update_base(self, input, input_len, use_tbb);
+  bool use_openmp = false;
+  blake3_hasher_update_base(self, input, input_len, use_tbb, use_openmp);
 }
 
 #if defined(BLAKE3_USE_TBB)
 void blake3_hasher_update_tbb(blake3_hasher *self, const void *input,
                               size_t input_len) {
   bool use_tbb = true;
-  blake3_hasher_update_base(self, input, input_len, use_tbb);
+  bool use_openmp = false;
+  blake3_hasher_update_base(self, input, input_len, use_tbb, use_openmp);
 }
 #endif // BLAKE3_USE_TBB
+#if defined(BLAKE3_USE_OPENMP)
+#include <omp.h>
+void blake3_hasher_update_openmp(blake3_hasher *self, const void *input,
+                                 size_t input_len) {
+  const int old_max_active_levels = omp_get_max_active_levels();
+  omp_set_max_active_levels(highest_one(omp_get_max_threads()) + 1);
+  const bool use_tbb = false;
+  const bool use_openmp = true;
+  blake3_hasher_update_base(self, input, input_len, use_tbb, use_openmp);
+  omp_set_max_active_levels(old_max_active_levels);
+}
+#endif // BLAKE3_USE_OPENMP
 
 void blake3_hasher_finalize(const blake3_hasher *self, uint8_t *out,
                             size_t out_len) {

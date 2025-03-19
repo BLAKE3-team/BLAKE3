@@ -19,19 +19,19 @@ extern "C" void blake3_compress_subtree_wide_join_tbb(
     uint8_t *r_cvs, size_t *r_n) noexcept {
   if (!use_tbb) {
     *l_n = blake3_compress_subtree_wide(l_input, l_input_len, key,
-                                        l_chunk_counter, flags, l_cvs, use_tbb);
+                                        l_chunk_counter, flags, l_cvs, use_tbb, false);
     *r_n = blake3_compress_subtree_wide(r_input, r_input_len, key,
-                                        r_chunk_counter, flags, r_cvs, use_tbb);
+                                        r_chunk_counter, flags, r_cvs, use_tbb, false);
     return;
   }
 
   oneapi::tbb::parallel_invoke(
       [=]() {
         *l_n = blake3_compress_subtree_wide(
-            l_input, l_input_len, key, l_chunk_counter, flags, l_cvs, use_tbb);
+            l_input, l_input_len, key, l_chunk_counter, flags, l_cvs, use_tbb, false);
       },
       [=]() {
         *r_n = blake3_compress_subtree_wide(
-            r_input, r_input_len, key, r_chunk_counter, flags, r_cvs, use_tbb);
+            r_input, r_input_len, key, r_chunk_counter, flags, r_cvs, use_tbb, false);
       });
 }
