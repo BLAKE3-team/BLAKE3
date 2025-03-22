@@ -293,6 +293,15 @@ mod test {
     #[test]
     #[should_panic]
     #[cfg(debug_assertions)]
+    fn test_hasher_already_accepted_input_should_panic() {
+        let mut hasher = crate::Hasher::new();
+        hasher.update(b"x");
+        set_input_offset(&mut hasher, 0);
+    }
+
+    #[test]
+    #[should_panic]
+    #[cfg(debug_assertions)]
     fn test_atonce_too_much_input_should_panic() {
         hash_subtree(&[0; CHUNK_LEN + 1], CHUNK_LEN as u64, Mode::Hash);
     }
