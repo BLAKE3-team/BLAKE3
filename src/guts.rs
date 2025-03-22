@@ -146,7 +146,8 @@ fn hash_subtree_inner<J: crate::join::Join>(input: &[u8], offset: u64, mode: Mod
             input.len(),
         );
     }
-    crate::hash_all_at_once::<J>(input, &mode.key_words(), 0, 0).chaining_value()
+    crate::hash_all_at_once::<J>(input, &mode.key_words(), mode.flags_byte(), counter)
+        .chaining_value()
 }
 
 /// This always returns a non-root chaining value. It's never correct to cast this function's
@@ -248,7 +249,7 @@ mod test {
     #[test]
     #[should_panic]
     #[cfg(debug_assertions)]
-    fn test_empty_subtree_should_panic() {
+    fn test_atonce_empty_subtree_should_panic() {
         hash_subtree(b"", 0, Mode::Hash);
     }
 
@@ -262,7 +263,7 @@ mod test {
     #[test]
     #[should_panic]
     #[cfg(debug_assertions)]
-    fn test_unaligned_offset_should_panic() {
+    fn test_atonce_unaligned_offset_should_panic() {
         hash_subtree(b"x", 1, Mode::Hash);
     }
 
@@ -277,7 +278,7 @@ mod test {
     #[test]
     #[should_panic]
     #[cfg(debug_assertions)]
-    fn test_too_much_input_should_panic() {
+    fn test_atonce_too_much_input_should_panic() {
         hash_subtree(&[0; CHUNK_LEN + 1], CHUNK_LEN as u64, Mode::Hash);
     }
 
@@ -288,5 +289,72 @@ mod test {
         let mut hasher = crate::Hasher::new();
         set_input_offset(&mut hasher, CHUNK_LEN as u64);
         hasher.update(&[0; CHUNK_LEN + 1]);
+    }
+
+    #[test]
+    fn test_grouped_hash() {
+        const MAX_CHUNKS: usize = (crate::test::TEST_CASES_MAX + 1) / CHUNK_LEN;
+        let mut input_buf = [0; crate::test::TEST_CASES_MAX];
+        crate::test::paint_test_input(&mut input_buf);
+        for subtree_chunks in [1, 2, 4, 8, 16, 32] {
+            #[cfg(feature = "std")]
+            dbg!(subtree_chunks);
+            let subtree_len = subtree_chunks * CHUNK_LEN;
+            for &case in crate::test::TEST_CASES {
+                if case <= subtree_len {
+                    continue;
+                }
+                #[cfg(feature = "std")]
+                dbg!(case);
+                let input = &input_buf[..case];
+                let expected_hash = crate::hash(input);
+
+                // Collect all the group chaining values.
+                let mut chaining_values = arrayvec::ArrayVec::<CVBytes, MAX_CHUNKS>::new();
+                let mut subtree_offset = 0;
+                while subtree_offset < input.len() {
+                    let take = core::cmp::min(subtree_len, input.len() - subtree_offset);
+                    let subtree_input = &input[subtree_offset..][..take];
+                    let subtree_cv = hash_subtree(subtree_input, subtree_offset as u64, Mode::Hash);
+                    // Double check the subtree hash against the Rayon implementation.
+                    #[cfg(feature = "rayon")]
+                    {
+                        let rayon_subtree_cv =
+                            hash_subtree_rayon(subtree_input, subtree_offset as u64, Mode::Hash);
+                        assert_eq!(subtree_cv, rayon_subtree_cv);
+                    }
+                    // Triple check the subtree hash against the Hasher implementation.
+                    let mut hasher = crate::Hasher::new();
+                    set_input_offset(&mut hasher, subtree_offset as u64);
+                    hasher.update(subtree_input);
+                    assert_eq!(subtree_cv, finalize_non_root(&hasher));
+                    chaining_values.push(subtree_cv);
+                    subtree_offset += take;
+                }
+
+                // Compress all the chaining_values together, layer by layer.
+                assert!(chaining_values.len() >= 2);
+                while chaining_values.len() > 2 {
+                    let mut pairs = chaining_values.chunks_exact(2);
+                    let mut new_chaining_values = arrayvec::ArrayVec::new();
+                    while let Some([left, right]) = pairs.next() {
+                        new_chaining_values.push(merge_subtrees_non_root(left, right, Mode::Hash));
+                    }
+                    // If there's an odd CV out, it moves up to the next layer.
+                    if let &[odd_cv] = pairs.remainder() {
+                        new_chaining_values.push(odd_cv);
+                    }
+                    assert_eq!(
+                        new_chaining_values.len(),
+                        chaining_values.len() / 2 + chaining_values.len() % 2,
+                    );
+                    chaining_values = new_chaining_values;
+                }
+                assert_eq!(chaining_values.len(), 2);
+                let root_hash =
+                    merge_subtrees_root(&chaining_values[0], &chaining_values[1], Mode::Hash);
+                assert_eq!(expected_hash, root_hash);
+            }
+        }
     }
 }

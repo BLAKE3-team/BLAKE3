@@ -885,9 +885,9 @@ fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8, count
     // compress_subtree_to_parent_node().
     Output {
         input_chaining_value: *key,
-        block: compress_subtree_to_parent_node::<J>(input, key, 0, flags, platform),
+        block: compress_subtree_to_parent_node::<J>(input, key, counter, flags, platform),
         block_len: BLOCK_LEN as u8,
-        counter,
+        counter: 0,
         flags: flags | PARENT,
         platform,
     }
@@ -1338,7 +1338,7 @@ impl Hasher {
         // also. Convert it directly into an Output. Otherwise, we need to
         // merge subtrees below.
         if self.cv_stack.is_empty() {
-            debug_assert_eq!(self.chunk_state.chunk_counter, 0);
+            debug_assert_eq!(self.chunk_state.chunk_counter, self.initial_chunk_counter);
             return self.chunk_state.output();
         }
 
@@ -1359,7 +1359,7 @@ impl Hasher {
         if self.chunk_state.count() > 0 {
             debug_assert_eq!(
                 self.cv_stack.len(),
-                self.chunk_state.chunk_counter.count_ones() as usize,
+                (self.chunk_state.chunk_counter - self.initial_chunk_counter).count_ones() as usize,
                 "cv stack does not need a merge",
             );
             output = self.chunk_state.output();
