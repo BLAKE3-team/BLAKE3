@@ -155,6 +155,7 @@ impl<'a> Mode<'a> {
 //       .     .     .     .
 //      / \   / \   / \   / \
 //     0  1  2  3  4  5  6  7
+#[cfg(debug_assertions)]
 pub(crate) fn max_subtree_len(counter: u64) -> u64 {
     debug_assert_ne!(counter, 0);
     (1 << counter.trailing_zeros()) * CHUNK_LEN as u64
