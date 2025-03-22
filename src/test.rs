@@ -801,6 +801,7 @@ fn test_zeroize() {
             flags: 42,
             platform: crate::Platform::Portable,
         },
+        initial_chunk_counter: 42,
         key: [42; 8],
         cv_stack: [[42; 32]; { crate::MAX_DEPTH + 1 }].into(),
     };
@@ -815,6 +816,7 @@ fn test_zeroize() {
         hasher.chunk_state.platform,
         crate::Platform::Portable
     ));
+    assert_eq!(hasher.initial_chunk_counter, 0);
     assert_eq!(hasher.key, [0; 8]);
     assert_eq!(&*hasher.cv_stack, &[[0u8; 32]; 0]);
 

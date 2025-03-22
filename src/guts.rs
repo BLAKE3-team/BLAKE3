@@ -107,7 +107,7 @@ impl<'a> Mode<'a> {
 //       .     .     .     .
 //      / \   / \   / \   / \
 //     0  1  2  3  4  5  6  7
-fn max_subtree_len(counter: u64) -> u64 {
+pub(crate) fn max_subtree_len(counter: u64) -> u64 {
     debug_assert_ne!(counter, 0);
     (1 << counter.trailing_zeros()) * CHUNK_LEN as u64
 }
@@ -193,6 +193,23 @@ pub fn merge_subtrees_xof(
     crate::OutputReader::new(merge_subtrees_inner(left_hash, right_hash, mode))
 }
 
+pub fn set_input_offset(hasher: &mut crate::Hasher, offset: u64) {
+    debug_assert_eq!(hasher.count(), 0, "hasher has already accepted input");
+    debug_assert_eq!(
+        offset % CHUNK_LEN as u64,
+        0,
+        "offset ({offset}) must be a chunk boundary (divisible by {CHUNK_LEN})",
+    );
+    let counter = offset / CHUNK_LEN as u64;
+    hasher.chunk_state.chunk_counter = counter;
+    hasher.initial_chunk_counter = counter;
+}
+
+pub fn finalize_non_root(hasher: &crate::Hasher) -> CVBytes {
+    assert_ne!(hasher.count(), 0, "empty subtrees are never valid");
+    hasher.final_output().chaining_value()
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -238,6 +255,13 @@ mod test {
     #[test]
     #[should_panic]
     #[cfg(debug_assertions)]
+    fn test_hasher_empty_subtree_should_panic() {
+        _ = finalize_non_root(&crate::Hasher::new());
+    }
+
+    #[test]
+    #[should_panic]
+    #[cfg(debug_assertions)]
     fn test_unaligned_offset_should_panic() {
         hash_subtree(b"x", 1, Mode::Hash);
     }
@@ -245,7 +269,24 @@ mod test {
     #[test]
     #[should_panic]
     #[cfg(debug_assertions)]
+    fn test_hasher_unaligned_offset_should_panic() {
+        let mut hasher = crate::Hasher::new();
+        set_input_offset(&mut hasher, 1);
+    }
+
+    #[test]
+    #[should_panic]
+    #[cfg(debug_assertions)]
     fn test_too_much_input_should_panic() {
         hash_subtree(&[0; CHUNK_LEN + 1], CHUNK_LEN as u64, Mode::Hash);
+    }
+
+    #[test]
+    #[should_panic]
+    #[cfg(debug_assertions)]
+    fn test_hasher_too_much_input_should_panic() {
+        let mut hasher = crate::Hasher::new();
+        set_input_offset(&mut hasher, CHUNK_LEN as u64);
+        hasher.update(&[0; CHUNK_LEN + 1]);
     }
 }

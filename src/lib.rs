@@ -1063,6 +1063,7 @@ fn parent_node_output(
 pub struct Hasher {
     key: CVWords,
     chunk_state: ChunkState,
+    initial_chunk_counter: u64,
     // The stack size is MAX_DEPTH + 1 because we do lazy merging. For example,
     // with 7 chunks, we have 3 entries in the stack. Adding an 8th chunk
     // requires a 4th entry, rather than merging everything down to 1, because
@@ -1076,6 +1077,7 @@ impl Hasher {
         Self {
             key: *key,
             chunk_state: ChunkState::new(key, 0, flags, Platform::detect()),
+            initial_chunk_counter: 0,
             cv_stack: ArrayVec::new(),
         }
     }
@@ -1133,8 +1135,9 @@ impl Hasher {
     // the CV on top of the stack. The principle is the same: each CV that
     // should remain in the stack is represented by a 1-bit in the total number
     // of chunks (or bytes) so far.
-    fn merge_cv_stack(&mut self, total_len: u64) {
-        let post_merge_stack_len = total_len.count_ones() as usize;
+    fn merge_cv_stack(&mut self, chunk_counter: u64) {
+        let post_merge_stack_len =
+            (chunk_counter - self.initial_chunk_counter).count_ones() as usize;
         while self.cv_stack.len() > post_merge_stack_len {
             let right_child = self.cv_stack.pop().unwrap();
             let left_child = self.cv_stack.pop().unwrap();
@@ -1199,6 +1202,18 @@ impl Hasher {
     }
 
     fn update_with_join<J: join::Join>(&mut self, mut input: &[u8]) -> &mut Self {
+        #[cfg(debug_assertions)]
+        if self.initial_chunk_counter != 0 {
+            let max = guts::max_subtree_len(self.initial_chunk_counter);
+            let remaining = max - self.count();
+            debug_assert!(
+                input.len() as u64 <= remaining,
+                "the subtree starting at {} contains at most {} bytes (found {})",
+                CHUNK_LEN as u64 * self.initial_chunk_counter,
+                max,
+                input.len(),
+            );
+        }
         // If we have some partial chunk bytes in the internal chunk_state, we
         // need to finish that chunk first.
         if self.chunk_state.count() > 0 {
@@ -1394,7 +1409,8 @@ impl Hasher {
 
     /// Return the total number of bytes hashed so far.
     pub fn count(&self) -> u64 {
-        self.chunk_state.chunk_counter * CHUNK_LEN as u64 + self.chunk_state.count() as u64
+        (self.chunk_state.chunk_counter - self.initial_chunk_counter) * CHUNK_LEN as u64
+            + self.chunk_state.count() as u64
     }
 
     /// As [`update`](Hasher::update), but reading from a
@@ -1613,11 +1629,13 @@ impl Zeroize for Hasher {
         let Self {
             key,
             chunk_state,
+            initial_chunk_counter,
             cv_stack,
         } = self;
 
         key.zeroize();
         chunk_state.zeroize();
+        initial_chunk_counter.zeroize();
         cv_stack.zeroize();
     }
 }
