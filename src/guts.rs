@@ -161,16 +161,8 @@ pub(crate) fn max_subtree_len(counter: u64) -> u64 {
     (1 << counter.trailing_zeros()) * CHUNK_LEN as u64
 }
 
-/// The academic term for a "non-root hash" is a "chaining value".
-#[derive(Copy, Clone, Debug, Eq)]
-pub struct NonRootHash(pub [u8; OUT_LEN]);
-
-impl PartialEq for NonRootHash {
-    #[inline]
-    fn eq(&self, other: &NonRootHash) -> bool {
-        constant_time_eq::constant_time_eq_32(&self.0, &other.0)
-    }
-}
+/// "Chaining value" is the academic term for a non-root or non-final hash.
+pub type ChainingValue = [u8; OUT_LEN];
 
 #[test]
 fn test_max_subtree_len() {
@@ -191,13 +183,13 @@ fn test_max_subtree_len() {
 }
 
 fn merge_subtrees_inner(
-    left_child: &NonRootHash,
-    right_child: &NonRootHash,
+    left_child: &ChainingValue,
+    right_child: &ChainingValue,
     mode: Mode,
 ) -> crate::Output {
     crate::parent_node_output(
-        &left_child.0,
-        &right_child.0,
+        &left_child,
+        &right_child,
         &mode.key_words(),
         mode.flags_byte(),
         Platform::detect(),
@@ -207,17 +199,17 @@ fn merge_subtrees_inner(
 /// Compute a non-root chaining value. It's never correct to cast this function's return value to
 /// Hash.
 pub fn merge_subtrees_non_root(
-    left_child: &NonRootHash,
-    right_child: &NonRootHash,
+    left_child: &ChainingValue,
+    right_child: &ChainingValue,
     mode: Mode,
-) -> NonRootHash {
-    NonRootHash(merge_subtrees_inner(left_child, right_child, mode).chaining_value())
+) -> ChainingValue {
+    merge_subtrees_inner(left_child, right_child, mode).chaining_value()
 }
 
 /// Compute the root hash, similar to [`Hasher::finalize`](crate::Hasher::finalize).
 pub fn merge_subtrees_root(
-    left_child: &NonRootHash,
-    right_child: &NonRootHash,
+    left_child: &ChainingValue,
+    right_child: &ChainingValue,
     mode: Mode,
 ) -> crate::Hash {
     merge_subtrees_inner(left_child, right_child, mode).root_hash()
@@ -226,8 +218,8 @@ pub fn merge_subtrees_root(
 /// Return a root [`OutputReader`](crate::OutputReader), similar to
 /// [`Hasher::finalize_xof`](crate::Hasher::finalize_xof).
 pub fn merge_subtrees_xof(
-    left_child: &NonRootHash,
-    right_child: &NonRootHash,
+    left_child: &ChainingValue,
+    right_child: &ChainingValue,
     mode: Mode,
 ) -> crate::OutputReader {
     crate::OutputReader::new(merge_subtrees_inner(left_child, right_child, mode))
@@ -247,7 +239,7 @@ pub fn context_key(context: &str) -> [u8; crate::KEY_LEN] {
 pub trait HasherExt {
     fn new_from_context_key(context_key: &[u8; KEY_LEN]) -> Self;
     fn set_input_offset(&mut self, offset: u64) -> &mut Self;
-    fn finalize_non_root(&self) -> NonRootHash;
+    fn finalize_non_root(&self) -> ChainingValue;
 }
 
 impl HasherExt for Hasher {
@@ -269,9 +261,9 @@ impl HasherExt for Hasher {
         self
     }
 
-    fn finalize_non_root(&self) -> NonRootHash {
+    fn finalize_non_root(&self) -> ChainingValue {
         assert_ne!(self.count(), 0, "empty subtrees are never valid");
-        NonRootHash(self.final_output().chaining_value())
+        self.final_output().chaining_value()
     }
 }
 
@@ -359,7 +351,7 @@ mod test {
                 let expected_hash = crate::hash(input);
 
                 // Collect all the group chaining values.
-                let mut chaining_values = arrayvec::ArrayVec::<NonRootHash, MAX_CHUNKS>::new();
+                let mut chaining_values = arrayvec::ArrayVec::<ChainingValue, MAX_CHUNKS>::new();
                 let mut subtree_offset = 0;
                 while subtree_offset < input.len() {
                     let take = core::cmp::min(subtree_len, input.len() - subtree_offset);
