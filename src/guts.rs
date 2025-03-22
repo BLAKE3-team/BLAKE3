@@ -5,6 +5,55 @@
 //!
 //! We could stabilize something like this module in the future. If you have a
 //! use case for it, please let us know by filing a GitHub issue.
+//!
+//! # Example
+//!
+//! Expanding this API is work-in-progress. Here's an example of computing all the interior hashes
+//! in a 3-chunk tree:
+//!
+//! ```text
+//!             root
+//!          /       \
+//!      parent       \
+//!    /       \       \
+//! chunk0  chunk1   chunk2
+//! ```
+//!
+//! ```
+//! # fn main() {
+//! use blake3::Hasher;
+//! use blake3::guts::{Mode, HasherExt};
+//!
+//! let chunk0 = [b'a'; 1024];
+//! let chunk1 = [b'b'; 1024];
+//! let chunk2 = [b'c'; 1024];
+//!
+//! let chunk0_hash = Hasher::new()
+//!     .update(&chunk0)
+//!     .finalize_non_root();
+//! let chunk1_hash = Hasher::new()
+//!     .set_input_offset(1024)
+//!     .update(&chunk1)
+//!     .finalize_non_root();
+//! let chunk2_hash = Hasher::new()
+//!     .set_input_offset(2048)
+//!     .update(&chunk2)
+//!     .finalize_non_root();
+//!
+//! // Join the first two chunks with a parent node.
+//! let parent_hash = blake3::guts::merge_subtrees_non_root(&chunk0_hash, &chunk1_hash, Mode::Hash);
+//!
+//! // Finish the tree by joining that parent node with the third chunk.
+//! let root_hash = blake3::guts::merge_subtrees_root(&parent_hash, &chunk2_hash, Mode::Hash);
+//!
+//! // Double check that we got the right answer.
+//! let mut combined_input = [0; 1024 * 3];
+//! combined_input[..1024].copy_from_slice(&chunk0);
+//! combined_input[1024..2048].copy_from_slice(&chunk1);
+//! combined_input[2048..].copy_from_slice(&chunk2);
+//! assert_eq!(root_hash, blake3::hash(&combined_input));
+//! # }
+//! ```
 
 use crate::platform::Platform;
 use crate::{CVWords, Hash, Hasher, IV, KEY_LEN, OUT_LEN};
@@ -194,13 +243,13 @@ pub fn context_key(context: &str) -> [u8; crate::KEY_LEN] {
     .0
 }
 
-pub trait HasherGutsExt {
+pub trait HasherExt {
     fn new_from_context_key(context_key: &[u8; KEY_LEN]) -> Self;
     fn set_input_offset(&mut self, offset: u64) -> &mut Self;
     fn finalize_non_root(&self) -> NonRootHash;
 }
 
-impl HasherGutsExt for Hasher {
+impl HasherExt for Hasher {
     fn new_from_context_key(context_key: &[u8; KEY_LEN]) -> Hasher {
         let context_key_words = crate::platform::words_from_le_bytes_32(context_key);
         Hasher::new_internal(&context_key_words, crate::DERIVE_KEY_MATERIAL)
