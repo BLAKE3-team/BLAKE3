@@ -144,7 +144,7 @@ fn bench_many_chunks_avx512(b: &mut Bencher) {
 }
 
 #[bench]
-#[cfg(blake3_neon)]
+#[cfg(blake3_neon_ffi)]
 fn bench_many_chunks_neon(b: &mut Bencher) {
     bench_many_chunks_fn(b, Platform::neon().unwrap());
 }
@@ -215,7 +215,7 @@ fn bench_many_parents_avx512(b: &mut Bencher) {
 }
 
 #[bench]
-#[cfg(blake3_neon)]
+#[cfg(blake3_neon_ffi)]
 fn bench_many_parents_neon(b: &mut Bencher) {
     bench_many_parents_fn(b, Platform::neon().unwrap());
 }
