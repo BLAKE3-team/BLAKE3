@@ -7,7 +7,7 @@
 //! use case for it, please let us know by filing a GitHub issue.
 
 use crate::platform::Platform;
-use crate::{CVBytes, CVWords, Hash, IV, KEY_LEN};
+use crate::{CVBytes, CVWords, Hash, Hasher, IV, KEY_LEN, OUT_LEN};
 
 pub const BLOCK_LEN: usize = 64;
 pub const CHUNK_LEN: usize = 1024;
@@ -99,8 +99,8 @@ impl<'a> Mode<'a> {
 // chunk 8. For a subtree starting at chunk index N, the maximum number of chunks in the tree is
 // 2 ^ (trailing zero bits of N). If you try to hash more input than this in a subtree, you'll
 // merge parent nodes that should never be merged, and your output will be garbage.
-//                 .
-//              /    \
+//                .
+//            /       \
 //          .           .
 //        /   \       /   \
 //       .     .     .     .
@@ -127,39 +127,6 @@ fn test_max_subtree_len() {
     for (counter, chunks) in cases {
         assert_eq!(max_subtree_len(counter), chunks * CHUNK_LEN as u64);
     }
-}
-
-fn hash_subtree_inner<J: crate::join::Join>(input: &[u8], offset: u64, mode: Mode) -> CVBytes {
-    debug_assert!(input.len() != 0, "empty subtrees are never valid");
-    debug_assert_eq!(
-        offset % CHUNK_LEN as u64,
-        0,
-        "offset ({offset}) must be a chunk boundary (divisible by {CHUNK_LEN})",
-    );
-    let counter = offset / CHUNK_LEN as u64;
-    if counter != 0 {
-        let max = max_subtree_len(counter);
-        debug_assert!(
-            input.len() as u64 <= max,
-            "the subtree starting at {offset} contains at most {max} bytes (found {})",
-            input.len(),
-        );
-    }
-    crate::hash_all_at_once::<J>(input, &mode.key_words(), mode.flags_byte(), counter)
-        .chaining_value()
-}
-
-/// This always returns a non-root chaining value. It's never correct to cast this function's
-/// return value to Hash. If offset is 0, there must be more input to merge.
-pub fn hash_subtree(input: &[u8], offset: u64, mode: Mode) -> CVBytes {
-    hash_subtree_inner::<crate::join::SerialJoin>(input, offset, mode)
-}
-
-/// This always returns a non-root chaining value. It's never correct to cast this function's
-/// return value to Hash. If offset is 0, there must be more input to merge.
-#[cfg(feature = "rayon")]
-pub fn hash_subtree_rayon(input: &[u8], offset: u64, mode: Mode) -> CVBytes {
-    hash_subtree_inner::<crate::join::RayonJoin>(input, offset, mode)
 }
 
 fn merge_subtrees_inner(left_hash: &CVBytes, right_hash: &CVBytes, mode: Mode) -> crate::Output {
@@ -204,26 +171,35 @@ pub fn context_key(context: &str) -> [u8; crate::KEY_LEN] {
     .0
 }
 
-pub fn new_derive_key_from_context_key(context_key: &[u8; 32]) -> crate::Hasher {
-    let context_key_words = crate::platform::words_from_le_bytes_32(context_key);
-    crate::Hasher::new_internal(&context_key_words, crate::DERIVE_KEY_MATERIAL)
+pub trait HasherGutsExt {
+    fn new_from_context_key(context_key: &[u8; KEY_LEN]) -> Self;
+    fn set_input_offset(&mut self, offset: u64) -> &mut Self;
+    fn finalize_non_root(&self) -> [u8; OUT_LEN];
 }
 
-pub fn set_input_offset(hasher: &mut crate::Hasher, offset: u64) {
-    debug_assert_eq!(hasher.count(), 0, "hasher has already accepted input");
-    debug_assert_eq!(
-        offset % CHUNK_LEN as u64,
-        0,
-        "offset ({offset}) must be a chunk boundary (divisible by {CHUNK_LEN})",
-    );
-    let counter = offset / CHUNK_LEN as u64;
-    hasher.chunk_state.chunk_counter = counter;
-    hasher.initial_chunk_counter = counter;
-}
+impl HasherGutsExt for Hasher {
+    fn new_from_context_key(context_key: &[u8; KEY_LEN]) -> Hasher {
+        let context_key_words = crate::platform::words_from_le_bytes_32(context_key);
+        Hasher::new_internal(&context_key_words, crate::DERIVE_KEY_MATERIAL)
+    }
 
-pub fn finalize_non_root(hasher: &crate::Hasher) -> CVBytes {
-    assert_ne!(hasher.count(), 0, "empty subtrees are never valid");
-    hasher.final_output().chaining_value()
+    fn set_input_offset(&mut self, offset: u64) -> &mut Hasher {
+        debug_assert_eq!(self.count(), 0, "hasher has already accepted input");
+        debug_assert_eq!(
+            offset % CHUNK_LEN as u64,
+            0,
+            "offset ({offset}) must be a chunk boundary (divisible by {CHUNK_LEN})",
+        );
+        let counter = offset / CHUNK_LEN as u64;
+        self.chunk_state.chunk_counter = counter;
+        self.initial_chunk_counter = counter;
+        self
+    }
+
+    fn finalize_non_root(&self) -> CVBytes {
+        assert_ne!(self.count(), 0, "empty subtrees are never valid");
+        self.final_output().chaining_value()
+    }
 }
 
 #[cfg(test)]
@@ -242,7 +218,7 @@ mod test {
     #[test]
     #[allow(deprecated)]
     fn test_parents() {
-        let mut hasher = crate::Hasher::new();
+        let mut hasher = Hasher::new();
         let mut buf = [0; crate::CHUNK_LEN];
 
         buf[0] = 'a' as u8;
@@ -264,55 +240,31 @@ mod test {
     #[test]
     #[should_panic]
     #[cfg(debug_assertions)]
-    fn test_atonce_empty_subtree_should_panic() {
-        hash_subtree(b"", 0, Mode::Hash);
+    fn test_empty_subtree_should_panic() {
+        Hasher::new().finalize_non_root();
     }
 
     #[test]
     #[should_panic]
     #[cfg(debug_assertions)]
-    fn test_hasher_empty_subtree_should_panic() {
-        _ = finalize_non_root(&crate::Hasher::new());
-    }
-
-    #[test]
-    #[should_panic]
-    #[cfg(debug_assertions)]
-    fn test_atonce_unaligned_offset_should_panic() {
-        hash_subtree(b"x", 1, Mode::Hash);
-    }
-
-    #[test]
-    #[should_panic]
-    #[cfg(debug_assertions)]
-    fn test_hasher_unaligned_offset_should_panic() {
-        let mut hasher = crate::Hasher::new();
-        set_input_offset(&mut hasher, 1);
+    fn test_unaligned_offset_should_panic() {
+        Hasher::new().set_input_offset(1);
     }
 
     #[test]
     #[should_panic]
     #[cfg(debug_assertions)]
     fn test_hasher_already_accepted_input_should_panic() {
-        let mut hasher = crate::Hasher::new();
-        hasher.update(b"x");
-        set_input_offset(&mut hasher, 0);
+        Hasher::new().update(b"x").set_input_offset(0);
     }
 
     #[test]
     #[should_panic]
     #[cfg(debug_assertions)]
-    fn test_atonce_too_much_input_should_panic() {
-        hash_subtree(&[0; CHUNK_LEN + 1], CHUNK_LEN as u64, Mode::Hash);
-    }
-
-    #[test]
-    #[should_panic]
-    #[cfg(debug_assertions)]
-    fn test_hasher_too_much_input_should_panic() {
-        let mut hasher = crate::Hasher::new();
-        set_input_offset(&mut hasher, CHUNK_LEN as u64);
-        hasher.update(&[0; CHUNK_LEN + 1]);
+    fn test_too_much_input_should_panic() {
+        Hasher::new()
+            .set_input_offset(CHUNK_LEN as u64)
+            .update(&[0; CHUNK_LEN + 1]);
     }
 
     #[test]
@@ -339,19 +291,10 @@ mod test {
                 while subtree_offset < input.len() {
                     let take = core::cmp::min(subtree_len, input.len() - subtree_offset);
                     let subtree_input = &input[subtree_offset..][..take];
-                    let subtree_cv = hash_subtree(subtree_input, subtree_offset as u64, Mode::Hash);
-                    // Double check the subtree hash against the Rayon implementation.
-                    #[cfg(feature = "rayon")]
-                    {
-                        let rayon_subtree_cv =
-                            hash_subtree_rayon(subtree_input, subtree_offset as u64, Mode::Hash);
-                        assert_eq!(subtree_cv, rayon_subtree_cv);
-                    }
-                    // Triple check the subtree hash against the Hasher implementation.
-                    let mut hasher = crate::Hasher::new();
-                    set_input_offset(&mut hasher, subtree_offset as u64);
-                    hasher.update(subtree_input);
-                    assert_eq!(subtree_cv, finalize_non_root(&hasher));
+                    let subtree_cv = Hasher::new()
+                        .set_input_offset(subtree_offset as u64)
+                        .update(subtree_input)
+                        .finalize_non_root();
                     chaining_values.push(subtree_cv);
                     subtree_offset += take;
                 }
@@ -392,14 +335,17 @@ mod test {
         let key = &[44; 32];
 
         let mut expected_output = [0; 100];
-        crate::Hasher::new_keyed(&key)
+        Hasher::new_keyed(&key)
             .update(&input)
             .finalize_xof()
             .fill(&mut expected_output);
 
         let mut guts_output = [0; 100];
-        let left = hash_subtree(group0, 0, Mode::KeyedHash(&key));
-        let right = hash_subtree(group1, group0.len() as u64, Mode::KeyedHash(&key));
+        let left = Hasher::new_keyed(key).update(group0).finalize_non_root();
+        let right = Hasher::new_keyed(key)
+            .set_input_offset(group0.len() as u64)
+            .update(group1)
+            .finalize_non_root();
         merge_subtrees_xof(&left, &right, Mode::KeyedHash(&key)).fill(&mut guts_output);
         assert_eq!(expected_output, guts_output);
     }
@@ -412,13 +358,14 @@ mod test {
         let expected = crate::derive_key(context, &input);
 
         let cx_key = context_key(context);
-        let left = hash_subtree(&input[..1024], 0, Mode::DeriveKeyMaterial(&cx_key));
-        let right = hash_subtree(&input[1024..], 1024, Mode::DeriveKeyMaterial(&cx_key));
+        let left = Hasher::new_from_context_key(&cx_key)
+            .update(&input[..1024])
+            .finalize_non_root();
+        let right = Hasher::new_from_context_key(&cx_key)
+            .set_input_offset(1024)
+            .update(&input[1024..])
+            .finalize_non_root();
         let derived_key = merge_subtrees_root(&left, &right, Mode::DeriveKeyMaterial(&cx_key)).0;
         assert_eq!(expected, derived_key);
-
-        // Double check that we can initialize a Hasher from the context key.
-        let mut hasher = new_derive_key_from_context_key(&cx_key);
-        assert_eq!(hasher.update(&input).finalize(), expected);
     }
 }
