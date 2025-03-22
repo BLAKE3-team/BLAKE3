@@ -91,8 +91,8 @@
 //! However, hashing multiple chunks together **must** respect the overall tree structure. Hashing
 //! `chunk0` and `chunk1` together is valid, but hashing `chunk1` and `chunk2` together is
 //! incorrect and gives a garbage result that will never match a standard BLAKE3 hash. The
-//! implementation currently includes a few best-effort asserts to catch some of these mistakes.
-//! For example, this call to `update` panics in debug mode:
+//! implementation includes a few best-effort asserts to catch some of these mistakes, but these
+//! checks aren't guaranteed. For example, this call to `update` currently panics:
 //!
 //! ```should_panic
 //! # fn main() {
@@ -218,9 +218,8 @@ impl<'a> Mode<'a> {
 //       .     .     .     .
 //      / \   / \   / \   / \
 //     0  1  2  3  4  5  6  7
-#[cfg(debug_assertions)]
 pub(crate) fn max_subtree_len(counter: u64) -> u64 {
-    debug_assert_ne!(counter, 0);
+    assert_ne!(counter, 0);
     (1 << counter.trailing_zeros()) * CHUNK_LEN as u64
 }
 
@@ -312,8 +311,8 @@ impl HasherExt for Hasher {
     }
 
     fn set_input_offset(&mut self, offset: u64) -> &mut Hasher {
-        debug_assert_eq!(self.count(), 0, "hasher has already accepted input");
-        debug_assert_eq!(
+        assert_eq!(self.count(), 0, "hasher has already accepted input");
+        assert_eq!(
             offset % CHUNK_LEN as u64,
             0,
             "offset ({offset}) must be a chunk boundary (divisible by {CHUNK_LEN})",
@@ -367,28 +366,24 @@ mod test {
 
     #[test]
     #[should_panic]
-    #[cfg(debug_assertions)]
     fn test_empty_subtree_should_panic() {
         Hasher::new().finalize_non_root();
     }
 
     #[test]
     #[should_panic]
-    #[cfg(debug_assertions)]
     fn test_unaligned_offset_should_panic() {
         Hasher::new().set_input_offset(1);
     }
 
     #[test]
     #[should_panic]
-    #[cfg(debug_assertions)]
     fn test_hasher_already_accepted_input_should_panic() {
         Hasher::new().update(b"x").set_input_offset(0);
     }
 
     #[test]
     #[should_panic]
-    #[cfg(debug_assertions)]
     fn test_too_much_input_should_panic() {
         Hasher::new()
             .set_input_offset(CHUNK_LEN as u64)

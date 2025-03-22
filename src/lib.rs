@@ -1196,11 +1196,10 @@ impl Hasher {
     }
 
     fn update_with_join<J: join::Join>(&mut self, mut input: &[u8]) -> &mut Self {
-        #[cfg(debug_assertions)]
         if self.initial_chunk_counter != 0 {
             let max = guts::max_subtree_len(self.initial_chunk_counter);
             let remaining = max - self.count();
-            debug_assert!(
+            assert!(
                 input.len() as u64 <= remaining,
                 "the subtree starting at {} contains at most {} bytes (found {})",
                 CHUNK_LEN as u64 * self.initial_chunk_counter,
