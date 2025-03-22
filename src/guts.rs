@@ -6,45 +6,54 @@
 //! We could stabilize something like this module in the future. If you have a
 //! use case for it, please let us know by filing a GitHub issue.
 //!
-//! # Example
+//! <div class="warning">
+//! <strong>Warning:</strong> This whole <code>guts</code> module is <em>hazardous material</em>.
+//! If you've heard folks say <em>don't roll you're own crypto,</em> this is the sort of thing they
+//! were talking about. Playing with these APIs is a great way to learn more about how BLAKE3 works
+//! on the inside, but the rules are complicated, and minor mistakes will give you garbage output
+//! and/or break all the security properties that BLAKE3 is supposed to have. Read <a
+//! href="https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf">the BLAKE3 paper</a>,
+//! particularly sections 2.1 and 5.1, to understand the tree structure that you need to maintain.
+//! Test your code against the regular BLAKE3 API (<a
+//! href="../fn.hash.html"><code>blake3::hash</code></a> etc.), and make sure that you can get the
+//! same root hash both ways for <a
+//! href="https://github.com/BLAKE3-team/BLAKE3/blob/master/test_vectors/test_vectors.json">lots of
+//! different inputs</a>.
+//! </div>
+//!
+//! # Examples
 //!
 //! Expanding this API is work-in-progress. Here's an example of computing all the interior hashes
 //! in a 3-chunk tree:
 //!
 //! ```text
-//!             root
-//!          /       \
-//!      parent       \
-//!    /       \       \
-//! chunk0  chunk1   chunk2
+//!            root
+//!          /      \
+//!      parent      \
+//!    /       \      \
+//! chunk0  chunk1  chunk2
 //! ```
 //!
 //! ```
 //! # fn main() {
 //! use blake3::Hasher;
-//! use blake3::guts::{Mode, HasherExt};
+//! use blake3::guts::{Mode, HasherExt, merge_subtrees_non_root, merge_subtrees_root};
 //!
 //! let chunk0 = [b'a'; 1024];
 //! let chunk1 = [b'b'; 1024];
 //! let chunk2 = [b'c'; 1024];
 //!
-//! let chunk0_hash = Hasher::new()
-//!     .update(&chunk0)
-//!     .finalize_non_root();
-//! let chunk1_hash = Hasher::new()
-//!     .set_input_offset(1024)
-//!     .update(&chunk1)
-//!     .finalize_non_root();
-//! let chunk2_hash = Hasher::new()
-//!     .set_input_offset(2048)
-//!     .update(&chunk2)
-//!     .finalize_non_root();
+//! // Hash all three chunks. Chunks or subtrees that don't begin at the start of the input use
+//! // `set_input_offset` to say where they begin.
+//! let chunk0_hash = Hasher::new().update(&chunk0).finalize_non_root();
+//! let chunk1_hash = Hasher::new().set_input_offset(1024).update(&chunk1).finalize_non_root();
+//! let chunk2_hash = Hasher::new().set_input_offset(2048).update(&chunk2).finalize_non_root();
 //!
 //! // Join the first two chunks with a parent node.
-//! let parent_hash = blake3::guts::merge_subtrees_non_root(&chunk0_hash, &chunk1_hash, Mode::Hash);
+//! let parent_hash = merge_subtrees_non_root(&chunk0_hash, &chunk1_hash, Mode::Hash);
 //!
 //! // Finish the tree by joining that parent node with the third chunk.
-//! let root_hash = blake3::guts::merge_subtrees_root(&parent_hash, &chunk2_hash, Mode::Hash);
+//! let root_hash = merge_subtrees_root(&parent_hash, &chunk2_hash, Mode::Hash);
 //!
 //! // Double check that we got the right answer.
 //! let mut combined_input = [0; 1024 * 3];
@@ -54,6 +63,60 @@
 //! assert_eq!(root_hash, blake3::hash(&combined_input));
 //! # }
 //! ```
+//!
+//! Hashing many chunks together is important for performance, because it allows the implementation
+//! to use SIMD parallelism internally. ([AVX-512](https://en.wikipedia.org/wiki/AVX-512) for
+//! example needs 16 chunks to really get going.) We can reproduce `parent_hash` by hashing
+//! `chunk0` and `chunk1` at the same time:
+//!
+//! ```
+//! # fn main() {
+//! # use blake3::Hasher;
+//! # use blake3::guts::{Mode, HasherExt, merge_subtrees_non_root, merge_subtrees_root};
+//! # let chunk0 = [b'a'; 1024];
+//! # let chunk1 = [b'b'; 1024];
+//! # let chunk2 = [b'c'; 1024];
+//! # let mut combined_input = [0; 1024 * 3];
+//! # combined_input[..1024].copy_from_slice(&chunk0);
+//! # combined_input[1024..2048].copy_from_slice(&chunk1);
+//! # combined_input[2048..].copy_from_slice(&chunk2);
+//! # let chunk0_hash = Hasher::new().update(&chunk0).finalize_non_root();
+//! # let chunk1_hash = Hasher::new().set_input_offset(1024).update(&chunk1).finalize_non_root();
+//! # let parent_hash = merge_subtrees_non_root(&chunk0_hash, &chunk1_hash, Mode::Hash);
+//! let left_subtree_hash = Hasher::new().update(&combined_input[..2048]).finalize_non_root();
+//! assert_eq!(left_subtree_hash, parent_hash);
+//! # }
+//! ```
+//!
+//! However, hashing multiple chunks together **must** respect the overall tree structure. Hashing
+//! `chunk0` and `chunk1` together is valid, but hashing `chunk1` and `chunk2` together is
+//! incorrect and gives a garbage result that will never match a standard BLAKE3 hash. The
+//! implementation currently includes a few best-effort asserts to catch some of these mistakes.
+//! For example, this call to `update` panics in debug mode:
+//!
+//! ```should_panic
+//! # fn main() {
+//! # use blake3::Hasher;
+//! # use blake3::guts::HasherExt;
+//! # let chunk0 = [b'a'; 1024];
+//! # let chunk1 = [b'b'; 1024];
+//! # let chunk2 = [b'c'; 1024];
+//! # let mut combined_input = [0; 1024 * 3];
+//! # combined_input[..1024].copy_from_slice(&chunk0);
+//! # combined_input[1024..2048].copy_from_slice(&chunk1);
+//! # combined_input[2048..].copy_from_slice(&chunk2);
+//! let oops = Hasher::new()
+//!     .set_input_offset(1024)
+//!     // PANIC: "the subtree starting at 1024 contains at most 1024 bytes"
+//!     .update(&combined_input[1024..])
+//!     .finalize_non_root();
+//! # }
+//! ```
+//!
+//! Note that the merging functions ([`merge_subtrees_non_root`] and friends) don't know the shape
+//! of the left and right subtrees you're giving them, and they can't help you catch mistakes. The
+//! only way to catch mistakes with those is to compare your root output to the
+//! [`blake3::hash`](crate::hash) or similar of the same input.
 
 use crate::platform::Platform;
 use crate::{CVWords, Hash, Hasher, IV, KEY_LEN, OUT_LEN};
