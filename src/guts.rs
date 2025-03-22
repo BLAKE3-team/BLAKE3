@@ -7,7 +7,7 @@
 //! use case for it, please let us know by filing a GitHub issue.
 
 use crate::platform::Platform;
-use crate::{CVBytes, CVWords, Hash, Hasher, IV, KEY_LEN, OUT_LEN};
+use crate::{CVWords, Hash, Hasher, IV, KEY_LEN, OUT_LEN};
 
 pub const BLOCK_LEN: usize = 64;
 pub const CHUNK_LEN: usize = 1024;
@@ -111,6 +111,17 @@ pub(crate) fn max_subtree_len(counter: u64) -> u64 {
     (1 << counter.trailing_zeros()) * CHUNK_LEN as u64
 }
 
+/// The academic term for a "non-root hash" is a "chaining value".
+#[derive(Copy, Clone, Debug, Eq)]
+pub struct NonRootHash(pub [u8; OUT_LEN]);
+
+impl PartialEq for NonRootHash {
+    #[inline]
+    fn eq(&self, other: &NonRootHash) -> bool {
+        constant_time_eq::constant_time_eq_32(&self.0, &other.0)
+    }
+}
+
 #[test]
 fn test_max_subtree_len() {
     // (chunk index, max chunks)
@@ -129,10 +140,14 @@ fn test_max_subtree_len() {
     }
 }
 
-fn merge_subtrees_inner(left_hash: &CVBytes, right_hash: &CVBytes, mode: Mode) -> crate::Output {
+fn merge_subtrees_inner(
+    left_child: &NonRootHash,
+    right_child: &NonRootHash,
+    mode: Mode,
+) -> crate::Output {
     crate::parent_node_output(
-        left_hash,
-        right_hash,
+        &left_child.0,
+        &right_child.0,
         &mode.key_words(),
         mode.flags_byte(),
         Platform::detect(),
@@ -141,23 +156,31 @@ fn merge_subtrees_inner(left_hash: &CVBytes, right_hash: &CVBytes, mode: Mode) -
 
 /// Compute a non-root chaining value. It's never correct to cast this function's return value to
 /// Hash.
-pub fn merge_subtrees_non_root(left_hash: &CVBytes, right_hash: &CVBytes, mode: Mode) -> CVBytes {
-    merge_subtrees_inner(left_hash, right_hash, mode).chaining_value()
+pub fn merge_subtrees_non_root(
+    left_child: &NonRootHash,
+    right_child: &NonRootHash,
+    mode: Mode,
+) -> NonRootHash {
+    NonRootHash(merge_subtrees_inner(left_child, right_child, mode).chaining_value())
 }
 
 /// Compute the root hash, similar to [`Hasher::finalize`](crate::Hasher::finalize).
-pub fn merge_subtrees_root(left_hash: &CVBytes, right_hash: &CVBytes, mode: Mode) -> crate::Hash {
-    merge_subtrees_inner(left_hash, right_hash, mode).root_hash()
+pub fn merge_subtrees_root(
+    left_child: &NonRootHash,
+    right_child: &NonRootHash,
+    mode: Mode,
+) -> crate::Hash {
+    merge_subtrees_inner(left_child, right_child, mode).root_hash()
 }
 
 /// Return a root [`OutputReader`](crate::OutputReader), similar to
 /// [`Hasher::finalize_xof`](crate::Hasher::finalize_xof).
 pub fn merge_subtrees_xof(
-    left_hash: &CVBytes,
-    right_hash: &CVBytes,
+    left_child: &NonRootHash,
+    right_child: &NonRootHash,
     mode: Mode,
 ) -> crate::OutputReader {
-    crate::OutputReader::new(merge_subtrees_inner(left_hash, right_hash, mode))
+    crate::OutputReader::new(merge_subtrees_inner(left_child, right_child, mode))
 }
 
 pub fn context_key(context: &str) -> [u8; crate::KEY_LEN] {
@@ -174,7 +197,7 @@ pub fn context_key(context: &str) -> [u8; crate::KEY_LEN] {
 pub trait HasherGutsExt {
     fn new_from_context_key(context_key: &[u8; KEY_LEN]) -> Self;
     fn set_input_offset(&mut self, offset: u64) -> &mut Self;
-    fn finalize_non_root(&self) -> [u8; OUT_LEN];
+    fn finalize_non_root(&self) -> NonRootHash;
 }
 
 impl HasherGutsExt for Hasher {
@@ -196,9 +219,9 @@ impl HasherGutsExt for Hasher {
         self
     }
 
-    fn finalize_non_root(&self) -> CVBytes {
+    fn finalize_non_root(&self) -> NonRootHash {
         assert_ne!(self.count(), 0, "empty subtrees are never valid");
-        self.final_output().chaining_value()
+        NonRootHash(self.final_output().chaining_value())
     }
 }
 
@@ -286,7 +309,7 @@ mod test {
                 let expected_hash = crate::hash(input);
 
                 // Collect all the group chaining values.
-                let mut chaining_values = arrayvec::ArrayVec::<CVBytes, MAX_CHUNKS>::new();
+                let mut chaining_values = arrayvec::ArrayVec::<NonRootHash, MAX_CHUNKS>::new();
                 let mut subtree_offset = 0;
                 while subtree_offset < input.len() {
                     let take = core::cmp::min(subtree_len, input.len() - subtree_offset);
@@ -302,20 +325,21 @@ mod test {
                 // Compress all the chaining_values together, layer by layer.
                 assert!(chaining_values.len() >= 2);
                 while chaining_values.len() > 2 {
-                    let mut pairs = chaining_values.chunks_exact(2);
-                    let mut new_chaining_values = arrayvec::ArrayVec::new();
-                    while let Some([left, right]) = pairs.next() {
-                        new_chaining_values.push(merge_subtrees_non_root(left, right, Mode::Hash));
+                    let n = chaining_values.len();
+                    // Merge each side-by-side pair in place, overwriting the front half of the
+                    // array with the merged results. This moves us "up one level" in the tree.
+                    for i in 0..(n / 2) {
+                        chaining_values[i] = merge_subtrees_non_root(
+                            &chaining_values[2 * i],
+                            &chaining_values[2 * i + 1],
+                            Mode::Hash,
+                        );
                     }
-                    // If there's an odd CV out, it moves up to the next layer.
-                    if let &[odd_cv] = pairs.remainder() {
-                        new_chaining_values.push(odd_cv);
+                    // If there's an odd CV out, it moves up.
+                    if n % 2 == 1 {
+                        chaining_values[n / 2] = chaining_values[n - 1];
                     }
-                    assert_eq!(
-                        new_chaining_values.len(),
-                        chaining_values.len() / 2 + chaining_values.len() % 2,
-                    );
-                    chaining_values = new_chaining_values;
+                    chaining_values.truncate(n / 2 + n % 2);
                 }
                 assert_eq!(chaining_values.len(), 2);
                 let root_hash =

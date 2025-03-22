@@ -227,7 +227,7 @@ fn counter_high(counter: u64) -> u32 {
 /// [`Display`]: https://doc.rust-lang.org/std/fmt/trait.Display.html
 /// [`FromStr`]: https://doc.rust-lang.org/std/str/trait.FromStr.html
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Clone, Copy, Hash)]
+#[derive(Clone, Copy, Hash, Eq)]
 pub struct Hash([u8; OUT_LEN]);
 
 impl Hash {
@@ -353,8 +353,6 @@ impl PartialEq<[u8]> for Hash {
         constant_time_eq::constant_time_eq(&self.0, other)
     }
 }
-
-impl Eq for Hash {}
 
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
