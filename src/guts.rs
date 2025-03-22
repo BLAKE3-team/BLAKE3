@@ -357,4 +357,26 @@ mod test {
             }
         }
     }
+
+    #[test]
+    fn test_keyed_hash_xof() {
+        let group0 = &[42; 4096];
+        let group1 = &[43; 4095];
+        let mut input = [0; 8191];
+        input[..4096].copy_from_slice(group0);
+        input[4096..].copy_from_slice(group1);
+        let key = &[44; 32];
+
+        let mut expected_output = [0; 100];
+        crate::Hasher::new_keyed(&key)
+            .update(&input)
+            .finalize_xof()
+            .fill(&mut expected_output);
+
+        let mut guts_output = [0; 100];
+        let left = hash_subtree(group0, 0, Mode::KeyedHash(&key));
+        let right = hash_subtree(group1, group0.len() as u64, Mode::KeyedHash(&key));
+        merge_subtrees_xof(&left, &right, Mode::KeyedHash(&key)).fill(&mut guts_output);
+        assert_eq!(expected_output, guts_output);
+    }
 }
