@@ -72,16 +72,16 @@ pub fn parent_cv(left_child: &Hash, right_child: &Hash, is_root: bool) -> Hash {
 pub enum Mode<'a> {
     Hash,
     KeyedHash(&'a [u8; KEY_LEN]),
-    DeriveKeyContext,
-    DeriveKeyMaterial,
+    DeriveKeyMaterial(&'a [u8; KEY_LEN]),
 }
 
 impl<'a> Mode<'a> {
     #[inline(always)]
     fn key_words(&self) -> CVWords {
         match self {
+            Mode::Hash => *IV,
             Mode::KeyedHash(key) => crate::platform::words_from_le_bytes_32(key),
-            _ => *IV,
+            Mode::DeriveKeyMaterial(cx_key) => crate::platform::words_from_le_bytes_32(cx_key),
         }
     }
 
@@ -89,8 +89,7 @@ impl<'a> Mode<'a> {
         match self {
             Mode::Hash => 0,
             Mode::KeyedHash(_) => crate::KEYED_HASH,
-            Mode::DeriveKeyContext => crate::DERIVE_KEY_CONTEXT,
-            Mode::DeriveKeyMaterial => crate::DERIVE_KEY_MATERIAL,
+            Mode::DeriveKeyMaterial(_) => crate::DERIVE_KEY_MATERIAL,
         }
     }
 }
@@ -192,6 +191,22 @@ pub fn merge_subtrees_xof(
     mode: Mode,
 ) -> crate::OutputReader {
     crate::OutputReader::new(merge_subtrees_inner(left_hash, right_hash, mode))
+}
+
+pub fn context_key(context: &str) -> [u8; crate::KEY_LEN] {
+    crate::hash_all_at_once::<crate::join::SerialJoin>(
+        context.as_bytes(),
+        IV,
+        crate::DERIVE_KEY_CONTEXT,
+        0,
+    )
+    .root_hash()
+    .0
+}
+
+pub fn new_derive_key_from_context_key(context_key: &[u8; 32]) -> crate::Hasher {
+    let context_key_words = crate::platform::words_from_le_bytes_32(context_key);
+    crate::Hasher::new_internal(&context_key_words, crate::DERIVE_KEY_MATERIAL)
 }
 
 pub fn set_input_offset(hasher: &mut crate::Hasher, offset: u64) {
@@ -378,5 +393,23 @@ mod test {
         let right = hash_subtree(group1, group0.len() as u64, Mode::KeyedHash(&key));
         merge_subtrees_xof(&left, &right, Mode::KeyedHash(&key)).fill(&mut guts_output);
         assert_eq!(expected_output, guts_output);
+    }
+
+    #[test]
+    fn test_derive_key() {
+        let context = "foo";
+        let mut input = [0; 1025];
+        crate::test::paint_test_input(&mut input);
+        let expected = crate::derive_key(context, &input);
+
+        let cx_key = context_key(context);
+        let left = hash_subtree(&input[..1024], 0, Mode::DeriveKeyMaterial(&cx_key));
+        let right = hash_subtree(&input[1024..], 1024, Mode::DeriveKeyMaterial(&cx_key));
+        let derived_key = merge_subtrees_root(&left, &right, Mode::DeriveKeyMaterial(&cx_key)).0;
+        assert_eq!(expected, derived_key);
+
+        // Double check that we can initialize a Hasher from the context key.
+        let mut hasher = new_derive_key_from_context_key(&cx_key);
+        assert_eq!(hasher.update(&input).finalize(), expected);
     }
 }

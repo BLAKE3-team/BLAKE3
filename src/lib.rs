@@ -996,11 +996,9 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 ///
 /// [Argon2]: https://en.wikipedia.org/wiki/Argon2
 pub fn derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
-    let context_key =
-        hash_all_at_once::<join::SerialJoin>(context.as_bytes(), IV, DERIVE_KEY_CONTEXT, 0)
-            .root_hash();
-    let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
-    hash_all_at_once::<join::SerialJoin>(key_material, &context_key_words, DERIVE_KEY_MATERIAL, 0)
+    let key = guts::context_key(context);
+    let key_words = platform::words_from_le_bytes_32(&key);
+    hash_all_at_once::<join::SerialJoin>(key_material, &key_words, DERIVE_KEY_MATERIAL, 0)
         .root_hash()
         .0
 }
@@ -1102,11 +1100,9 @@ impl Hasher {
     ///
     /// [`derive_key`]: fn.derive_key.html
     pub fn new_derive_key(context: &str) -> Self {
-        let context_key =
-            hash_all_at_once::<join::SerialJoin>(context.as_bytes(), IV, DERIVE_KEY_CONTEXT, 0)
-                .root_hash();
-        let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
-        Self::new_internal(&context_key_words, DERIVE_KEY_MATERIAL)
+        let key = guts::context_key(context);
+        let key_words = platform::words_from_le_bytes_32(&key);
+        Self::new_internal(&key_words, DERIVE_KEY_MATERIAL)
     }
 
     /// Reset the `Hasher` to its initial state.
