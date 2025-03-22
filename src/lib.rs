@@ -871,12 +871,12 @@ fn compress_subtree_to_parent_node<J: join::Join>(
 
 // Hash a complete input all at once. Unlike compress_subtree_wide() and
 // compress_subtree_to_parent_node(), this function handles the 1 chunk case.
-fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8) -> Output {
+fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8, counter: u64) -> Output {
     let platform = Platform::detect();
 
     // If the whole subtree is one chunk, hash it directly with a ChunkState.
     if input.len() <= CHUNK_LEN {
-        return ChunkState::new(key, 0, flags, platform)
+        return ChunkState::new(key, counter, flags, platform)
             .update(input)
             .output();
     }
@@ -887,7 +887,7 @@ fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8) -> Ou
         input_chaining_value: *key,
         block: compress_subtree_to_parent_node::<J>(input, key, 0, flags, platform),
         block_len: BLOCK_LEN as u8,
-        counter: 0,
+        counter,
         flags: flags | PARENT,
         platform,
     }
@@ -913,7 +913,7 @@ fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8) -> Ou
 /// This function is always single-threaded. For multithreading support, see
 /// [`Hasher::update_rayon`](struct.Hasher.html#method.update_rayon).
 pub fn hash(input: &[u8]) -> Hash {
-    hash_all_at_once::<join::SerialJoin>(input, IV, 0).root_hash()
+    hash_all_at_once::<join::SerialJoin>(input, IV, 0, 0).root_hash()
 }
 
 /// The keyed hash function.
@@ -943,7 +943,7 @@ pub fn hash(input: &[u8]) -> Hash {
 /// [`Hasher::update_rayon`](struct.Hasher.html#method.update_rayon).
 pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
     let key_words = platform::words_from_le_bytes_32(key);
-    hash_all_at_once::<join::SerialJoin>(input, &key_words, KEYED_HASH).root_hash()
+    hash_all_at_once::<join::SerialJoin>(input, &key_words, KEYED_HASH, 0).root_hash()
 }
 
 /// The key derivation function.
@@ -997,10 +997,10 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 /// [Argon2]: https://en.wikipedia.org/wiki/Argon2
 pub fn derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
     let context_key =
-        hash_all_at_once::<join::SerialJoin>(context.as_bytes(), IV, DERIVE_KEY_CONTEXT)
+        hash_all_at_once::<join::SerialJoin>(context.as_bytes(), IV, DERIVE_KEY_CONTEXT, 0)
             .root_hash();
     let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
-    hash_all_at_once::<join::SerialJoin>(key_material, &context_key_words, DERIVE_KEY_MATERIAL)
+    hash_all_at_once::<join::SerialJoin>(key_material, &context_key_words, DERIVE_KEY_MATERIAL, 0)
         .root_hash()
         .0
 }
@@ -1101,7 +1101,7 @@ impl Hasher {
     /// [`derive_key`]: fn.derive_key.html
     pub fn new_derive_key(context: &str) -> Self {
         let context_key =
-            hash_all_at_once::<join::SerialJoin>(context.as_bytes(), IV, DERIVE_KEY_CONTEXT)
+            hash_all_at_once::<join::SerialJoin>(context.as_bytes(), IV, DERIVE_KEY_CONTEXT, 0)
                 .root_hash();
         let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
         Self::new_internal(&context_key_words, DERIVE_KEY_MATERIAL)
