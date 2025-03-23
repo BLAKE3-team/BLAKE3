@@ -97,7 +97,10 @@ mod test;
 // and likely to keep working, but largely undocumented and not intended for
 // widespread use.
 #[doc(hidden)]
+#[deprecated(since = "1.8.0", note = "use the hazmat module instead")]
 pub mod guts;
+
+pub mod hazmat;
 
 /// Undocumented and unstable, for benchmarks only.
 #[doc(hidden)]
@@ -156,7 +159,7 @@ pub const OUT_LEN: usize = 32;
 pub const KEY_LEN: usize = 32;
 
 const MAX_DEPTH: usize = 54; // 2^54 * CHUNK_LEN = 2^64
-use guts::{BLOCK_LEN, CHUNK_LEN};
+use hazmat::{BLOCK_LEN, CHUNK_LEN};
 
 // While iterating the compression function within a chunk, the CV is
 // represented as words, to avoid doing two extra endianness conversions for
@@ -994,7 +997,7 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 ///
 /// [Argon2]: https://en.wikipedia.org/wiki/Argon2
 pub fn derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
-    let key = guts::context_key(context);
+    let key = hazmat::context_key(context);
     let key_words = platform::words_from_le_bytes_32(&key);
     hash_all_at_once::<join::SerialJoin>(key_material, &key_words, DERIVE_KEY_MATERIAL, 0)
         .root_hash()
@@ -1098,7 +1101,7 @@ impl Hasher {
     ///
     /// [`derive_key`]: fn.derive_key.html
     pub fn new_derive_key(context: &str) -> Self {
-        let key = guts::context_key(context);
+        let key = hazmat::context_key(context);
         let key_words = platform::words_from_le_bytes_32(&key);
         Self::new_internal(&key_words, DERIVE_KEY_MATERIAL)
     }
@@ -1197,7 +1200,7 @@ impl Hasher {
 
     fn update_with_join<J: join::Join>(&mut self, mut input: &[u8]) -> &mut Self {
         if self.initial_chunk_counter != 0 {
-            let max = guts::max_subtree_len(self.initial_chunk_counter);
+            let max = hazmat::max_subtree_len(self.initial_chunk_counter);
             let remaining = max - self.count();
             assert!(
                 input.len() as u64 <= remaining,
