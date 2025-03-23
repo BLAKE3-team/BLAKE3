@@ -114,7 +114,7 @@
 //! [`blake3::hash`](crate::hash) or similar of the same input.
 
 use crate::platform::Platform;
-use crate::{CVWords, Hash, Hasher, IV, KEY_LEN, OUT_LEN};
+use crate::{CVWords, Hasher, IV, KEY_LEN, OUT_LEN};
 
 pub const BLOCK_LEN: usize = 64;
 pub const CHUNK_LEN: usize = 1024;
@@ -123,7 +123,7 @@ pub const CHUNK_LEN: usize = 1024;
 pub enum Mode<'a> {
     Hash,
     KeyedHash(&'a [u8; KEY_LEN]),
-    DeriveKeyMaterial(&'a [u8; KEY_LEN]),
+    DeriveKeyMaterial(&'a ContextKey),
 }
 
 impl<'a> Mode<'a> {
@@ -226,7 +226,28 @@ pub fn merge_subtrees_xof(
     crate::OutputReader::new(merge_subtrees_inner(left_child, right_child, mode))
 }
 
-pub fn context_key(context: &str) -> [u8; crate::KEY_LEN] {
+/// An alias to distinguish [`hash_derive_key_context`] outputs from other keys.
+pub type ContextKey = [u8; KEY_LEN];
+
+/// Hash a [`derive_key`](crate::derive_key) context string and return a [`ContextKey`].
+///
+/// The _only_ valid uses for the returned [`ContextKey`] are [`Hasher::new_from_context_key`] and
+/// [`Mode::DeriveKeyMaterial`] (together with the merge subtree functions).
+///
+/// # Example
+///
+/// ```
+/// use blake3::Hasher;
+/// use blake3::hazmat::HasherExt;
+///
+/// let context_key = blake3::hazmat::hash_derive_key_context("foo");
+/// let mut hasher = Hasher::new_from_context_key(&context_key);
+/// hasher.update(b"bar");
+/// let derived_key = *hasher.finalize().as_bytes();
+///
+/// assert_eq!(derived_key, blake3::derive_key("foo", b"bar"));
+/// ```
+pub fn hash_derive_key_context(context: &str) -> ContextKey {
     crate::hash_all_at_once::<crate::join::SerialJoin>(
         context.as_bytes(),
         IV,
@@ -238,8 +259,28 @@ pub fn context_key(context: &str) -> [u8; crate::KEY_LEN] {
 }
 
 pub trait HasherExt {
-    fn new_from_context_key(context_key: &[u8; KEY_LEN]) -> Self;
+    /// Similar to [`Hasher::new_derive_key`] but using a pre-hashed [`ContextKey`] from
+    /// [`hash_derive_key_context`].
+    ///
+    /// The [`hash_derive_key_context`] function is _only_ valid source of the [`ContextKey`]
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use blake3::Hasher;
+    /// use blake3::hazmat::HasherExt;
+    ///
+    /// let context_key = blake3::hazmat::hash_derive_key_context("foo");
+    /// let mut hasher = Hasher::new_from_context_key(&context_key);
+    /// hasher.update(b"bar");
+    /// let derived_key = *hasher.finalize().as_bytes();
+    ///
+    /// assert_eq!(derived_key, blake3::derive_key("foo", b"bar"));
+    /// ```
+    fn new_from_context_key(context_key: &ContextKey) -> Self;
+
     fn set_input_offset(&mut self, offset: u64) -> &mut Self;
+
     fn finalize_non_root(&self) -> ChainingValue;
 }
 
@@ -389,7 +430,7 @@ mod test {
         crate::test::paint_test_input(&mut input);
         let expected = crate::derive_key(context, &input);
 
-        let cx_key = context_key(context);
+        let cx_key = hash_derive_key_context(context);
         let left = Hasher::new_from_context_key(&cx_key)
             .update(&input[..1024])
             .finalize_non_root();
