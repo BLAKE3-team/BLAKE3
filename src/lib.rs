@@ -144,8 +144,10 @@ mod join;
 use arrayref::{array_mut_ref, array_ref};
 use arrayvec::{ArrayString, ArrayVec};
 use core::cmp;
+use core::cmp::Ordering;
 use core::fmt;
 use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
+use subtle::{ConditionallySelectable, ConstantTimeEq, ConstantTimeGreater, ConstantTimeLess};
 #[cfg(feature = "zeroize")]
 use zeroize::Zeroize;
 
@@ -355,6 +357,27 @@ impl PartialEq<[u8]> for Hash {
 }
 
 impl Eq for Hash {}
+
+impl PartialOrd for Hash {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Hash {
+    /// This ordering is [lexigraphical](https://doc.rust-lang.org/std/cmp/trait.Ord.html#lexicographical-comparison), and is done in constant time.
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        let mut order = Ordering::Equal;
+
+        // Iterate over all corresponding bytes, but only set a non-equal ordering on the first mismatch
+        for (l, r) in self.0.iter().zip(other.0.iter()) {
+            order.conditional_assign(&Ordering::Less, l.ct_lt(r) & order.ct_eq(&Ordering::Equal));
+            order.conditional_assign(&Ordering::Greater, l.ct_gt(r) & order.ct_eq(&Ordering::Equal));
+        }
+
+        order
+    }
+}
 
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
