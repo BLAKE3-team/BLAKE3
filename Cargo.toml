@@ -29,7 +29,7 @@ wasm32_simd = []
 # --no-default-features, the only way to use the SIMD implementations in this
 # crate is to enable the corresponding instruction sets statically for the
 # entire build, with e.g. RUSTFLAGS="-C target-cpu=native".
-std = []
+std = ["subtle?/std"]
 
 # The `rayon` feature (disabled by default, but enabled for docs.rs) adds the
 # `update_rayon` and (in combination with `mmap` below) `update_mmap_rayon`
@@ -47,6 +47,9 @@ mmap = ["std", "dep:memmap2"]
 
 # Implement the zeroize::Zeroize trait for types in this crate.
 zeroize = ["dep:zeroize", "arrayvec/zeroize"]
+
+# Enable the `ConstantTimeEq` trait for `Hash` using `subtle` functionality.
+subtle = ["dep:subtle"]
 
 # This crate implements traits from the RustCrypto project, exposed here as the
 # "traits-preview" feature. However, these traits aren't stable, and they're
@@ -118,6 +121,7 @@ digest = { version = "0.10.1", features = [ "mac" ], optional = true }
 memmap2 = { version = "0.9", optional = true }
 rayon-core = { version = "1.12.1", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
+subtle = { version = "2.6", default-features = false, optional = true }
 zeroize = { version = "1", default-features = false, optional = true }
 
 [dev-dependencies]
