@@ -5,11 +5,11 @@
 //! **Warning:** This whole module is *hazardous material*. If you've heard folks say *don't roll
 //! your own crypto,* this is the sort of thing they were talking about. The rules for using these
 //! functions correctly are complicated, and tiny mistakes can give you garbage output and/or break
-//! the security properties that BLAKE3 is supposed to have. Read [the BLAKE3
-//! paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf), particularly
-//! sections 2.1 and 5.1, to understand the tree structure that you need to maintain. Test your
-//! code against [`blake3::hash`](../fn.hash.html) and friends and make sure you can get the same
-//! output for [lots of different
+//! the security properties that BLAKE3 is supposed to have. Read section 2.1 of [the BLAKE3
+//! paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf) to understand the
+//! tree structure that you need to maintain. Test your code against
+//! [`blake3::hash`](../fn.hash.html) and friends and make sure you can get the same output for
+//! [lots of different
 //! inputs](https://github.com/BLAKE3-team/BLAKE3/blob/master/test_vectors/test_vectors.json).
 //!
 //! **Encouragement:** Playing with these functions is a great way to learn how BLAKE3 works on the
@@ -20,7 +20,9 @@
 //! The main entrypoint for this module is the [`HasherExt`] trait, particularly the
 //! [`set_input_offset`](HasherExt::set_input_offset) and
 //! [`finalize_non_root`](HasherExt::finalize_non_root) methods. These let you compute the non-root
-//! hashes ("chaining values") of individual chunks
+//! hashes ("chaining values") of individual chunks or larger subtrees. You then combine these
+//! chaining values into larger subtrees using [`merge_subtrees_non_root`] and finally (once at the
+//! very top) [`merge_subtrees_root`] or [`merge_subtrees_root_xof`].
 //!
 //! # Examples
 //!
@@ -150,6 +152,12 @@ pub trait HasherExt {
     /// This isn't required for the first chunk, or for a subtree that includes the first chunk
     /// (i.e. when the `offset` is zero), but it's required for all other chunks and subtrees.
     ///
+    /// The starting input offset of a subtree implies a maximum possible length for that subtree.
+    /// See [`max_subtree_len`] and section 2.1 of [the BLAKE3
+    /// paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf). Note that only
+    /// subtrees along the right edge of the whole tree can have a length less than their maximum
+    /// possible length.
+    ///
     /// # Panics
     ///
     /// This should always be paired with [`finalize_non_root`](HasherExt::finalize_non_root). It's
@@ -163,7 +171,7 @@ pub trait HasherExt {
     ///
     /// Afterwards you can merge subtree chaining values into parent nodes using
     /// [`merge_subtrees_non_root`] and ultimately into the root node with either
-    /// [`merge_subtrees_root`] (similar to [`Hasher::finalize`]) or [`merge_subtrees_xof`]
+    /// [`merge_subtrees_root`] (similar to [`Hasher::finalize`]) or [`merge_subtrees_root_xof`]
     /// (similar to [`Hasher::finalize_xof`]).
     fn finalize_non_root(&self) -> ChainingValue;
 }
@@ -340,7 +348,38 @@ pub fn merge_subtrees_root(
 
 /// Return a root [`OutputReader`](crate::OutputReader), similar to
 /// [`Hasher::finalize_xof`](crate::Hasher::finalize_xof).
-pub fn merge_subtrees_xof(
+///
+/// # Example
+///
+/// ```
+/// use blake3::hazmat::{merge_subtrees_root_xof, HasherExt, Mode};
+/// use blake3::{Hasher, CHUNK_LEN};
+///
+/// // Hash a 2-chunk subtree in steps. Note that only
+/// // the final chunk can be shorter than CHUNK_LEN.
+/// let chunk0 = &[42; CHUNK_LEN];
+/// let chunk1 = b"hello world";
+/// let chunk0_hash = Hasher::new()
+///     .update(chunk0)
+///     .finalize_non_root();
+/// let chunk1_hash = Hasher::new()
+///     .set_input_offset(CHUNK_LEN as u64)
+///     .update(chunk1)
+///     .finalize_non_root();
+/// // Obtain a blake3::OutputReader at the root and extract 1000 bytes.
+/// let mut output_reader = merge_subtrees_root_xof(&chunk0_hash, &chunk1_hash, Mode::Hash);
+/// let mut output_bytes = [0; 1_000];
+/// output_reader.fill(&mut output_bytes);
+///
+/// // Double check the answer.
+/// let mut hasher = Hasher::new();
+/// hasher.update(chunk0);
+/// hasher.update(chunk1);
+/// let mut expected = [0; 1_000];
+/// hasher.finalize_xof().fill(&mut expected);
+/// assert_eq!(output_bytes, expected);
+/// ```
+pub fn merge_subtrees_root_xof(
     left_child: &ChainingValue,
     right_child: &ChainingValue,
     mode: Mode,
@@ -504,7 +543,7 @@ mod test {
             .set_input_offset(group0.len() as u64)
             .update(group1)
             .finalize_non_root();
-        merge_subtrees_xof(&left, &right, Mode::KeyedHash(&key)).fill(&mut hazmat_output);
+        merge_subtrees_root_xof(&left, &right, Mode::KeyedHash(&key)).fill(&mut hazmat_output);
         assert_eq!(expected_output, hazmat_output);
     }
 
