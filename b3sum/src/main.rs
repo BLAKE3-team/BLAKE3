@@ -196,7 +196,7 @@ fn write_hex_output(mut output: blake3::OutputReader, args: &Args) -> anyhow::Re
     // TODO: This computes each output block twice when the --seek argument isn't a multiple of 64.
     // We'll refactor all of this soon anyway, once SIMD optimizations are available for the XOF.
     let mut len = args.len();
-    let mut block = [0; blake3::guts::BLOCK_LEN];
+    let mut block = [0; blake3::BLOCK_LEN];
     while len > 0 {
         output.fill(&mut block);
         let hex_str = hex::encode(&block[..]);

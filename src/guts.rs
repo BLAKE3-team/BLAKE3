@@ -1,7 +1,6 @@
 //! Deprecated in favor of [`hazmat`](crate::hazmat)
 
-pub const BLOCK_LEN: usize = 64;
-pub const CHUNK_LEN: usize = 1024;
+pub use crate::{BLOCK_LEN, CHUNK_LEN};
 
 #[derive(Clone, Debug)]
 pub struct ChunkState(crate::ChunkState);

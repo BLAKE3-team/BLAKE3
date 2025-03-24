@@ -92,10 +92,6 @@
 #[cfg(test)]
 mod test;
 
-// The guts module is for incremental use cases like the `bao` crate that need
-// to explicitly compute chunk and parent chaining values. It is semi-stable
-// and likely to keep working, but largely undocumented and not intended for
-// widespread use.
 #[doc(hidden)]
 #[deprecated(since = "1.8.0", note = "use the hazmat module instead")]
 pub mod guts;
@@ -158,8 +154,20 @@ pub const OUT_LEN: usize = 32;
 /// The number of bytes in a key, 32.
 pub const KEY_LEN: usize = 32;
 
+/// The number of bytes in a block, 64.
+///
+/// You don't usually need to think about this number. One case where it matters is calling
+/// [`OutputReader::fill`] in a loop, where using a `buf` argument that's a multiple of `BLOCK_LEN`
+/// avoids repeating work.
+pub const BLOCK_LEN: usize = 64;
+
+/// The number of bytes in a chunk, 1024.
+///
+/// You don't usually need to think about this number, but it often comes up in benchmarks, because
+/// the maximum degree of parallelism used by the implementation equals the number of chunks.
+pub const CHUNK_LEN: usize = 1024;
+
 const MAX_DEPTH: usize = 54; // 2^54 * CHUNK_LEN = 2^64
-use hazmat::{BLOCK_LEN, CHUNK_LEN};
 
 // While iterating the compression function within a chunk, the CV is
 // represented as words, to avoid doing two extra endianness conversions for
@@ -1698,7 +1706,7 @@ impl OutputReader {
     /// calling `fill` repeatedly with a short-length or odd-length slice will
     /// end up performing the same compression multiple times. If you're
     /// reading output in a loop, prefer a slice length that's a multiple of
-    /// 64.
+    /// [`BLOCK_LEN`] (64 bytes).
     ///
     /// The maximum output size of BLAKE3 is 2<sup>64</sup>-1 bytes. If you try
     /// to extract more than that, for example by seeking near the end and

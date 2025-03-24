@@ -114,10 +114,7 @@
 //! [`blake3::hash`](crate::hash) or similar of the same input.
 
 use crate::platform::Platform;
-use crate::{CVWords, Hasher, IV, KEY_LEN, OUT_LEN};
-
-pub const BLOCK_LEN: usize = 64;
-pub const CHUNK_LEN: usize = 1024;
+use crate::{CVWords, Hasher, CHUNK_LEN, IV, KEY_LEN, OUT_LEN};
 
 #[derive(Copy, Clone, Debug)]
 pub enum Mode<'a> {
@@ -413,14 +410,14 @@ mod test {
             .finalize_xof()
             .fill(&mut expected_output);
 
-        let mut guts_output = [0; 100];
+        let mut hazmat_output = [0; 100];
         let left = Hasher::new_keyed(key).update(group0).finalize_non_root();
         let right = Hasher::new_keyed(key)
             .set_input_offset(group0.len() as u64)
             .update(group1)
             .finalize_non_root();
-        merge_subtrees_xof(&left, &right, Mode::KeyedHash(&key)).fill(&mut guts_output);
-        assert_eq!(expected_output, guts_output);
+        merge_subtrees_xof(&left, &right, Mode::KeyedHash(&key)).fill(&mut hazmat_output);
+        assert_eq!(expected_output, hazmat_output);
     }
 
     #[test]

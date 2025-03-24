@@ -1,4 +1,4 @@
-use blake3::guts::{BLOCK_LEN, CHUNK_LEN};
+use blake3::{BLOCK_LEN, CHUNK_LEN};
 use serde::{Deserialize, Serialize};
 
 // Reading files at runtime requires special configuration under WASM/WASI, so including this at
