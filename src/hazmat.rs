@@ -3,12 +3,12 @@
 //! <div class="warning">
 //!
 //! **Warning:** This whole module is *hazardous material*. If you've heard folks say *don't roll
-//! your own crypto,* this is the sort of thing they were talking about. The rules for using these
-//! functions correctly are complicated, and tiny mistakes can give you garbage output and/or break
-//! the security properties that BLAKE3 is supposed to have. Read section 2.1 of [the BLAKE3
+//! your own crypto,* this is the sort of thing they were talking about. These functions have
+//! complicated requirements, and tiny mistakes can give you garbage output and/or break the
+//! security properties that BLAKE3 is supposed to have. Read section 2.1 of [the BLAKE3
 //! paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf) to understand the
 //! tree structure that you need to maintain. Test your code against
-//! [`blake3::hash`](../fn.hash.html) and friends and make sure you can get the same output for
+//! [`blake3::hash`](../fn.hash.html) and friends and make sure you can get the same outputs for
 //! [lots of different
 //! inputs](https://github.com/BLAKE3-team/BLAKE3/blob/master/test_vectors/test_vectors.json).
 //!
@@ -96,8 +96,7 @@
 //!     .finalize_non_root();
 //! assert_eq!(left_subtree_hash, parent_hash);
 //!
-//! // Double check that using multiple updates gives the same answer, even though
-//! // it might not be as efficient.
+//! // Using multiple updates gives the same answer, though it's not as efficient.
 //! let mut subtree_hasher = Hasher::new();
 //! // Again, .set_input_offset(0) is the default.
 //! subtree_hasher.update(&chunk0);
@@ -110,7 +109,7 @@
 //! `chunk0` and `chunk1` together is valid, but hashing `chunk1` and `chunk2` together is
 //! incorrect and gives a garbage result that will never match a standard BLAKE3 hash. The
 //! implementation includes a few best-effort asserts to catch some of these mistakes, but these
-//! checks aren't guaranteed. For example, this call to `update` currently panics:
+//! checks aren't guaranteed. For example, this second call to `update` currently panics:
 //!
 //! ```should_panic
 //! # fn main() {
@@ -134,7 +133,7 @@
 //! merging functions ([`merge_subtrees_root`] and friends) don't know the shape of the left and
 //! right subtrees you're giving them, and they can't help you catch mistakes. The best way to
 //! catch mistakes with these is to compare your root output to the [`blake3::hash`](crate::hash)
-//! or similar of the same input.
+//! of the same input.
 
 use crate::platform::Platform;
 use crate::{CVWords, Hasher, CHUNK_LEN, IV, KEY_LEN, OUT_LEN};
@@ -191,7 +190,8 @@ pub trait HasherExt {
     /// [`merge_subtrees_root`] (similar to [`Hasher::finalize`]) or [`merge_subtrees_root_xof`]
     /// (similar to [`Hasher::finalize_xof`]).
     ///
-    /// See the [module level examples](index.html#examples).
+    /// See the [module level examples](index.html#examples), particularly the discussion of valid
+    /// tree structures.
     fn finalize_non_root(&self) -> ChainingValue;
 }
 
@@ -356,9 +356,9 @@ fn test_left_subtree_len() {
     }
 }
 
-/// The `mode` argument to [`merge_subtrees_non_root`] and friends
+/// The `mode` argument to [`merge_subtrees_root`] and friends
 ///
-/// See the module level examples.
+/// See the [module level examples](index.html#examples).
 #[derive(Copy, Clone, Debug)]
 pub enum Mode<'a> {
     /// Corresponding to [`hash`](crate::hash)
@@ -408,10 +408,14 @@ fn merge_subtrees_inner(
     )
 }
 
-/// Compute a non-root chaining value, similar to [`Hasher::finalize_non_root`].
+/// Compute a non-root chaining value, similar to
+/// [`Hasher::finalize_non_root`](HasherExt::finalize_non_root).
 ///
-/// See the module level examples. "Chaining value" is the academic term for a non-root or
-/// non-final hash.
+/// See the [module level examples](index.html#examples), particularly the discussion of valid tree
+/// structures. The left and right child chaining values can come from either
+/// [`Hasher::finalize_non_root`](HasherExt::finalize_non_root) or other calls to
+/// `merge_subtrees_non_root`. "Chaining value" is the academic term for a non-root or non-final
+/// hash.
 pub fn merge_subtrees_non_root(
     left_child: &ChainingValue,
     right_child: &ChainingValue,
@@ -422,7 +426,10 @@ pub fn merge_subtrees_non_root(
 
 /// Compute a root hash, similar to [`Hasher::finalize`](crate::Hasher::finalize).
 ///
-/// See the module level examples.
+/// See the [module level examples](index.html#examples), particularly the discussion of valid tree
+/// structures. The left and right child chaining values can come from either
+/// [`Hasher::finalize_non_root`](HasherExt::finalize_non_root) or [`merge_subtrees_non_root`].
+/// "Chaining value" is the academic term for a non-root or non-final hash.
 pub fn merge_subtrees_root(
     left_child: &ChainingValue,
     right_child: &ChainingValue,
@@ -433,6 +440,11 @@ pub fn merge_subtrees_root(
 
 /// Return a root [`OutputReader`](crate::OutputReader), similar to
 /// [`Hasher::finalize_xof`](crate::Hasher::finalize_xof).
+///
+/// See also the [module level examples](index.html#examples), particularly the discussion of valid
+/// tree structures. The left and right child chaining values can come from either
+/// [`Hasher::finalize_non_root`](HasherExt::finalize_non_root) or [`merge_subtrees_non_root`].
+/// "Chaining value" is the academic term for a non-root or non-final hash.
 ///
 /// # Example
 ///
