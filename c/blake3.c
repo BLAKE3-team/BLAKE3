@@ -158,10 +158,10 @@ INLINE output_t parent_output(const uint8_t block[BLAKE3_BLOCK_LEN],
 // Given some input larger than one chunk, return the number of bytes that
 // should go in the left subtree. This is the largest power-of-2 number of
 // chunks that leaves at least 1 byte for the right subtree.
-INLINE size_t left_len(size_t content_len) {
-  // Subtract 1 to reserve at least one byte for the right side. content_len
+INLINE size_t left_subtree_len(size_t input_len) {
+  // Subtract 1 to reserve at least one byte for the right side. input_len
   // should always be greater than BLAKE3_CHUNK_LEN.
-  size_t full_chunks = (content_len - 1) / BLAKE3_CHUNK_LEN;
+  size_t full_chunks = (input_len - 1) / BLAKE3_CHUNK_LEN;
   return round_down_to_power_of_2(full_chunks) * BLAKE3_CHUNK_LEN;
 }
 
@@ -282,7 +282,7 @@ size_t blake3_compress_subtree_wide(const uint8_t *input, size_t input_len,
   // the input into left and right subtrees. (Note that this is only optimal
   // as long as the SIMD degree is a power of 2. If we ever get a SIMD degree
   // of 3 or something, we'll need a more complicated strategy.)
-  size_t left_input_len = left_len(input_len);
+  size_t left_input_len = left_subtree_len(input_len);
   size_t right_input_len = input_len - left_input_len;
   const uint8_t *right_input = &input[left_input_len];
   uint64_t right_chunk_counter =

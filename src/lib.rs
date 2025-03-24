@@ -655,20 +655,10 @@ impl IncrementCounter {
     }
 }
 
-// The largest power of two less than or equal to `n`, used for left_len()
+// The largest power of two less than or equal to `n`, used for left_subtree_len()
 // immediately below, and also directly in Hasher::update().
 fn largest_power_of_two_leq(n: usize) -> usize {
     ((n / 2) + 1).next_power_of_two()
-}
-
-// Given some input larger than one chunk, return the number of bytes that
-// should go in the left subtree. This is the largest power-of-2 number of
-// chunks that leaves at least 1 byte for the right subtree.
-fn left_len(content_len: usize) -> usize {
-    debug_assert!(content_len > CHUNK_LEN);
-    // Subtract 1 to reserve at least one byte for the right side.
-    let full_chunks = (content_len - 1) / CHUNK_LEN;
-    largest_power_of_two_leq(full_chunks) * CHUNK_LEN
 }
 
 // Use SIMD parallelism to hash up to MAX_SIMD_DEGREE chunks at the same time
@@ -799,7 +789,7 @@ fn compress_subtree_wide<J: join::Join>(
     // as long as the SIMD degree is a power of 2. If we ever get a SIMD degree
     // of 3 or something, we'll need a more complicated strategy.)
     debug_assert_eq!(platform.simd_degree().count_ones(), 1, "power of 2");
-    let (left, right) = input.split_at(left_len(input.len()));
+    let (left, right) = input.split_at(hazmat::left_subtree_len(input.len() as u64) as usize);
     let right_chunk_counter = chunk_counter + (left.len() / CHUNK_LEN) as u64;
 
     // Make space for the child outputs. Here we use MAX_SIMD_DEGREE_OR_2 to

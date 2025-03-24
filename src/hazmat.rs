@@ -43,7 +43,7 @@
 //!
 //! let chunk0 = [b'a'; 1024];
 //! let chunk1 = [b'b'; 1024];
-//! let chunk2 = [b'c'; 1024];
+//! let chunk2 = [b'c'; 42]; // The final chunk can be short.
 //!
 //! // Hash all three chunks. Chunks or subtrees that don't begin at the start of the input use
 //! // `set_input_offset` to say where they begin.
@@ -58,7 +58,7 @@
 //! let root_hash = merge_subtrees_root(&parent_hash, &chunk2_hash, Mode::Hash);
 //!
 //! // Double check that we got the right answer.
-//! let mut combined_input = [0; 1024 * 3];
+//! let mut combined_input = [0; 1024 + 1024 + 42];
 //! combined_input[..1024].copy_from_slice(&chunk0);
 //! combined_input[1024..2048].copy_from_slice(&chunk1);
 //! combined_input[2048..].copy_from_slice(&chunk2);
@@ -115,10 +115,10 @@
 //! # }
 //! ```
 //!
-//! For more on what makes a valid subtree, see [`max_subtree_len`] and its doc comments. Note that
-//! the merging functions ([`merge_subtrees_non_root`] and friends) don't know the shape of the
-//! left and right subtrees you're giving them, and they can't help you catch mistakes. The only
-//! way to catch mistakes with those is to compare your root output to the
+//! For more on what makes a valid subtree, see the docs for [`max_subtree_len`] and
+//! [`left_subtree_len`]. Note that the merging functions ([`merge_subtrees_root`] and friends)
+//! don't know the shape of the left and right subtrees you're giving them, and they can't help you
+//! catch mistakes. The only way to catch mistakes with these is to compare your root output to the
 //! [`blake3::hash`](crate::hash) or similar of the same input.
 
 use crate::platform::Platform;
@@ -158,6 +158,8 @@ pub trait HasherExt {
     /// subtrees along the right edge of the whole tree can have a length less than their maximum
     /// possible length.
     ///
+    /// See the [module level examples](index.html#examples).
+    ///
     /// # Panics
     ///
     /// This should always be paired with [`finalize_non_root`](HasherExt::finalize_non_root). It's
@@ -173,6 +175,8 @@ pub trait HasherExt {
     /// [`merge_subtrees_non_root`] and ultimately into the root node with either
     /// [`merge_subtrees_root`] (similar to [`Hasher::finalize`]) or [`merge_subtrees_root_xof`]
     /// (similar to [`Hasher::finalize_xof`]).
+    ///
+    /// See the [module level examples](index.html#examples).
     fn finalize_non_root(&self) -> ChainingValue;
 }
 
@@ -203,9 +207,9 @@ impl HasherExt for Hasher {
 
 /// Compute the maximum length of a subtree, given its starting offset.
 ///
-/// If you try to hash more input than this in a subtree, you'll merge parent nodes that should
-/// never be merged, and your output will be garbage. [`Hasher::update`] will currently panic if
-/// you try this, but this is not guaranteed.
+/// If you try to hash more input than this many bytes as one subtree, you'll end up merging parent
+/// nodes that shouldn't be merged, and your output will be garbage. [`Hasher::update`] will
+/// currently panic in this case, but this is not guaranteed.
 ///
 /// For input offset zero (the default), there is no maximum length, and this function returns
 /// `None`. For all other offsets it returns `Some`. Note that valid offset must be a multiple of
@@ -232,6 +236,15 @@ impl HasherExt for Hasher {
 ///
 /// The general rule turns out to be that for a subtree starting at chunk index N (greater than
 /// zero), the maximum number of chunks in the tree is 2 ^ (trailing zero bits of N).
+///
+/// I hope this function a useful study aid for learning how the tree structure works, or for
+/// writing debug assertions, but it's actually rare to use this for real control flow.
+/// Applications commonly choose some fixed power-of-two subtree size, say 64 chunks, and divide
+/// their input up into slices of that fixed length (with the final slice possibly short). In that
+/// case, it's guaranteed that none of those slices will exceed `max_subtree_len`, and the
+/// application doesn't need to check. Proving that this is true can be an interesting exercise.
+/// Note that for example chunks 0, 4, 8, and 12 all begin subtrees with at least 4 chunks in the
+/// tree above.
 ///
 /// # Panics
 ///
@@ -268,6 +281,63 @@ fn test_max_subtree_len() {
             max_subtree_len(input_offset),
             Some(max_chunks * CHUNK_LEN as u64),
         );
+    }
+}
+
+/// Given the length of either a complete input or a subtree input, return the number of bytes that
+/// belong to the left child subtree. The rest belong to the right child subtree.
+///
+/// This function isn't meaningful for one chunk of input, because chunks don't have children. It
+/// currently panics in debug mode if `input_len <= CHUNK_LEN`.
+///
+/// Note that for a valid `input_len` (greater than `CHUNK_LEN`), the return value is always
+/// strictly less than `input_len`, because right subtrees are never empty.
+///
+/// # Example
+///
+/// Hash a input of random length as two subtrees:
+///
+/// ```
+/// # #[cfg(feature = "std")] {
+/// use blake3::hazmat::{left_subtree_len, merge_subtrees_root, HasherExt, Mode};
+/// use blake3::{Hasher, CHUNK_LEN};
+///
+/// // Generate a random input. To be split into two subtrees, the input length must be
+/// // greater than CHUNK_LEN.
+/// let input_len = rand::random_range(CHUNK_LEN + 1..1_000_000);
+/// let mut input = vec![0; input_len];
+/// rand::fill(&mut input[..]);
+///
+/// // Compute the left and right subtree hashes and then the root hash.
+/// let left_len = left_subtree_len(input_len as u64) as usize;
+/// let left_subtree_hash = Hasher::new()
+///     .update(&input[..left_len])
+///     .finalize_non_root();
+/// let right_subtree_hash = Hasher::new()
+///     .set_input_offset(left_len as u64)
+///     .update(&input[left_len..])
+///     .finalize_non_root();
+/// let root_hash = merge_subtrees_root(&left_subtree_hash, &right_subtree_hash, Mode::Hash);
+///
+/// // Double check the answer.
+/// assert_eq!(root_hash, blake3::hash(&input));
+/// # }
+/// ```
+#[inline(always)]
+pub fn left_subtree_len(input_len: u64) -> u64 {
+    debug_assert!(input_len > CHUNK_LEN as u64);
+    // Note that .next_power_of_two() is greater than *or equal*.
+    ((input_len + 1) / 2).next_power_of_two()
+}
+
+#[test]
+fn test_left_subtree_len() {
+    assert_eq!(left_subtree_len(1025), 1024);
+    for boundary_case in [2, 4, 8, 16, 32, 64] {
+        let input_len = boundary_case * CHUNK_LEN as u64;
+        assert_eq!(left_subtree_len(input_len - 1), input_len / 2);
+        assert_eq!(left_subtree_len(input_len), input_len / 2);
+        assert_eq!(left_subtree_len(input_len + 1), input_len);
     }
 }
 

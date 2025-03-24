@@ -328,22 +328,6 @@ fn test_largest_power_of_two_leq() {
 }
 
 #[test]
-fn test_left_len() {
-    let input_output = &[
-        (CHUNK_LEN + 1, CHUNK_LEN),
-        (2 * CHUNK_LEN - 1, CHUNK_LEN),
-        (2 * CHUNK_LEN, CHUNK_LEN),
-        (2 * CHUNK_LEN + 1, 2 * CHUNK_LEN),
-        (4 * CHUNK_LEN - 1, 2 * CHUNK_LEN),
-        (4 * CHUNK_LEN, 2 * CHUNK_LEN),
-        (4 * CHUNK_LEN + 1, 4 * CHUNK_LEN),
-    ];
-    for &(input, output) in input_output {
-        assert_eq!(crate::left_len(input), output);
-    }
-}
-
-#[test]
 fn test_compare_reference_impl() {
     const OUT: usize = 303; // more than 64, not a multiple of 4
     let mut input_buf = [0; TEST_CASES_MAX];
