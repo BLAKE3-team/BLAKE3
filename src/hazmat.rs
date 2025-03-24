@@ -38,18 +38,25 @@
 //!
 //! ```
 //! # fn main() {
-//! use blake3::Hasher;
-//! use blake3::hazmat::{Mode, HasherExt, merge_subtrees_non_root, merge_subtrees_root};
+//! use blake3::{Hasher, CHUNK_LEN};
+//! use blake3::hazmat::{merge_subtrees_non_root, merge_subtrees_root, Mode};
+//! use blake3::hazmat::HasherExt; // an extension trait for Hasher
 //!
-//! let chunk0 = [b'a'; 1024];
-//! let chunk1 = [b'b'; 1024];
+//! let chunk0 = [b'a'; CHUNK_LEN];
+//! let chunk1 = [b'b'; CHUNK_LEN];
 //! let chunk2 = [b'c'; 42]; // The final chunk can be short.
 //!
 //! // Hash all three chunks. Chunks or subtrees that don't begin at the start of the input use
 //! // `set_input_offset` to say where they begin.
 //! let chunk0_hash = Hasher::new().update(&chunk0).finalize_non_root();
-//! let chunk1_hash = Hasher::new().set_input_offset(1024).update(&chunk1).finalize_non_root();
-//! let chunk2_hash = Hasher::new().set_input_offset(2048).update(&chunk2).finalize_non_root();
+//! let chunk1_hash = Hasher::new()
+//!     .set_input_offset(CHUNK_LEN as u64)
+//!     .update(&chunk1)
+//!     .finalize_non_root();
+//! let chunk2_hash = Hasher::new()
+//!     .set_input_offset(2 * CHUNK_LEN as u64)
+//!     .update(&chunk2)
+//!     .finalize_non_root();
 //!
 //! // Join the first two chunks with a non-root parent node.
 //! let parent_hash = merge_subtrees_non_root(&chunk0_hash, &chunk1_hash, Mode::Hash);
@@ -58,10 +65,10 @@
 //! let root_hash = merge_subtrees_root(&parent_hash, &chunk2_hash, Mode::Hash);
 //!
 //! // Double check that we got the right answer.
-//! let mut combined_input = [0; 1024 + 1024 + 42];
-//! combined_input[..1024].copy_from_slice(&chunk0);
-//! combined_input[1024..2048].copy_from_slice(&chunk1);
-//! combined_input[2048..].copy_from_slice(&chunk2);
+//! let mut combined_input = Vec::new();
+//! combined_input.extend_from_slice(&chunk0);
+//! combined_input.extend_from_slice(&chunk1);
+//! combined_input.extend_from_slice(&chunk2);
 //! assert_eq!(root_hash, blake3::hash(&combined_input));
 //! # }
 //! ```
@@ -73,20 +80,29 @@
 //!
 //! ```
 //! # fn main() {
-//! # use blake3::Hasher;
+//! # use blake3::{Hasher, CHUNK_LEN};
 //! # use blake3::hazmat::{Mode, HasherExt, merge_subtrees_non_root, merge_subtrees_root};
-//! # let chunk0 = [b'a'; 1024];
-//! # let chunk1 = [b'b'; 1024];
-//! # let chunk2 = [b'c'; 1024];
-//! # let mut combined_input = [0; 1024 * 3];
-//! # combined_input[..1024].copy_from_slice(&chunk0);
-//! # combined_input[1024..2048].copy_from_slice(&chunk1);
-//! # combined_input[2048..].copy_from_slice(&chunk2);
+//! # let chunk0 = [b'a'; CHUNK_LEN];
+//! # let chunk1 = [b'b'; CHUNK_LEN];
 //! # let chunk0_hash = Hasher::new().update(&chunk0).finalize_non_root();
-//! # let chunk1_hash = Hasher::new().set_input_offset(1024).update(&chunk1).finalize_non_root();
+//! # let chunk1_hash = Hasher::new().set_input_offset(CHUNK_LEN as u64).update(&chunk1).finalize_non_root();
 //! # let parent_hash = merge_subtrees_non_root(&chunk0_hash, &chunk1_hash, Mode::Hash);
-//! let left_subtree_hash = Hasher::new().update(&combined_input[..2048]).finalize_non_root();
+//! # let mut combined_input = Vec::new();
+//! # combined_input.extend_from_slice(&chunk0);
+//! # combined_input.extend_from_slice(&chunk1);
+//! let left_subtree_hash = Hasher::new()
+//!     // .set_input_offset(0) is the default.
+//!     .update(&combined_input[..2 * CHUNK_LEN])
+//!     .finalize_non_root();
 //! assert_eq!(left_subtree_hash, parent_hash);
+//!
+//! // Double check that using multiple updates gives the same answer, even though
+//! // it might not be as efficient.
+//! let mut subtree_hasher = Hasher::new();
+//! // Again, .set_input_offset(0) is the default.
+//! subtree_hasher.update(&chunk0);
+//! subtree_hasher.update(&chunk1);
+//! assert_eq!(left_subtree_hash, subtree_hasher.finalize_non_root());
 //! # }
 //! ```
 //!
@@ -98,28 +114,27 @@
 //!
 //! ```should_panic
 //! # fn main() {
-//! # use blake3::Hasher;
+//! # use blake3::{Hasher, CHUNK_LEN};
 //! # use blake3::hazmat::HasherExt;
-//! # let chunk0 = [b'a'; 1024];
-//! # let chunk1 = [b'b'; 1024];
-//! # let chunk2 = [b'c'; 1024];
-//! # let mut combined_input = [0; 1024 * 3];
-//! # combined_input[..1024].copy_from_slice(&chunk0);
-//! # combined_input[1024..2048].copy_from_slice(&chunk1);
-//! # combined_input[2048..].copy_from_slice(&chunk2);
+//! # let chunk0 = [b'a'; CHUNK_LEN];
+//! # let chunk1 = [b'b'; CHUNK_LEN];
+//! # let chunk2 = [b'c'; 42];
 //! let oops = Hasher::new()
-//!     .set_input_offset(1024)
+//!     .set_input_offset(CHUNK_LEN as u64)
+//!     .update(&chunk1)
 //!     // PANIC: "the subtree starting at 1024 contains at most 1024 bytes"
-//!     .update(&combined_input[1024..])
+//!     .update(&chunk2)
 //!     .finalize_non_root();
 //! # }
 //! ```
 //!
-//! For more on what makes a valid subtree, see the docs for [`max_subtree_len`] and
-//! [`left_subtree_len`]. Note that the merging functions ([`merge_subtrees_root`] and friends)
-//! don't know the shape of the left and right subtrees you're giving them, and they can't help you
-//! catch mistakes. The only way to catch mistakes with these is to compare your root output to the
-//! [`blake3::hash`](crate::hash) or similar of the same input.
+//! For more on valid tree structures, see the docs for [`max_subtree_len`] and
+//! [`left_subtree_len`], and see section 2.1 of [the BLAKE3
+//! paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf). Note that the
+//! merging functions ([`merge_subtrees_root`] and friends) don't know the shape of the left and
+//! right subtrees you're giving them, and they can't help you catch mistakes. The best way to
+//! catch mistakes with these is to compare your root output to the [`blake3::hash`](crate::hash)
+//! or similar of the same input.
 
 use crate::platform::Platform;
 use crate::{CVWords, Hasher, CHUNK_LEN, IV, KEY_LEN, OUT_LEN};
