@@ -1207,8 +1207,8 @@ impl Hasher {
     }
 
     fn update_with_join<J: join::Join>(&mut self, mut input: &[u8]) -> &mut Self {
-        if self.initial_chunk_counter != 0 {
-            let max = hazmat::max_subtree_len(self.initial_chunk_counter);
+        let input_offset = self.initial_chunk_counter * CHUNK_LEN as u64;
+        if let Some(max) = hazmat::max_subtree_len(input_offset) {
             let remaining = max - self.count();
             assert!(
                 input.len() as u64 <= remaining,
@@ -1397,6 +1397,10 @@ impl Hasher {
     /// This method is idempotent. Calling it twice will give the same result.
     /// You can also add more input and finalize again.
     pub fn finalize(&self) -> Hash {
+        assert_eq!(
+            self.initial_chunk_counter, 0,
+            "set_input_offset must be used with finalized_non_root",
+        );
         self.final_output().root_hash()
     }
 
@@ -1408,6 +1412,10 @@ impl Hasher {
     ///
     /// [`OutputReader`]: struct.OutputReader.html
     pub fn finalize_xof(&self) -> OutputReader {
+        assert_eq!(
+            self.initial_chunk_counter, 0,
+            "set_input_offset must be used with finalized_non_root",
+        );
         OutputReader::new(self.final_output())
     }
 

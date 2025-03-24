@@ -17,6 +17,11 @@
 //!
 //! </div>
 //!
+//! The main entrypoint for this module is the [`HasherExt`] trait, particularly the
+//! [`set_input_offset`](HasherExt::set_input_offset) and
+//! [`finalize_non_root`](HasherExt::finalize_non_root) methods. These let you compute the non-root
+//! hashes ("chaining values") of individual chunks
+//!
 //! # Examples
 //!
 //! Here's an example of computing all the interior hashes in a 3-chunk tree:
@@ -44,10 +49,10 @@
 //! let chunk1_hash = Hasher::new().set_input_offset(1024).update(&chunk1).finalize_non_root();
 //! let chunk2_hash = Hasher::new().set_input_offset(2048).update(&chunk2).finalize_non_root();
 //!
-//! // Join the first two chunks with a parent node.
+//! // Join the first two chunks with a non-root parent node.
 //! let parent_hash = merge_subtrees_non_root(&chunk0_hash, &chunk1_hash, Mode::Hash);
 //!
-//! // Finish the tree by joining that parent node with the third chunk.
+//! // Join that parent node and the third chunk at the root of the tree.
 //! let root_hash = merge_subtrees_root(&parent_hash, &chunk2_hash, Mode::Hash);
 //!
 //! // Double check that we got the right answer.
@@ -108,23 +113,174 @@
 //! # }
 //! ```
 //!
-//! Note that the merging functions ([`merge_subtrees_non_root`] and friends) don't know the shape
-//! of the left and right subtrees you're giving them, and they can't help you catch mistakes. The
-//! only way to catch mistakes with those is to compare your root output to the
+//! For more on what makes a valid subtree, see [`max_subtree_len`] and its doc comments. Note that
+//! the merging functions ([`merge_subtrees_non_root`] and friends) don't know the shape of the
+//! left and right subtrees you're giving them, and they can't help you catch mistakes. The only
+//! way to catch mistakes with those is to compare your root output to the
 //! [`blake3::hash`](crate::hash) or similar of the same input.
 
 use crate::platform::Platform;
 use crate::{CVWords, Hasher, CHUNK_LEN, IV, KEY_LEN, OUT_LEN};
 
+/// Extension methods for [`Hasher`]. This is the main entrypoint to the `hazmat` module.
+pub trait HasherExt {
+    /// Similar to [`Hasher::new_derive_key`] but using a pre-hashed [`ContextKey`] from
+    /// [`hash_derive_key_context`].
+    ///
+    /// The [`hash_derive_key_context`] function is _only_ valid source of the [`ContextKey`]
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use blake3::Hasher;
+    /// use blake3::hazmat::HasherExt;
+    ///
+    /// let context_key = blake3::hazmat::hash_derive_key_context("foo");
+    /// let mut hasher = Hasher::new_from_context_key(&context_key);
+    /// hasher.update(b"bar");
+    /// let derived_key = *hasher.finalize().as_bytes();
+    ///
+    /// assert_eq!(derived_key, blake3::derive_key("foo", b"bar"));
+    /// ```
+    fn new_from_context_key(context_key: &ContextKey) -> Self;
+
+    /// Configure the `Hasher` to process a chunk or subtree starting at `offset` bytes into the
+    /// whole input.
+    ///
+    /// This isn't required for the first chunk, or for a subtree that includes the first chunk
+    /// (i.e. when the `offset` is zero), but it's required for all other chunks and subtrees.
+    ///
+    /// # Panics
+    ///
+    /// This should always be paired with [`finalize_non_root`](HasherExt::finalize_non_root). It's
+    /// never correct to use a non-zero input offset with [`finalize`](Hasher::finalize) or
+    /// [`finalize_xof`](Hasher::finalize_xof). The `offset` must also be a multiple of
+    /// `CHUNK_LEN`. Violating either of these rules will currently fail an assertion and panic,
+    /// but this is not guaranteed.
+    fn set_input_offset(&mut self, offset: u64) -> &mut Self;
+
+    /// Finalize the non-root hash ("chaining value") of the current chunk or subtree.
+    ///
+    /// Afterwards you can merge subtree chaining values into parent nodes using
+    /// [`merge_subtrees_non_root`] and ultimately into the root node with either
+    /// [`merge_subtrees_root`] (similar to [`Hasher::finalize`]) or [`merge_subtrees_xof`]
+    /// (similar to [`Hasher::finalize_xof`]).
+    fn finalize_non_root(&self) -> ChainingValue;
+}
+
+impl HasherExt for Hasher {
+    fn new_from_context_key(context_key: &[u8; KEY_LEN]) -> Hasher {
+        let context_key_words = crate::platform::words_from_le_bytes_32(context_key);
+        Hasher::new_internal(&context_key_words, crate::DERIVE_KEY_MATERIAL)
+    }
+
+    fn set_input_offset(&mut self, offset: u64) -> &mut Hasher {
+        assert_eq!(self.count(), 0, "hasher has already accepted input");
+        assert_eq!(
+            offset % CHUNK_LEN as u64,
+            0,
+            "offset ({offset}) must be a chunk boundary (divisible by {CHUNK_LEN})",
+        );
+        let counter = offset / CHUNK_LEN as u64;
+        self.chunk_state.chunk_counter = counter;
+        self.initial_chunk_counter = counter;
+        self
+    }
+
+    fn finalize_non_root(&self) -> ChainingValue {
+        assert_ne!(self.count(), 0, "empty subtrees are never valid");
+        self.final_output().chaining_value()
+    }
+}
+
+/// Compute the maximum length of a subtree, given its starting offset.
+///
+/// If you try to hash more input than this in a subtree, you'll merge parent nodes that should
+/// never be merged, and your output will be garbage. [`Hasher::update`] will currently panic if
+/// you try this, but this is not guaranteed.
+///
+/// For input offset zero (the default), there is no maximum length, and this function returns
+/// `None`. For all other offsets it returns `Some`. Note that valid offset must be a multiple of
+/// `CHUNK_LEN`; it's not possible to start hashing a chunk in the middle.
+///
+/// In the tree below, the subtree that starts with chunk 3 (input offset 3 * CHUNK_LEN) includes
+/// only that one chunk, so its max length is `Some(1024)` (`CHUNK_LEN`). The subtree that starts
+/// with chunk 6 includes chunk 7 but not chunk 8, so its max length is `Some(2048)` (2 *
+/// `CHUNK_LEN`). The subtree that starts with chunk 12 includes chunks 13 through 15, but if the
+/// tree were bigger it would not include chunk 16, so its max length is `Some(4096)` (4 *
+/// CHUNK_LEN).
+///
+/// ```text
+///                       root
+///                /               \
+///            .                       .
+///        /       \               /       \
+///      .           .           .           .
+///    /   \       /   \       /   \       /   \
+///   .     .     .     .     .     .     .     .
+///  / \   / \   / \   / \   / \   / \   / \   / \
+/// 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+/// ```
+///
+/// The general rule turns out to be that for a subtree starting at chunk index N (greater than
+/// zero), the maximum number of chunks in the tree is 2 ^ (trailing zero bits of N).
+///
+/// # Panics
+///
+/// This function currently panics if `input_offset` is not a multiple of `CHUNK_LEN`. This is not
+/// guaranteed.
+#[inline(always)]
+pub fn max_subtree_len(input_offset: u64) -> Option<u64> {
+    if input_offset == 0 {
+        return None;
+    }
+    assert_eq!(input_offset % CHUNK_LEN as u64, 0);
+    let counter = input_offset / CHUNK_LEN as u64;
+    let max_chunks = 1 << counter.trailing_zeros();
+    Some(max_chunks * CHUNK_LEN as u64)
+}
+
+#[test]
+fn test_max_subtree_len() {
+    assert_eq!(max_subtree_len(0), None);
+    // (chunk index, max chunks)
+    let cases = [
+        (1, 1),
+        (2, 2),
+        (3, 1),
+        (4, 4),
+        (5, 1),
+        (6, 2),
+        (7, 1),
+        (8, 8),
+    ];
+    for (chunk_index, max_chunks) in cases {
+        let input_offset = chunk_index * CHUNK_LEN as u64;
+        assert_eq!(
+            max_subtree_len(input_offset),
+            Some(max_chunks * CHUNK_LEN as u64),
+        );
+    }
+}
+
+/// The `mode` argument to [`merge_subtrees_non_root`] and friends
+///
+/// See the module level examples.
 #[derive(Copy, Clone, Debug)]
 pub enum Mode<'a> {
+    /// Corresponding to [`hash`](crate::hash)
     Hash,
+
+    /// Corresponding to [`keyed_hash`](crate::hash)
     KeyedHash(&'a [u8; KEY_LEN]),
+
+    /// Corresponding to [`derive_key`](crate::hash)
+    ///
+    /// The [`ContextKey`] comes from [`hash_derive_key_context`].
     DeriveKeyMaterial(&'a ContextKey),
 }
 
 impl<'a> Mode<'a> {
-    #[inline(always)]
     fn key_words(&self) -> CVWords {
         match self {
             Mode::Hash => *IV,
@@ -142,43 +298,8 @@ impl<'a> Mode<'a> {
     }
 }
 
-// In the diagram below, the subtree that starts with chunk 2 includes chunk 3 but not chunk 4. The
-// subtree that starts with chunk 4 includes chunk 7 but (if the tree was bigger) would not include
-// chunk 8. For a subtree starting at chunk index N, the maximum number of chunks in the tree is
-// 2 ^ (trailing zero bits of N). If you try to hash more input than this in a subtree, you'll
-// merge parent nodes that should never be merged, and your output will be garbage.
-//                .
-//            /       \
-//          .           .
-//        /   \       /   \
-//       .     .     .     .
-//      / \   / \   / \   / \
-//     0  1  2  3  4  5  6  7
-pub(crate) fn max_subtree_len(counter: u64) -> u64 {
-    assert_ne!(counter, 0);
-    (1 << counter.trailing_zeros()) * CHUNK_LEN as u64
-}
-
 /// "Chaining value" is the academic term for a non-root or non-final hash.
 pub type ChainingValue = [u8; OUT_LEN];
-
-#[test]
-fn test_max_subtree_len() {
-    // (chunk index, max chunks)
-    let cases = [
-        (1, 1),
-        (2, 2),
-        (3, 1),
-        (4, 4),
-        (5, 1),
-        (6, 2),
-        (7, 1),
-        (8, 8),
-    ];
-    for (counter, chunks) in cases {
-        assert_eq!(max_subtree_len(counter), chunks * CHUNK_LEN as u64);
-    }
-}
 
 fn merge_subtrees_inner(
     left_child: &ChainingValue,
@@ -194,8 +315,10 @@ fn merge_subtrees_inner(
     )
 }
 
-/// Compute a non-root chaining value. It's never correct to cast this function's return value to
-/// Hash.
+/// Compute a non-root chaining value, similar to [`Hasher::finalize_non_root`].
+///
+/// See the module level examples. "Chaining value" is the academic term for a non-root or
+/// non-final hash.
 pub fn merge_subtrees_non_root(
     left_child: &ChainingValue,
     right_child: &ChainingValue,
@@ -204,7 +327,9 @@ pub fn merge_subtrees_non_root(
     merge_subtrees_inner(left_child, right_child, mode).chaining_value()
 }
 
-/// Compute the root hash, similar to [`Hasher::finalize`](crate::Hasher::finalize).
+/// Compute a root hash, similar to [`Hasher::finalize`](crate::Hasher::finalize).
+///
+/// See the module level examples.
 pub fn merge_subtrees_root(
     left_child: &ChainingValue,
     right_child: &ChainingValue,
@@ -255,57 +380,6 @@ pub fn hash_derive_key_context(context: &str) -> ContextKey {
     .0
 }
 
-pub trait HasherExt {
-    /// Similar to [`Hasher::new_derive_key`] but using a pre-hashed [`ContextKey`] from
-    /// [`hash_derive_key_context`].
-    ///
-    /// The [`hash_derive_key_context`] function is _only_ valid source of the [`ContextKey`]
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use blake3::Hasher;
-    /// use blake3::hazmat::HasherExt;
-    ///
-    /// let context_key = blake3::hazmat::hash_derive_key_context("foo");
-    /// let mut hasher = Hasher::new_from_context_key(&context_key);
-    /// hasher.update(b"bar");
-    /// let derived_key = *hasher.finalize().as_bytes();
-    ///
-    /// assert_eq!(derived_key, blake3::derive_key("foo", b"bar"));
-    /// ```
-    fn new_from_context_key(context_key: &ContextKey) -> Self;
-
-    fn set_input_offset(&mut self, offset: u64) -> &mut Self;
-
-    fn finalize_non_root(&self) -> ChainingValue;
-}
-
-impl HasherExt for Hasher {
-    fn new_from_context_key(context_key: &[u8; KEY_LEN]) -> Hasher {
-        let context_key_words = crate::platform::words_from_le_bytes_32(context_key);
-        Hasher::new_internal(&context_key_words, crate::DERIVE_KEY_MATERIAL)
-    }
-
-    fn set_input_offset(&mut self, offset: u64) -> &mut Hasher {
-        assert_eq!(self.count(), 0, "hasher has already accepted input");
-        assert_eq!(
-            offset % CHUNK_LEN as u64,
-            0,
-            "offset ({offset}) must be a chunk boundary (divisible by {CHUNK_LEN})",
-        );
-        let counter = offset / CHUNK_LEN as u64;
-        self.chunk_state.chunk_counter = counter;
-        self.initial_chunk_counter = counter;
-        self
-    }
-
-    fn finalize_non_root(&self) -> ChainingValue {
-        assert_ne!(self.count(), 0, "empty subtrees are never valid");
-        self.final_output().chaining_value()
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -334,6 +408,20 @@ mod test {
         Hasher::new()
             .set_input_offset(CHUNK_LEN as u64)
             .update(&[0; CHUNK_LEN + 1]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_set_input_offset_cant_finalize() {
+        Hasher::new().set_input_offset(CHUNK_LEN as u64).finalize();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_set_input_offset_cant_finalize_xof() {
+        Hasher::new()
+            .set_input_offset(CHUNK_LEN as u64)
+            .finalize_xof();
     }
 
     #[test]
