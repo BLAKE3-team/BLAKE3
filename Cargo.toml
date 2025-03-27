@@ -31,6 +31,9 @@ wasm32_simd = []
 # entire build, with e.g. RUSTFLAGS="-C target-cpu=native".
 std = []
 
+# This feature enables `const fn` variants of functions, but requires Rust 1.85.0+
+const = []
+
 # The `rayon` feature (disabled by default, but enabled for docs.rs) adds the
 # `update_rayon` and (in combination with `mmap` below) `update_mmap_rayon`
 # methods, for multithreaded hashing. However, even if this feature is enabled,
@@ -114,7 +117,7 @@ arrayref = "0.3.5"
 arrayvec = { version = "0.7.4", default-features = false }
 constant_time_eq = { version = "0.3.1", default-features = false }
 cfg-if = "1.0.0"
-digest = { version = "0.10.1", features = [ "mac" ], optional = true }
+digest = { version = "0.10.1", features = ["mac"], optional = true }
 memmap2 = { version = "0.9", optional = true }
 rayon-core = { version = "1.12.1", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
