@@ -1,10 +1,10 @@
 //! Low-level tree manipulations and other sharp tools
 //!
 //! The target audience for this module is projects like [Bao](https://github.com/oconnor663/bao),
-//! which work directly with the interior hashes ("chaining values") of chunks and subtrees. For
-//! example, you could implement a BitTorrent-like protocol using standard BLAKE3 root hashes, or
-//! you could compute the BLAKE3 hash of a file that's distributed across different machines. These
-//! use cases are very advanced, and most applications don't need anything in this module. Also:
+//! which work directly with the interior hashes ("chaining values") of BLAKE3 chunks and subtrees.
+//! For example, you could use these functions to implement a BitTorrent-like protocol using the
+//! BLAKE3 tree structure, or to hash an input that's distributed across different machines. These
+//! use cases are very advanced, and most applications don't need this module. Also:
 //!
 //! <div class="warning">
 //!
