@@ -533,7 +533,6 @@ pub fn hash_derive_key_context(context: &str) -> ContextKey {
         context.as_bytes(),
         IV,
         crate::DERIVE_KEY_CONTEXT,
-        0,
     )
     .root_hash()
     .0
