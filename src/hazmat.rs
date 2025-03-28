@@ -13,9 +13,8 @@
 //! complicated requirements, and any mistakes will give you garbage output and/or break the
 //! security properties that BLAKE3 is supposed to have. Read section 2.1 of [the BLAKE3
 //! paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf) to understand the
-//! tree structure that you need to maintain. Test your code against
-//! [`blake3::hash`](../fn.hash.html) and make sure you can get the same outputs for [lots of
-//! different
+//! tree structure you need to maintain. Test your code against [`blake3::hash`](../fn.hash.html)
+//! and make sure you can get the same outputs for [lots of different
 //! inputs](https://github.com/BLAKE3-team/BLAKE3/blob/master/test_vectors/test_vectors.json).
 //!
 //! </div>
@@ -31,10 +30,10 @@
 //!
 //! The main entrypoint for this module is the [`HasherExt`] trait, particularly the
 //! [`set_input_offset`](HasherExt::set_input_offset) and
-//! [`finalize_non_root`](HasherExt::finalize_non_root) methods. These let you compute the non-root
-//! hashes ("chaining values") of individual chunks or larger subtrees. You then combine these
-//! chaining values into larger subtrees using [`merge_subtrees_non_root`] and finally (once at the
-//! very top) [`merge_subtrees_root`] or [`merge_subtrees_root_xof`].
+//! [`finalize_non_root`](HasherExt::finalize_non_root) methods. These let you compute the chaining
+//! values of individual chunks or subtrees. You then combine these chaining values into larger
+//! subtrees using [`merge_subtrees_non_root`] and finally (once at the very top)
+//! [`merge_subtrees_root`] or [`merge_subtrees_root_xof`].
 //!
 //! # Examples
 //!
@@ -142,8 +141,8 @@
 //! # }
 //! ```
 //!
-//! For more on valid tree structures, see the docs for [`max_subtree_len`] and
-//! [`left_subtree_len`], and see section 2.1 of [the BLAKE3
+//! For more on valid tree structures, see the docs for and [`left_subtree_len`] and
+//! [`max_subtree_len`], and see section 2.1 of [the BLAKE3
 //! paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf). Note that the
 //! merging functions ([`merge_subtrees_root`] and friends) don't know the shape of the left and
 //! right subtrees you're giving them, and they can't help you catch mistakes. The best way to
@@ -240,46 +239,49 @@ impl HasherExt for Hasher {
     }
 }
 
-/// Compute the maximum length of a subtree, given its starting offset.
+/// Compute the maximum length of a subtree in bytes, given its starting offset in bytes.
 ///
-/// If you try to hash more input than this many bytes as one subtree, you'll end up merging parent
-/// nodes that shouldn't be merged, and your output will be garbage. [`Hasher::update`] will
-/// currently panic in this case, but this is not guaranteed.
+/// If you try to hash more than this many bytes as one subtree, you'll end up merging parent nodes
+/// that shouldn't be merged, and your output will be garbage. [`Hasher::update`] will currently
+/// panic in this case, but this is not guaranteed.
 ///
 /// For input offset zero (the default), there is no maximum length, and this function returns
-/// `None`. For all other offsets it returns `Some`. Note that valid offset must be a multiple of
-/// `CHUNK_LEN`; it's not possible to start hashing a chunk in the middle.
+/// `None`. For all other offsets it returns `Some`. Note that valid offsets must be a multiple of
+/// [`CHUNK_LEN`] (1024); it's not possible to start hashing a chunk in the middle.
 ///
-/// In the tree below, the subtree that starts with chunk 3 (input offset 3 * `CHUNK_LEN`) includes
-/// only that one chunk, so its max length is `Some(1024)` (1 * `CHUNK_LEN`). The subtree that
-/// starts with chunk 6 includes chunk 7 but not chunk 8, so its max length is `Some(2048)` (2 *
-/// `CHUNK_LEN`). The subtree that starts with chunk 12 includes chunks 13 through 15, but if the
-/// tree were bigger it would not include chunk 16, so its max length is `Some(4096)` (4 *
-/// `CHUNK_LEN`).
+/// In the example tree below, chunks are numbered by their _0-based index_. The subtree that
+/// _starts_ with chunk 3, i.e. `input_offset = 3 * CHUNK_LEN`, includes only that one chunk, so
+/// its max length is `Some(CHUNK_LEN)`. The subtree that starts with chunk 6 includes chunk 7 but
+/// not chunk 8, so its max length is `Some(2 * CHUNK_LEN)`. The subtree that starts with chunk 12
+/// includes chunks 13, 14, and 15, but if the tree were bigger it would not include chunk 16, so
+/// its max length is `Some(4 * CHUNK_LEN)`. One way to think about the rule here is that, if you
+/// go beyond the max subtree length from a given starting offset, you start dealing with subtrees
+/// that include chunks _to the left_ of where you started.
 ///
 /// ```text
-///                       root
-///                /               \
-///            .                       .
-///        /       \               /       \
-///      .           .           .           .
-///    /   \       /   \       /   \       /   \
-///   .     .     .     .     .     .     .     .
-///  / \   / \   / \   / \   / \   / \   / \   / \
-/// 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+///                           root
+///                 /                       \
+///              .                             .
+///        /           \                 /           \
+///       .             .               .             .
+///    /    \         /    \         /    \         /    \
+///   .      .       .      .       .      .       .      .
+///  / \    / \     / \    / \     / \    / \     / \    / \
+/// 0  1   2  3    4  5   6  7    8  9   10 11   12 13  14 15
 /// ```
 ///
-/// The general rule turns out to be that for a subtree starting at 0-based chunk index N, if N is
-/// greater than zero, the maximum number of chunks in that tree is the largest power-of-two that
-/// divides N, or equivalently 2 ^ (the number of trailing zero bits of N).
+/// The general rule turns out to be that for a subtree starting at a 0-based chunk index N greater
+/// than zero, the maximum number of chunks in that subtree is the largest power-of-two that
+/// divides N, which is given by `1 << N.trailing_zeros()`.
 ///
-/// This function can be useful for writing debug assertions, but it's actually rare to use this
-/// for real control flow. It's more common to choose some fixed power-of-two subtree size, say 64
-/// chunks, and divide your input up into slices of that fixed length (with the final slice
-/// possibly short). In that case, it's guaranteed that none of those slices will exceed
-/// `max_subtree_len`, and you don't need to check. Proving that this is true can be an interesting
-/// exercise. Note that for example chunks 0, 4, 8, and 12 all begin subtrees with at least 4
-/// chunks in the tree above.
+/// This function can be useful for writing tests or debug assertions, but it's actually rare to
+/// use this for real control flow. Callers who split their input recursively using
+/// [`left_subtree_len`] will automatically satisfy the `max_subtree_len` bound and don't
+/// necessarily need to check. It's also common to choose some fixed power-of-two subtree size, say
+/// 64 chunks, and divide your input up into slices of that fixed length (with the final slice
+/// possibly short). This approach also automatically satisfies the `max_subtree_len` bound and
+/// doesn't need to check. Proving that this is true can be an interesting exercise. Note that
+/// chunks 0, 4, 8, and 12 all begin subtrees of at least 4 chunks in the example tree above.
 ///
 /// # Panics
 ///
@@ -319,13 +321,16 @@ fn test_max_subtree_len() {
     }
 }
 
-/// Given the length of either a complete input or a subtree input, return the number of bytes that
-/// belong to the left child subtree. The rest belong to the right child subtree.
+/// Given the length in bytes of either a complete input or a subtree input, return the number of
+/// bytes that belong to the left child subtree. The rest belong to the right child subtree.
 ///
 /// Concretely, this function returns the largest power-of-two number of bytes that's strictly less
 /// than `input_len`. This leads to a tree where all left subtrees are "complete" and at least as
-/// large as their sibling right subtree, as specified in section 2.1 of [the BLAKE3
-/// paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf).
+/// large as their sibling right subtrees, as specified in section 2.1 of [the BLAKE3
+/// paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf). For example, if an
+/// input is exactly two chunks, its left and right subtrees both get one chunk. But if an input is
+/// two chunks plus one more byte, then its left subtree gets two chunks, and its right subtree
+/// only gets one byte.
 ///
 /// This function isn't meaningful for one chunk of input, because chunks don't have children. It
 /// currently panics in debug mode if `input_len <= CHUNK_LEN`.
@@ -339,14 +344,15 @@ fn test_max_subtree_len() {
 /// use blake3::hazmat::{left_subtree_len, merge_subtrees_root, HasherExt, Mode};
 /// use blake3::{Hasher, CHUNK_LEN};
 ///
-/// // Generate a random-length input. To be split into two subtrees, the input length must be
-/// // greater than CHUNK_LEN.
+/// // Generate a random-length input. Note that to be split into two subtrees, the input length
+/// // must be greater than CHUNK_LEN.
 /// let input_len = rand::random_range(CHUNK_LEN + 1..1_000_000);
 /// let mut input = vec![0; input_len];
 /// rand::fill(&mut input[..]);
 ///
 /// // Compute the left and right subtree hashes and then the root hash. left_subtree_len() tells
-/// // us where to split the input. Any other split would lead to an incorrect root hash.
+/// // us exactly where to split the input. Any other split would either panic (if we're lucky) or
+/// // lead to an incorrect root hash.
 /// let left_len = left_subtree_len(input_len as u64) as usize;
 /// let left_subtree_hash = Hasher::new()
 ///     .update(&input[..left_len])
