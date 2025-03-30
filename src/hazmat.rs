@@ -422,18 +422,9 @@ impl<'a> Mode<'a> {
 
 /// "Chaining value" is the academic term for a non-root or non-final hash.
 ///
-/// Besides just sounding fancy, it turns out there are security reasons to be careful about the
-/// difference between (root/final) hashes and (non-root/non-final) chaining values. The BLAKE3
-/// "compression function" has an [internal `flags`
-/// parameter](https://github.com/BLAKE3-team/BLAKE3/blob/1.7.0/reference_impl/reference_impl.rs#L79)
-/// that it mixes with its other inputs, and we use different `flags` [for root
-/// hashes](https://github.com/BLAKE3-team/BLAKE3/blob/1.7.0/reference_impl/reference_impl.rs#L154).
-/// Without this, BLAKE3 would be vulnerable to [length extension
-/// attacks](https://en.wikipedia.org/wiki/Length_extension_attack).
-///
-/// For a formal treatment of this problem, and an even more important tree hashing problem
-/// involving internal collisions, see [Sufficient conditions for sound tree and sequential hashing
-/// modes](https://keccak.team/files/TreeHashing.pdf) by the Keccak team.
+/// Besides just sounding fancy, it turns out there are [security
+/// reasons](https://jacko.io/tree_hashing.html) to be careful about the difference between
+/// (root/final) hashes and (non-root/non-final) chaining values.
 pub type ChainingValue = [u8; OUT_LEN];
 
 fn merge_subtrees_inner(
