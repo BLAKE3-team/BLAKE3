@@ -38,8 +38,12 @@ pub const TEST_CASES: &[usize] = &[
     7 * CHUNK_LEN + 1,
     8 * CHUNK_LEN,
     8 * CHUNK_LEN + 1,
-    16 * CHUNK_LEN,  // AVX512's bandwidth
-    31 * CHUNK_LEN,  // 16 + 8 + 4 + 2 + 1
+    16 * CHUNK_LEN - 1,
+    16 * CHUNK_LEN, // AVX512's bandwidth
+    16 * CHUNK_LEN + 1,
+    31 * CHUNK_LEN - 1,
+    31 * CHUNK_LEN, // 16 + 8 + 4 + 2 + 1
+    31 * CHUNK_LEN + 1,
     100 * CHUNK_LEN, // subtrees larger than MAX_SIMD_DEGREE chunks
 ];
 
