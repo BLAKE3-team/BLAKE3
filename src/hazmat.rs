@@ -4,14 +4,14 @@
 //! which work directly with the interior hashes ("chaining values") of BLAKE3 chunks and subtrees.
 //! For example, you could use these functions to implement a BitTorrent-like protocol using the
 //! BLAKE3 tree structure, or to hash an input that's distributed across different machines. These
-//! use cases are very advanced, and most applications don't need this module. Also:
+//! use cases are advanced, and most applications don't need this module. Also:
 //!
 //! <div class="warning">
 //!
-//! **Warning:** This whole module is *hazardous material*. If you've heard folks say *don't roll
-//! your own crypto,* this is the sort of thing they're talking about. These functions have
-//! complicated requirements, and any mistakes will give you garbage output and/or break the
-//! security properties that BLAKE3 is supposed to have. Read section 2.1 of [the BLAKE3
+//! **Warning:** This module is *hazardous material*. If you've heard folks say *don't roll your
+//! own crypto,* this is the sort of thing they're talking about. These functions have complicated
+//! requirements, and any mistakes will give you garbage output and/or break the security
+//! properties that BLAKE3 is supposed to have. Read section 2.1 of [the BLAKE3
 //! paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf) to understand the
 //! tree structure you need to maintain. Test your code against [`blake3::hash`](../fn.hash.html)
 //! and make sure you can get the same outputs for [lots of different

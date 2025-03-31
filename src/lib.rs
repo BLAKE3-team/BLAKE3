@@ -655,8 +655,8 @@ impl IncrementCounter {
     }
 }
 
-// The largest power of two less than or equal to `n`, used for left_subtree_len()
-// immediately below, and also directly in Hasher::update().
+// The largest power of two less than or equal to `n`, used in Hasher::update(). This is similar to
+// left_subtree_len(n), but note that left_subtree_len(n) is strictly less than `n`.
 fn largest_power_of_two_leq(n: usize) -> usize {
     ((n / 2) + 1).next_power_of_two()
 }
@@ -1131,6 +1131,9 @@ impl Hasher {
     // should remain in the stack is represented by a 1-bit in the total number
     // of chunks (or bytes) so far.
     fn merge_cv_stack(&mut self, chunk_counter: u64) {
+        // Account for non-zero cases of Hasher::set_input_offset, where there are no prior
+        // subtrees in the stack. Note that initial_chunk_counter is always 0 for callers who don't
+        // use the hazmat module.
         let post_merge_stack_len =
             (chunk_counter - self.initial_chunk_counter).count_ones() as usize;
         while self.cv_stack.len() > post_merge_stack_len {
@@ -1389,7 +1392,7 @@ impl Hasher {
     pub fn finalize(&self) -> Hash {
         assert_eq!(
             self.initial_chunk_counter, 0,
-            "set_input_offset must be used with finalized_non_root",
+            "set_input_offset must be used with finalize_non_root",
         );
         self.final_output().root_hash()
     }
@@ -1404,13 +1407,18 @@ impl Hasher {
     pub fn finalize_xof(&self) -> OutputReader {
         assert_eq!(
             self.initial_chunk_counter, 0,
-            "set_input_offset must be used with finalized_non_root",
+            "set_input_offset must be used with finalize_non_root",
         );
         OutputReader::new(self.final_output())
     }
 
     /// Return the total number of bytes hashed so far.
+    ///
+    /// [`hazmat::HasherExt::set_input_offset`] does not affect this value. This only counts bytes
+    /// passed to [`update`](Hasher::update).
     pub fn count(&self) -> u64 {
+        // Account for non-zero cases of Hasher::set_input_offset. Note that initial_chunk_counter
+        // is always 0 for callers who don't use the hazmat module.
         (self.chunk_state.chunk_counter - self.initial_chunk_counter) * CHUNK_LEN as u64
             + self.chunk_state.count() as u64
     }
