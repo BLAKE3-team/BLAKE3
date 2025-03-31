@@ -330,6 +330,29 @@ function(join_paths joined_path first_path_segment)
     set(${joined_path} "${temp_path}" PARENT_SCOPE)
 endfunction()
 
+# In-place rewrite a list of strings `requires` into a comma separated string.
+#
+# TODO: Replace function with list(JOIN) when updating to CMake 3.12
+function(join_pkg_config_requires requires)
+  list(LENGTH ${requires} len)
+  set(idx 1)
+  foreach(req ${${requires}})
+    string(APPEND acc ${req})
+    if(idx LESS len)
+      string(APPEND acc ", ")
+    endif()
+    math(EXPR idx "${idx} + 1")
+  endforeach()
+  set(${requires} ${acc} PARENT_SCOPE)
+endfunction()
+
+# calculate pkg-config requirements
+if(BLAKE3_USE_TBB)
+  list(APPEND PKG_CONFIG_REQUIRES "tbb >= ${TBB_VERSION}")
+endif()
+
+# pkg-config support
+join_pkg_config_requires(PKG_CONFIG_REQUIRES)
 join_paths(PKG_CONFIG_INSTALL_LIBDIR "\${prefix}" "${CMAKE_INSTALL_LIBDIR}")
 join_paths(PKG_CONFIG_INSTALL_INCLUDEDIR "\${prefix}" "${CMAKE_INSTALL_INCLUDEDIR}")
 configure_file(libblake3.pc.in libblake3.pc @ONLY)
