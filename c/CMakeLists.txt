@@ -240,6 +240,8 @@ if(BLAKE3_USE_TBB)
       PUBLIC
         BLAKE3_USE_TBB)
   endif()
+  list(APPEND PKG_CONFIG_REQUIRES "tbb >= ${TBB_VERSION}")
+  list(APPEND BLAKE3_PKGCONFIG_CFLAGS -DBLAKE3_USE_TBB)
 endif()
 
 if(BLAKE3_USE_TBB)
@@ -346,11 +348,6 @@ function(join_pkg_config_requires requires)
   endforeach()
   set("${requires}" "${acc}" PARENT_SCOPE)
 endfunction()
-
-# calculate pkg-config requirements
-if(BLAKE3_USE_TBB)
-  list(APPEND PKG_CONFIG_REQUIRES "tbb >= ${TBB_VERSION}")
-endif()
 
 # pkg-config support
 join_pkg_config_requires(PKG_CONFIG_REQUIRES)
