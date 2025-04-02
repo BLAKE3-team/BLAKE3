@@ -334,16 +334,17 @@ endfunction()
 #
 # TODO: Replace function with list(JOIN) when updating to CMake 3.12
 function(join_pkg_config_requires requires)
-  list(LENGTH ${requires} len)
+  set(_requires "${${requires}}") # avoid shadowing issues, e.g. "${requires}"=len
+  list(LENGTH "${requires}" len)
   set(idx 1)
-  foreach(req ${${requires}})
-    string(APPEND acc ${req})
+  foreach(req IN LISTS _requires)
+    string(APPEND acc "${req}")
     if(idx LESS len)
       string(APPEND acc ", ")
     endif()
     math(EXPR idx "${idx} + 1")
   endforeach()
-  set(${requires} ${acc} PARENT_SCOPE)
+  set("${requires}" "${acc}" PARENT_SCOPE)
 endfunction()
 
 # calculate pkg-config requirements
