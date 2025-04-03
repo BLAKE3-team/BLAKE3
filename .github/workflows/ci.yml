@@ -258,8 +258,8 @@ jobs:
     - run: docker run -v $(pwd):/io -w /io messense/cargo-xwin cargo xwin test --target x86_64-pc-windows-msvc --features=mmap,rayon,traits-preview,serde,zeroize
 
   # Currently only on x86.
-  c_tests:
-    name: C tests SIMD=${{ matrix.simd }} TBB=${{ matrix.use_tbb }}
+  cmake_c_tests:
+    name: CMake C tests SIMD=${{ matrix.simd }} TBB=${{ matrix.use_tbb }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -301,6 +301,28 @@ jobs:
     - run: |
         cmake --fresh -S c -B c/build -G Ninja -DBLAKE3_TESTING=ON -DBLAKE3_TESTING_CI=ON -DBLAKE3_EXAMPLES=ON "-DBLAKE3_USE_TBB=${{ matrix.use_tbb }}"
         cmake --build c/build --target blake3-example
+
+  # Currently only on x86.
+  pkg_config_c_tests:
+    name: pkg-config C tests TBB=${{ matrix.use_tbb }} BUILD_SHARED_LIBS=${{ matrix.shared_libs }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        use_tbb: ["OFF", "ON"]
+        shared_libs: ["OFF", "ON"]
+    steps:
+    - uses: actions/checkout@v4
+    - run: |
+        sudo apt-get update
+        sudo apt-get install ninja-build libtbb-dev libtbb12
+    - run: cmake --fresh -S c -B c/build -G Ninja -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/target "-DBLAKE3_USE_TBB=${{ matrix.use_tbb }}" "-DBUILD_SHARED_LIBS=${{ matrix.shared_libs }}"
+    - run: cmake --build c/build --target install
+    - run: mkdir -p ${{ github.workspace }}/target/bin
+    - run: echo "PKG_CONFIG_PATH=${{ github.workspace }}/target/lib/pkgconfig" >> $GITHUB_ENV
+    - run: gcc -O3 -o ${{ github.workspace }}/target/bin/blake3-example c/example.c $(pkg-config --cflags --libs libblake3) -lstdc++
+    - if: matrix.use_tbb == 'ON'
+      run: gcc -O3 -o ${{ github.workspace }}/target/bin/blake3-example-tbb c/example_tbb.c $(pkg-config --cflags --libs libblake3) -lstdc++
 
   # Note that this jobs builds AArch64 binaries from an x86_64 host.
   build_apple_silicon:
