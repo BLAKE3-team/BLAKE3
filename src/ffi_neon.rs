@@ -53,6 +53,7 @@ pub extern "C" fn blake3_compress_in_place_portable(
 }
 
 pub mod ffi {
+    #[cfg_attr(blake3_neon_ffi, link(name = "blake3_neon", kind = "static"))]
     extern "C" {
         pub fn blake3_hash_many_neon(
             inputs: *const *const u8,
