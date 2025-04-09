@@ -120,6 +120,9 @@ rayon-core = { version = "1.12.1", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
 zeroize = { version = "1", default-features = false, optional = true }
 
+[target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
+cpufeatures = "0.2.17"
+
 [dev-dependencies]
 hmac = "0.12.0"
 hex = "0.4.2"
