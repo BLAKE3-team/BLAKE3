@@ -1,8 +1,3 @@
-if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  message(FATAL_ERROR "BLAKE3_USE_TBB requires building with Clang or MSVC on Windows")
-  set(BLAKE3_USE_TBB OFF)
-endif()
-
 find_package(TBB 2021.11.0 QUIET)
 
 if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.11)
