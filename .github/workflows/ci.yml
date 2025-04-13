@@ -303,34 +303,119 @@ jobs:
         cmake --build c/build --target blake3-example
 
   # Currently only on x86.
-  pkg_config_c_tests:
-    name: pkg-config C tests TBB=${{ matrix.use_tbb }} BUILD_SHARED_LIBS=${{ matrix.shared_libs }} STDLIB=${{ matrix.stdlib }}
+  packaging-cmake:
+    name: CMake packaging tests - tbb=${{ matrix.use_tbb }} shared=${{ matrix.shared_libs }} os=${{ matrix.os }} cc=${{ matrix.toolchain.cc }} stdlib=${{ matrix.stdlib }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        use_tbb: ["OFF", "ON"]
-        shared_libs: ["OFF", "ON"]
-        stdlib: ["libc++", "libstdc++"]
+        use_tbb: [OFF, ON]
+        shared_libs: [OFF, ON]
+        os: [ubuntu-latest, macOS-latest]
+        stdlib: [libc++, libstdc++]
+        toolchain: [
+          { cc: clang, cxx: clang++ },
+          { cc: gcc, cxx: g++ }
+        ]
+        exclude:
+          - toolchain: { cc: gcc, cxx: g++ }
+            os: macOS-latest
+          - toolchain: { cc: gcc, cxx: g++ }
+            stdlib: libc++
+    env:
+      CC: ${{ matrix.toolchain.cc }}
+      CXX: ${{ matrix.toolchain.cxx }}
+      CXXFLAGS: ${{ matrix.stdlib == 'libc++' && '-stdlib=libc++' || '' }}
     steps:
     - uses: actions/checkout@v4
-    - name: update packages
+    - name: install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install ninja-build libtbb-dev libtbb12
-        ${{ matrix.stdlib != 'libc++' || 'sudo apt-get install libc++-dev libc++abi-dev' }}
-    - name: configure cmake
+    - name: install dependencies (libc++)
+      if: matrix.stdlib == 'libc++'
+      run: sudo apt-get install libc++-dev libc++abi-dev
+    - name: configure libblake3
+      run: cmake --fresh -S c -B c/build -G Ninja -DCMAKE_VERBOSE_MAKEFILE=1 "-DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/target" "-DBLAKE3_USE_TBB=${{ matrix.use_tbb }}" "-DBUILD_SHARED_LIBS=${{ matrix.shared_libs }}" -DBLAKE3_EXAMPLES=0
+    - name: build libblake3
+      run: cmake --build c/build --target install
+    - name: configure blake3-examples
+      run: cmake --fresh -S c/examples -B c/examples/build -G Ninja -DCMAKE_VERBOSE_MAKEFILE=1 "-DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/examples/target" "-DBLAKE3_DIR=${{ github.workspace }}/target/lib/cmake/blake3"
+    - name: build blake3 examples
+      run: cmake --build c/examples/build --target install
+    - name: configure environment
       run: |
-        export CXXFLAGS=${{ matrix.stdlib == 'libc++' && '-stdlib=libc++' || '' }}
-        export CC=${{ matrix.stdlib == 'libc++' && 'clang' || 'gcc' }}
-        export CXX=${{ matrix.stdlib == 'libc++' && 'clang++' || 'g++' }}
-        cmake --fresh -S c -B c/build -G Ninja -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/target "-DBLAKE3_USE_TBB=${{ matrix.use_tbb }}" "-DBUILD_SHARED_LIBS=${{ matrix.shared_libs }}" -DCMAKE_VERBOSE_MAKEFILE=1
-    - run: cmake --build c/build --target install
-    - run: mkdir -p ${{ github.workspace }}/target/bin
-    - run: echo "PKG_CONFIG_PATH=${{ github.workspace }}/target/lib/pkgconfig" >> $GITHUB_ENV
-    - run: gcc -O3 -o ${{ github.workspace }}/target/bin/blake3-example c/example.c $(pkg-config --cflags --libs libblake3)
-    - if: matrix.use_tbb == 'ON'
-      run: gcc -O3 -o ${{ github.workspace }}/target/bin/blake3-example-tbb c/example_tbb.c $(pkg-config --cflags --libs libblake3)
+        echo "LD_LIBRARY_PATH=${{ github.workspace }}/target/lib:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
+        echo "PKG_CONFIG_PATH=${{ github.workspace }}/target/lib/pkgconfig" >> $GITHUB_ENV
+    - name: test blake3-example
+      run: |
+        [ -f "${{ github.workspace }}/examples/target/bin/blake3-example" ]
+        [ $(echo -n IETF | "${{ github.workspace }}/examples/target/bin/blake3-example") = "83a2de1ee6f4e6ab686889248f4ec0cf4cc5709446a682ffd1cbb4d6165181e2" ]
+    - name: test blake3-example-tbb
+      if: matrix.use_tbb == 'ON'
+      run: |
+        [ -f "${{ github.workspace }}/examples/target/bin/blake3-example-tbb" ]
+        echo -n IETF > example-input
+        [ $("${{ github.workspace }}/examples/target/bin/blake3-example-tbb" ./example-input) = "83a2de1ee6f4e6ab686889248f4ec0cf4cc5709446a682ffd1cbb4d6165181e2" ]
+
+  # Currently only on x86.
+  packaging-pkg_config:
+    name: pkg-config packaging tests - tbb=${{ matrix.use_tbb }} shared=${{ matrix.shared_libs }} os=${{ matrix.os }} cc=${{ matrix.toolchain.cc }} stdlib=${{ matrix.stdlib }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        use_tbb: [OFF, ON]
+        shared_libs: [OFF, ON]
+        os: [ubuntu-latest, macOS-latest]
+        stdlib: [libc++, libstdc++]
+        toolchain: [
+          { cc: clang, cxx: clang++ },
+          { cc: gcc, cxx: g++ }
+        ]
+        exclude:
+          - toolchain: { cc: gcc, cxx: g++ }
+            os: macOS-latest
+          - toolchain: { cc: gcc, cxx: g++ }
+            stdlib: libc++
+    env:
+      CC: ${{ matrix.toolchain.cc }}
+      CXX: ${{ matrix.toolchain.cxx }}
+      CXXFLAGS: ${{ matrix.stdlib == 'libc++' && '-stdlib=libc++' || '' }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install ninja-build libtbb-dev libtbb12
+    - name: install dependencies (libc++)
+      if: matrix.stdlib == 'libc++'
+      run: sudo apt-get install libc++-dev libc++abi-dev
+    - name: configure libblake3
+      run: cmake --fresh -S c -B c/build -G Ninja -DCMAKE_VERBOSE_MAKEFILE=1 "-DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/target" "-DBLAKE3_USE_TBB=${{ matrix.use_tbb }}" "-DBUILD_SHARED_LIBS=${{ matrix.shared_libs }}" -DBLAKE3_EXAMPLES=0
+    - name: build libblake3
+      run: cmake --build c/build --target install
+    - name: configure environment
+      run: |
+        echo "LD_LIBRARY_PATH=${{ github.workspace }}/target/lib:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
+        echo "PKG_CONFIG_PATH=${{ github.workspace }}/target/lib/pkgconfig" >> $GITHUB_ENV
+    - name: create bin directory
+      run: mkdir -p ${{ github.workspace }}/target/bin
+    - name: compile blake3-example
+      run: gcc -O3 -o ${{ github.workspace }}/target/bin/blake3-example c/examples/example.c $(pkg-config --cflags --libs libblake3)
+    - name: compile blake3-example-tbb
+      if: matrix.use_tbb == 'ON'
+      run: gcc -O3 -o ${{ github.workspace }}/target/bin/blake3-example-tbb c/examples/example_tbb.c $(pkg-config --cflags --libs libblake3)
+    - name: test blake3-example
+      run: |
+        [ -f "${{ github.workspace }}/target/bin/blake3-example" ]
+        [ $(echo -n IETF | "${{ github.workspace }}/target/bin/blake3-example") = "83a2de1ee6f4e6ab686889248f4ec0cf4cc5709446a682ffd1cbb4d6165181e2" ]
+    - name: test blake3-example-tbb
+      if: matrix.use_tbb == 'ON'
+      run: |
+        [ -f "${{ github.workspace }}/target/bin/blake3-example-tbb" ]
+        echo -n IETF > example-input
+        [ $("${{ github.workspace }}/target/bin/blake3-example-tbb" ./example-input) = "83a2de1ee6f4e6ab686889248f4ec0cf4cc5709446a682ffd1cbb4d6165181e2" ]
 
   # Note that this jobs builds AArch64 binaries from an x86_64 host.
   build_apple_silicon:
