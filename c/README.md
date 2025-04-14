@@ -277,7 +277,7 @@ The following options are available when compiling with CMake:
 Options can be enabled like this:
 
 ```bash
-cmake -S c -B c/build "-DCMAKE_INSTALL_PREFIX=/usr/local" -DCMAKE_USE_TBB=1 -DCMAKE_FETCH_TBB=1
+cmake -S c -B c/build "-DCMAKE_INSTALL_PREFIX=/usr/local" -DBLAKE3_USE_TBB=1 -DBLAKE3_FETCH_TBB=1
 ```
 
 ## Building manually
