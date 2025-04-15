@@ -205,8 +205,9 @@ Here's a (non-exhaustive) list of protocols and software that use BLAKE3:
 * [Alephium](https://github.com/alephium/alephium/blob/master/crypto/src/main/scala/org/alephium/crypto/Blake3.scala)
 * [Bazel](https://github.com/bazelbuild/bazel/releases/tag/6.4.0)
 * [Chia](https://github.com/Chia-Network/chia-blockchain/blob/main/CHANGELOG.md#10beta8-aka-beta-18---2020-07-16)
-* [IPFS](https://github.com/ipfs/go-verifcid/issues/13)
+* [Clickhouse](https://github.com/ClickHouse/ClickHouse/blob/master/rust/chcache/Cargo.toml#L7)
 * [Farcaster](https://www.farcaster.xyz/)
+* [IPFS](https://github.com/ipfs/go-verifcid/issues/13)
 * [LLVM](https://reviews.llvm.org/D121510)
 * [Nix](https://github.com/NixOS/nix/pull/12379)
 * [Nym](https://github.com/nymtech/nym/blob/59056a22c5e6b01a38da2124662bd1fa3c8abef2/common/nymsphinx/params/src/lib.rs#L5)
@@ -217,7 +218,6 @@ Here's a (non-exhaustive) list of protocols and software that use BLAKE3:
 * [Solana](https://docs.rs/solana-program/1.9.5/solana_program/blake3/index.html)
 * [Tekken 8](https://en.bandainamcoent.eu/tekken/tekken-8)
 * [Wasmer](https://github.com/wasmerio/wasmer/blob/4f935a8c162bf604df223003e434e4f7ca253688/lib/cache/src/hash.rs#L21)
-* [Clickhouse](https://github.com/ClickHouse/ClickHouse/blob/master/rust/chcache/Cargo.toml#L7)
 
 
 ## Miscellany
