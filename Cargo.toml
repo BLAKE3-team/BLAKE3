@@ -38,7 +38,7 @@ std = []
 #
 # Implementation detail: We take a dependency on rayon-core instead of rayon,
 # because it builds faster and still includes all the APIs we need.
-rayon = ["dep:rayon-core", "std"]
+rayon = ["dep:rayon-core"]
 
 # The `mmap` feature (disabled by default, but enabled for docs.rs) adds the
 # `update_mmap` and (in combination with `rayon` above) `update_mmap_rayon`
@@ -114,7 +114,7 @@ arrayref = "0.3.5"
 arrayvec = { version = "0.7.4", default-features = false }
 constant_time_eq = { version = "0.3.1", default-features = false }
 cfg-if = "1.0.0"
-digest = { version = "0.10.1", features = [ "mac" ], optional = true }
+digest = { version = "0.10.1", features = ["mac"], optional = true }
 memmap2 = { version = "0.9", optional = true }
 rayon-core = { version = "1.12.1", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
