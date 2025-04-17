@@ -1125,11 +1125,11 @@ impl Hasher {
     // always merging 1 chunk at a time. Instead, each CV might represent any
     // power-of-two number of chunks, as long as the smaller-above-larger stack
     // order is maintained. Instead of the "count the trailing 0-bits"
-    // algorithm described in the spec, we use a "count the total number of
-    // 1-bits" variant that doesn't require us to retain the subtree size of
-    // the CV on top of the stack. The principle is the same: each CV that
-    // should remain in the stack is represented by a 1-bit in the total number
-    // of chunks (or bytes) so far.
+    // algorithm described in the spec (which assumes you're adding one chunk
+    // at a time), we use a "count the total number of 1-bits" variant (which
+    // doesn't assume that). The principle is the same: each CV that should
+    // remain in the stack is represented by a 1-bit in the total number of
+    // chunks (or bytes) so far.
     fn merge_cv_stack(&mut self, chunk_counter: u64) {
         // Account for non-zero cases of Hasher::set_input_offset, where there are no prior
         // subtrees in the stack. Note that initial_chunk_counter is always 0 for callers who don't
