@@ -376,7 +376,7 @@ add_feature_info("oneTBB parallelism" BLAKE3_USE_TBB "The library uses oneTBB pa
 feature_summary(WHAT ENABLED_FEATURES)
 
 if(BLAKE3_EXAMPLES)
-  include(BLAKE3/Examples)
+  add_subdirectory(examples)
 endif()
 if(BLAKE3_TESTING)
   include(BLAKE3/Testing)
