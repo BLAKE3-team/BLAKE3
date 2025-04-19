@@ -145,6 +145,8 @@ use arrayvec::{ArrayString, ArrayVec};
 use core::cmp;
 use core::fmt;
 use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
+#[cfg(feature = "subtle")]
+use subtle::ConstantTimeEq;
 #[cfg(feature = "zeroize")]
 use zeroize::Zeroize;
 
@@ -338,6 +340,13 @@ impl Zeroize for Hash {
         // Destructuring to trigger compile error as a reminder to update this impl.
         let Self(bytes) = self;
         bytes.zeroize();
+    }
+}
+
+#[cfg(feature = "subtle")]
+impl ConstantTimeEq for Hash {
+    fn ct_eq(&self, other: &Self) -> subtle::Choice {
+        self.0.ct_eq(&other.0)
     }
 }
 
