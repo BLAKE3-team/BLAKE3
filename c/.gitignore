@@ -1,7 +1,11 @@
-blake3
-example
-example_tbb
-build/
+
+# manual build output
+# note that the "blake3" pattern would also matche the "BLAKE3" directory on Windows
+/blake3
+/example
+/example_tbb
 *.o
 
+# CMake related files
+build/
 CMakeUserPresets.json
