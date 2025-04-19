@@ -126,6 +126,22 @@
                 "linux",
                 "base"
             ]
+        },
+        {
+            "name": "arm64-macos-gcc",
+            "inherits": [
+                "gcc",
+                "macos",
+                "base"
+            ]
+        },
+        {
+            "name": "arm64-macos-clang",
+            "inherits": [
+                "clang",
+                "macos",
+                "base"
+            ]
         }
     ],
     "buildPresets": [
@@ -180,6 +196,27 @@
             "name": "x64-linux-clang-release",
             "configurePreset": "x64-linux-clang",
             "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "arm64-macos-gcc-debug",
+            "configurePreset": "arm64-macos-gcc",
+            "configuration": "Debug"
+        },
+        {
+            "name": "arm64-macos-gcc-release",
+            "configurePreset": "arm64-macos-gcc",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "arm64-macos-clang-debug",
+            "configurePreset": "arm64-macos-clang",
+            "configuration": "Debug"
+        },
+        {
+            "name": "arm64-macos-clang-release",
+            "configurePreset": "arm64-macos-clang",
+            "configuration": "RelWithDebInfo"
+        }
     ],
     "testPresets": [
         {
