@@ -14,7 +14,64 @@
         {
             "name": "msvc",
             "hidden": true,
-            "generator": "Visual Studio 17 2022",
+            "generator": "Visual Studio 17 2022"
+        },
+        {
+            "name": "gcc",
+            "hidden": true,
+            "generator": "Ninja Multi-Config",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++"
+            }
+        },
+        {
+            "name": "clang",
+            "hidden": true,
+            "generator": "Ninja Multi-Config",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++"
+            }
+        },
+        {
+            "name": "testing",
+            "hidden": true,
+            "cacheVariables": {
+                "BUILD_TESTING": true,
+                "CMAKE_C_FLAGS": "-Wall -Wextra -pedantic -D_FORTIFY_SOURCE=2 -fstack-protector-strong -fsanitize=address,undefined",
+                "CMAKE_C_FLAGS_RELEASE": "-O3",
+                "CMAKE_CXX_FLAGS": "-Wall -Wextra -pedantic -D_FORTIFY_SOURCE=2 -fstack-protector-strong -fsanitize=address,undefined",
+                "CMAKE_CXX_FLAGS_RELEASE": "-O3",
+                "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined -Wl,-z,relro,-z,now",
+                "CMAKE_POSITION_INDEPENDENT_CODE": true
+            }
+        },
+        {
+            "name": "linux",
+            "hidden": true,
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": [
+                        "Linux"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "macos",
+            "hidden": true,
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": [
+                        "macOS"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "windows",
+            "hidden": true,
             "vendor": {
                 "microsoft.com/VisualStudioSettings/CMake/1.0": {
                     "hostOS": [
@@ -46,6 +103,29 @@
                 "base"
             ],
             "architecture": "ARM64"
+        },
+        {
+            "name": "x64-linux-gcc",
+            "inherits": [
+                "gcc",
+                "linux",
+                "base"
+            ]
+        },
+        {
+            "name": "x64-linux-gcc-testing",
+            "inherits": [
+                "testing",
+                "x64-linux-gcc"
+            ]
+        },
+        {
+            "name": "x64-linux-clang",
+            "inherits": [
+                "clang",
+                "linux",
+                "base"
+            ]
         }
     ],
     "buildPresets": [
@@ -68,6 +148,49 @@
             "name": "x86-windows-msvc-release",
             "configurePreset": "x86-windows-msvc",
             "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "x64-linux-gcc-debug",
+            "configurePreset": "x64-linux-gcc",
+            "configuration": "Debug"
+        },
+        {
+            "name": "x64-linux-gcc-release",
+            "configurePreset": "x64-linux-gcc",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "x64-linux-gcc-testing-debug",
+            "configurePreset": "x64-linux-gcc-testing",
+            "configuration": "Debug",
+            "verbose": true
+        },
+        {
+            "name": "x64-linux-gcc-testing-release",
+            "configurePreset": "x64-linux-gcc-testing",
+            "configuration": "Release",
+            "verbose": true
+        },
+        {
+            "name": "x64-linux-clang-debug",
+            "configurePreset": "x64-linux-clang",
+            "configuration": "Debug"
+        },
+        {
+            "name": "x64-linux-clang-release",
+            "configurePreset": "x64-linux-clang",
+            "configuration": "RelWithDebInfo"
+    ],
+    "testPresets": [
+        {
+            "name": "x64-linux-gcc-debug",
+            "configurePreset": "x64-linux-gcc-testing",
+            "configuration": "Debug"
+        },
+        {
+            "name": "x64-linux-gcc-release",
+            "configurePreset": "x64-linux-gcc-testing",
+            "configuration": "Release"
         }
     ]
 }

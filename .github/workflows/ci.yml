@@ -268,39 +268,24 @@ jobs:
         simd: ["x86-intrinsics", "amd64-asm"]
     steps:
     - uses: actions/checkout@v4
-    - run: |
+      with:
+        sparse-checkout: |
+          .github
+          c
+          test_vectors
+    - name: Install Ubuntu dependencies
+      run: |
         sudo apt-get update
         sudo apt-get install ninja-build libtbb-dev libtbb12
-    # Test the intrinsics-based and assembly-based implementations.
-    - run: |
-        cmake --fresh -S c -B c/build -G Ninja -DBLAKE3_TESTING=ON -DBLAKE3_TESTING_CI=ON "-DBLAKE3_SIMD_TYPE=${{ matrix.simd }}"
-        cmake --build c/build --target test
-        cat c/build/Testing/Temporary/LastTest.log
-    - run: |
-        cmake --fresh -S c -B c/build -G Ninja -DBLAKE3_TESTING=ON -DBLAKE3_TESTING_CI=ON "-DBLAKE3_SIMD_TYPE=${{ matrix.simd }}" -DBLAKE3_NO_SSE2=1
-        cmake --build c/build --target test
-        cat c/build/Testing/Temporary/LastTest.log
-    - run: |
-        cmake --fresh -S c -B c/build -G Ninja -DBLAKE3_TESTING=ON -DBLAKE3_TESTING_CI=ON "-DBLAKE3_SIMD_TYPE=${{ matrix.simd }}" -DBLAKE3_NO_SSE2=1 -DBLAKE3_NO_SSE41=1
-        cmake --build c/build --target test
-        cat c/build/Testing/Temporary/LastTest.log
-    - run: |
-        cmake --fresh -S c -B c/build -G Ninja -DBLAKE3_TESTING=ON -DBLAKE3_TESTING_CI=ON "-DBLAKE3_SIMD_TYPE=${{ matrix.simd }}" "-DBLAKE3_NO_SSE2=1" "-DBLAKE3_NO_SSE41=1" "-DBLAKE3_NO_AVX2=1"
-        cmake --build c/build --target test
-        cat c/build/Testing/Temporary/LastTest.log
-    - run: |
-        cmake --fresh -S c -B c/build -G Ninja -DBLAKE3_TESTING=ON -DBLAKE3_TESTING_CI=ON "-DBLAKE3_SIMD_TYPE=${{ matrix.simd }}" "-DBLAKE3_NO_SSE2=1" "-DBLAKE3_NO_SSE41=1" "-DBLAKE3_NO_AVX2=1" "-DBLAKE3_NO_AVX512=1"
-        cmake --build c/build --target test
-        cat c/build/Testing/Temporary/LastTest.log
-    # Test with TBB disabled/enabled.
-    - run: |
-        cmake --fresh -S c -B c/build -G Ninja -DBLAKE3_TESTING=ON -DBLAKE3_TESTING_CI=ON "-DBLAKE3_USE_TBB=${{ matrix.use_tbb }}"
-        cmake --build c/build --target test
-        cat c/build/Testing/Temporary/LastTest.log
-    # Build the example with TBB disabled/enabled.
-    - run: |
-        cmake --fresh -S c -B c/build -G Ninja -DBLAKE3_TESTING=ON -DBLAKE3_TESTING_CI=ON -DBLAKE3_EXAMPLES=ON "-DBLAKE3_USE_TBB=${{ matrix.use_tbb }}"
-        cmake --build c/build --target blake3-example
+    - name: CMake configure
+      working-directory: c
+      run: cmake --preset=x64-linux-gcc-testing "-DBLAKE3_SIMD_TYPE=${{ matrix.simd }}" "-DBLAKE3_USE_TBB=${{ matrix.use_tbb }}"
+    - name: CMake test debug
+      working-directory: c
+      run: ctest --preset=x64-linux-gcc-debug
+    - name: CMake test release
+      working-directory: c
+      run: ctest --preset=x64-linux-gcc-release
 
   # Currently only on x86.
   packaging-cmake:

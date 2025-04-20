@@ -1,13 +1,4 @@
-cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
-
-# respect C_EXTENSIONS OFF without explicitly setting C_STANDARD
-if (POLICY CMP0128)
-  cmake_policy(SET CMP0128 NEW)
-endif()
-# mark_as_advanced does not implicitly create UNINITIALIZED cache entries
-if (POLICY CMP0102)
-  cmake_policy(SET CMP0102 NEW)
-endif()
+cmake_minimum_required(VERSION 3.9...3.22 FATAL_ERROR)
 
 project(libblake3
   VERSION 1.8.1
@@ -19,6 +10,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 option(BLAKE3_USE_TBB "Enable oneTBB parallelism" OFF)
 option(BLAKE3_FETCH_TBB "Allow fetching oneTBB from GitHub if not found on system" OFF)
+option(BUILD_TESTING "Enable testing" OFF)
 
 include(CTest)
 include(FeatureSummary)
@@ -339,6 +331,6 @@ feature_summary(WHAT ENABLED_FEATURES)
 if(BLAKE3_EXAMPLES)
   add_subdirectory(examples)
 endif()
-if(BLAKE3_TESTING)
+if(BUILD_TESTING)
   include(BLAKE3/Testing)
 endif()
