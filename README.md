@@ -200,23 +200,21 @@ Alternatively, it is licensed under any of the following:
 
 ## Adoption & deployment
 
-Here's a (non-exhaustive) list of protocols and software that use BLAKE3:
-
-* [Alephium](https://github.com/alephium/alephium/blob/master/crypto/src/main/scala/org/alephium/crypto/Blake3.scala)
 * [Bazel](https://github.com/bazelbuild/bazel/releases/tag/6.4.0)
+* [Cargo](https://github.com/rust-lang/cargo/pull/14137)
+* [Ccache](https://github.com/ccache/ccache/pull/519)
 * [Chia](https://github.com/Chia-Network/chia-blockchain/blob/main/CHANGELOG.md#10beta8-aka-beta-18---2020-07-16)
 * [Clickhouse](https://github.com/ClickHouse/ClickHouse/blob/master/rust/chcache/Cargo.toml#L7)
 * [Farcaster](https://www.farcaster.xyz/)
 * [IPFS](https://github.com/ipfs/go-verifcid/issues/13)
+* [Iroh](https://www.iroh.computer/blog/blake3-hazmat-api)
 * [LLVM](https://reviews.llvm.org/D121510)
 * [Nix](https://github.com/NixOS/nix/pull/12379)
 * [Nym](https://github.com/nymtech/nym/blob/59056a22c5e6b01a38da2124662bd1fa3c8abef2/common/nymsphinx/params/src/lib.rs#L5)
 * [OpenZFS](https://github.com/openzfs/zfs/)
 * [Redox](https://www.redox-os.org/news/pkgar-introduction/)
-* [Saito](https://saito.tech/)
-* [Skale](https://github.com/skalenetwork/skale-consensus/pull/284)
 * [Solana](https://docs.rs/solana-program/1.9.5/solana_program/blake3/index.html)
-* [Tekken 8](https://en.bandainamcoent.eu/tekken/tekken-8)
+* [Tekken 8](https://x.com/rodarmor/status/1751567502050771189)
 * [Wasmer](https://github.com/wasmerio/wasmer/blob/4f935a8c162bf604df223003e434e4f7ca253688/lib/cache/src/hash.rs#L21)
 
 
