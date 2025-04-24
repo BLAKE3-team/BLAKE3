@@ -7,6 +7,9 @@ project(libblake3
 )
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+# if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT AND "$ENV{CI}")
+#   set_property(CACHE CMAKE_INSTALL_PREFIX PROPERTY VALUE "/my/default")
+# endif()
 
 option(BLAKE3_USE_TBB "Enable oneTBB parallelism" OFF)
 option(BLAKE3_FETCH_TBB "Allow fetching oneTBB from GitHub if not found on system" OFF)

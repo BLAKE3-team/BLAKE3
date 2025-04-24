@@ -257,7 +257,90 @@ jobs:
     - uses: actions/checkout@v4
     - run: docker run -v $(pwd):/io -w /io messense/cargo-xwin cargo xwin test --target x86_64-pc-windows-msvc --features=mmap,rayon,traits-preview,serde,zeroize
 
-  # Currently only on x86.
+  cmake_build:
+    name: CMake build OS=${{ matrix.os }} COMPILER=${{ matrix.compiler }} CMAKE=${{ matrix.cmake_version }} SO=${{ matrix.shared_libs }} TBB=${{ matrix.use_tbb }}
+    runs-on: ${{matrix.os}}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+        compiler: [clang, gcc, msvc]
+        cmake_version: ["~3.22.6", latest]
+        shared_libs: [OFF, ON]
+        use_tbb: [OFF, ON]
+        include:
+          - os: macos-latest
+            triplet_base: arm64-macos
+          - os: ubuntu-latest
+            triplet_base: x64-linux
+          - os: windows-latest
+            triplet_base: x64-windows
+        exclude:
+          - compiler: msvc
+            os: macos-latest
+          - compiler: msvc
+            os: ubuntu-latest
+          - compiler: gcc
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github
+            c
+      - if: matrix.os == 'macos-latest' && matrix.use_tbb == 'ON'
+        name: Install dependencies on macOS
+        run: |
+          brew update
+          brew install tbb
+      - if: matrix.os == 'ubuntu-latest' && matrix.use_tbb == 'ON'
+        name: Install dependencies on Linux
+        run: |
+          sudo apt-get update
+          sudo apt-get install libtbb-dev libtbb12
+      - uses: lukka/get-cmake@57c20a23a6cac5b90f31864439996e5b206df9dc
+        with:
+          cmakeVersion: ${{ matrix.cmake_version }}
+          ninjaVersion: latest
+      - name: Build ${{ matrix.triplet_base }}-${{ matrix.compiler }}-debug preset
+        uses: lukka/run-cmake@af1be47fd7c933593f687731bc6fdbee024d3ff4
+        with:
+          cmakeListsTxtPath: ${{ github.workspace }}/c/CMakeLists.txt
+          configurePreset: ${{matrix.triplet_base}}-${{matrix.compiler}}
+          configurePresetAdditionalArgs: >-
+            [
+              '-DBLAKE3_USE_TBB=${{ matrix.use_tbb }}',
+              '-DBUILD_SHARED_LIBS=${{ matrix.shared_libs }}',
+              '-DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/c/build/install'
+            ]
+          buildPreset: ${{matrix.triplet_base}}-${{matrix.compiler}}-debug
+          buildPresetAdditionalArgs: "['--target install']"
+      - name: Build ${{ matrix.triplet_base }}-${{ matrix.compiler }}-release preset
+        uses: lukka/run-cmake@af1be47fd7c933593f687731bc6fdbee024d3ff4
+        with:
+          cmakeListsTxtPath: ${{ github.workspace }}/c/CMakeLists.txt
+          configurePreset: ${{matrix.triplet_base}}-${{matrix.compiler}}
+          buildPreset: ${{matrix.triplet_base}}-${{matrix.compiler}}-release
+          buildPresetAdditionalArgs: "['--target install']"
+      # TODO: check generated pkg-config & cmake config files & CPS
+
+  cmake_3-9_build:
+    name: CMake 3.9.6 ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: lukka/get-cmake@5f6e04f5267c8133f1273bf2103583fc72c46b17
+        with:
+          cmakeVersion: 3.9.6
+      - name: Create build directory
+        run: mkdir c/build
+      - name: CMake generation
+        run: cmake .. -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/install
+        working-directory: c/build
+      - name: CMake build / install
+        run: make install
+        working-directory: c/build
+
   cmake_c_tests:
     name: CMake C tests SIMD=${{ matrix.simd }} TBB=${{ matrix.use_tbb }}
     runs-on: ubuntu-latest
@@ -504,23 +587,6 @@ jobs:
           ${{ matrix.os != 'windows-latest' || '& "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/Common7/Tools/Launch-VsDevShell.ps1" -Arch amd64 -SkipAutomaticLocation' }}
           cmake -S c -B c/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/target -DCMAKE_C_COMPILER=${{ matrix.toolchain.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.toolchain.cxx }} -DBLAKE3_USE_TBB=${{ matrix.use_tbb }} -DBLAKE3_FETCH_TBB=${{ matrix.os == 'windows-latest' && 'YES' || 'NO' }} -DBLAKE3_EXAMPLES=ON
           cmake --build c/build --target install
-
-  cmake_3-9_build:
-    name: CMake 3.9.6 ubuntu-latest
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: lukka/get-cmake@5f6e04f5267c8133f1273bf2103583fc72c46b17
-        with:
-          cmakeVersion: 3.9.6
-      - name: Create build directory
-        run: mkdir c/build
-      - name: CMake generation
-        run: cmake .. -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/target
-        working-directory: c/build
-      - name: CMake build / install
-        run: make install
-        working-directory: c/build
 
   miri_smoketest:
     name: Miri smoketest
