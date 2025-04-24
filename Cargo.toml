@@ -24,11 +24,11 @@ neon = []
 # This may become the default in the future.
 wasm32_simd = []
 
-# This crate uses libstd for std::io trait implementations, and also for
-# runtime CPU feature detection. This feature is enabled by default. If you use
-# --no-default-features, the only way to use the SIMD implementations in this
-# crate is to enable the corresponding instruction sets statically for the
-# entire build, with e.g. RUSTFLAGS="-C target-cpu=native".
+# Enables std::io traits, including impl Write for Hasher, impl Read and Seek
+# for OutputReader, and the Hasher::update_reader method. This feature is
+# enabled by default. (Previously this also controlled runtime CPU feature
+# detection on x86, but now we use the no-std-compatible `cpufeatures` crate
+# for that.)
 std = []
 
 # The `rayon` feature (disabled by default, but enabled for docs.rs) adds the

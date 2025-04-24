@@ -32,13 +32,10 @@
 //!
 //! # Cargo Features
 //!
-//! The `std` feature (the only feature enabled by default) is required for
-//! implementations of the [`Write`] and [`Seek`] traits, the
-//! [`update_reader`](Hasher::update_reader) helper method, and runtime CPU
-//! feature detection on x86. If this feature is disabled, the only way to use
-//! the x86 SIMD implementations is to enable the corresponding instruction sets
-//! globally, with e.g. `RUSTFLAGS="-C target-cpu=native"`. The resulting binary
-//! will not be portable to other machines.
+//! The `std` feature (the only feature enabled by default) enables the
+//! [`Write`] implementation and the [`update_reader`](Hasher::update_reader)
+//! method for [`Hasher`], and also the [`Read`] and [`Seek`] implementations
+//! for [`OutputReader`].
 //!
 //! The `rayon` feature (disabled by default, but enabled for [docs.rs]) adds
 //! the [`update_rayon`](Hasher::update_rayon) and (in combination with `mmap`
@@ -82,6 +79,7 @@
 //! [BLAKE3]: https://blake3.io
 //! [Rayon]: https://github.com/rayon-rs/rayon
 //! [docs.rs]: https://docs.rs/
+//! [`Read`]: https://doc.rust-lang.org/std/io/trait.Read.html
 //! [`Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
 //! [`Seek`]: https://doc.rust-lang.org/std/io/trait.Seek.html
 //! [`digest`]: https://crates.io/crates/digest
