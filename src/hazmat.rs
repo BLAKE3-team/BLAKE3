@@ -157,7 +157,14 @@ pub trait HasherExt {
     /// Similar to [`Hasher::new_derive_key`] but using a pre-hashed [`ContextKey`] from
     /// [`hash_derive_key_context`].
     ///
-    /// The [`hash_derive_key_context`] function is _only_ valid source of the [`ContextKey`]
+    /// The [`hash_derive_key_context`] function is the _only_ valid source of the [`ContextKey`].
+    /// Any other source ([`hash`](crate::hash), [`keyed_hash`](crate::keyed_hash), arbitrary bytes
+    /// from the caller) violates the security requirements.
+    ///
+    /// Calling [`derive_key`](crate::derive_key) or [`Hasher::new_derive_key`] in a loop will
+    /// re-hash the context string every time. This constructor function is a performance
+    /// optimization to avoid that repeated work. If you hardcode the [`ContextKey`], the
+    /// derive-key mode becomes zero-overhead, like the keyed mode.
     ///
     /// # Example
     ///
@@ -529,8 +536,12 @@ pub type ContextKey = [u8; KEY_LEN];
 
 /// Hash a [`derive_key`](crate::derive_key) context string and return a [`ContextKey`].
 ///
-/// The _only_ valid uses for the returned [`ContextKey`] are [`Hasher::new_from_context_key`] and
-/// [`Mode::DeriveKeyMaterial`] (together with the merge subtree functions).
+/// This has the same security requirement as [`derive_key`](crate::derive_key). **The context
+/// string should be hardcoded, globally unique, and application-specific.**
+///
+/// The _only_ valid uses for the returned [`ContextKey`] are
+/// [`new_from_context_key`](HasherExt::new_from_context_key) and [`Mode::DeriveKeyMaterial`]
+/// (together with the merge subtree functions).
 ///
 /// # Example
 ///
