@@ -44,12 +44,12 @@ int main(void) {
 }
 ```
 
-The code above is included in this directory as `example.c`. If you're
+The code above is included in this directory as `examples/example.c`. If you're
 on x86\_64 with a Unix-like OS, you can compile a working binary like
 this:
 
 ```bash
-gcc -O3 -o example example.c blake3.c blake3_dispatch.c blake3_portable.c \
+gcc -O3 -o example examples/example.c blake3.c blake3_dispatch.c blake3_portable.c \
     blake3_sse2_x86-64_unix.S blake3_sse41_x86-64_unix.S blake3_avx2_x86-64_unix.S \
     blake3_avx512_x86-64_unix.S
 ```
@@ -388,11 +388,11 @@ Multithreading is available using [oneTBB], by compiling the optional C++
 support file [`blake3_tbb.cpp`](./blake3_tbb.cpp). For an example of using
 `mmap` (non-Windows) and `blake3_hasher_update_tbb` to get large-file
 performance on par with [`b3sum`](../b3sum), see
-[`example_tbb.c`](./example_tbb.c). You can build it like this:
+[`example_tbb.c`](./examples/example_tbb.c). You can build it like this:
 
 ```bash
 g++ -c -O3 -fno-exceptions -fno-rtti -DBLAKE3_USE_TBB -o blake3_tbb.o blake3_tbb.cpp
-gcc -O3 -o example_tbb -lstdc++ -ltbb -DBLAKE3_USE_TBB blake3_tbb.o example_tbb.c blake3.c \
+gcc -O3 -o example_tbb -lstdc++ -ltbb -DBLAKE3_USE_TBB blake3_tbb.o examples/example_tbb.c blake3.c \
     blake3_dispatch.c blake3_portable.c blake3_sse2_x86-64_unix.S blake3_sse41_x86-64_unix.S \
     blake3_avx2_x86-64_unix.S blake3_avx512_x86-64_unix.S
 ```

@@ -1,13 +1,4 @@
-cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
-
-# respect C_EXTENSIONS OFF without explicitly setting C_STANDARD
-if (POLICY CMP0128)
-  cmake_policy(SET CMP0128 NEW)
-endif()
-# mark_as_advanced does not implicitly create UNINITIALIZED cache entries
-if (POLICY CMP0102)
-  cmake_policy(SET CMP0102 NEW)
-endif()
+cmake_minimum_required(VERSION 3.9...3.22 FATAL_ERROR)
 
 project(libblake3
   VERSION 1.8.2
@@ -16,13 +7,18 @@ project(libblake3
 )
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+# if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT AND "$ENV{CI}")
+#   set_property(CACHE CMAKE_INSTALL_PREFIX PROPERTY VALUE "/my/default")
+# endif()
 
 option(BLAKE3_USE_TBB "Enable oneTBB parallelism" OFF)
 option(BLAKE3_FETCH_TBB "Allow fetching oneTBB from GitHub if not found on system" OFF)
+option(BUILD_TESTING "Enable testing" OFF)
 
 include(CTest)
 include(FeatureSummary)
 include(GNUInstallDirs)
+include(BLAKE3/Utils)
 
 add_subdirectory(dependencies)
 
@@ -322,46 +318,6 @@ install(FILES
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/blake3"
 )
 
-# Function for joining paths known from most languages
-#
-# SPDX-License-Identifier: (MIT OR CC0-1.0)
-# Copyright 2020 Jan Tojnar
-# https://github.com/jtojnar/cmake-snips
-#
-# Modelled after Python’s os.path.join
-# https://docs.python.org/3.7/library/os.path.html#os.path.join
-# Windows not supported
-function(join_paths joined_path first_path_segment)
-    set(temp_path "${first_path_segment}")
-    foreach(current_segment IN LISTS ARGN)
-        if(NOT ("${current_segment}" STREQUAL ""))
-            if(IS_ABSOLUTE "${current_segment}")
-                set(temp_path "${current_segment}")
-            else()
-                set(temp_path "${temp_path}/${current_segment}")
-            endif()
-        endif()
-    endforeach()
-    set(${joined_path} "${temp_path}" PARENT_SCOPE)
-endfunction()
-
-# In-place rewrite a string and and join by `sep`.
-#
-# TODO: Replace function with list(JOIN) when updating to CMake 3.12
-function(join_pkg_config_field sep requires)
-  set(_requires "${${requires}}") # avoid shadowing issues, e.g. "${requires}"=len
-  list(LENGTH "${requires}" len)
-  set(idx 1)
-  foreach(req IN LISTS _requires)
-    string(APPEND acc "${req}")
-    if(idx LESS len)
-      string(APPEND acc "${sep}")
-    endif()
-    math(EXPR idx "${idx} + 1")
-  endforeach()
-  set("${requires}" "${acc}" PARENT_SCOPE)
-endfunction()
-
 # pkg-config support
 join_pkg_config_field(", " PKG_CONFIG_REQUIRES)
 join_pkg_config_field(" " PKG_CONFIG_LIBS)
@@ -381,8 +337,8 @@ add_feature_info("oneTBB parallelism" BLAKE3_USE_TBB "The library uses oneTBB pa
 feature_summary(WHAT ENABLED_FEATURES)
 
 if(BLAKE3_EXAMPLES)
-  include(BLAKE3/Examples)
+  add_subdirectory(examples)
 endif()
-if(BLAKE3_TESTING)
+if(BUILD_TESTING)
   include(BLAKE3/Testing)
 endif()
