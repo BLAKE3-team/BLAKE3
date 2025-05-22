@@ -144,6 +144,7 @@ use arrayref::{array_mut_ref, array_ref};
 use arrayvec::{ArrayString, ArrayVec};
 use core::cmp;
 use core::fmt;
+use core::ops::Deref;
 use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
 #[cfg(feature = "zeroize")]
 use zeroize::Zeroize;
@@ -241,9 +242,18 @@ fn counter_high(counter: u64) -> u32 {
 #[derive(Clone, Copy, Hash, Eq)]
 pub struct Hash([u8; OUT_LEN]);
 
+impl Deref for Hash {
+    type Target = [u8; OUT_LEN];
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl Hash {
     /// The raw bytes of the `Hash`. Note that byte arrays don't provide
-    /// constant-time equality checking, so if  you need to compare hashes,
+    /// constant-time equality checking, so if you need to compare hashes,
     /// prefer the `Hash` type.
     #[inline]
     pub const fn as_bytes(&self) -> &[u8; OUT_LEN] {
