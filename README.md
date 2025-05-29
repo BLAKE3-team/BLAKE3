@@ -220,7 +220,7 @@ Alternatively, it is licensed under any of the following:
 
 ## Miscellany
 
-- [@veorq] and [@oconnor663] did [an interview with Cryptography FM](https://www.cryptography.fm/3).
+- [@veorq] and [@oconnor663] did [an interview with Cryptography FM](https://cryptography.fireside.fm/3).
 - [@oconnor663] did [an interview with Saito](https://www.youtube.com/watch?v=cJkmIt7yN_E).
 
 [@oconnor663]: https://github.com/oconnor663
