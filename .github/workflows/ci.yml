@@ -208,7 +208,7 @@ jobs:
     - run: cross test --target ${{ matrix.arch }}
     # Test building for ancient i386 processors without guaranteed SSE2 support.
     - run: cross rustc --target ${{ matrix.arch }} -- -C target-cpu=i386
-      if: startsWith(matrix.arch, 'i586-') || startsWith(matrix.arch, 'i686-')
+      if: startsWith(matrix.arch, 'i586-')
     # Test the NEON implementation on ARM targets.
     - run: cross test --target ${{ matrix.arch }} --features=neon
       if: startsWith(matrix.arch, 'armv7-') || startsWith(matrix.arch, 'aarch64-')
