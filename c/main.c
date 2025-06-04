@@ -63,6 +63,7 @@ enum cpu_feature {
   AVX2 = 1 << 4,
   AVX512F = 1 << 5,
   AVX512VL = 1 << 6,
+  ARM_NEON = 1 << 7,
   /* ... */
   UNDEFINED = 1 << 30
 };
