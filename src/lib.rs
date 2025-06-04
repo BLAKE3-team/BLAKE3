@@ -39,7 +39,7 @@
 //!
 //! The `rayon` feature (disabled by default, but enabled for [docs.rs]) adds
 //! the [`update_rayon`](Hasher::update_rayon) and (in combination with `mmap`
-//! below) [`update_mmap_rayon`](Hasher::update_mmap_rayon) methods, for
+//! below) [`update_mmap_rayon`](Hasher::update_mmap_rayon) methods for
 //! multithreaded hashing. However, even if this feature is enabled, all other
 //! APIs remain single-threaded.
 //!
