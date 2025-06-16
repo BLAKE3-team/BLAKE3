@@ -134,7 +134,7 @@ fn unpackhi_epi32(a: v128, b: v128) -> v128 {
 fn shuffle_epi32<const I3: usize, const I2: usize, const I1: usize, const I0: usize>(
     a: v128,
 ) -> v128 {
-    // Please note that generic arguments in delcaration and imlementation are in
+    // Please note that generic arguments in delcaration and implementation are in
     // different order.
     // second arg is actually ignored.
     i32x4_shuffle::<I0, I1, I2, I3>(a, a)
