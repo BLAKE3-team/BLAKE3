@@ -1,4 +1,4 @@
-use crate::{CVWords, IncrementCounter, BLOCK_LEN, OUT_LEN};
+use crate::{BlockBytes, CVWords, IncrementCounter, BLOCK_LEN, OUT_LEN};
 
 // Unsafe because this may only be called on platforms supporting NEON.
 pub unsafe fn hash_many<const N: usize>(
@@ -44,7 +44,7 @@ pub extern "C" fn blake3_compress_in_place_portable(
     unsafe {
         crate::portable::compress_in_place(
             &mut *(cv as *mut [u32; 8]),
-            &*(block as *const [u8; 64]),
+            &*(block as *const BlockBytes),
             block_len,
             counter,
             flags,

@@ -1,11 +1,11 @@
 use crate::{
-    counter_high, counter_low, CVBytes, CVWords, IncrementCounter, BLOCK_LEN, IV, MSG_SCHEDULE,
-    OUT_LEN,
+    counter_high, counter_low, BlockBytes, BlockWords, CVBytes, CVWords, IncrementCounter,
+    BLOCK_LEN, IV, MSG_SCHEDULE, OUT_LEN,
 };
 use arrayref::{array_mut_ref, array_ref};
 
 #[inline(always)]
-fn g(state: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize, x: u32, y: u32) {
+fn g(state: &mut BlockWords, a: usize, b: usize, c: usize, d: usize, x: u32, y: u32) {
     state[a] = state[a].wrapping_add(state[b]).wrapping_add(x);
     state[d] = (state[d] ^ state[a]).rotate_right(16);
     state[c] = state[c].wrapping_add(state[d]);
@@ -17,7 +17,7 @@ fn g(state: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize, x: u32, y: u
 }
 
 #[inline(always)]
-fn round(state: &mut [u32; 16], msg: &[u32; 16], round: usize) {
+fn round(state: &mut BlockWords, msg: &BlockWords, round: usize) {
     // Select the message schedule based on the round.
     let schedule = MSG_SCHEDULE[round];
 
@@ -37,11 +37,11 @@ fn round(state: &mut [u32; 16], msg: &[u32; 16], round: usize) {
 #[inline(always)]
 fn compress_pre(
     cv: &CVWords,
-    block: &[u8; BLOCK_LEN],
+    block: &BlockBytes,
     block_len: u8,
     counter: u64,
     flags: u8,
-) -> [u32; 16] {
+) -> BlockWords {
     let block_words = crate::platform::words_from_le_bytes_64(block);
 
     let mut state = [
@@ -76,7 +76,7 @@ fn compress_pre(
 
 pub fn compress_in_place(
     cv: &mut CVWords,
-    block: &[u8; BLOCK_LEN],
+    block: &BlockBytes,
     block_len: u8,
     counter: u64,
     flags: u8,
@@ -95,11 +95,11 @@ pub fn compress_in_place(
 
 pub fn compress_xof(
     cv: &CVWords,
-    block: &[u8; BLOCK_LEN],
+    block: &BlockBytes,
     block_len: u8,
     counter: u64,
     flags: u8,
-) -> [u8; 64] {
+) -> BlockBytes {
     let mut state = compress_pre(cv, block, block_len, counter, flags);
     state[0] ^= state[8];
     state[1] ^= state[9];
