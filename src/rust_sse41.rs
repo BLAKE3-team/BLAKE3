@@ -4,8 +4,8 @@ use core::arch::x86::*;
 use core::arch::x86_64::*;
 
 use crate::{
-    counter_high, counter_low, CVBytes, CVWords, IncrementCounter, BLOCK_LEN, IV, MSG_SCHEDULE,
-    OUT_LEN,
+    counter_high, counter_low, BlockBytes, CVBytes, CVWords, IncrementCounter, BLOCK_LEN, IV,
+    MSG_SCHEDULE, OUT_LEN,
 };
 use arrayref::{array_mut_ref, array_ref, mut_array_refs};
 
@@ -140,7 +140,7 @@ unsafe fn undiagonalize(row0: &mut __m128i, row2: &mut __m128i, row3: &mut __m12
 #[inline(always)]
 unsafe fn compress_pre(
     cv: &CVWords,
-    block: &[u8; BLOCK_LEN],
+    block: &BlockBytes,
     block_len: u8,
     counter: u64,
     flags: u8,
@@ -326,7 +326,7 @@ unsafe fn compress_pre(
 #[target_feature(enable = "sse4.1")]
 pub unsafe fn compress_in_place(
     cv: &mut CVWords,
-    block: &[u8; BLOCK_LEN],
+    block: &BlockBytes,
     block_len: u8,
     counter: u64,
     flags: u8,
@@ -339,11 +339,11 @@ pub unsafe fn compress_in_place(
 #[target_feature(enable = "sse4.1")]
 pub unsafe fn compress_xof(
     cv: &CVWords,
-    block: &[u8; BLOCK_LEN],
+    block: &BlockBytes,
     block_len: u8,
     counter: u64,
     flags: u8,
-) -> [u8; 64] {
+) -> BlockBytes {
     let [mut row0, mut row1, mut row2, mut row3] =
         compress_pre(cv, block, block_len, counter, flags);
     row0 = xor(row0, row2);

@@ -1,4 +1,4 @@
-use crate::{portable, CVWords, IncrementCounter, BLOCK_LEN};
+use crate::{portable, BlockBytes, BlockWords, CVWords, IncrementCounter, BLOCK_LEN};
 use arrayref::{array_mut_ref, array_ref};
 
 cfg_if::cfg_if! {
@@ -123,7 +123,7 @@ impl Platform {
     pub fn compress_in_place(
         &self,
         cv: &mut CVWords,
-        block: &[u8; BLOCK_LEN],
+        block: &BlockBytes,
         block_len: u8,
         counter: u64,
         flags: u8,
@@ -159,11 +159,11 @@ impl Platform {
     pub fn compress_xof(
         &self,
         cv: &CVWords,
-        block: &[u8; BLOCK_LEN],
+        block: &BlockBytes,
         block_len: u8,
         counter: u64,
         flags: u8,
-    ) -> [u8; 64] {
+    ) -> BlockBytes {
         match self {
             Platform::Portable => portable::compress_xof(cv, block, block_len, counter, flags),
             // Safe because detect() checked for platform support.
@@ -315,7 +315,7 @@ impl Platform {
     pub fn xof_many(
         &self,
         cv: &CVWords,
-        block: &[u8; BLOCK_LEN],
+        block: &BlockBytes,
         block_len: u8,
         mut counter: u64,
         flags: u8,
@@ -339,7 +339,7 @@ impl Platform {
                 // compress_xof. This is still faster than portable code.
                 for out_block in out.chunks_exact_mut(BLOCK_LEN) {
                     // TODO: Use array_chunks_mut here once that's stable.
-                    let out_array: &mut [u8; BLOCK_LEN] = out_block.try_into().unwrap();
+                    let out_array: &mut BlockBytes = out_block.try_into().unwrap();
                     *out_array = self.compress_xof(cv, block, block_len, counter, flags);
                     counter += 1;
                 }
@@ -485,7 +485,7 @@ pub fn words_from_le_bytes_32(bytes: &[u8; 32]) -> [u32; 8] {
 }
 
 #[inline(always)]
-pub fn words_from_le_bytes_64(bytes: &[u8; 64]) -> [u32; 16] {
+pub fn words_from_le_bytes_64(bytes: &BlockBytes) -> BlockWords {
     let mut out = [0; 16];
     out[0] = u32::from_le_bytes(*array_ref!(bytes, 0 * 4, 4));
     out[1] = u32::from_le_bytes(*array_ref!(bytes, 1 * 4, 4));
@@ -521,7 +521,7 @@ pub fn le_bytes_from_words_32(words: &[u32; 8]) -> [u8; 32] {
 }
 
 #[inline(always)]
-pub fn le_bytes_from_words_64(words: &[u32; 16]) -> [u8; 64] {
+pub fn le_bytes_from_words_64(words: &BlockWords) -> BlockBytes {
     let mut out = [0; 64];
     *array_mut_ref!(out, 0 * 4, 4) = words[0].to_le_bytes();
     *array_mut_ref!(out, 1 * 4, 4) = words[1].to_le_bytes();

@@ -175,6 +175,9 @@ const MAX_DEPTH: usize = 54; // 2^54 * CHUNK_LEN = 2^64
 type CVWords = [u32; 8];
 type CVBytes = [u8; 32]; // little-endian
 
+type BlockBytes = [u8; BLOCK_LEN];
+type BlockWords = [u32; 16];
+
 const IV: &CVWords = &[
     0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
 ];
@@ -367,7 +370,7 @@ impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Formatting field as `&str` to reduce code size since the `Debug`
         // dynamic dispatch table for `&str` is likely needed elsewhere already,
-        // but that for `ArrayString<[u8; 64]>` is not.
+        // but that for `ArrayString<BlockBytes>` is not.
         let hex = self.to_hex();
         let hex: &str = hex.as_str();
 
@@ -379,7 +382,7 @@ impl fmt::Debug for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Formatting field as `&str` to reduce code size since the `Debug`
         // dynamic dispatch table for `&str` is likely needed elsewhere already,
-        // but that for `ArrayString<[u8; 64]>` is not.
+        // but that for `ArrayString<BlockBytes>` is not.
         let hex = self.to_hex();
         let hex: &str = hex.as_str();
 
@@ -427,7 +430,7 @@ impl std::error::Error for HexError {}
 #[derive(Clone)]
 struct Output {
     input_chaining_value: CVWords,
-    block: [u8; 64],
+    block: BlockBytes,
     block_len: u8,
     counter: u64,
     flags: u8,
@@ -491,7 +494,7 @@ impl Zeroize for Output {
 struct ChunkState {
     cv: CVWords,
     chunk_counter: u64,
-    buf: [u8; BLOCK_LEN],
+    buf: BlockBytes,
     buf_len: u8,
     blocks_compressed: u8,
     flags: u8,
@@ -725,7 +728,7 @@ fn compress_parents_parallel(
     let mut parents_exact = child_chaining_values.chunks_exact(BLOCK_LEN);
     // Use MAX_SIMD_DEGREE_OR_2 rather than MAX_SIMD_DEGREE here, because of
     // the requirements of compress_subtree_wide().
-    let mut parents_array = ArrayVec::<&[u8; BLOCK_LEN], MAX_SIMD_DEGREE_OR_2>::new();
+    let mut parents_array = ArrayVec::<&BlockBytes, MAX_SIMD_DEGREE_OR_2>::new();
     for parent in &mut parents_exact {
         parents_array.push(array_ref!(parent, 0, BLOCK_LEN));
     }
@@ -847,7 +850,7 @@ fn compress_subtree_to_parent_node<J: join::Join>(
     chunk_counter: u64,
     flags: u8,
     platform: Platform,
-) -> [u8; BLOCK_LEN] {
+) -> BlockBytes {
     debug_assert!(input.len() > CHUNK_LEN);
     let mut cv_array = [0; MAX_SIMD_DEGREE_OR_2 * OUT_LEN];
     let mut num_cvs =
@@ -1689,7 +1692,7 @@ impl OutputReader {
     // shorter than one block, and the case where our position_within_block is
     // non-zero.
     fn fill_one_block(&mut self, buf: &mut &mut [u8]) {
-        let output_block: [u8; BLOCK_LEN] = self.inner.root_output_block();
+        let output_block: BlockBytes = self.inner.root_output_block();
         let output_bytes = &output_block[self.position_within_block as usize..];
         let take = cmp::min(buf.len(), output_bytes.len());
         buf[..take].copy_from_slice(&output_bytes[..take]);

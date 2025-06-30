@@ -1,4 +1,4 @@
-use crate::{CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, OUT_LEN};
+use crate::{BlockBytes, CVBytes, CVWords, IncrementCounter, BLOCK_LEN, CHUNK_LEN, OUT_LEN};
 use arrayref::array_ref;
 use arrayvec::ArrayVec;
 use core::usize;
@@ -66,15 +66,15 @@ pub fn paint_test_input(buf: &mut [u8]) {
 }
 
 type CompressInPlaceFn =
-    unsafe fn(cv: &mut CVWords, block: &[u8; BLOCK_LEN], block_len: u8, counter: u64, flags: u8);
+    unsafe fn(cv: &mut CVWords, block: &BlockBytes, block_len: u8, counter: u64, flags: u8);
 
 type CompressXofFn = unsafe fn(
     cv: &CVWords,
-    block: &[u8; BLOCK_LEN],
+    block: &BlockBytes,
     block_len: u8,
     counter: u64,
     flags: u8,
-) -> [u8; 64];
+) -> BlockBytes;
 
 // A shared helper function for platform-specific tests.
 pub fn test_compress_fn(compress_in_place_fn: CompressInPlaceFn, compress_xof_fn: CompressXofFn) {
@@ -213,7 +213,7 @@ pub fn test_hash_many_fn(
 #[allow(unused)]
 type XofManyFunction = unsafe fn(
     cv: &CVWords,
-    block: &[u8; BLOCK_LEN],
+    block: &BlockBytes,
     block_len: u8,
     counter: u64,
     flags: u8,
