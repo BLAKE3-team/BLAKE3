@@ -6,6 +6,8 @@
 .global _blake3_compress_in_place_avx512
 .global blake3_compress_xof_avx512
 .global _blake3_compress_xof_avx512
+.global blake3_xof_many_avx512
+.global _blake3_xof_many_avx512
 
 .section .text
 .p2align  6
@@ -2585,6 +2587,53 @@ blake3_compress_xof_avx512:
         vmovdqa xmm8, xmmword ptr [rsp+0x20]
         vmovdqa xmm9, xmmword ptr [rsp+0x30]
         add     rsp, 72
+        ret
+
+.p2align 6
+_blake3_xof_many_avx512:
+blake3_xof_many_avx512:
+        push    r15
+        push    r14
+        push    r13
+        push    r12
+        push    rdi
+        push    rsi
+        push    rbx
+        push    rbp
+        mov     rbp, rsp
+        mov     rdi, rcx
+        mov     rsi, rdx
+        movzx   r12d, r8b
+        mov     r14, r9
+        movzx   r13d, byte ptr [rbp+0x68]
+        mov     rbx, qword ptr [rbp+0x70]
+        mov     r15, qword ptr [rbp+0x78]
+1:
+        test    r15, r15
+        jz      2f
+        mov     rcx, rdi
+        mov     rdx, rsi
+        mov     r8d, r12d
+        mov     r9, r14
+        sub     rsp, 48
+        mov     byte ptr [rsp+0x20], r13b
+        mov     qword ptr [rsp+0x28], rbx
+        call    blake3_compress_xof_avx512
+        add     rsp, 48
+        add     rbx, 64
+        inc     r14
+        dec     r15
+        jmp     1b
+2:
+        mov     rsp, rbp
+        pop     rbp
+        pop     rbx
+        pop     rsi
+        pop     rdi
+        pop     r12
+        pop     r13
+        pop     r14
+        pop     r15
         ret
 
 .section .rdata

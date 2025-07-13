@@ -309,12 +309,10 @@ void blake3_hash_many_avx512(const uint8_t *const *inputs, size_t num_inputs,
                              uint8_t flags, uint8_t flags_start,
                              uint8_t flags_end, uint8_t *out);
 
-#if !defined(_WIN32)
 void blake3_xof_many_avx512(const uint32_t cv[8],
                             const uint8_t block[BLAKE3_BLOCK_LEN],
                             uint8_t block_len, uint64_t counter, uint8_t flags,
                             uint8_t* out, size_t outblocks);
-#endif
 #endif
 #endif
 

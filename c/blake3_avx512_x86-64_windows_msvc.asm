@@ -4,6 +4,8 @@ public blake3_compress_in_place_avx512
 public _blake3_compress_in_place_avx512
 public blake3_compress_xof_avx512
 public _blake3_compress_xof_avx512
+public blake3_xof_many_avx512
+public _blake3_xof_many_avx512
 
 _TEXT   SEGMENT ALIGN(16) 'CODE'
 
@@ -2599,6 +2601,55 @@ _blake3_compress_xof_avx512 PROC
         ret
 _blake3_compress_xof_avx512 ENDP
 blake3_compress_xof_avx512 ENDP
+
+ALIGN 16
+blake3_xof_many_avx512 PROC
+_blake3_xof_many_avx512 PROC
+        push    r15
+        push    r14
+        push    r13
+        push    r12
+        push    rdi
+        push    rsi
+        push    rbx
+        push    rbp
+        mov     rbp, rsp
+        mov     rdi, rcx
+        mov     rsi, rdx
+        movzx   r12d, r8b
+        mov     r14, r9
+        movzx   r13d, byte ptr [rbp+68H]
+        mov     rbx, qword ptr [rbp+70H]
+        mov     r15, qword ptr [rbp+78H]
+@@loop:
+        test    r15, r15
+        jz      @@end
+        mov     rcx, rdi
+        mov     rdx, rsi
+        mov     r8d, r12d
+        mov     r9, r14
+        sub     rsp, 48
+        mov     byte ptr [rsp+20H], r13b
+        mov     qword ptr [rsp+28H], rbx
+        call    blake3_compress_xof_avx512
+        add     rsp, 48
+        add     rbx, 64
+        inc     r14
+        dec     r15
+        jmp     @@loop
+@@end:
+        mov     rsp, rbp
+        pop     rbp
+        pop     rbx
+        pop     rsi
+        pop     rdi
+        pop     r12
+        pop     r13
+        pop     r14
+        pop     r15
+        ret
+_blake3_xof_many_avx512 ENDP
+blake3_xof_many_avx512 ENDP
 
 _TEXT ENDS
 
