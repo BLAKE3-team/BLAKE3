@@ -31,6 +31,24 @@ add_subdirectory(dependencies)
 set(BLAKE3_AMD64_NAMES amd64 AMD64 x86_64)
 set(BLAKE3_X86_NAMES i686 x86 X86)
 set(BLAKE3_ARMv8_NAMES aarch64 AArch64 arm64 ARM64 armv8 armv8a)
+
+if(APPLE)
+  # On macOS, prefer CMAKE_OSX_ARCHITECTURES if set (e.g compiling for x86 on arm)
+  if(CMAKE_OSX_ARCHITECTURES)
+    message(STATUS "macOS architectures specified: ${CMAKE_OSX_ARCHITECTURES}")
+    # If multiple architectures, use the first one for SIMD detection
+    list(GET CMAKE_OSX_ARCHITECTURES 0 BLAKE3_TARGET_ARCH)
+    message(STATUS "Using architecture for BLAKE3 SIMD: ${BLAKE3_TARGET_ARCH}")
+  else()
+    set(BLAKE3_TARGET_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
+  endif()
+else()
+  set(BLAKE3_TARGET_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+
+message(STATUS "BLAKE3_TARGET_ARCH: ${BLAKE3_TARGET_ARCH}")
+message(STATUS "CMAKE_SYSTEM_PROCESSOR: ${CMAKE_SYSTEM_PROCESSOR} (original)")
+
 # default SIMD compiler flag configuration (can be overriden by toolchains or CLI)
 if(MSVC)
   set(BLAKE3_CFLAGS_SSE2 "/arch:SSE2" CACHE STRING "the compiler flags to enable SSE2")
@@ -71,7 +89,7 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU"
     )
   endif()
 
-  if (CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_ARMv8_NAMES
+  if (BLAKE3_TARGET_ARCH IN_LIST BLAKE3_ARMv8_NAMES
       AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
     # 32-bit ARMv8 needs NEON to be enabled explicitly
     set(BLAKE3_CFLAGS_NEON "-mfpu=neon" CACHE STRING "the compiler flags to enable NEON")
@@ -96,17 +114,17 @@ if(MSVC AND DEFINED CMAKE_C_COMPILER_ARCHITECTURE_ID)
     set(BLAKE3_SIMD_TYPE "none" CACHE STRING "the SIMD acceleration type to use")
   endif()
 
-elseif(CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_AMD64_NAMES)
+elseif(BLAKE3_TARGET_ARCH IN_LIST BLAKE3_AMD64_NAMES)
   set(BLAKE3_SIMD_TYPE "amd64-asm" CACHE STRING "the SIMD acceleration type to use")
 
-elseif(CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_X86_NAMES
+elseif(BLAKE3_TARGET_ARCH IN_LIST BLAKE3_X86_NAMES
        AND DEFINED BLAKE3_CFLAGS_SSE2
        AND DEFINED BLAKE3_CFLAGS_SSE4.1
        AND DEFINED BLAKE3_CFLAGS_AVX2
        AND DEFINED BLAKE3_CFLAGS_AVX512)
   set(BLAKE3_SIMD_TYPE "x86-intrinsics" CACHE STRING "the SIMD acceleration type to use")
 
-elseif((CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_ARMv8_NAMES
+elseif((BLAKE3_TARGET_ARCH IN_LIST BLAKE3_ARMv8_NAMES
           OR ANDROID_ABI STREQUAL "armeabi-v7a"
           OR BLAKE3_USE_NEON_INTRINSICS)
         AND (DEFINED BLAKE3_CFLAGS_NEON
@@ -199,6 +217,10 @@ elseif(BLAKE3_SIMD_TYPE STREQUAL "neon-intrinsics")
   )
   target_compile_definitions(blake3 PRIVATE
     BLAKE3_USE_NEON=1
+  )
+
+  target_compile_options(blake3 PRIVATE
+    -mfloat-abi=hard
   )
 
   if (DEFINED BLAKE3_CFLAGS_NEON)
