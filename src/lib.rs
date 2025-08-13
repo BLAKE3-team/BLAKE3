@@ -239,6 +239,12 @@ fn counter_high(counter: u64) -> u32 {
 #[derive(Clone, Copy, Hash, Eq)]
 pub struct Hash([u8; OUT_LEN]);
 
+
+/// Provided to allow for construction of magic hash values (eg null commit in git as [0; OUT_LEN])
+pub const fn construct_magic_hash(bytes: [u8; OUT_LEN]) -> Hash {
+    Hash(bytes)
+}
+
 impl Hash {
     /// The raw bytes of the `Hash`. Note that byte arrays don't provide
     /// constant-time equality checking, so if  you need to compare hashes,
