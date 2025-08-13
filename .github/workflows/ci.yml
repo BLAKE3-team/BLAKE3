@@ -41,16 +41,16 @@ jobs:
       run: cargo run --quiet
       working-directory: ./tools/instruction_set_support
     # Default tests plus Rayon and trait implementations.
-    - run: cargo test --features=rayon,traits-preview,serde,zeroize
+    - run: cargo test --features=rayon,traits-preview,serde,subtle,zeroize
     # Same but with only one thread in the Rayon pool. This can find deadlocks.
     - name: "again with RAYON_NUM_THREADS=1"
-      run: cargo test --features=rayon,traits-preview,serde,zeroize
+      run: cargo test --features=rayon,traits-preview,serde,subtle,zeroize
       env:
         RAYON_NUM_THREADS: 1
     # The mmap feature by itself (update_mmap_rayon is omitted).
     - run: cargo test --features=mmap
     # All public features put together.
-    - run: cargo test --features=mmap,rayon,traits-preview,serde,zeroize
+    - run: cargo test --features=mmap,rayon,traits-preview,serde,subtle,zeroize
     # no_std tests.
     - run: cargo test --no-default-features
 
