@@ -1,9 +1,9 @@
-use crate::{CVWords, IncrementCounter, BLOCK_LEN, OUT_LEN};
+use crate::{BlockBytes, CVWords, IncrementCounter, BLOCK_LEN, OUT_LEN};
 
 // Unsafe because this may only be called on platforms supporting AVX-512.
 pub unsafe fn compress_in_place(
     cv: &mut CVWords,
-    block: &[u8; BLOCK_LEN],
+    block: &BlockBytes,
     block_len: u8,
     counter: u64,
     flags: u8,
@@ -22,11 +22,11 @@ pub unsafe fn compress_in_place(
 // Unsafe because this may only be called on platforms supporting AVX-512.
 pub unsafe fn compress_xof(
     cv: &CVWords,
-    block: &[u8; BLOCK_LEN],
+    block: &BlockBytes,
     block_len: u8,
     counter: u64,
     flags: u8,
-) -> [u8; 64] {
+) -> BlockBytes {
     unsafe {
         let mut out = [0u8; 64];
         ffi::blake3_compress_xof_avx512(
@@ -76,7 +76,7 @@ pub unsafe fn hash_many<const N: usize>(
 #[cfg(unix)]
 pub unsafe fn xof_many(
     cv: &CVWords,
-    block: &[u8; BLOCK_LEN],
+    block: &BlockBytes,
     block_len: u8,
     counter: u64,
     flags: u8,
