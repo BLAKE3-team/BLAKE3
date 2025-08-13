@@ -94,6 +94,7 @@ fn bench_single_compression_sse41(b: &mut Bencher) {
 }
 
 #[bench]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn bench_single_compression_avx512(b: &mut Bencher) {
     if !blake3_c_rust_bindings::avx512_detected() {
         return;
@@ -186,6 +187,7 @@ fn bench_many_chunks_avx2(b: &mut Bencher) {
 }
 
 #[bench]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn bench_many_chunks_avx512(b: &mut Bencher) {
     if !blake3_c_rust_bindings::avx512_detected() {
         return;
@@ -204,6 +206,26 @@ fn bench_many_chunks_neon(b: &mut Bencher) {
     bench_many_chunks_fn(
         b,
         blake3_c_rust_bindings::ffi::neon::blake3_hash_many_neon,
+        4,
+    );
+}
+
+#[bench]
+#[cfg(target_arch = "loongarch64")]
+fn bench_many_chunks_lasx(b: &mut Bencher) {
+    bench_many_chunks_fn(
+        b,
+        blake3_c_rust_bindings::ffi::loong::blake3_hash_many_lasx,
+        8,
+    );
+}
+
+#[bench]
+#[cfg(target_arch = "loongarch64")]
+fn bench_many_chunks_lsx(b: &mut Bencher) {
+    bench_many_chunks_fn(
+        b,
+        blake3_c_rust_bindings::ffi::loong::blake3_hash_many_lsx,
         4,
     );
 }
@@ -278,6 +300,7 @@ fn bench_many_parents_avx2(b: &mut Bencher) {
 }
 
 #[bench]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn bench_many_parents_avx512(b: &mut Bencher) {
     if !blake3_c_rust_bindings::avx512_detected() {
         return;
@@ -296,6 +319,26 @@ fn bench_many_parents_neon(b: &mut Bencher) {
     bench_many_parents_fn(
         b,
         blake3_c_rust_bindings::ffi::neon::blake3_hash_many_neon,
+        4,
+    );
+}
+
+#[bench]
+#[cfg(target_arch = "loongarch64")]
+fn bench_many_parents_lasx(b: &mut Bencher) {
+    bench_many_parents_fn(
+        b,
+        blake3_c_rust_bindings::ffi::loong::blake3_hash_many_lasx,
+        8,
+    );
+}
+
+#[bench]
+#[cfg(target_arch = "loongarch64")]
+fn bench_many_parents_lsx(b: &mut Bencher) {
+    bench_many_parents_fn(
+        b,
+        blake3_c_rust_bindings::ffi::loong::blake3_hash_many_lsx,
         4,
     );
 }

@@ -6,6 +6,9 @@
 use std::ffi::{c_void, CString};
 use std::mem::MaybeUninit;
 
+#[cfg(target_arch = "loongarch64")]
+use std::arch::is_loongarch_feature_detected;
+
 #[cfg(test)]
 mod test;
 
@@ -33,6 +36,16 @@ pub fn avx2_detected() -> bool {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub fn avx512_detected() -> bool {
     is_x86_feature_detected!("avx512f") && is_x86_feature_detected!("avx512vl")
+}
+
+#[cfg(target_arch = "loongarch64")]
+pub fn lsx_detected() -> bool {
+    is_loongarch_feature_detected!("lsx")
+}
+
+#[cfg(target_arch = "loongarch64")]
+pub fn lasx_detected() -> bool {
+    is_loongarch_feature_detected!("lasx")
 }
 
 #[derive(Clone)]
@@ -317,6 +330,37 @@ pub mod ffi {
         extern "C" {
             // NEON low level functions
             pub fn blake3_hash_many_neon(
+                inputs: *const *const u8,
+                num_inputs: usize,
+                blocks: usize,
+                key: *const u32,
+                counter: u64,
+                increment_counter: bool,
+                flags: u8,
+                flags_start: u8,
+                flags_end: u8,
+                out: *mut u8,
+            );
+        }
+    }
+
+    #[cfg(target_arch = "loongarch64")]
+    pub mod loong {
+        extern "C" {
+            // lasx low level functions
+            pub fn blake3_hash_many_lasx(
+                inputs: *const *const u8,
+                num_inputs: usize,
+                blocks: usize,
+                key: *const u32,
+                counter: u64,
+                increment_counter: bool,
+                flags: u8,
+                flags_start: u8,
+                flags_end: u8,
+                out: *mut u8,
+            );
+            pub fn blake3_hash_many_lsx(
                 inputs: *const *const u8,
                 num_inputs: usize,
                 blocks: usize,
