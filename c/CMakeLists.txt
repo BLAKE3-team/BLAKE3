@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.9...3.18 FATAL_ERROR)
 
 # respect C_EXTENSIONS OFF without explicitly setting C_STANDARD
 if (POLICY CMP0128)
