@@ -73,7 +73,7 @@ pub unsafe fn hash_many<const N: usize>(
 }
 
 pub mod ffi {
-    extern "C" {
+    unsafe extern "C" {
         pub fn blake3_compress_in_place_sse2(
             cv: *mut u32,
             block: *const u8,

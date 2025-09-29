@@ -97,7 +97,7 @@ pub unsafe fn xof_many(
 }
 
 pub mod ffi {
-    extern "C" {
+    unsafe extern "C" {
         pub fn blake3_compress_in_place_avx512(
             cv: *mut u32,
             block: *const u8,
