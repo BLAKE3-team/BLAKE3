@@ -8,6 +8,7 @@ license = "CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/blake3"
 readme = "README.md"
 edition = "2021"
+rust-version = "1.80.1"
 
 [features]
 default = ["std"]
