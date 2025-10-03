@@ -92,7 +92,7 @@ void blake3_hasher_update(
 
 Add input to the hasher. This can be called any number of times. This function
 is always single-threaded; for multithreading see `blake3_hasher_update_tbb`
-below.
+or `blake3_hasher_update_openmp` below.
 
 
 ---
@@ -169,16 +169,22 @@ void blake3_hasher_update_tbb(
   blake3_hasher *self,
   const void *input,
   size_t input_len);
+void blake3_hasher_update_openmp(
+  blake3_hasher *self,
+  const void *input,
+  size_t input_len);
 ```
 
-Add input to the hasher, using [oneTBB] to process large inputs using multiple
-threads. This can be called any number of times. This gives the same result as
-`blake3_hasher_update` above.
+Add input to the hasher, using [oneTBB] or [OpenMP] to process large inputs
+using multiple threads. This can be called any number of times. This gives the
+same result as `blake3_hasher_update` above.
 
 [oneTBB]: https://uxlfoundation.github.io/oneTBB/
+[OpenMP]: https://www.openmp.org/
 
-NOTE: This function is only enabled when the library is compiled with CMake option `BLAKE3_USE_TBB`
-and when the oneTBB library is detected on the host system. See the building instructions for
+NOTE: These function is only enabled when the library is compiled with CMake
+option `BLAKE3_USE_TBB` or `BLAKE3_USE_OPENMP`, respectively, and when these
+library is detected on the host system. See the building instructions for
 further details.
 
 To get any performance benefit from multithreading, the input buffer needs to
@@ -196,7 +202,7 @@ Again it's important to benchmark your specific use case.
 
 This implementation doesn't require configuration of thread resources and will
 use as many cores as possible by default. More fine-grained control of
-resources is possible using the [oneTBB] API.
+resources is possible using the [oneTBB] or the [OpenMP] API.
 
 ---
 
@@ -272,6 +278,8 @@ The following options are available when compiling with CMake:
 
 - `BLAKE3_USE_TBB`: Enable oneTBB parallelism (Requires a C++20 capable compiler)
 - `BLAKE3_FETCH_TBB`: Allow fetching oneTBB from GitHub (only if not found on system)
+- `BLAKE3_USE_OPENMP`: Enable OpenMP parallelism (Requires a C compiler with
+  OpenMP support, like GCC, Clang or MSVC)
 - `BLAKE3_EXAMPLES`: Compile and install example programs
 
 Options can be enabled like this:
@@ -384,6 +392,8 @@ gcc -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c
 
 ### Multithreading
 
+#### oneTBB
+
 Multithreading is available using [oneTBB], by compiling the optional C++
 support file [`blake3_tbb.cpp`](./blake3_tbb.cpp). For an example of using
 `mmap` (non-Windows) and `blake3_hasher_update_tbb` to get large-file
@@ -401,3 +411,19 @@ NOTE: `-fno-exceptions` or equivalent is required to compile `blake3_tbb.cpp`,
 and public API methods with external C linkage are marked `noexcept`. Compiling
 that file with exceptions enabled will fail. Compiling with RTTI disabled isn't
 required but is recommended for code size.
+
+#### OpenMP
+
+Multithreading is also available using [OpenMP], by compiling the optional C
+support file [`blake3_openmp.c`](./blake3_openmp.c). For an example of using
+`mmap` (non-Windows) and `blake3_hasher_update_openmp` to get large-file
+performance on par with [`b3sum`](../b3sum), see
+[`example_openmp.c`](./example_openmp.c). You can build it like this:
+
+```bash
+gcc -O3 -o example_openmp -fopenmp -DBLAKE3_USE_OPENMP blake3_openmp.c example_openmp.c blake3.c \
+    blake3_dispatch.c blake3_portable.c blake3_sse2_x86-64_unix.S blake3_sse41_x86-64_unix.S \
+    blake3_avx2_x86-64_unix.S blake3_avx512_x86-64_unix.S
+```
+
+NOTE: OpenMP version is slightly slower (5~30%) than TBB version.
