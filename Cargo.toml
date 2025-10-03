@@ -29,7 +29,9 @@ wasm32_simd = []
 # enabled by default. (Previously this also controlled runtime CPU feature
 # detection on x86, but now we use the no-std-compatible `cpufeatures` crate
 # for that.)
-std = []
+# Also enables the `std` feature of the `constant_time_eq` dependency, which
+# toggles a runtime feature check on 64-bit ARM targets.
+std = ["constant_time_eq/std"]
 
 # The `rayon` feature (disabled by default, but enabled for docs.rs) adds the
 # `update_rayon` and (in combination with `mmap` below) `update_mmap_rayon`
@@ -112,7 +114,7 @@ features = ["mmap", "rayon", "serde", "zeroize"]
 [dependencies]
 arrayref = "0.3.5"
 arrayvec = { version = "0.7.4", default-features = false }
-constant_time_eq = { version = "0.3.1", default-features = false }
+constant_time_eq = { version = "0.4.2", default-features = false }
 cfg-if = "1.0.0"
 digest = { version = "0.10.1", features = ["mac"], optional = true }
 memmap2 = { version = "0.9", optional = true }
