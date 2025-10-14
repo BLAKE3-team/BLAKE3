@@ -107,11 +107,12 @@ no_neon = []
 
 [package.metadata.docs.rs]
 # Document the rayon/mmap methods and the Serialize/Deserialize/Zeroize impls on docs.rs.
-features = ["mmap", "rayon", "serde", "zeroize"]
+features = ["mmap", "rayon", "serde", "zeroize", "bincode"]
 
 [dependencies]
 arrayref = "0.3.5"
 arrayvec = { version = "0.7.4", default-features = false }
+bincode = { version = "2.0.0", default-features = false, features = ["derive"], optional = true }
 constant_time_eq = { version = "0.3.1", default-features = false }
 cfg-if = "1.0.0"
 digest = { version = "0.10.1", features = ["mac"], optional = true }
