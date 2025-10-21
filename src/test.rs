@@ -982,7 +982,7 @@ fn test_serde() {
     // Version 1.5.2 of this crate changed the default serialization format to a bytestring
     // (instead of an array/list) to save bytes on the wire. That was a backwards compatibility
     // mistake for non-self-describing formats, and it's been reverted. Since some small number of
-    // serialized bytestrings will probably exist forever in the wild, we shold test that we can
+    // serialized bytestrings will probably exist forever in the wild, we should test that we can
     // still deserialize these from self-describing formats.
     let bytestring_cbor: &[u8] = &[
         0x58, 0x20, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,

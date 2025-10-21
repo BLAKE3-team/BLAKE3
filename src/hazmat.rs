@@ -335,9 +335,9 @@ fn test_max_subtree_len() {
 /// than `input_len`. This leads to a tree where all left subtrees are "complete" and at least as
 /// large as their sibling right subtrees, as specified in section 2.1 of [the BLAKE3
 /// paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf). For example, if an
-/// input is exactly two chunks, its left and right subtrees both get one chunk. But if an input is
-/// two chunks plus one more byte, then its left subtree gets two chunks, and its right subtree
-/// only gets one byte.
+/// input is exactly two chunks, the left subtree gets the first chunk and the right subtree gets
+/// the second chunk. But if an input is two chunks plus one more byte, then its left subtree gets
+/// two chunks, and its right subtree only gets one byte.
 ///
 /// This function isn't meaningful for one chunk of input, because chunks don't have children. It
 /// currently panics in debug mode if `input_len <= CHUNK_LEN`.
