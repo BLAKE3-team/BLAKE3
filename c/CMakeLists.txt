@@ -19,6 +19,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 option(BLAKE3_USE_TBB "Enable oneTBB parallelism" OFF)
 option(BLAKE3_FETCH_TBB "Allow fetching oneTBB from GitHub if not found on system" OFF)
+option(BLAKE3_USE_OPENMP "Enable OpenMP parallelism" OFF)
 
 include(CTest)
 include(FeatureSummary)
@@ -281,6 +282,18 @@ if(BLAKE3_USE_TBB)
   unset(BLAKE3_CXXFLAGS_MSVC)
 endif()
 
+if(BLAKE3_USE_OPENMP)
+  find_package(OpenMP)
+  if(NOT OpenMP_C_FOUND)
+    message(WARNING "OpenMP not found; disabling BLAKE3_USE_OPENMP")
+    set(BLAKE3_USE_OPENMP OFF)
+  else()
+    target_sources(blake3 PRIVATE blake3_openmp.c)
+    target_link_libraries(blake3 PRIVATE OpenMP::OpenMP_C)
+    target_compile_definitions(blake3 PUBLIC BLAKE3_USE_OPENMP)
+  endif()
+endif()
+
 # cmake install support
 install(FILES blake3.h DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 install(TARGETS blake3 EXPORT blake3-targets
@@ -366,6 +379,7 @@ add_feature_info("AMD64 assembly" BLAKE3_SIMD_AMD64_ASM "The library uses hand w
 add_feature_info("x86 SIMD intrinsics" BLAKE3_SIMD_X86_INTRINSICS "The library uses x86 SIMD intrinsics.")
 add_feature_info("NEON SIMD intrinsics" BLAKE3_SIMD_NEON_INTRINSICS "The library uses NEON SIMD intrinsics.")
 add_feature_info("oneTBB parallelism" BLAKE3_USE_TBB "The library uses oneTBB parallelism.")
+add_feature_info("OpenMP parallelism" BLAKE3_USE_OPENMP "The library uses OpenMP parallelism.")
 feature_summary(WHAT ENABLED_FEATURES)
 
 if(BLAKE3_EXAMPLES)
