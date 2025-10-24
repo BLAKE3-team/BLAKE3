@@ -155,7 +155,7 @@ jobs:
     # https://github.com/rust-lang/libs-team/issues/72.
     # This test target is here so that we notice if we accidentally bump
     # the MSRV, but it's not a promise that we won't bump it.
-    - uses: dtolnay/rust-toolchain@1.80.1
+    - uses: dtolnay/rust-toolchain@1.85.1
     - run: cargo build --features=mmap,rayon,traits-preview,serde,zeroize
 
   b3sum_tests:
