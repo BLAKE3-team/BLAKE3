@@ -201,7 +201,7 @@ Alternatively, it is licensed under any of the following:
 
 * [Bazel](https://github.com/bazelbuild/bazel/releases/tag/6.4.0)
 * [Cargo](https://github.com/rust-lang/cargo/pull/14137)
-* [Ccache](https://github.com/ccache/ccache/pull/519)
+* [Ccache](https://ccache.dev/releasenotes.html#_ccache_4_0)
 * [Chia](https://github.com/Chia-Network/chia-blockchain/blob/main/CHANGELOG.md#10beta8-aka-beta-18---2020-07-16)
 * [Clickhouse](https://github.com/ClickHouse/ClickHouse/blob/master/rust/chcache/Cargo.toml#L7)
 * [Farcaster](https://www.farcaster.xyz/)
