@@ -7,7 +7,7 @@ repository = "https://github.com/BLAKE3-team/BLAKE3"
 license = "CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/blake3"
 readme = "README.md"
-edition = "2021"
+edition = "2024"
 
 [features]
 default = ["std"]
@@ -112,7 +112,7 @@ features = ["mmap", "rayon", "serde", "zeroize"]
 [dependencies]
 arrayref = "0.3.5"
 arrayvec = { version = "0.7.4", default-features = false }
-constant_time_eq = { version = "0.3.1", default-features = false }
+constant_time_eq = { version = "0.4.2", default-features = false }
 cfg-if = "1.0.0"
 digest = { version = "0.10.1", features = ["mac"], optional = true }
 memmap2 = { version = "0.9", optional = true }
