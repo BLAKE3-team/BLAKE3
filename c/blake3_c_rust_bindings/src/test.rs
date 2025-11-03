@@ -488,6 +488,15 @@ fn test_compare_reference_impl() {
                 tbb_hasher.finalize(&mut tbb_out);
                 assert_eq!(tbb_out[..], expected_out[..]);
             }
+
+            #[cfg(feature = "openmp")]
+            {
+                let mut openmp_hasher = crate::Hasher::new();
+                openmp_hasher.update_openmp(input);
+                let mut openmp_out = [0; OUT];
+                openmp_hasher.finalize(&mut openmp_out);
+                assert_eq!(openmp_out[..], expected_out[..]);
+            }
         }
 
         // keyed
@@ -510,6 +519,15 @@ fn test_compare_reference_impl() {
                 let mut tbb_out = [0; OUT];
                 tbb_hasher.finalize(&mut tbb_out);
                 assert_eq!(tbb_out[..], expected_out[..]);
+            }
+
+            #[cfg(feature = "openmp")]
+            {
+                let mut openmp_hasher = crate::Hasher::new_keyed(&TEST_KEY);
+                openmp_hasher.update_openmp(input);
+                let mut openmp_out = [0; OUT];
+                openmp_hasher.finalize(&mut openmp_out);
+                assert_eq!(openmp_out[..], expected_out[..]);
             }
         }
 
@@ -542,6 +560,15 @@ fn test_compare_reference_impl() {
                 let mut tbb_out = [0; OUT];
                 tbb_hasher.finalize(&mut tbb_out);
                 assert_eq!(tbb_out[..], expected_out[..]);
+            }
+
+            #[cfg(feature = "openmp")]
+            {
+                let mut openmp_hasher = crate::Hasher::new_derive_key(context);
+                openmp_hasher.update_openmp(input);
+                let mut openmp_out = [0; OUT];
+                openmp_hasher.finalize(&mut openmp_out);
+                assert_eq!(openmp_out[..], expected_out[..]);
             }
         }
     }
