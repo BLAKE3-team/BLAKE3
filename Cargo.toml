@@ -55,7 +55,7 @@ zeroize = ["dep:zeroize", "arrayvec/zeroize"]
 # who use it should expect breaking changes between patch versions of this
 # crate. (The "*-preview" feature name follows the conventions of the RustCrypto
 # "signature" crate.)
-traits-preview = ["dep:digest"]
+traits-preview = ["dep:digest", "dep:generic-array"]
 
 # ---------- Features below this line are undocumented and unstable. ----------
 # The following features are mainly intended for testing and benchmarking, and
@@ -115,6 +115,9 @@ arrayvec = { version = "0.7.4", default-features = false }
 constant_time_eq = { version = "0.3.1", default-features = false }
 cfg-if = "1.0.0"
 digest = { version = "0.10.1", features = ["mac"], optional = true }
+# HACK: `generic-array` is pinned here to silence an upstream deprecation warning.
+# TODO: Remove it once https://github.com/RustCrypto/traits/issues/2036 is fixed.
+generic-array = { version = "=0.14.7", default-features = false, optional = true }
 memmap2 = { version = "0.9", optional = true }
 rayon-core = { version = "1.12.1", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
