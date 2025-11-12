@@ -351,6 +351,12 @@ fn test_compare_reference_impl() {
             // all at once
             let test_out = crate::hash(input);
             assert_eq!(test_out, *array_ref!(expected_out, 0, 32));
+            #[cfg(feature = "const")]
+            {
+                // all at once const
+                let test_out = crate::const_hash(input);
+                assert_eq!(test_out, *array_ref!(expected_out, 0, 32));
+            }
             // incremental
             let mut hasher = crate::Hasher::new();
             hasher.update(input);
@@ -380,6 +386,12 @@ fn test_compare_reference_impl() {
             // all at once
             let test_out = crate::keyed_hash(&TEST_KEY, input);
             assert_eq!(test_out, *array_ref!(expected_out, 0, 32));
+            #[cfg(feature = "const")]
+            {
+                // all at once const
+                let test_out = crate::const_keyed_hash(&TEST_KEY, input);
+                assert_eq!(test_out, *array_ref!(expected_out, 0, 32));
+            }
             // incremental
             let mut hasher = crate::Hasher::new_keyed(&TEST_KEY);
             hasher.update(input);
@@ -410,6 +422,12 @@ fn test_compare_reference_impl() {
             // all at once
             let test_out = crate::derive_key(context, input);
             assert_eq!(test_out, expected_out[..32]);
+            #[cfg(feature = "const")]
+            {
+                // all at once const
+                let test_out = crate::const_derive_key(context, input);
+                assert_eq!(test_out, expected_out[..32]);
+            }
             // incremental
             let mut hasher = crate::Hasher::new_derive_key(context);
             hasher.update(input);
