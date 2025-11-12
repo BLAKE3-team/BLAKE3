@@ -1,6 +1,4 @@
 use crate::{CVWords, IncrementCounter, BLOCK_LEN, OUT_LEN};
-use core::mem::transmute;
-use core::mem::MaybeUninit;
 
 // Unsafe because this may only be called on platforms supporting AVX-512.
 pub unsafe fn compress_in_place(
@@ -86,7 +84,7 @@ pub unsafe fn xof_many(
     out: &mut [u8],
 ) {
     // SAFETY: We only write fully initialized bytes
-    let out: &mut [MaybeUninit<u8>] = unsafe { transmute(out) };
+    let out: &mut [core::mem::MaybeUninit<u8>] = unsafe { core::mem::transmute(out) };
     xof_many_uninit(cv, block, block_len, counter, flags, out)
 }
 
@@ -98,7 +96,7 @@ pub unsafe fn xof_many_uninit(
     block_len: u8,
     counter: u64,
     flags: u8,
-    out: &mut [MaybeUninit<u8>],
+    out: &mut [core::mem::MaybeUninit<u8>],
 ) {
     unsafe {
         debug_assert_eq!(0, out.len() % BLOCK_LEN, "whole blocks only");
