@@ -1,4 +1,6 @@
 use crate::{CVWords, IncrementCounter, BLOCK_LEN, OUT_LEN};
+use core::mem::transmute;
+use core::mem::MaybeUninit;
 
 // Unsafe because this may only be called on platforms supporting AVX-512.
 pub unsafe fn compress_in_place(
@@ -74,6 +76,7 @@ pub unsafe fn hash_many<const N: usize>(
 
 // Unsafe because this may only be called on platforms supporting AVX-512.
 #[cfg(unix)]
+#[allow(unused)]
 pub unsafe fn xof_many(
     cv: &CVWords,
     block: &[u8; BLOCK_LEN],
@@ -81,6 +84,21 @@ pub unsafe fn xof_many(
     counter: u64,
     flags: u8,
     out: &mut [u8],
+) {
+    // SAFETY: We only write fully initialized bytes
+    let out: &mut [MaybeUninit<u8>] = unsafe { transmute(out) };
+    xof_many_uninit(cv, block, block_len, counter, flags, out)
+}
+
+// Unsafe because this may only be called on platforms supporting AVX-512.
+#[cfg(unix)]
+pub unsafe fn xof_many_uninit(
+    cv: &CVWords,
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    counter: u64,
+    flags: u8,
+    out: &mut [MaybeUninit<u8>],
 ) {
     unsafe {
         debug_assert_eq!(0, out.len() % BLOCK_LEN, "whole blocks only");
@@ -90,7 +108,8 @@ pub unsafe fn xof_many(
             block_len,
             counter,
             flags,
-            out.as_mut_ptr(),
+            // todo: use MaybeUninit::slice_as_mut_ptr when feature "maybe_uninit_slice" (issue = "63569") stabilizes
+            out.as_mut_ptr().cast::<u8>(),
             out.len() / BLOCK_LEN,
         );
     }

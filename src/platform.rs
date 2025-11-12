@@ -1,5 +1,6 @@
 use crate::{portable, CVWords, IncrementCounter, BLOCK_LEN};
 use arrayref::{array_mut_ref, array_ref};
+use core::mem::{transmute, MaybeUninit};
 
 cfg_if::cfg_if! {
     if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
@@ -163,7 +164,7 @@ impl Platform {
         block_len: u8,
         counter: u64,
         flags: u8,
-    ) -> [u8; 64] {
+    ) -> [u8; BLOCK_LEN] {
         match self {
             Platform::Portable => portable::compress_xof(cv, block, block_len, counter, flags),
             // Safe because detect() checked for platform support.
@@ -317,9 +318,23 @@ impl Platform {
         cv: &CVWords,
         block: &[u8; BLOCK_LEN],
         block_len: u8,
-        mut counter: u64,
+        counter: u64,
         flags: u8,
         out: &mut [u8],
+    ) {
+        // SAFETY: We only write fully initialized bytes
+        let out: &mut [MaybeUninit<u8>] = unsafe { transmute(out) };
+        self.xof_many_uninit(cv, block, block_len, counter, flags, out);
+    }
+
+    pub fn xof_many_uninit(
+        &self,
+        cv: &CVWords,
+        block: &[u8; BLOCK_LEN],
+        block_len: u8,
+        mut counter: u64,
+        flags: u8,
+        out: &mut [MaybeUninit<u8>],
     ) {
         debug_assert_eq!(0, out.len() % BLOCK_LEN, "whole blocks only");
         if out.is_empty() {
@@ -332,15 +347,19 @@ impl Platform {
             #[cfg(unix)]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => unsafe {
-                crate::avx512::xof_many(cv, block, block_len, counter, flags, out)
+                crate::avx512::xof_many_uninit(cv, block, block_len, counter, flags, out)
             },
             _ => {
                 // For platforms without an optimized xof_many, fall back to a loop over
                 // compress_xof. This is still faster than portable code.
+                // TODO: Use `as_chunks_mut` here once MSRV is >= 1.88.0.
                 for out_block in out.chunks_exact_mut(BLOCK_LEN) {
-                    // TODO: Use array_chunks_mut here once that's stable.
-                    let out_array: &mut [u8; BLOCK_LEN] = out_block.try_into().unwrap();
-                    *out_array = self.compress_xof(cv, block, block_len, counter, flags);
+                    let out_block = out_block.first_chunk_mut::<BLOCK_LEN>().unwrap();
+                    // TODO: use `transpose` when "maybe_uninit_uninit_array_transpose"(issue = "96097") is stable
+                    // SAFETY: T and MaybeUninit<T> have the same layout
+                    let out_block: &mut MaybeUninit<[u8; BLOCK_LEN]> =
+                        unsafe { transmute(out_block) };
+                    out_block.write(self.compress_xof(cv, block, block_len, counter, flags));
                     counter += 1;
                 }
             }

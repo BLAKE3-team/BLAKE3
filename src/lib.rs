@@ -142,6 +142,7 @@ use arrayref::{array_mut_ref, array_ref};
 use arrayvec::{ArrayString, ArrayVec};
 use core::cmp;
 use core::fmt;
+use core::mem::{transmute, MaybeUninit};
 use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
 #[cfg(feature = "zeroize")]
 use zeroize::Zeroize;
@@ -1688,11 +1689,14 @@ impl OutputReader {
     // This helper function handles both the case where the output buffer is
     // shorter than one block, and the case where our position_within_block is
     // non-zero.
-    fn fill_one_block(&mut self, buf: &mut &mut [u8]) {
+    fn fill_one_block(&mut self, buf: &mut &mut [MaybeUninit<u8>]) {
         let output_block: [u8; BLOCK_LEN] = self.inner.root_output_block();
         let output_bytes = &output_block[self.position_within_block as usize..];
         let take = cmp::min(buf.len(), output_bytes.len());
-        buf[..take].copy_from_slice(&output_bytes[..take]);
+        let output_bytes: &[u8] = &output_bytes[..take];
+        // SAFETY: &[u8] and &[MaybeUninit<u8>] have the same layout
+        let output_bytes: &[MaybeUninit<u8>] = unsafe { transmute(output_bytes) };
+        buf[..take].copy_from_slice(output_bytes);
         self.position_within_block += take as u8;
         if self.position_within_block == BLOCK_LEN as u8 {
             self.inner.counter += 1;
@@ -1717,7 +1721,21 @@ impl OutputReader {
     /// reading further, the behavior is unspecified.
     ///
     /// [`Read::read`]: #method.read
-    pub fn fill(&mut self, mut buf: &mut [u8]) {
+    pub fn fill(&mut self, buf: &mut [u8]) {
+        if buf.is_empty() {
+            return;
+        }
+        // SAFETY: We only write fully initialized bytes
+        let buf: &mut [MaybeUninit<u8>] = unsafe { transmute(buf) };
+        self.fill_uninit(buf)
+    }
+
+    /// Fills an uninitialized buffer with output bytes.
+    ///
+    /// This method is similar to [`fill`](#method.fill), but accepts an uninitialized
+    /// buffer to avoid unnecessary zero-initialization overhead. This can provide
+    /// performance benefits when generating large amounts of output.
+    pub fn fill_uninit(&mut self, mut buf: &mut [MaybeUninit<u8>]) {
         if buf.is_empty() {
             return;
         }
@@ -1731,7 +1749,7 @@ impl OutputReader {
         let full_blocks_len = full_blocks * BLOCK_LEN;
         if full_blocks > 0 {
             debug_assert_eq!(0, self.position_within_block);
-            self.inner.platform.xof_many(
+            self.inner.platform.xof_many_uninit(
                 &self.inner.input_chaining_value,
                 &self.inner.block,
                 self.inner.block_len,
