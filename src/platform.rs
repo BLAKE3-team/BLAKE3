@@ -313,6 +313,7 @@ impl Platform {
         }
     }
 
+    #[inline]
     pub fn xof_many(
         &self,
         cv: &CVWords,

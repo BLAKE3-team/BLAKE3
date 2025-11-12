@@ -75,6 +75,7 @@ pub unsafe fn hash_many<const N: usize>(
 // Unsafe because this may only be called on platforms supporting AVX-512.
 #[cfg(unix)]
 #[allow(unused)]
+#[inline]
 pub unsafe fn xof_many(
     cv: &CVWords,
     block: &[u8; BLOCK_LEN],

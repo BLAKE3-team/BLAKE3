@@ -1721,6 +1721,7 @@ impl OutputReader {
     /// reading further, the behavior is unspecified.
     ///
     /// [`Read::read`]: #method.read
+    #[inline]
     pub fn fill(&mut self, buf: &mut [u8]) {
         if buf.is_empty() {
             return;
