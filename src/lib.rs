@@ -1723,9 +1723,6 @@ impl OutputReader {
     /// [`Read::read`]: #method.read
     #[inline]
     pub fn fill(&mut self, buf: &mut [u8]) {
-        if buf.is_empty() {
-            return;
-        }
         // SAFETY: We only write fully initialized bytes
         let buf: &mut [MaybeUninit<u8>] = unsafe { transmute(buf) };
         self.fill_uninit(buf)
