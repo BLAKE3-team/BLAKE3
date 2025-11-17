@@ -756,6 +756,9 @@ fn test_hash_conversions() {
     let hash4 = crate::Hash::from_slice(slice1).expect("correct length");
     assert_eq!(hash1, hash4);
 
+    let slice2 = hash1.as_slice();
+    assert_eq!(slice1, slice2);
+
     assert!(crate::Hash::from_slice(&[]).is_err());
     assert!(crate::Hash::from_slice(&[42]).is_err());
     assert!(crate::Hash::from_slice([42; 31].as_slice()).is_err());
