@@ -253,6 +253,14 @@ impl Hash {
         Self(bytes)
     }
 
+    /// The raw bytes of the `Hash`, as a slice. Useful for serialization. Note that byte arrays
+    /// don't provide constant-time equality checking, so if you need to compare hashes, prefer
+    /// the `Hash` type.
+    #[inline]
+    pub const fn as_slice(&self) -> &[u8] {
+        self.0.as_slice()
+    }
+
     /// Create a `Hash` from its raw bytes representation as a slice.
     ///
     /// Returns an error if the slice is not exactly 32 bytes long.
