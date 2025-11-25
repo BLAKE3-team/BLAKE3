@@ -239,6 +239,12 @@ fn counter_high(counter: u64) -> u32 {
 #[derive(Clone, Copy, Eq)]
 pub struct Hash([u8; OUT_LEN]);
 
+impl core::hash::Hash for Hash {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
 impl Hash {
     /// The raw bytes of the `Hash`. Note that byte arrays don't provide
     /// constant-time equality checking, so if  you need to compare hashes,
