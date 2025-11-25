@@ -378,7 +378,7 @@ fn test_max_subtree_len() {
 pub fn left_subtree_len(input_len: u64) -> u64 {
     debug_assert!(input_len > CHUNK_LEN as u64);
     // Note that .next_power_of_two() is greater than *or equal*.
-    ((input_len + 1) / 2).next_power_of_two()
+    input_len.div_ceil(2).next_power_of_two()
 }
 
 #[test]
@@ -440,8 +440,8 @@ fn merge_subtrees_inner(
     mode: Mode,
 ) -> crate::Output {
     crate::parent_node_output(
-        &left_child,
-        &right_child,
+        left_child,
+        right_child,
         &mode.key_words(),
         mode.flags_byte(),
         Platform::detect(),

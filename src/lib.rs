@@ -236,8 +236,14 @@ fn counter_high(counter: u64) -> u32 {
 /// [`Display`]: https://doc.rust-lang.org/std/fmt/trait.Display.html
 /// [`FromStr`]: https://doc.rust-lang.org/std/str/trait.FromStr.html
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Clone, Copy, Hash, Eq)]
+#[derive(Clone, Copy, Eq)]
 pub struct Hash([u8; OUT_LEN]);
+
+impl core::hash::Hash for Hash {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
 
 impl Hash {
     /// The raw bytes of the `Hash`. Note that byte arrays don't provide
@@ -859,7 +865,7 @@ fn compress_subtree_to_parent_node<J: join::Join>(
     debug_assert!(input.len() > CHUNK_LEN);
     let mut cv_array = [0; MAX_SIMD_DEGREE_OR_2 * OUT_LEN];
     let mut num_cvs =
-        compress_subtree_wide::<J>(input, &key, chunk_counter, flags, platform, &mut cv_array);
+        compress_subtree_wide::<J>(input, key, chunk_counter, flags, platform, &mut cv_array);
     debug_assert!(num_cvs >= 2);
 
     // If MAX_SIMD_DEGREE is greater than 2 and there's enough input,
@@ -1804,7 +1810,7 @@ impl std::io::Read for OutputReader {
 #[cfg(feature = "std")]
 impl std::io::Seek for OutputReader {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
-        let max_position = u64::max_value() as i128;
+        let max_position = u64::MAX as i128;
         let target_position: i128 = match pos {
             std::io::SeekFrom::Start(x) => x as i128,
             std::io::SeekFrom::Current(x) => self.position() as i128 + x as i128,
