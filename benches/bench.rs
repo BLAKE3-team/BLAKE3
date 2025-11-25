@@ -276,7 +276,7 @@ fn bench_single_compression_avx512(b: &mut Bencher) {
 /// # Stability Optimizations
 ///
 /// - **Pre-allocated Inputs**: All input buffers are allocated before
-///   benchmarking begins to avoid GC pressure during iterations.
+///   benchmarking begins to avoid allocator overhead during iterations.
 ///
 /// - **Pre-allocated Output**: Output buffer is allocated with fixed
 ///   capacity to avoid runtime allocation.
