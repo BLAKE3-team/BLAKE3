@@ -470,6 +470,7 @@ pub fn sse2_detected() -> bool {
     has_sse2::get()
 }
 
+#[allow(clippy::erasing_op, clippy::identity_op)]
 #[inline(always)]
 pub fn words_from_le_bytes_32(bytes: &[u8; 32]) -> [u32; 8] {
     let mut out = [0; 8];
@@ -484,6 +485,7 @@ pub fn words_from_le_bytes_32(bytes: &[u8; 32]) -> [u32; 8] {
     out
 }
 
+#[allow(clippy::erasing_op, clippy::identity_op)]
 #[inline(always)]
 pub fn words_from_le_bytes_64(bytes: &[u8; 64]) -> [u32; 16] {
     let mut out = [0; 16];
@@ -506,6 +508,7 @@ pub fn words_from_le_bytes_64(bytes: &[u8; 64]) -> [u32; 16] {
     out
 }
 
+#[allow(clippy::erasing_op, clippy::identity_op)]
 #[inline(always)]
 pub fn le_bytes_from_words_32(words: &[u32; 8]) -> [u8; 32] {
     let mut out = [0; 32];
@@ -520,6 +523,7 @@ pub fn le_bytes_from_words_32(words: &[u32; 8]) -> [u8; 32] {
     out
 }
 
+#[allow(clippy::erasing_op, clippy::identity_op)]
 #[inline(always)]
 pub fn le_bytes_from_words_64(words: &[u32; 16]) -> [u8; 64] {
     let mut out = [0; 64];
