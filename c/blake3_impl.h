@@ -123,16 +123,16 @@ enum blake3_flags {
  * Big-endian ARM systems disable NEON by default as they are less common.
  * Users can override this by defining BLAKE3_USE_NEON before including.
  */
-#if !defined(BLAKE3_USE_NEON) 
-  /* If BLAKE3_USE_NEON not manually set, autodetect based on AArch64 */
+#if !defined(BLAKE3_USE_NEON)
+  // If BLAKE3_USE_NEON not manually set, autodetect based on AArch64
   #if defined(IS_AARCH64)
     #if defined(__ARM_BIG_ENDIAN)
-      #define BLAKE3_USE_NEON 0  /* Disable on big-endian ARM */
+      #define BLAKE3_USE_NEON 0  // Disable on big-endian ARM
     #else
-      #define BLAKE3_USE_NEON 1  /* Enable on little-endian AArch64 */
+      #define BLAKE3_USE_NEON 1  // Enable on little-endian AArch64
     #endif
   #else
-    #define BLAKE3_USE_NEON 0    /* Disable on non-ARM platforms */
+    #define BLAKE3_USE_NEON 0    // Disable on non-ARM platforms
   #endif
 #endif
 

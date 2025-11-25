@@ -228,7 +228,7 @@ BLAKE3_API void blake3_hasher_update(blake3_hasher *self, const void *input,
  */
 BLAKE3_API void blake3_hasher_update_tbb(blake3_hasher *self, const void *input,
                                          size_t input_len);
-#endif /* BLAKE3_USE_TBB */
+#endif // BLAKE3_USE_TBB
 
 /**
  * @brief Finalize the hash and produce output

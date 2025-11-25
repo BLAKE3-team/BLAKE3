@@ -1,0 +1,12 @@
+prefix="/usr/local"
+exec_prefix="${prefix}"
+libdir="${prefix}/lib"
+includedir="${prefix}/include"
+
+Name: libblake3
+Description: BLAKE3 C implementation
+Version: 1.8.2
+
+Requires: 
+Libs: -L"${libdir}" -lblake3 
+Cflags: -I"${includedir}" 
