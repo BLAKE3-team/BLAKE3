@@ -1,2 +1,6 @@
 Cargo.lock
 target
+
+# CodeQL build artifacts
+_codeql_detected_source_root
+c/_codeql_build_dir/
