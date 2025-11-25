@@ -71,7 +71,7 @@ const WARMUP_ITERATIONS: usize = 3;
 /// This struct implements several techniques to improve benchmark stability:
 ///
 /// - **Pre-allocation**: All memory is allocated during construction,
-///   avoiding allocation during benchmark iterations (reduces GC pressure).
+///   avoiding allocation during benchmark iterations (reduces allocator overhead).
 ///
 /// - **Offset Randomization**: Input data can start at any offset
 ///   within a page, which helps avoid systematic cache line alignment effects.
