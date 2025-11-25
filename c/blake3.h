@@ -28,47 +28,10 @@
  *
  * Development sponsored by Electric Coin Company.
  *
- * @section compliance Standards Compliance
- * This implementation follows cryptographic and security best practices:
  *
- * ISO Standards:
- * - ISO 9001: Quality Management Systems
- * - ISO/IEC 27001: Information Security Management
- * - ISO/IEC 27002: Information Security Controls
- * - ISO/IEC 27017: Cloud Security
- * - ISO/IEC 27018: Protection of PII in Public Clouds
- * - ISO 8000: Data Quality
- * - ISO/IEC 25010: Systems and Software Quality
- * - ISO 22301: Business Continuity Management
- * - ISO 31000: Risk Management
- *
- * IEEE Standards:
- * - IEEE 830: Software Requirements Specifications
- * - IEEE 1012: Software Verification and Validation
- * - IEEE 12207: Systems and Software Engineering
- * - IEEE 14764: Software Maintenance
- * - IEEE 1633: Software Reliability
- * - IEEE 42010: Architecture Description
- * - IEEE 26514: User Documentation
- *
- * NIST Standards:
- * - NIST CSF: Cybersecurity Framework
- * - NIST SP 800-53: Security and Privacy Controls
- * - NIST SP 800-207: Zero Trust Architecture
- * - NIST AI Risk Management Framework
- *
- * IETF RFCs (applicable):
- * - RFC 5280: PKI Certificate and CRL Profile
- * - RFC 7519: JSON Web Token (JWT)
- * - RFC 7230: HTTP/1.1 Message Syntax
- * - RFC 8446: TLS 1.3
- *
- * W3C Standards:
- * - JSON, YAML, WebArch specifications
- *
- * @section conflict_resolution Conflict Resolution Principle
- * In case of conflict between standards, the most protective measure
- * for human safety, privacy, and security shall prevail.
+ * This implementation is based on the BLAKE3 cryptographic hash function as described in the official BLAKE3 paper:
+ * https://github.com/BLAKE3-team/BLAKE3/blob/master/doc/blake3.pdf
+ * It is designed following modern cryptographic best practices, but is not certified to any particular standard.
  *
  * @copyright Released into the public domain under CC0 1.0
  * Alternatively licensed under Apache 2.0 or Apache 2.0 with LLVM exceptions
