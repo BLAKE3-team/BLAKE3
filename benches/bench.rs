@@ -10,7 +10,7 @@
 //! The benchmarks implement several techniques to improve measurement stability:
 //!
 //! - **Memory Pre-allocation**: Buffers are allocated upfront to avoid
-//!   garbage collection and memory allocation during timed sections.
+//!   allocator overhead and memory allocation during timed sections.
 //!
 //! - **Cache Warming**: Input data is accessed before benchmarking to
 //!   ensure data is in CPU cache, reducing cache miss latency variance.
