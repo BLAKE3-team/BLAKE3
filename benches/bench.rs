@@ -118,7 +118,7 @@ impl RandomInput {
     /// # Stability Optimizations
     ///
     /// 1. **Single Allocation**: Allocates all memory upfront to avoid
-    ///    GC pressure during benchmark iterations.
+    ///    allocator overhead during benchmark iterations.
     ///
     /// 2. **Random Fill**: Buffer is filled with random data, which:
     ///    - Prevents compiler from optimizing away zero-filled reads
