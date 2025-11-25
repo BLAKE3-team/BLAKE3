@@ -211,7 +211,7 @@ impl RandomInput {
 /// # Stability Optimizations
 ///
 /// - **Pre-allocated State**: State array is allocated outside the
-///   benchmark loop to avoid GC pressure.
+///   benchmark loop to avoid allocation overhead.
 ///
 /// - **Warm-up**: Performs warm-up iterations to stabilize cache.
 ///
