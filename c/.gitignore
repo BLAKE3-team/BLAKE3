@@ -1,6 +1,7 @@
 blake3
 example
 example_tbb
+example_openmp
 build/
 *.o
 
