@@ -476,6 +476,16 @@ fn reference_hash(input: &[u8]) -> crate::Hash {
     bytes.into()
 }
 
+#[cfg(feature = "subtle")]
+#[test]
+fn test_constanttimeeq() {
+    use subtle::ConstantTimeEq;
+    
+    // Basic check that `ConstantTimeEq` behaves as expected
+    assert_eq!(reference_hash(&[0]).ct_eq(&reference_hash(&[0])).unwrap_u8(), 1);
+    assert_eq!(reference_hash(&[0]).ct_eq(&reference_hash(&[1])).unwrap_u8(), 0);
+}
+
 #[test]
 fn test_compare_update_multiple() {
     // Don't use all the long test cases here, since that's unnecessarily slow
