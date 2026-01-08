@@ -9,16 +9,22 @@ if (POLICY CMP0102)
   cmake_policy(SET CMP0102 NEW)
 endif()
 
+option(BLAKE3_USE_TBB "Enable oneTBB parallelism" OFF)
+option(BLAKE3_FETCH_TBB "Allow fetching oneTBB from GitHub if not found on system" OFF)
+
+if(BLAKE3_USE_TBB OR BLAKE3_FETCH_TBB)
+  set(BLAKE3_LANGUAGES C CXX ASM)
+else()
+  set(BLAKE3_LANGUAGES C ASM)
+endif()
+
 project(libblake3
   VERSION 1.8.3
   DESCRIPTION "BLAKE3 C implementation"
-  LANGUAGES C CXX ASM
+  LANGUAGES ${BLAKE3_LANGUAGES}
 )
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-
-option(BLAKE3_USE_TBB "Enable oneTBB parallelism" OFF)
-option(BLAKE3_FETCH_TBB "Allow fetching oneTBB from GitHub if not found on system" OFF)
 
 include(CTest)
 include(FeatureSummary)
@@ -147,9 +153,11 @@ set_target_properties(blake3 PROPERTIES
   C_EXTENSIONS OFF
 )
 target_compile_features(blake3 PUBLIC c_std_99)
-if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.12)
-  target_compile_features(blake3 PUBLIC cxx_std_20)
-  # else: add it further below through `BLAKE3_CMAKE_CXXFLAGS_*`
+if(BLAKE3_USE_TBB OR BLAKE3_FETCH_TBB)
+  if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.12)
+    target_compile_features(blake3 PUBLIC cxx_std_20)
+    # else: add it further below through `BLAKE3_CMAKE_CXXFLAGS_*`
+  endif()
 endif()
 
 # ensure C_EXTENSIONS OFF is respected without overriding CMAKE_C_STANDARD
