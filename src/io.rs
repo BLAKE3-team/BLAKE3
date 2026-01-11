@@ -1,5 +1,8 @@
 //! Helper functions for efficient IO.
 
+#[cfg(feature = "mmap")]
+use std::io::Seek;
+
 #[cfg(feature = "std")]
 pub(crate) fn copy_wide(
     mut reader: impl std::io::Read,
@@ -21,9 +24,7 @@ pub(crate) fn copy_wide(
     }
 }
 
-// Mmap a file, if it looks like a good idea. Return None in cases where we know mmap will fail, or
-// if the file is short enough that mmapping isn't worth it. However, if we do try to mmap and it
-// fails, return the error.
+// Mmap a file, if it looks like a good idea. Return None if we can't or don't want to.
 //
 // SAFETY: Mmaps are fundamentally unsafe, because you can call invariant-checking functions like
 // str::from_utf8 on them and then have them change out from under you. Letting a safe caller get
@@ -47,18 +48,23 @@ pub(crate) fn copy_wide(
 // But if you "know what you're doing," I don't think *const i32 and &i32 are fundamentally
 // different here. Feedback needed.
 #[cfg(feature = "mmap")]
-pub(crate) fn maybe_mmap_file(file: &std::fs::File) -> std::io::Result<Option<memmap2::Mmap>> {
-    let metadata = file.metadata()?;
-    let file_size = metadata.len();
-    if !metadata.is_file() {
-        // Not a real file.
-        Ok(None)
-    } else if file_size < 16 * 1024 {
-        // Mapping small files is not worth it, and some special files that can't be mapped report
-        // a size of zero.
-        Ok(None)
-    } else {
-        let map = unsafe { memmap2::Mmap::map(file)? };
-        Ok(Some(map))
+pub(crate) fn maybe_mmap_file(file: &mut std::fs::File) -> std::io::Result<Option<memmap2::Mmap>> {
+    // Assumes file's seek offset is 0 at entry and is not an observable side-effect if returning Some()
+    let file_size = match file.seek(std::io::SeekFrom::End(0)) {
+        Ok(l) => l,
+        Err(_) => return Ok(None),
+    };
+    if file_size < 16 * 1024 {
+        // Mapping small files is not worth it.
+    } else if file_size > usize::MAX as u64 {
+        // Too big to map.
+    } else if let Ok(map) = unsafe {
+        memmap2::MmapOptions::new()
+            .len(file_size as usize)
+            .map(&*file)
+    } {
+        return Ok(Some(map));
     }
+    file.rewind()?;
+    Ok(None)
 }
