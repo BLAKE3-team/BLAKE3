@@ -375,7 +375,7 @@ fn test_max_subtree_len() {
 /// # }
 /// ```
 #[inline(always)]
-pub fn left_subtree_len(input_len: u64) -> u64 {
+pub const fn left_subtree_len(input_len: u64) -> u64 {
     debug_assert!(input_len > CHUNK_LEN as u64);
     // Note that .next_power_of_two() is greater than *or equal*.
     ((input_len + 1) / 2).next_power_of_two()
@@ -564,6 +564,15 @@ pub fn hash_derive_key_context(context: &str) -> ContextKey {
     )
     .root_hash()
     .0
+}
+
+/// Hash a [`derive_key`](crate::derive_key) context like [`hash_derive_key_context`], but
+/// `const fn`.
+#[cfg(feature = "const")]
+pub const fn const_hash_derive_key_context(context: &str) -> ContextKey {
+    crate::const_hash_all_at_once(context.as_bytes(), IV, crate::DERIVE_KEY_CONTEXT)
+        .root_hash()
+        .0
 }
 
 #[cfg(test)]

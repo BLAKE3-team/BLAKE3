@@ -33,6 +33,9 @@ wasm32_simd = []
 # toggles a runtime feature check on 64-bit ARM targets.
 std = ["constant_time_eq/std"]
 
+# This feature enables `const fn` variants of functions, but requires Rust 1.85.0+
+const = []
+
 # The `rayon` feature (disabled by default, but enabled for docs.rs) adds the
 # `update_rayon` and (in combination with `mmap` below) `update_mmap_rayon`
 # methods, for multithreaded hashing. However, even if this feature is enabled,
