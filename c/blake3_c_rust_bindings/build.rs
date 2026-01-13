@@ -57,6 +57,10 @@ fn is_aarch64() -> bool {
     target_components()[0] == "aarch64"
 }
 
+fn is_loongarch64() -> bool {
+    target_components()[0] == "loongarch64"
+}
+
 // Windows targets may be using the MSVC toolchain or the GNU toolchain. The
 // right compiler flags to use depend on the toolchain. (And we don't want to
 // use flag_if_supported, because we don't want features to be silently
@@ -221,6 +225,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             neon_build.flag("-mfloat-abi=hard");
         }
         neon_build.compile("blake3_neon");
+    }
+
+    if defined("CARGO_FEATURE_LOONGARCH") || is_loongarch64() {
+        let mut lsx_build = new_build();
+        lsx_build.file(c_dir_path("blake3_lsx.c"));
+        lsx_build.flag("-mlsx");
+        lsx_build.compile("blake3_lsx");
+        let mut lasx_build = new_build();
+        lasx_build.file(c_dir_path("blake3_lasx.c"));
+        lasx_build.flag("-mlasx");
+        lasx_build.compile("blake3_lasx");
     }
 
     // The `cc` crate does not automatically emit rerun-if directives for the
