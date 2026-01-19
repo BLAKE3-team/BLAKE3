@@ -542,23 +542,23 @@ impl ChunkState {
     // Try to avoid buffering as much as possible, by compressing directly from
     // the input slice when full blocks are available.
     fn update(&mut self, mut input: &[u8]) -> &mut Self {
-        if self.buf_len > 0 {
-            self.fill_buf(&mut input);
-            if !input.is_empty() {
-                debug_assert_eq!(self.buf_len as usize, BLOCK_LEN);
-                let block_flags = self.flags | self.start_flag(); // borrowck
-                self.platform.compress_in_place(
-                    &mut self.cv,
-                    &self.buf,
-                    BLOCK_LEN as u8,
-                    self.chunk_counter,
-                    block_flags,
-                );
-                self.buf_len = 0;
-                self.buf = [0; BLOCK_LEN];
-                self.blocks_compressed += 1;
-            }
-        }
+    if !input.is_empty() && self.buf_len > 0 {
+        self.fill_buf(&mut input);
+        debug_assert_eq!(self.buf_len as usize, BLOCK_LEN);
+        let block_flags = self.flags | self.start_flag();
+        self.platform.compress_in_place(
+            &mut self.cv,
+            &self.buf,
+            BLOCK_LEN as u8,
+            self.chunk_counter,
+            block_flags,
+        );
+        self.buf_len = 0;
+        self.buf = [0; BLOCK_LEN];
+        self.blocks_compressed += 1;
+    }
+}
+
 
         while input.len() > BLOCK_LEN {
             debug_assert_eq!(self.buf_len, 0);
