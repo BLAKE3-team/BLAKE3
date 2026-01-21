@@ -5,6 +5,13 @@
 #include "blake3.h"
 #include "blake3_impl.h"
 
+#ifdef __has_feature
+#if __has_feature(memory_sanitizer)
+#include <sanitizer/msan_interface.h>
+#define BLAKE3_MEMORY_SANITIZER_BUILD
+#endif
+#endif
+
 const char *blake3_version(void) { return BLAKE3_VERSION_STRING; }
 
 INLINE void chunk_state_init(blake3_chunk_state *self, const uint32_t key[8],
@@ -614,6 +621,10 @@ void blake3_hasher_finalize_seek(const blake3_hasher *self, uint64_t seek,
   if (self->cv_stack_len == 0) {
     output_t output = chunk_state_output(&self->chunk);
     output_root_bytes(&output, seek, out, out_len);
+#ifdef BLAKE3_MEMORY_SANITIZER_BUILD
+    // MemorySanitizer gives a false positive due to use of assembly.
+    __msan_unpoison(out, out_len);
+#endif
     return;
   }
   // If there are any bytes in the chunk state, finalize that chunk and do a
@@ -642,6 +653,10 @@ void blake3_hasher_finalize_seek(const blake3_hasher *self, uint64_t seek,
     output = parent_output(parent_block, self->key, self->chunk.flags);
   }
   output_root_bytes(&output, seek, out, out_len);
+#ifdef BLAKE3_MEMORY_SANITIZER_BUILD
+  // MemorySanitizer gives a false positive due to use of assembly.
+  __msan_unpoison(out, out_len);
+#endif
 }
 
 void blake3_hasher_reset(blake3_hasher *self) {
