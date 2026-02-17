@@ -10,6 +10,7 @@ edition = "2024"
 
 [features]
 neon = ["blake3/neon"]
+rvv = ["blake3/rvv"]
 prefer_intrinsics = ["blake3/prefer_intrinsics"]
 pure = ["blake3/pure"]
 
