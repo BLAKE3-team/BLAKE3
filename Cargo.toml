@@ -18,6 +18,11 @@ default = ["std"]
 # implementation uses C intrinsics and requires a C compiler.
 neon = []
 
+# The RVV (RISC-V Vector) implementation does not participate in dynamic feature
+# detection. If "rvv" is on, RVV support is assumed. The RVV implementation uses
+# C intrinsics and requires a C compiler with RVV support.
+rvv = []
+
 # The Wasm SIMD implementation does not participate in dynamic feature detection,
 # which is currently x86-only. If "wasm_simd" is on, Wasm SIMD support is assumed.
 # Note that not all Wasm implementations support the Wasm SIMD specification.

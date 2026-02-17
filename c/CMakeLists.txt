@@ -31,6 +31,7 @@ add_subdirectory(dependencies)
 set(BLAKE3_AMD64_NAMES amd64 AMD64 x86_64)
 set(BLAKE3_X86_NAMES i686 x86 X86)
 set(BLAKE3_ARMv8_NAMES aarch64 AArch64 arm64 ARM64 armv8 armv8a)
+set(BLAKE3_RISCV64_NAMES riscv64 RISCV64 rv64)
 # default SIMD compiler flag configuration (can be overriden by toolchains or CLI)
 if(MSVC)
   set(BLAKE3_CFLAGS_SSE2 "/arch:SSE2" CACHE STRING "the compiler flags to enable SSE2")
@@ -76,9 +77,45 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU"
     # 32-bit ARMv8 needs NEON to be enabled explicitly
     set(BLAKE3_CFLAGS_NEON "-mfpu=neon" CACHE STRING "the compiler flags to enable NEON")
   endif()
+  
+  if (CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_RISCV64_NAMES)
+    # RISC-V Vector Extension (RVV 1.0) - check if compiler supports it
+    # Try rva23u64 first (RVA23 profile with RVV), then rv64gcv
+    include(CheckCSourceCompiles)
+    
+    # Try rva23u64 first (RVA23 profile includes RVV 1.0)
+    set(CMAKE_REQUIRED_FLAGS "-march=rva23u64")
+    check_c_source_compiles("
+#include <riscv_vector.h>
+int main() {
+  size_t vl = __riscv_vsetvlmax_e32m1();
+  return 0;
+}
+" BLAKE3_COMPILER_SUPPORTS_RVA23U64)
+    set(CMAKE_REQUIRED_FLAGS)
+    
+    if(BLAKE3_COMPILER_SUPPORTS_RVA23U64)
+      set(BLAKE3_CFLAGS_RVV "-march=rva23u64" CACHE STRING "the compiler flags to enable RVV")
+    else()
+      # Fall back to rv64gcv
+      set(CMAKE_REQUIRED_FLAGS "-march=rv64gcv")
+      check_c_source_compiles("
+#include <riscv_vector.h>
+int main() {
+  size_t vl = __riscv_vsetvlmax_e32m1();
+  return 0;
+}
+" BLAKE3_COMPILER_SUPPORTS_RV64GCV)
+      set(CMAKE_REQUIRED_FLAGS)
+      
+      if(BLAKE3_COMPILER_SUPPORTS_RV64GCV)
+        set(BLAKE3_CFLAGS_RVV "-march=rv64gcv" CACHE STRING "the compiler flags to enable RVV")
+      endif()
+    endif()
+  endif()
 endif()
 
-mark_as_advanced(BLAKE3_CFLAGS_SSE2 BLAKE3_CFLAGS_SSE4.1 BLAKE3_CFLAGS_AVX2 BLAKE3_CFLAGS_AVX512 BLAKE3_CFLAGS_NEON)
+mark_as_advanced(BLAKE3_CFLAGS_SSE2 BLAKE3_CFLAGS_SSE4.1 BLAKE3_CFLAGS_AVX2 BLAKE3_CFLAGS_AVX512 BLAKE3_CFLAGS_NEON BLAKE3_CFLAGS_RVV)
 mark_as_advanced(BLAKE3_AMD64_ASM_SOURCES)
 
 message(STATUS "BLAKE3 SIMD configuration: ${CMAKE_C_COMPILER_ARCHITECTURE_ID}")
@@ -112,6 +149,10 @@ elseif((CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_ARMv8_NAMES
         AND (DEFINED BLAKE3_CFLAGS_NEON
           OR CMAKE_SIZEOF_VOID_P EQUAL 8))
   set(BLAKE3_SIMD_TYPE "neon-intrinsics" CACHE STRING "the SIMD acceleration type to use")
+
+elseif(CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_RISCV64_NAMES
+        AND DEFINED BLAKE3_CFLAGS_RVV)
+  set(BLAKE3_SIMD_TYPE "rvv-intrinsics" CACHE STRING "the SIMD acceleration type to use")
 
 else()
   set(BLAKE3_SIMD_TYPE "none" CACHE STRING "the SIMD acceleration type to use")
@@ -205,9 +246,26 @@ elseif(BLAKE3_SIMD_TYPE STREQUAL "neon-intrinsics")
     set_source_files_properties(blake3_neon.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_NEON}")
   endif()
 
+elseif(BLAKE3_SIMD_TYPE STREQUAL "rvv-intrinsics")
+  set(BLAKE3_SIMD_RVV_INTRINSICS ON)
+
+  target_sources(blake3 PRIVATE
+    blake3_rvv.c
+  )
+  target_compile_definitions(blake3 PRIVATE
+    BLAKE3_USE_RVV=1
+  )
+
+  if (DEFINED BLAKE3_CFLAGS_RVV)
+    set_source_files_properties(blake3_rvv.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_RVV}")
+    # blake3_dispatch.c also needs RVV flags to call __riscv_vsetvlmax_e32m1()
+    set_source_files_properties(blake3_dispatch.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_RVV}")
+  endif()
+
 elseif(BLAKE3_SIMD_TYPE STREQUAL "none")
   target_compile_definitions(blake3 PRIVATE
     BLAKE3_USE_NEON=0
+    BLAKE3_USE_RVV=0
     BLAKE3_NO_SSE2
     BLAKE3_NO_SSE41
     BLAKE3_NO_AVX2
@@ -365,6 +423,7 @@ install(FILES "${CMAKE_BINARY_DIR}/libblake3.pc"
 add_feature_info("AMD64 assembly" BLAKE3_SIMD_AMD64_ASM "The library uses hand written amd64 SIMD assembly.")
 add_feature_info("x86 SIMD intrinsics" BLAKE3_SIMD_X86_INTRINSICS "The library uses x86 SIMD intrinsics.")
 add_feature_info("NEON SIMD intrinsics" BLAKE3_SIMD_NEON_INTRINSICS "The library uses NEON SIMD intrinsics.")
+add_feature_info("RVV SIMD intrinsics" BLAKE3_SIMD_RVV_INTRINSICS "The library uses RISC-V Vector Extension (RVV) intrinsics.")
 add_feature_info("oneTBB parallelism" BLAKE3_USE_TBB "The library uses oneTBB parallelism.")
 feature_summary(WHAT ENABLED_FEATURES)
 

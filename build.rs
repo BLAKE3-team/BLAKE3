@@ -99,6 +99,26 @@ fn is_wasm32() -> bool {
     target_components()[0] == "wasm32"
 }
 
+fn is_riscv64() -> bool {
+    let arch = &target_components()[0];
+    arch == "riscv64gc" || arch == "riscv64a23"
+}
+
+fn is_rvv() -> bool {
+    // Explicit RVV feature flag
+    if defined("CARGO_FEATURE_RVV") {
+        return true;
+    }
+
+    // riscv64a23 target has built-in RVV support
+    let arch = &target_components()[0];
+    if arch == "riscv64a23" {
+        return true;
+    }
+
+    false
+}
+
 fn endianness() -> String {
     let endianness = env::var("CARGO_CFG_TARGET_ENDIAN").unwrap();
     assert!(endianness == "little" || endianness == "big");
@@ -300,6 +320,25 @@ fn build_wasm32_simd() {
     println!("cargo:rustc-cfg=blake3_wasm32_simd");
 }
 
+fn build_rvv_c_intrinsics() {
+    let mut build = new_build();
+    // Note that blake3_rvv.c normally depends on the blake3_portable.c
+    // for the single-instance compression function, but we expose
+    // portable.rs over FFI instead. See ffi_rvv.rs.
+    build.file("c/blake3_rvv.c");
+
+    // Try rva23u64 first (RVA23 profile includes RVV 1.0), then fall back to rv64gcv.
+    // This matches the priority in CMakeLists.txt.
+    let march_flag = if build.is_flag_supported("-march=rva23u64").unwrap_or(false) {
+        "-march=rva23u64"
+    } else {
+        "-march=rv64gcv"
+    };
+    build.flag(march_flag);
+
+    build.compile("blake3_rvv");
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // As of Rust 1.80, unrecognized config names are warnings. Give Cargo all of our config names.
     let all_cfgs = [
@@ -312,6 +351,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "blake3_avx512_ffi",
         "blake3_neon",
         "blake3_wasm32_simd",
+        "blake3_rvv",
     ];
     for cfg_name in all_cfgs {
         // TODO: Switch this whole file to the new :: syntax when our MSRV reaches 1.77.
@@ -325,6 +365,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if is_no_neon() && is_neon() {
         panic!("It doesn't make sense to enable both \"no_neon\" and \"neon\".");
+    }
+
+    if is_pure() && is_rvv() {
+        panic!("It doesn't make sense to enable both \"pure\" and \"rvv\".");
     }
 
     if is_x86_64() || is_x86_32() {
@@ -359,6 +403,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if is_wasm32() && is_wasm32_simd() {
         build_wasm32_simd();
+    }
+
+    if is_rvv() && is_big_endian() {
+        panic!("The RVV implementation doesn't support big-endian RISC-V.")
+    }
+
+    // Enable RVV if explicitly requested via feature flag
+    if is_riscv64() && is_rvv() {
+        println!("cargo:rustc-cfg=blake3_rvv");
+        build_rvv_c_intrinsics();
     }
 
     // The `cc` crate doesn't automatically emit rerun-if directives for the
