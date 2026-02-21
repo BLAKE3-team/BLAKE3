@@ -147,10 +147,6 @@ set_target_properties(blake3 PROPERTIES
   C_EXTENSIONS OFF
 )
 target_compile_features(blake3 PUBLIC c_std_99)
-if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.12)
-  target_compile_features(blake3 PUBLIC cxx_std_20)
-  # else: add it further below through `BLAKE3_CMAKE_CXXFLAGS_*`
-endif()
 
 # ensure C_EXTENSIONS OFF is respected without overriding CMAKE_C_STANDARD
 # which may be set by the user or toolchain file
@@ -263,6 +259,8 @@ if(BLAKE3_USE_TBB)
   if(CMAKE_VERSION VERSION_LESS 3.12)
     set(APPEND BLAKE3_CXX_STANDARD_FLAGS_GNU -std=c++20)
     set(APPEND BLAKE3_CXX_STANDARD_FLAGS_MSVC /std:c++20)
+  else()
+    target_compile_features(blake3 PUBLIC cxx_std_20)
   endif()
 
   set(BLAKE3_CXXFLAGS_GNU "-fno-exceptions;-fno-rtti;${BLAKE3_CXX_STANDARD_FLAGS_GNU}" CACHE STRING "C++ flags used for compiling private BLAKE3 library components with GNU-like compiler frontends.")
