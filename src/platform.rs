@@ -12,6 +12,15 @@ cfg_if::cfg_if! {
         }
     } else if #[cfg(blake3_neon)] {
         pub const MAX_SIMD_DEGREE: usize = 4;
+    } else if #[cfg(blake3_rvv)] {
+        // RVV is a variable-length vector architecture. The actual degree depends
+        // on VLEN (vector register length in bits):
+        // - VLEN=128: degree=4 (minimum required by spec)
+        // - VLEN=256: degree=8 (common in current implementations)
+        // - VLEN=512: degree=16 (high-performance implementations)
+        // - VLEN=1024+: degree=32+ (future implementations)
+        // We use 8 as a reasonable default for current hardware.
+        pub const MAX_SIMD_DEGREE: usize = 8;
     } else if #[cfg(blake3_wasm32_simd)] {
         pub const MAX_SIMD_DEGREE: usize = 4;
     } else {
@@ -34,6 +43,8 @@ cfg_if::cfg_if! {
         }
     } else if #[cfg(blake3_neon)] {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 4;
+    } else if #[cfg(blake3_rvv)] {
+        pub const MAX_SIMD_DEGREE_OR_2: usize = 8;
     } else if #[cfg(blake3_wasm32_simd)] {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 4;
     } else {
@@ -55,6 +66,8 @@ pub enum Platform {
     AVX512,
     #[cfg(blake3_neon)]
     NEON,
+    #[cfg(blake3_rvv)]
+    RVV,
     #[cfg(blake3_wasm32_simd)]
     #[allow(non_camel_case_types)]
     WASM32_SIMD,
@@ -92,6 +105,12 @@ impl Platform {
         {
             return Platform::NEON;
         }
+        // We don't use dynamic feature detection for RVV. If the "rvv"
+        // feature is on, RVV is assumed to be supported.
+        #[cfg(blake3_rvv)]
+        {
+            return Platform::RVV;
+        }
         #[cfg(blake3_wasm32_simd)]
         {
             return Platform::WASM32_SIMD;
@@ -113,6 +132,8 @@ impl Platform {
             Platform::AVX512 => 16,
             #[cfg(blake3_neon)]
             Platform::NEON => 4,
+            #[cfg(blake3_rvv)]
+            Platform::RVV => 8,
             #[cfg(blake3_wasm32_simd)]
             Platform::WASM32_SIMD => 4,
         };
@@ -149,6 +170,9 @@ impl Platform {
             // No NEON compress_in_place() implementation yet.
             #[cfg(blake3_neon)]
             Platform::NEON => portable::compress_in_place(cv, block, block_len, counter, flags),
+            // No RVV compress_in_place() implementation yet.
+            #[cfg(blake3_rvv)]
+            Platform::RVV => portable::compress_in_place(cv, block, block_len, counter, flags),
             #[cfg(blake3_wasm32_simd)]
             Platform::WASM32_SIMD => {
                 crate::wasm32_simd::compress_in_place(cv, block, block_len, counter, flags)
@@ -185,6 +209,9 @@ impl Platform {
             // No NEON compress_xof() implementation yet.
             #[cfg(blake3_neon)]
             Platform::NEON => portable::compress_xof(cv, block, block_len, counter, flags),
+            // No RVV compress_xof() implementation yet.
+            #[cfg(blake3_rvv)]
+            Platform::RVV => portable::compress_xof(cv, block, block_len, counter, flags),
             #[cfg(blake3_wasm32_simd)]
             Platform::WASM32_SIMD => {
                 crate::wasm32_simd::compress_xof(cv, block, block_len, counter, flags)
@@ -285,6 +312,20 @@ impl Platform {
             #[cfg(blake3_neon)]
             Platform::NEON => unsafe {
                 crate::neon::hash_many(
+                    inputs,
+                    key,
+                    counter,
+                    increment_counter,
+                    flags,
+                    flags_start,
+                    flags_end,
+                    out,
+                )
+            },
+            // Assumed to be safe if the "rvv" feature is on.
+            #[cfg(blake3_rvv)]
+            Platform::RVV => unsafe {
+                crate::rvv::hash_many(
                     inputs,
                     key,
                     counter,
