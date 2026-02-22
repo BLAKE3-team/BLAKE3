@@ -46,6 +46,7 @@
 
 #define MAYBE_UNUSED(x) (void)((x))
 
+#if defined(IS_X86) || defined(IS_LOONGARCH)
 #if defined(IS_X86)
 static uint64_t xgetbv(void) {
 #if defined(_MSC_VER)
@@ -88,7 +89,42 @@ static void cpuidex(uint32_t out[4], uint32_t id, uint32_t sid) {
                        : "a"(id), "c"(sid));
 #endif
 }
+#endif
 
+#if defined(IS_LOONGARCH)
+#ifdef __linux__
+static inline int prctl_auxv(void *buf, size_t bufsz) {
+  register uint64_t a0 __asm__("a0") = 0x41555856UL; /* PR_GET_AUXV */
+  register uint64_t a1 __asm__("a1") = (uint64_t)buf;
+  register uint64_t a2 __asm__("a2") = (uint64_t)bufsz;
+  register uint64_t a3 __asm__("a3") = 0;
+  register uint64_t a4 __asm__("a4") = 0;
+  register uint64_t a7 __asm__("a7") = 167; /* __NR_prctl */
+  __asm__ __volatile__("syscall 0\n\t"
+    : "+r"(a0)
+    : "r"(a7), "r"(a1), "r"(a2), "r"(a3), "r"(a4)
+    : "memory", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8");
+  return a0;
+}
+#endif /* __linux__ */
+
+static uint32_t get_hwcap(void) {
+#ifdef __linux__
+  int bufsz = prctl_auxv(NULL, 0);
+  if (bufsz < 0)
+    return 0;
+  unsigned long *buf = __builtin_alloca(bufsz);
+  if (prctl_auxv(buf, bufsz) < 0)
+    return 0;
+  for (size_t i = 0; i < bufsz / (2 * sizeof(unsigned long)); ++i)
+    if (buf[2 * i] == 16 /* AT_HWCAP */)
+      return (uint32_t)buf[2 * i + 1] >> 4;
+  return 0;
+#else
+  return __builtin_loongarch_cpucfg(2) >> 6;
+#endif
+}
+#endif /* IS_LOONGARCH */
 
 enum cpu_feature {
   SSE2 = 1 << 0,
@@ -98,6 +134,8 @@ enum cpu_feature {
   AVX2 = 1 << 4,
   AVX512F = 1 << 5,
   AVX512VL = 1 << 6,
+  LSX = 1 << 0,
+  LASX = 1 << 1,
   /* ... */
   UNDEFINED = 1 << 30
 };
@@ -155,6 +193,11 @@ static
         }
       }
     }
+    ATOMIC_STORE(g_cpu_features, features);
+    return features;
+#elif defined(IS_LOONGARCH)
+    uint32_t hwcap = get_hwcap();
+    features = hwcap & (LSX | LASX);
     ATOMIC_STORE(g_cpu_features, features);
     return features;
 #else
@@ -294,6 +337,26 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
   return;
 #endif
 
+#if defined(IS_LOONGARCH)
+  const enum cpu_feature features = get_cpu_features();
+  MAYBE_UNUSED(features);
+#if !defined(BLAKE3_NO_LASX)
+  if (features & LASX) {
+    blake3_hash_many_lasx(inputs, num_inputs, blocks, key, counter,
+                          increment_counter, flags, flags_start, flags_end,
+                          out);
+    return;
+  }
+#endif
+#if !defined(BLAKE3_NO_LSX)
+  if (features & LSX) {
+    blake3_hash_many_lsx(inputs, num_inputs, blocks, key, counter,
+                         increment_counter, flags, flags_start, flags_end, out);
+    return;
+  }
+#endif
+#endif /* IS_LOONGARCH */
+
   blake3_hash_many_portable(inputs, num_inputs, blocks, key, counter,
                             increment_counter, flags, flags_start, flags_end,
                             out);
@@ -328,5 +391,19 @@ size_t blake3_simd_degree(void) {
 #if BLAKE3_USE_NEON == 1
   return 4;
 #endif
+#if defined(IS_LOONGARCH)
+  const enum cpu_feature features = get_cpu_features();
+  MAYBE_UNUSED(features);
+#if !defined(BLAKE3_NO_LASX)
+  if (features & LASX) {
+    return 8;
+  }
+#endif
+#if !defined(BLAKE3_NO_LSX)
+  if (features & LSX) {
+    return 4;
+  }
+#endif
+#endif /* IS_LOONGARCH */
   return 1;
 }

@@ -359,6 +359,18 @@ fn test_hash_many_neon() {
     test_hash_many_fn(crate::ffi::neon::blake3_hash_many_neon);
 }
 
+#[test]
+#[cfg(target_arch = "loongarch64")]
+fn test_hash_many_lasx() {
+    test_hash_many_fn(crate::ffi::loong::blake3_hash_many_lasx);
+}
+
+#[test]
+#[cfg(target_arch = "loongarch64")]
+fn test_hash_many_lsx() {
+    test_hash_many_fn(crate::ffi::loong::blake3_hash_many_lsx);
+}
+
 #[allow(unused)]
 type XofManyFunction = unsafe extern "C" fn(
     cv: *const u32,
