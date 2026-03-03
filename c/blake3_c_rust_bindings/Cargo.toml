@@ -23,8 +23,8 @@ tbb = []
 arrayref = "0.3.5"
 arrayvec = { version = "0.7.0", default-features = false }
 page_size = "0.6.0"
-rand = "0.9.0"
-rand_chacha = "0.9.0"
+rand = "0.10.0"
+chacha20 = "0.10.0"
 reference_impl = { path = "../../reference_impl" }
 
 [build-dependencies]
