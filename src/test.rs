@@ -524,7 +524,7 @@ fn test_fuzz_hasher() {
     let num_tests = if cfg!(debug_assertions) { 100 } else { 10_000 };
 
     // Use a fixed RNG seed for reproducibility.
-    let mut rng = rand_chacha::ChaCha8Rng::from_seed([1; 32]);
+    let mut rng = chacha20::ChaCha8Rng::from_seed([1; 32]);
     for _num_test in 0..num_tests {
         #[cfg(feature = "std")]
         dbg!(_num_test);
@@ -555,7 +555,7 @@ fn test_fuzz_xof() {
     let num_tests = if cfg!(debug_assertions) { 100 } else { 2500 };
 
     // Use a fixed RNG seed for reproducibility.
-    let mut rng = rand_chacha::ChaCha8Rng::from_seed([1; 32]);
+    let mut rng = chacha20::ChaCha8Rng::from_seed([1; 32]);
     for _num_test in 0..num_tests {
         #[cfg(feature = "std")]
         dbg!(_num_test);
