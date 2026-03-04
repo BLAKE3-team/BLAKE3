@@ -86,38 +86,41 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU"
   endif()
   
   if (CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_RISCV64_NAMES)
-    # RISC-V Vector Extension (RVV 1.0) - check if compiler supports it
-    # Try rva23u64 first (RVA23 profile with RVV), then rv64gcv
-    include(CheckCSourceCompiles)
-    
-    # Try rva23u64 first (RVA23 profile includes RVV 1.0)
-    set(CMAKE_REQUIRED_FLAGS "-march=rva23u64")
-    check_c_source_compiles("
-#include <riscv_vector.h>
-int main() {
-  size_t vl = __riscv_vsetvlmax_e32m1();
-  return 0;
-}
-" BLAKE3_COMPILER_SUPPORTS_RVA23U64)
-    set(CMAKE_REQUIRED_FLAGS)
-    
-    if(BLAKE3_COMPILER_SUPPORTS_RVA23U64)
-      set(BLAKE3_CFLAGS_RVV "-march=rva23u64" CACHE STRING "the compiler flags to enable RVV")
-    else()
-      # Fall back to rv64gcv
-      set(CMAKE_REQUIRED_FLAGS "-march=rv64gcv")
-      check_c_source_compiles("
-#include <riscv_vector.h>
-int main() {
-  size_t vl = __riscv_vsetvlmax_e32m1();
-  return 0;
-}
-" BLAKE3_COMPILER_SUPPORTS_RV64GCV)
-      set(CMAKE_REQUIRED_FLAGS)
+    if(DEFINED BLAKE3_CFLAGS_RVV)
+      message(STATUS "Using user-specified RVV flags: ${BLAKE3_CFLAGS_RVV}")
+    elseif(NOT CMAKE_CROSSCOMPILING)
+      message(STATUS "Native RISC-V build: testing RVV runtime support...")
       
-      if(BLAKE3_COMPILER_SUPPORTS_RV64GCV)
+      file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/test_rvv.c "
+#include <riscv_vector.h>
+int main() {
+  size_t vl = __riscv_vsetvlmax_e32m1();
+  return 0;
+}
+")
+      
+      try_run(
+        BLAKE3_RVV_RUN_RESULT
+        BLAKE3_RVV_COMPILE_RESULT
+        ${CMAKE_CURRENT_BINARY_DIR}/try_rvv
+        ${CMAKE_CURRENT_BINARY_DIR}/test_rvv.c
+        COMPILE_DEFINITIONS -march=rv64gcv
+        COMPILE_OUTPUT_VARIABLE BLAKE3_RVV_COMPILE_OUTPUT
+      )
+      
+      if(BLAKE3_RVV_COMPILE_RESULT AND BLAKE3_RVV_RUN_RESULT EQUAL 0)
         set(BLAKE3_CFLAGS_RVV "-march=rv64gcv" CACHE STRING "the compiler flags to enable RVV")
+        message(STATUS "RVV runtime support verified")
+      elseif(BLAKE3_RVV_COMPILE_RESULT)
+        message(STATUS "RVV compiled but failed to run (CPU doesn't support it)")
+      else()
+        message(STATUS "RVV compilation failed")
       endif()
+    else()
+      message(WARNING 
+        "Cross-compiling for RISC-V: Cannot auto-detect RVV support.\n"
+        "RVV will be DISABLED. To enable, specify:\n"
+        "  cmake -DBLAKE3_CFLAGS_RVV=\"-march=rv64gcv\" ..")
     endif()
   endif()
 endif()

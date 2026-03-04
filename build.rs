@@ -100,20 +100,77 @@ fn is_wasm32() -> bool {
 }
 
 fn is_riscv64() -> bool {
-    let arch = &target_components()[0];
-    arch == "riscv64gc" || arch == "riscv64a23"
+    target_components()[0].starts_with("riscv64")
+}
+
+fn is_cross_compiling() -> bool {
+    let host = env::var("HOST").unwrap();
+    let target = env::var("TARGET").unwrap();
+    host != target
+}
+
+fn test_rvv_runtime_support() -> bool {
+    use std::fs;
+    use std::io::Write;
+    use std::process::Command;
+
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let test_c = format!("{}/test_rvv.c", out_dir);
+    let test_bin = format!("{}/test_rvv", out_dir);
+
+    let test_code = b"
+#include <riscv_vector.h>
+int main() {
+  size_t vl = __riscv_vsetvlmax_e32m1();
+  return 0;
+}
+";
+
+    let mut f = match fs::File::create(&test_c) {
+        Ok(f) => f,
+        Err(e) => {
+            println!("cargo:warning=Failed to create RVV test file: {}", e);
+            return false;
+        }
+    };
+
+    if let Err(e) = f.write_all(test_code) {
+        println!("cargo:warning=Failed to write RVV test file: {}", e);
+        return false;
+    }
+
+    let cc = env::var("CC").unwrap_or_else(|_| "gcc".to_string());
+    let compile = Command::new(&cc)
+        .args(&["-march=rv64gcv", &test_c, "-o", &test_bin])
+        .output();
+
+    if !compile.is_ok() || !compile.unwrap().status.success() {
+        return false;
+    }
+
+    match Command::new(&test_bin).output() {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
+    }
 }
 
 fn is_rvv() -> bool {
-    // Explicit RVV feature flag
     if defined("CARGO_FEATURE_RVV") {
         return true;
     }
 
-    // riscv64a23 target has built-in RVV support
-    let arch = &target_components()[0];
-    if arch == "riscv64a23" {
-        return true;
+    if !is_cross_compiling() && is_riscv64() {
+        if test_rvv_runtime_support() {
+            return true;
+        } else {
+            println!("cargo:warning=No RVV support detected, using portable implementation");
+            return false;
+        }
+    }
+
+    if is_cross_compiling() && is_riscv64() {
+        println!("cargo:warning=Cross-compiling for RISC-V: RVV disabled");
+        println!("cargo:warning=To enable: use --features=rvv");
     }
 
     false
@@ -322,20 +379,8 @@ fn build_wasm32_simd() {
 
 fn build_rvv_c_intrinsics() {
     let mut build = new_build();
-    // Note that blake3_rvv.c normally depends on the blake3_portable.c
-    // for the single-instance compression function, but we expose
-    // portable.rs over FFI instead. See ffi_rvv.rs.
     build.file("c/blake3_rvv.c");
-
-    // Try rva23u64 first (RVA23 profile includes RVV 1.0), then fall back to rv64gcv.
-    // This matches the priority in CMakeLists.txt.
-    let march_flag = if build.is_flag_supported("-march=rva23u64").unwrap_or(false) {
-        "-march=rva23u64"
-    } else {
-        "-march=rv64gcv"
-    };
-    build.flag(march_flag);
-
+    build.flag("-march=rv64gcv");
     build.compile("blake3_rvv");
 }
 
