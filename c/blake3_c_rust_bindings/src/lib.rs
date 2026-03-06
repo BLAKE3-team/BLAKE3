@@ -130,7 +130,7 @@ pub mod ffi {
         pub key: [u32; 8usize],
         pub chunk: blake3_chunk_state,
         pub cv_stack_len: u8,
-        pub cv_stack: [u8; 1728usize],
+        pub cv_stack: [u8; 1760usize],
     }
 
     unsafe extern "C" {
