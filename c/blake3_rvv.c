@@ -129,71 +129,80 @@ INLINE void blake3_hash_vl_rvv(const uint8_t *const *inputs, size_t vl,
 
   uint8_t block_flags = flags | flags_start;
 
+  // Copy each input's block into an aligned buffer before gather loading.
+  // Input pointers are byte-aligned (&[u8]) and may not satisfy the u32
+  // alignment required by vluxei64_v_u32m1 on hardware without misaligned
+  // vector support (e.g. T-Head C920).
+  uint8_t aligned_blocks[vl][BLAKE3_BLOCK_LEN];
+
   for (size_t block = 0; block < blocks; block++) {
     if (block + 1 == blocks) {
       block_flags |= flags_end;
     }
 
-    // Load message words from vl different inputs using indexed load
-    // This uses RVV's vluxei64 instruction to gather data from multiple addresses
     size_t offset = block * BLAKE3_BLOCK_LEN;
-    
-    // Construct base address vector: addresses of each input's message block
+
+    // Copy vl input blocks into the aligned buffer
+    for (size_t i = 0; i < vl; i++) {
+      memcpy(aligned_blocks[i], &inputs[i][offset], BLAKE3_BLOCK_LEN);
+    }
+
+    // Construct base address vector from aligned buffer
     uint64_t base_addrs[vl];
     for (size_t i = 0; i < vl; i++) {
-      base_addrs[i] = (uint64_t)&inputs[i][offset];
+      base_addrs[i] = (uint64_t)aligned_blocks[i];
     }
     vuint64m2_t base_vec = __riscv_vle64_v_u64m2(base_addrs, vl);
-    
-    // Use indexed load to gather each message word from all inputs
-    // Fully unrolled for maximum performance
-    vuint64m2_t addr0 = base_vec;
-    vuint32m1_t m0 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr0, vl);
-    
-    vuint64m2_t addr1 = __riscv_vadd_vx_u64m2(base_vec, 1 * sizeof(uint32_t), vl);
-    vuint32m1_t m1 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr1, vl);
-    
-    vuint64m2_t addr2 = __riscv_vadd_vx_u64m2(base_vec, 2 * sizeof(uint32_t), vl);
-    vuint32m1_t m2 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr2, vl);
-    
-    vuint64m2_t addr3 = __riscv_vadd_vx_u64m2(base_vec, 3 * sizeof(uint32_t), vl);
-    vuint32m1_t m3 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr3, vl);
-    
-    vuint64m2_t addr4 = __riscv_vadd_vx_u64m2(base_vec, 4 * sizeof(uint32_t), vl);
-    vuint32m1_t m4 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr4, vl);
-    
-    vuint64m2_t addr5 = __riscv_vadd_vx_u64m2(base_vec, 5 * sizeof(uint32_t), vl);
-    vuint32m1_t m5 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr5, vl);
-    
-    vuint64m2_t addr6 = __riscv_vadd_vx_u64m2(base_vec, 6 * sizeof(uint32_t), vl);
-    vuint32m1_t m6 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr6, vl);
-    
-    vuint64m2_t addr7 = __riscv_vadd_vx_u64m2(base_vec, 7 * sizeof(uint32_t), vl);
-    vuint32m1_t m7 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr7, vl);
-    
-    vuint64m2_t addr8 = __riscv_vadd_vx_u64m2(base_vec, 8 * sizeof(uint32_t), vl);
-    vuint32m1_t m8 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr8, vl);
-    
-    vuint64m2_t addr9 = __riscv_vadd_vx_u64m2(base_vec, 9 * sizeof(uint32_t), vl);
-    vuint32m1_t m9 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr9, vl);
-    
-    vuint64m2_t addr10 = __riscv_vadd_vx_u64m2(base_vec, 10 * sizeof(uint32_t), vl);
-    vuint32m1_t m10 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr10, vl);
-    
-    vuint64m2_t addr11 = __riscv_vadd_vx_u64m2(base_vec, 11 * sizeof(uint32_t), vl);
-    vuint32m1_t m11 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr11, vl);
-    
-    vuint64m2_t addr12 = __riscv_vadd_vx_u64m2(base_vec, 12 * sizeof(uint32_t), vl);
-    vuint32m1_t m12 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr12, vl);
-    
-    vuint64m2_t addr13 = __riscv_vadd_vx_u64m2(base_vec, 13 * sizeof(uint32_t), vl);
-    vuint32m1_t m13 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr13, vl);
-    
-    vuint64m2_t addr14 = __riscv_vadd_vx_u64m2(base_vec, 14 * sizeof(uint32_t), vl);
-    vuint32m1_t m14 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr14, vl);
-    
-    vuint64m2_t addr15 = __riscv_vadd_vx_u64m2(base_vec, 15 * sizeof(uint32_t), vl);
-    vuint32m1_t m15 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr15, vl);
+
+    vuint64m2_t addr_vec;
+
+    addr_vec = base_vec;
+    vuint32m1_t m0 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
+
+    addr_vec = __riscv_vadd_vx_u64m2(base_vec, 1 * sizeof(uint32_t), vl);
+    vuint32m1_t m1 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
+
+    addr_vec = __riscv_vadd_vx_u64m2(base_vec, 2 * sizeof(uint32_t), vl);
+    vuint32m1_t m2 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
+
+    addr_vec = __riscv_vadd_vx_u64m2(base_vec, 3 * sizeof(uint32_t), vl);
+    vuint32m1_t m3 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
+
+    addr_vec = __riscv_vadd_vx_u64m2(base_vec, 4 * sizeof(uint32_t), vl);
+    vuint32m1_t m4 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
+
+    addr_vec = __riscv_vadd_vx_u64m2(base_vec, 5 * sizeof(uint32_t), vl);
+    vuint32m1_t m5 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
+
+    addr_vec = __riscv_vadd_vx_u64m2(base_vec, 6 * sizeof(uint32_t), vl);
+    vuint32m1_t m6 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
+
+    addr_vec = __riscv_vadd_vx_u64m2(base_vec, 7 * sizeof(uint32_t), vl);
+    vuint32m1_t m7 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
+
+    addr_vec = __riscv_vadd_vx_u64m2(base_vec, 8 * sizeof(uint32_t), vl);
+    vuint32m1_t m8 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
+
+    addr_vec = __riscv_vadd_vx_u64m2(base_vec, 9 * sizeof(uint32_t), vl);
+    vuint32m1_t m9 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
+
+    addr_vec = __riscv_vadd_vx_u64m2(base_vec, 10 * sizeof(uint32_t), vl);
+    vuint32m1_t m10 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
+
+    addr_vec = __riscv_vadd_vx_u64m2(base_vec, 11 * sizeof(uint32_t), vl);
+    vuint32m1_t m11 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
+
+    addr_vec = __riscv_vadd_vx_u64m2(base_vec, 12 * sizeof(uint32_t), vl);
+    vuint32m1_t m12 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
+
+    addr_vec = __riscv_vadd_vx_u64m2(base_vec, 13 * sizeof(uint32_t), vl);
+    vuint32m1_t m13 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
+
+    addr_vec = __riscv_vadd_vx_u64m2(base_vec, 14 * sizeof(uint32_t), vl);
+    vuint32m1_t m14 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
+
+    addr_vec = __riscv_vadd_vx_u64m2(base_vec, 15 * sizeof(uint32_t), vl);
+    vuint32m1_t m15 = __riscv_vluxei64_v_u32m1((const uint32_t *)0, addr_vec, vl);
 
     vuint32m1_t v0 = h0;
     vuint32m1_t v1 = h1;
