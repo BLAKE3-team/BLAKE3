@@ -16,12 +16,12 @@ cfg_if::cfg_if! {
         // RVV is a variable-length vector architecture. The actual degree depends
         // on VLEN (vector register length in bits):
         // - VLEN=128: degree=4 (minimum required by spec)
-        // - VLEN=256: degree=8 (common in current implementations)
-        // - VLEN=512: degree=16 (high-performance implementations)
-        // - VLEN=1024+: degree=32+ (future implementations)
-        // We use 16 as the upper bound, when future hardwares with degree > 8 released
-        // alter this constant
-        pub const MAX_SIMD_DEGREE: usize = 16;
+        // - VLEN=256: degree=8
+        // - VLEN=512: degree=16
+        // - VLEN=1024: degree=32
+        // - VLEN=2048: degree=64 (maximum allowed by spec)
+        // We use 64 as the upper bound to cover all possible implementations.
+        pub const MAX_SIMD_DEGREE: usize = 64;
     } else if #[cfg(blake3_wasm32_simd)] {
         pub const MAX_SIMD_DEGREE: usize = 4;
     } else {
@@ -45,7 +45,7 @@ cfg_if::cfg_if! {
     } else if #[cfg(blake3_neon)] {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 4;
     } else if #[cfg(blake3_rvv)] {
-        pub const MAX_SIMD_DEGREE_OR_2: usize = 16;
+        pub const MAX_SIMD_DEGREE_OR_2: usize = 64;
     } else if #[cfg(blake3_wasm32_simd)] {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 4;
     } else {
