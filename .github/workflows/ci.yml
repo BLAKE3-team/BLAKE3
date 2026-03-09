@@ -489,3 +489,23 @@ jobs:
     - name: cargo test C bindings with TBB
       run: cargo test --features=tbb
       working-directory: ./c/blake3_c_rust_bindings
+
+  openmp_rust_bindings_test:
+    name: OpenMP test bindings ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "macOS-latest"]
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - name: install libomp
+      if: matrix.os == 'macOS-latest'
+      run: |
+        brew install libomp
+        echo "CFLAGS=-I$(brew --prefix libomp)/include $CFLAGS" >> $GITHUB_ENV
+        echo "RUSTFLAGS=-L$(brew --prefix libomp)/lib $RUSTFLAGS" >> $GITHUB_ENV
+    - name: cargo test C bindings with OpenMP
+      run: cargo test --features=openmp
+      working-directory: ./c/blake3_c_rust_bindings
