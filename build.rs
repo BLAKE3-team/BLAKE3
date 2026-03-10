@@ -99,6 +99,113 @@ fn is_wasm32() -> bool {
     target_components()[0] == "wasm32"
 }
 
+fn is_riscv64() -> bool {
+    target_components()[0].starts_with("riscv64")
+}
+
+fn is_cross_compiling() -> bool {
+    let host = env::var("HOST").unwrap();
+    let target = env::var("TARGET").unwrap();
+    host != target
+}
+
+fn test_rvv_runtime_support() -> bool {
+    use std::fs;
+    use std::io::Write;
+    use std::process::Command;
+
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let test_c = format!("{}/test_rvv.c", out_dir);
+    let test_bin = format!("{}/test_rvv", out_dir);
+
+    let test_code = b"
+#include <riscv_vector.h>
+#include <stdint.h>
+
+int main() {
+  size_t vl = __riscv_vsetvlmax_e32m1();
+  if (vl == 0) return 1;
+
+  vuint32m1_t v32_a = __riscv_vmv_v_x_u32m1(42, vl);
+  vuint32m1_t v32_b = __riscv_vmv_v_x_u32m1(17, vl);
+  vuint32m1_t v32_sum = __riscv_vadd_vv_u32m1(v32_a, v32_b, vl);
+  vuint32m1_t v32_xor = __riscv_vxor_vv_u32m1(v32_a, v32_b, vl);
+  vuint32m1_t v32_or = __riscv_vor_vv_u32m1(v32_a, v32_b, vl);
+  vuint32m1_t v32_srl = __riscv_vsrl_vx_u32m1(v32_a, 4, vl);
+  vuint32m1_t v32_sll = __riscv_vsll_vx_u32m1(v32_a, 4, vl);
+
+  uint32_t data32[16] = {0};
+  vuint32m1_t v32_loaded = __riscv_vle32_v_u32m1(data32, vl);
+  __riscv_vsse32_v_u32m1(data32, sizeof(uint32_t) * 2, v32_sum, vl);
+
+  uint64_t data64[16] = {0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60};
+  vuint64m2_t v64 = __riscv_vle64_v_u64m2(data64, vl);
+  vuint64m2_t v64_add = __riscv_vadd_vx_u64m2(v64, 100, vl);
+
+  uint32_t src_data[16] = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160};
+  vuint32m1_t v32_indexed = __riscv_vluxei64_v_u32m1((const uint32_t *)src_data, v64, vl);
+
+  uint32_t result_sum[16] = {0};
+  uint32_t result_indexed[16] = {0};
+  __riscv_vse32_v_u32m1(result_sum, v32_sum, vl);
+  __riscv_vse32_v_u32m1(result_indexed, v32_indexed, vl);
+
+  if (result_sum[0] != 59) return 2;
+  if (result_indexed[0] != 10) return 3;
+  if (vl > 1 && result_indexed[1] != 20) return 4;
+
+  return 0;
+}
+";
+
+    let mut f = match fs::File::create(&test_c) {
+        Ok(f) => f,
+        Err(e) => {
+            println!("cargo:warning=Failed to create RVV test file: {}", e);
+            return false;
+        }
+    };
+
+    if let Err(e) = f.write_all(test_code) {
+        println!("cargo:warning=Failed to write RVV test file: {}", e);
+        return false;
+    }
+
+    drop(f);
+
+    let mut build = cc::Build::new();
+    build.flag("-march=rv64gcv");
+    let compiler = build.get_compiler();
+
+    let mut cmd = compiler.to_command();
+    cmd.arg(&test_c).arg("-o").arg(&test_bin);
+
+    if !cmd.status().map(|s| s.success()).unwrap_or(false) {
+        return false;
+    }
+
+    match Command::new(&test_bin).output() {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
+    }
+}
+
+fn is_rvv() -> bool {
+    if defined("CARGO_FEATURE_RVV") {
+        return true;
+    }
+
+    if is_pure() {
+        return false;
+    }
+
+    if !is_cross_compiling() && is_riscv64() && is_little_endian() {
+        return test_rvv_runtime_support();
+    }
+
+    false
+}
+
 fn endianness() -> String {
     let endianness = env::var("CARGO_CFG_TARGET_ENDIAN").unwrap();
     assert!(endianness == "little" || endianness == "big");
@@ -300,6 +407,14 @@ fn build_wasm32_simd() {
     println!("cargo:rustc-cfg=blake3_wasm32_simd");
 }
 
+fn build_rvv_c_intrinsics() {
+    let mut build = new_build();
+    build.file("c/blake3_rvv.c");
+    build.flag("-march=rv64gcv");
+    build.define("BLAKE3_USE_RVV", "1");
+    build.compile("blake3_rvv");
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // As of Rust 1.80, unrecognized config names are warnings. Give Cargo all of our config names.
     let all_cfgs = [
@@ -312,6 +427,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "blake3_avx512_ffi",
         "blake3_neon",
         "blake3_wasm32_simd",
+        "blake3_rvv",
     ];
     for cfg_name in all_cfgs {
         // TODO: Switch this whole file to the new :: syntax when our MSRV reaches 1.77.
@@ -325,6 +441,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if is_no_neon() && is_neon() {
         panic!("It doesn't make sense to enable both \"no_neon\" and \"neon\".");
+    }
+
+    if is_pure() && is_rvv() {
+        panic!("It doesn't make sense to enable both \"pure\" and \"rvv\".");
     }
 
     if is_x86_64() || is_x86_32() {
@@ -359,6 +479,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if is_wasm32() && is_wasm32_simd() {
         build_wasm32_simd();
+    }
+
+    if is_rvv() && is_big_endian() {
+        panic!("The RVV implementation doesn't support big-endian RISC-V.")
+    }
+
+    // Enable RVV if explicitly requested via feature flag
+    if is_riscv64() && is_rvv() {
+        println!("cargo:rustc-cfg=blake3_rvv");
+        build_rvv_c_intrinsics();
     }
 
     // The `cc` crate doesn't automatically emit rerun-if directives for the

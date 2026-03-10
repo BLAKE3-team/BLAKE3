@@ -75,6 +75,8 @@ enum blake3_flags {
 #define MAX_SIMD_DEGREE 16
 #elif BLAKE3_USE_NEON == 1
 #define MAX_SIMD_DEGREE 4
+#elif BLAKE3_USE_RVV == 1
+#define MAX_SIMD_DEGREE 64
 #else
 #define MAX_SIMD_DEGREE 1
 #endif
@@ -324,6 +326,14 @@ void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
                            uint64_t counter, bool increment_counter,
                            uint8_t flags, uint8_t flags_start,
                            uint8_t flags_end, uint8_t *out);
+#endif
+
+#if BLAKE3_USE_RVV == 1
+void blake3_hash_many_rvv(const uint8_t *const *inputs, size_t num_inputs,
+                          size_t blocks, const uint32_t key[8],
+                          uint64_t counter, bool increment_counter,
+                          uint8_t flags, uint8_t flags_start,
+                          uint8_t flags_end, uint8_t *out);
 #endif
 
 #ifdef __cplusplus
