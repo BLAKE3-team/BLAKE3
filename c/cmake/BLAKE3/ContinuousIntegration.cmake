@@ -115,6 +115,23 @@ elseif(BLAKE3_SIMD_TYPE STREQUAL "neon-intrinsics")
     set_source_files_properties(blake3_neon.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_NEON}")
   endif()
 
+elseif(BLAKE3_SIMD_TYPE STREQUAL "loong-intrinsics")
+  # Conditionally add loongarch C files to `blake3-testing` sources
+
+  if (DEFINED BLAKE3_CFLAGS_LSX)
+    target_sources(blake3-testing PRIVATE blake3_lsx.c)
+    set_source_files_properties(blake3_lsx.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_LSX}")
+  else()
+    target_compile_definitions(blake3-testing PRIVATE BLAKE3_NO_LSX)
+  endif()
+
+  if (DEFINED BLAKE3_CFLAGS_LASX)
+    target_sources(blake3-testing PRIVATE blake3_lasx.c)
+    set_source_files_properties(blake3_lasx.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_LASX}")
+  else()
+    target_compile_definitions(blake3-testing PRIVATE BLAKE3_NO_LASX)
+  endif()
+
 elseif(BLAKE3_SIMD_TYPE STREQUAL "none")
   # Disable neon if simd type is "none". We check for individual amd64 features further below.
 
@@ -135,6 +152,12 @@ if(BLAKE3_NO_SSE2)
 endif()
 if(BLAKE3_NO_SSE41)
   target_compile_definitions(blake3-testing PRIVATE BLAKE3_NO_SSE41)
+endif()
+if(BLAKE3_NO_LSX)
+  target_compile_definitions(blake3-testing PRIVATE BLAKE3_NO_LSX)
+endif()
+if(BLAKE3_NO_LASX)
+  target_compile_definitions(blake3-testing PRIVATE BLAKE3_NO_LASX)
 endif()
 
 target_compile_definitions(blake3-testing PUBLIC BLAKE3_TESTING)
@@ -230,6 +253,8 @@ add_test(NAME blake3-testing
       "-DBLAKE3_NO_SSE41=${BLAKE3_NO_SSE41}"
       "-DBLAKE3_NO_AVX2=${BLAKE3_NO_AVX2}"
       "-DBLAKE3_NO_AVX512=${BLAKE3_NO_AVX512}"
+      "-DBLAKE3_NO_LSX=${BLAKE3_NO_LSX}"
+      "-DBLAKE3_NO_LASX=${BLAKE3_NO_LASX}"
     --test-command
       "${CMAKE_SOURCE_DIR}/test.py"
   )
