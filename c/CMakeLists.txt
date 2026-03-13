@@ -19,6 +19,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 option(BLAKE3_USE_TBB "Enable oneTBB parallelism" OFF)
 option(BLAKE3_FETCH_TBB "Allow fetching oneTBB from GitHub if not found on system" OFF)
+option(BLAKE3_USE_PTHREAD "Enable pthread parallelism" OFF)
 
 include(CTest)
 include(FeatureSummary)
@@ -256,6 +257,13 @@ if(BLAKE3_USE_TBB)
   elseif(BLAKE3_HAVE_LIBCPP)
     list(APPEND PKG_CONFIG_LIBS -lc++)
   endif()
+endif()
+
+if(BLAKE3_USE_PTHREAD AND NOT BLAKE3_USE_TBB)
+  find_package(Threads REQUIRED)
+  target_link_libraries(blake3 PRIVATE Threads::Threads)
+  target_compile_definitions(blake3 PUBLIC BLAKE3_USE_PTHREAD)
+  target_sources(blake3 PRIVATE blake3_pthread.c)
 endif()
 
 if(BLAKE3_USE_TBB)
