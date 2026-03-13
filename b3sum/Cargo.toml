@@ -24,3 +24,11 @@ wild = "2.0.3"
 [dev-dependencies]
 duct = "1.0.0"
 tempfile = "3.1.0"
+
+# b3sum does not gracefully handle panics (nor does it make sense for it to do
+# that), so unwinding on panic would just be a minor performance loss and
+# binary size hog with no benefit
+[profile.dev]
+panic = "abort"
+[profile.release]
+panic = "abort"
