@@ -1541,8 +1541,8 @@ impl Hasher {
     /// ```
     #[cfg(feature = "mmap")]
     pub fn update_mmap(&mut self, path: impl AsRef<std::path::Path>) -> std::io::Result<&mut Self> {
-        let file = std::fs::File::open(path.as_ref())?;
-        if let Some(mmap) = io::maybe_mmap_file(&file)? {
+        let mut file = std::fs::File::open(path.as_ref())?;
+        if let Some(mmap) = io::maybe_mmap_file(&mut file)? {
             self.update(&mmap);
         } else {
             io::copy_wide(&file, self)?;
@@ -1596,8 +1596,8 @@ impl Hasher {
         &mut self,
         path: impl AsRef<std::path::Path>,
     ) -> std::io::Result<&mut Self> {
-        let file = std::fs::File::open(path.as_ref())?;
-        if let Some(mmap) = io::maybe_mmap_file(&file)? {
+        let mut file = std::fs::File::open(path.as_ref())?;
+        if let Some(mmap) = io::maybe_mmap_file(&mut file)? {
             self.update_rayon(&mmap);
         } else {
             io::copy_wide(&file, self)?;
