@@ -56,16 +56,16 @@ fn set4(a: u32, b: u32, c: u32, d: u32) -> v128 {
     i32x4(a as i32, b as i32, c as i32, d as i32)
 }
 
-// These rotations are the "simple/shifts version". For the
-// "complicated/shuffles version", see
-// https://github.com/sneves/blake2-avx2/blob/b3723921f668df09ece52dcd225a36d4a4eea1d9/blake2s-common.h#L63-L66.
-// For a discussion of the tradeoffs, see
-// https://github.com/sneves/blake2-avx2/pull/5. Due to an LLVM bug
-// (https://bugs.llvm.org/show_bug.cgi?id=44379), this version performs better
-// on recent x86 chips.
+// rot16 and rot8 use i8x16_shuffle (1 WASM instruction) instead of
+// shift+OR (3 instructions) since they are byte-aligned rotations.
+// rot12 and rot7 are not byte-aligned, so they still use shift+OR.
+// For the x86 "shuffles vs shifts" discussion, see
+// https://github.com/sneves/blake2-avx2/pull/5. On x86, shifts can be
+// faster due to an LLVM bug (https://bugs.llvm.org/show_bug.cgi?id=44379),
+// but on WASM SIMD targets, i8x16_shuffle is ~20% faster for rot8/rot16.
 #[inline(always)]
 fn rot16(a: v128) -> v128 {
-    v128_or(u32x4_shr(a, 16), u32x4_shl(a, 32 - 16))
+    i8x16_shuffle::<2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13>(a, a)
 }
 
 #[inline(always)]
@@ -75,7 +75,7 @@ fn rot12(a: v128) -> v128 {
 
 #[inline(always)]
 fn rot8(a: v128) -> v128 {
-    v128_or(u32x4_shr(a, 8), u32x4_shl(a, 32 - 8))
+    i8x16_shuffle::<1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 12>(a, a)
 }
 
 #[inline(always)]
