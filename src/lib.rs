@@ -142,6 +142,10 @@ use arrayref::{array_mut_ref, array_ref};
 use arrayvec::{ArrayString, ArrayVec};
 use core::cmp;
 use core::fmt;
+#[cfg(feature = "const")]
+use core::mem::MaybeUninit;
+#[cfg(feature = "const")]
+use core::slice;
 use platform::{Platform, MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2};
 #[cfg(feature = "zeroize")]
 use zeroize::Zeroize;
@@ -201,13 +205,25 @@ const KEYED_HASH: u8 = 1 << 4;
 const DERIVE_KEY_CONTEXT: u8 = 1 << 5;
 const DERIVE_KEY_MATERIAL: u8 = 1 << 6;
 
+// TODO: Replace with `dst.copy_from_slice(src)` when Rust 1.86.0 is stable and used in this crate
+#[cfg(feature = "const")]
+#[inline(always)]
+const fn const_copy_from_slice(mut dst: &mut [u8], mut src: &[u8]) {
+    assert!(dst.len() == src.len());
+    while !src.is_empty() {
+        dst[0] = src[0];
+        dst = dst.split_at_mut(1).1;
+        src = src.split_at(1).1;
+    }
+}
+
 #[inline]
-fn counter_low(counter: u64) -> u32 {
+const fn counter_low(counter: u64) -> u32 {
     counter as u32
 }
 
 #[inline]
-fn counter_high(counter: u64) -> u32 {
+const fn counter_high(counter: u64) -> u32 {
     (counter >> 32) as u32
 }
 
@@ -495,6 +511,60 @@ impl Zeroize for Output {
     }
 }
 
+/// [`Output`] with `const fn` methods
+#[cfg(feature = "const")]
+#[derive(Clone)]
+struct ConstOutput {
+    input_chaining_value: CVWords,
+    block: [u8; 64],
+    block_len: u8,
+    counter: u64,
+    flags: u8,
+}
+
+#[cfg(feature = "const")]
+impl ConstOutput {
+    const fn chaining_value(&self) -> CVBytes {
+        let mut cv = self.input_chaining_value;
+        portable::compress_in_place(
+            &mut cv,
+            &self.block,
+            self.block_len,
+            self.counter,
+            self.flags,
+        );
+        platform::le_bytes_from_words_32(&cv)
+    }
+
+    const fn root_hash(&self) -> Hash {
+        debug_assert!(self.counter == 0);
+        let mut cv = self.input_chaining_value;
+        portable::compress_in_place(&mut cv, &self.block, self.block_len, 0, self.flags | ROOT);
+        Hash(platform::le_bytes_from_words_32(&cv))
+    }
+}
+
+#[cfg(feature = "zeroize")]
+#[cfg(feature = "const")]
+impl Zeroize for ConstOutput {
+    fn zeroize(&mut self) {
+        // Destructuring to trigger compile error as a reminder to update this impl.
+        let Self {
+            input_chaining_value,
+            block,
+            block_len,
+            counter,
+            flags,
+        } = self;
+
+        input_chaining_value.zeroize();
+        block.zeroize();
+        block_len.zeroize();
+        counter.zeroize();
+        flags.zeroize();
+    }
+}
+
 #[derive(Clone)]
 struct ChunkState {
     cv: CVWords,
@@ -628,6 +698,151 @@ impl Zeroize for ChunkState {
     }
 }
 
+/// [`ChunkState`] with `const fn` methods
+#[cfg(feature = "const")]
+#[derive(Clone)]
+struct ConstChunkState {
+    cv: CVWords,
+    chunk_counter: u64,
+    buf: [u8; BLOCK_LEN],
+    buf_len: u8,
+    blocks_compressed: u8,
+    flags: u8,
+}
+
+#[cfg(feature = "const")]
+impl ConstChunkState {
+    const fn new(key: &CVWords, chunk_counter: u64, flags: u8) -> Self {
+        Self {
+            cv: *key,
+            chunk_counter,
+            buf: [0; BLOCK_LEN],
+            buf_len: 0,
+            blocks_compressed: 0,
+            flags,
+        }
+    }
+
+    const fn count(&self) -> usize {
+        BLOCK_LEN * self.blocks_compressed as usize + self.buf_len as usize
+    }
+
+    const fn fill_buf(&mut self, input: &mut &[u8]) {
+        let want = BLOCK_LEN - self.buf_len as usize;
+        let take = if want < input.len() {
+            want
+        } else {
+            input.len()
+        };
+        let output = self
+            .buf
+            .split_at_mut(self.buf_len as usize)
+            .1
+            .split_at_mut(take)
+            .0;
+        const_copy_from_slice(output, input.split_at(take).0);
+        self.buf_len += take as u8;
+        *input = input.split_at(take).1;
+    }
+
+    const fn start_flag(&self) -> u8 {
+        if self.blocks_compressed == 0 {
+            CHUNK_START
+        } else {
+            0
+        }
+    }
+
+    // Try to avoid buffering as much as possible, by compressing directly from
+    // the input slice when full blocks are available.
+    const fn update(&mut self, mut input: &[u8]) -> &mut Self {
+        if self.buf_len > 0 {
+            self.fill_buf(&mut input);
+            if !input.is_empty() {
+                debug_assert!(self.buf_len as usize == BLOCK_LEN);
+                let block_flags = self.flags | self.start_flag(); // borrowck
+                portable::compress_in_place(
+                    &mut self.cv,
+                    &self.buf,
+                    BLOCK_LEN as u8,
+                    self.chunk_counter,
+                    block_flags,
+                );
+                self.buf_len = 0;
+                self.buf = [0; BLOCK_LEN];
+                self.blocks_compressed += 1;
+            }
+        }
+
+        while input.len() > BLOCK_LEN {
+            debug_assert!(self.buf_len == 0);
+            let block_flags = self.flags | self.start_flag(); // borrowck
+            portable::compress_in_place(
+                &mut self.cv,
+                input
+                    .first_chunk::<BLOCK_LEN>()
+                    .expect("Interation only starts when there is at least `BLOCK_LEN` bytes; qed"),
+                BLOCK_LEN as u8,
+                self.chunk_counter,
+                block_flags,
+            );
+            self.blocks_compressed += 1;
+            input = input.split_at(BLOCK_LEN).1;
+        }
+
+        self.fill_buf(&mut input);
+        debug_assert!(input.is_empty());
+        debug_assert!(self.count() <= CHUNK_LEN);
+        self
+    }
+
+    const fn output(&self) -> ConstOutput {
+        let block_flags = self.flags | self.start_flag() | CHUNK_END;
+        ConstOutput {
+            input_chaining_value: self.cv,
+            block: self.buf,
+            block_len: self.buf_len,
+            counter: self.chunk_counter,
+            flags: block_flags,
+        }
+    }
+}
+
+// Don't derive(Debug), because the state may be secret.
+#[cfg(feature = "const")]
+impl fmt::Debug for ConstChunkState {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("ConstChunkState")
+            .field("count", &self.count())
+            .field("chunk_counter", &self.chunk_counter)
+            .field("flags", &self.flags)
+            .finish()
+    }
+}
+
+#[cfg(feature = "const")]
+#[cfg(feature = "zeroize")]
+impl Zeroize for ConstChunkState {
+    fn zeroize(&mut self) {
+        // Destructuring to trigger compile error as a reminder to update this impl.
+        let Self {
+            cv,
+            chunk_counter,
+            buf,
+            buf_len,
+            blocks_compressed,
+            flags,
+        } = self;
+
+        cv.zeroize();
+        chunk_counter.zeroize();
+        buf.zeroize();
+        buf_len.zeroize();
+        blocks_compressed.zeroize();
+        flags.zeroize();
+    }
+}
+
 // IMPLEMENTATION NOTE
 // ===================
 // The recursive function compress_subtree_wide(), implemented below, is the
@@ -653,7 +868,7 @@ pub enum IncrementCounter {
 
 impl IncrementCounter {
     #[inline]
-    fn yes(&self) -> bool {
+    const fn yes(&self) -> bool {
         match self {
             IncrementCounter::Yes => true,
             IncrementCounter::No => false,
@@ -663,7 +878,7 @@ impl IncrementCounter {
 
 // The largest power of two less than or equal to `n`, used in Hasher::update(). This is similar to
 // left_subtree_len(n), but note that left_subtree_len(n) is strictly less than `n`.
-fn largest_power_of_two_leq(n: usize) -> usize {
+const fn largest_power_of_two_leq(n: usize) -> usize {
     ((n / 2) + 1).next_power_of_two()
 }
 
@@ -898,6 +1113,213 @@ fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8) -> Ou
     }
 }
 
+/// `const fn` version of [`compress_chunks_parallel`]
+#[cfg(feature = "const")]
+const fn const_compress_chunks_parallel(
+    input: &[u8],
+    key: &CVWords,
+    chunk_counter: u64,
+    flags: u8,
+    out: &mut [u8],
+) -> usize {
+    debug_assert!(!input.is_empty(), "empty chunks below the root");
+    debug_assert!(input.len() <= MAX_SIMD_DEGREE * CHUNK_LEN);
+
+    let mut chunks = input;
+    let mut chunks_so_far = 0;
+    let mut chunks_array = [MaybeUninit::<&[u8; CHUNK_LEN]>::uninit(); MAX_SIMD_DEGREE];
+    while let Some(chunk) = chunks.first_chunk::<CHUNK_LEN>() {
+        chunks = chunks.split_at(CHUNK_LEN).1;
+        chunks_array[chunks_so_far].write(chunk);
+        chunks_so_far += 1;
+    }
+    portable::hash_many(
+        // SAFETY: Exactly `chunks_so_far` elements of `chunks_array` were initialized above
+        unsafe {
+            slice::from_raw_parts(
+                chunks_array.as_ptr().cast::<&[u8; CHUNK_LEN]>(),
+                chunks_so_far,
+            )
+        },
+        key,
+        chunk_counter,
+        IncrementCounter::Yes,
+        flags,
+        CHUNK_START,
+        CHUNK_END,
+        out,
+    );
+
+    // Hash the remaining partial chunk, if there is one. Note that the empty
+    // chunk (meaning the empty message) is a different codepath.
+    if !chunks.is_empty() {
+        let counter = chunk_counter + chunks_so_far as u64;
+        let mut chunk_state = ConstChunkState::new(key, counter, flags);
+        chunk_state.update(chunks);
+        let out = out
+            .split_at_mut(chunks_so_far * OUT_LEN)
+            .1
+            .split_at_mut(OUT_LEN)
+            .0;
+        let chaining_value = chunk_state.output().chaining_value();
+        const_copy_from_slice(out, &chaining_value);
+        chunks_so_far + 1
+    } else {
+        chunks_so_far
+    }
+}
+
+/// `const fn` version of [`compress_parents_parallel`]
+#[cfg(feature = "const")]
+const fn const_compress_parents_parallel(
+    child_chaining_values: &[u8],
+    key: &CVWords,
+    flags: u8,
+    out: &mut [u8],
+) -> usize {
+    debug_assert!(
+        child_chaining_values.len() % OUT_LEN == 0,
+        "wacky hash bytes"
+    );
+    let num_children = child_chaining_values.len() / OUT_LEN;
+    debug_assert!(num_children >= 2, "not enough children");
+    debug_assert!(num_children <= 2 * MAX_SIMD_DEGREE_OR_2, "too many");
+
+    let mut parents = child_chaining_values;
+    // Use MAX_SIMD_DEGREE_OR_2 rather than MAX_SIMD_DEGREE here, because of
+    // the requirements of compress_subtree_wide().
+    let mut parents_so_far = 0;
+    let mut parents_array = [MaybeUninit::<&[u8; BLOCK_LEN]>::uninit(); MAX_SIMD_DEGREE_OR_2];
+    while let Some(parent) = parents.first_chunk::<BLOCK_LEN>() {
+        parents = parents.split_at(BLOCK_LEN).1;
+        parents_array[parents_so_far].write(parent);
+        parents_so_far += 1;
+    }
+    portable::hash_many(
+        // SAFETY: Exactly `parents_so_far` elements of `parents_array` were initialized above
+        unsafe {
+            slice::from_raw_parts(
+                parents_array.as_ptr().cast::<&[u8; BLOCK_LEN]>(),
+                parents_so_far,
+            )
+        },
+        key,
+        0, // Parents always use counter 0.
+        IncrementCounter::No,
+        flags | PARENT,
+        0, // Parents have no start flags.
+        0, // Parents have no end flags.
+        out,
+    );
+
+    // If there's an odd child left over, it becomes an output.
+    if !parents.is_empty() {
+        let out = out
+            .split_at_mut(parents_so_far * OUT_LEN)
+            .1
+            .split_at_mut(OUT_LEN)
+            .0;
+        const_copy_from_slice(out, parents);
+        parents_so_far + 1
+    } else {
+        parents_so_far
+    }
+}
+
+/// `const fn` version of [`compress_subtree_wide`]
+#[cfg(feature = "const")]
+const fn const_compress_subtree_wide(
+    input: &[u8],
+    key: &CVWords,
+    chunk_counter: u64,
+    flags: u8,
+    out: &mut [u8],
+) -> usize {
+    if input.len() <= CHUNK_LEN {
+        return const_compress_chunks_parallel(input, key, chunk_counter, flags, out);
+    }
+
+    let (left, right) = input.split_at(hazmat::left_subtree_len(input.len() as u64) as usize);
+    let right_chunk_counter = chunk_counter + (left.len() / CHUNK_LEN) as u64;
+
+    // Make space for the child outputs. Here we use MAX_SIMD_DEGREE_OR_2 to
+    // account for the special case of returning 2 outputs when the SIMD degree
+    // is 1.
+    let mut cv_array = [0; 2 * MAX_SIMD_DEGREE_OR_2 * OUT_LEN];
+    let degree = if left.len() == CHUNK_LEN { 1 } else { 2 };
+    let (left_out, right_out) = cv_array.split_at_mut(degree * OUT_LEN);
+
+    // Recurse!
+    let left_n = const_compress_subtree_wide(left, key, chunk_counter, flags, left_out);
+    let right_n = const_compress_subtree_wide(right, key, right_chunk_counter, flags, right_out);
+
+    // The special case again. If simd_degree=1, then we'll have left_n=1 and
+    // right_n=1. Rather than compressing them into a single output, return
+    // them directly, to make sure we always have at least two outputs.
+    debug_assert!(left_n == degree);
+    debug_assert!(right_n >= 1 && right_n <= left_n);
+    if left_n == 1 {
+        const_copy_from_slice(
+            out.split_at_mut(2 * OUT_LEN).0,
+            cv_array.split_at(2 * OUT_LEN).0,
+        );
+        return 2;
+    }
+
+    // Otherwise, do one layer of parent node compression.
+    let num_children = left_n + right_n;
+    const_compress_parents_parallel(cv_array.split_at(num_children * OUT_LEN).0, key, flags, out)
+}
+
+/// `const fn` version of [`compress_subtree_to_parent_node`]
+#[cfg(feature = "const")]
+const fn const_compress_subtree_to_parent_node(
+    input: &[u8],
+    key: &CVWords,
+    chunk_counter: u64,
+    flags: u8,
+) -> [u8; BLOCK_LEN] {
+    debug_assert!(input.len() > CHUNK_LEN);
+    let mut cv_array = [0; MAX_SIMD_DEGREE_OR_2 * OUT_LEN];
+    let mut num_cvs = const_compress_subtree_wide(input, &key, chunk_counter, flags, &mut cv_array);
+    debug_assert!(num_cvs >= 2);
+
+    // If MAX_SIMD_DEGREE is greater than 2 and there's enough input,
+    // compress_subtree_wide() returns more than 2 chaining values. Condense
+    // them into 2 by forming parent nodes repeatedly.
+    let mut out_array = [0; MAX_SIMD_DEGREE_OR_2 * OUT_LEN / 2];
+    while num_cvs > 2 {
+        let cv_slice = cv_array.split_at(num_cvs * OUT_LEN).0;
+        num_cvs = const_compress_parents_parallel(cv_slice, key, flags, &mut out_array);
+        const_copy_from_slice(
+            cv_array.split_at_mut(num_cvs * OUT_LEN).0,
+            out_array.split_at(num_cvs * OUT_LEN).0,
+        );
+    }
+    *cv_array
+        .first_chunk::<BLOCK_LEN>()
+        .expect("`cv_array` is larger than `BLOCK_LEN`; qed")
+}
+
+/// `const fn` version of [`hash_all_at_once`]
+#[cfg(feature = "const")]
+const fn const_hash_all_at_once(input: &[u8], key: &CVWords, flags: u8) -> ConstOutput {
+    // If the whole subtree is one chunk, hash it directly with a ChunkState.
+    if input.len() <= CHUNK_LEN {
+        return ConstChunkState::new(key, 0, flags).update(input).output();
+    }
+
+    // Otherwise construct an Output object from the parent node returned by
+    // compress_subtree_to_parent_node().
+    ConstOutput {
+        input_chaining_value: *key,
+        block: const_compress_subtree_to_parent_node(input, key, 0, flags),
+        block_len: BLOCK_LEN as u8,
+        counter: 0,
+        flags: flags | PARENT,
+    }
+}
+
 /// The default hash function.
 ///
 /// For an incremental version that accepts multiple writes, see [`Hasher::new`],
@@ -919,6 +1341,16 @@ fn hash_all_at_once<J: join::Join>(input: &[u8], key: &CVWords, flags: u8) -> Ou
 /// [`Hasher::update_rayon`](struct.Hasher.html#method.update_rayon).
 pub fn hash(input: &[u8]) -> Hash {
     hash_all_at_once::<join::SerialJoin>(input, IV, 0).root_hash()
+}
+
+/// Hashing function like [`hash`], but `const fn`.
+///
+/// ```
+/// const HASH: blake3::Hash = blake3::const_hash(b"foo");
+/// ```
+#[cfg(feature = "const")]
+pub const fn const_hash(input: &[u8]) -> Hash {
+    const_hash_all_at_once(input, IV, 0).root_hash()
 }
 
 /// The keyed hash function.
@@ -949,6 +1381,13 @@ pub fn hash(input: &[u8]) -> Hash {
 pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
     let key_words = platform::words_from_le_bytes_32(key);
     hash_all_at_once::<join::SerialJoin>(input, &key_words, KEYED_HASH).root_hash()
+}
+
+/// The keyed hash function like [`keyed_hash`]. but `const fn`.
+#[cfg(feature = "const")]
+pub const fn const_keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
+    let key_words = platform::words_from_le_bytes_32(key);
+    const_hash_all_at_once(input, &key_words, KEYED_HASH).root_hash()
 }
 
 /// The key derivation function.
@@ -1004,6 +1443,16 @@ pub fn derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
     let context_key = hazmat::hash_derive_key_context(context);
     let context_key_words = platform::words_from_le_bytes_32(&context_key);
     hash_all_at_once::<join::SerialJoin>(key_material, &context_key_words, DERIVE_KEY_MATERIAL)
+        .root_hash()
+        .0
+}
+
+/// The key derivation function like [`derive_key`], but `const fn`.
+#[cfg(feature = "const")]
+pub const fn const_derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
+    let context_key = hazmat::const_hash_derive_key_context(context);
+    let context_key_words = platform::words_from_le_bytes_32(&context_key);
+    const_hash_all_at_once(key_material, &context_key_words, DERIVE_KEY_MATERIAL)
         .root_hash()
         .0
 }
