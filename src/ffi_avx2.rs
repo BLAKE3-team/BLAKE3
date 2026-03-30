@@ -1,4 +1,4 @@
-use crate::{CVWords, IncrementCounter, BLOCK_LEN, OUT_LEN};
+use crate::{BLOCK_LEN, CVWords, IncrementCounter, OUT_LEN};
 
 // Note that there is no AVX2 implementation of compress_in_place or
 // compress_xof.

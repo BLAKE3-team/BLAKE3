@@ -1,4 +1,4 @@
-use crate::{CVWords, IncrementCounter, BLOCK_LEN, OUT_LEN};
+use crate::{BLOCK_LEN, CVWords, IncrementCounter, OUT_LEN};
 
 // Unsafe because this may only be called on platforms supporting SSE4.1.
 pub unsafe fn compress_in_place(

@@ -3,7 +3,7 @@
 //! repo, these bindings are not expected to be used in production. They're
 //! intended for testing and benchmarking.
 
-use std::ffi::{c_void, CString};
+use std::ffi::{CString, c_void};
 use std::mem::MaybeUninit;
 
 #[cfg(test)]

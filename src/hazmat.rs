@@ -150,7 +150,7 @@
 //! of the same input.
 
 use crate::platform::Platform;
-use crate::{CVWords, Hasher, CHUNK_LEN, IV, KEY_LEN, OUT_LEN};
+use crate::{CHUNK_LEN, CVWords, Hasher, IV, KEY_LEN, OUT_LEN};
 
 /// Extension methods for [`Hasher`]. This is the main entrypoint to the `hazmat` module.
 pub trait HasherExt {

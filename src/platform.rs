@@ -1,4 +1,4 @@
-use crate::{portable, CVWords, IncrementCounter, BLOCK_LEN};
+use crate::{BLOCK_LEN, CVWords, IncrementCounter, portable};
 use arrayref::{array_mut_ref, array_ref};
 
 cfg_if::cfg_if! {

@@ -1,4 +1,4 @@
-use crate::{CVWords, IncrementCounter, BLOCK_LEN, OUT_LEN};
+use crate::{BLOCK_LEN, CVWords, IncrementCounter, OUT_LEN};
 
 // Unsafe because this may only be called on platforms supporting NEON.
 pub unsafe fn hash_many<const N: usize>(
