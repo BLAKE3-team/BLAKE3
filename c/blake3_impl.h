@@ -71,11 +71,30 @@ enum blake3_flags {
   #endif
 #endif
 
+#if !defined(BLAKE3_USE_RVV)
+  #define BLAKE3_USE_RVV 0
+#endif
+
+// BLAKE3_USE_RVV implies BLAKE3_BUILD_RVV.
+#if BLAKE3_USE_RVV == 1 && !defined(BLAKE3_BUILD_RVV)
+  #define BLAKE3_BUILD_RVV 1
+#endif
+
+#if !defined(BLAKE3_BUILD_RVV)
+  // If BLAKE3_BUILD_RVV not manually set, autodetect based on __riscv_vector
+  // (defined by the compiler when V or Zve* extensions are enabled).
+  #if defined(__riscv_vector) && defined(__riscv) && (__riscv_xlen == 64)
+    #define BLAKE3_BUILD_RVV 1
+  #else
+    #define BLAKE3_BUILD_RVV 0
+  #endif
+#endif
+
 #if defined(IS_X86)
 #define MAX_SIMD_DEGREE 16
 #elif BLAKE3_USE_NEON == 1
 #define MAX_SIMD_DEGREE 4
-#elif BLAKE3_USE_RVV == 1
+#elif BLAKE3_BUILD_RVV == 1
 #define MAX_SIMD_DEGREE 64
 #else
 #define MAX_SIMD_DEGREE 1
@@ -328,12 +347,13 @@ void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
                            uint8_t flags_end, uint8_t *out);
 #endif
 
-#if BLAKE3_USE_RVV == 1
+#if BLAKE3_BUILD_RVV == 1
 void blake3_hash_many_rvv(const uint8_t *const *inputs, size_t num_inputs,
                           size_t blocks, const uint32_t key[8],
                           uint64_t counter, bool increment_counter,
                           uint8_t flags, uint8_t flags_start,
                           uint8_t flags_end, uint8_t *out);
+size_t blake3_rvv_simd_degree(void);
 #endif
 
 #ifdef __cplusplus

@@ -18,8 +18,36 @@
 #endif
 #endif
 
+#if BLAKE3_BUILD_RVV == 1
+#if defined(__linux__)
+#include <sys/auxv.h>
+#elif defined(__FreeBSD__)
+#include <sys/auxv.h>
+#endif
+
+// Runtime detection of RISC-V V extension.
+static bool blake3_rvv_detected(void) {
 #if BLAKE3_USE_RVV == 1
-#include <riscv_vector.h>
+  // User explicitly forced RVV via BLAKE3_USE_RVV=1, skip detection.
+  return true;
+#elif defined(__linux__)
+  // RISC-V HWCAP bit for V extension (bit 21, letter 'V' - 'A')
+  const unsigned long COMPAT_HWCAP_ISA_V = 1UL << ('V' - 'A');
+  return (getauxval(AT_HWCAP) & COMPAT_HWCAP_ISA_V) != 0;
+#elif defined(__FreeBSD__)
+  const unsigned long COMPAT_HWCAP_ISA_V = 1UL << ('V' - 'A');
+  unsigned long hwcap = 0;
+  if (elf_aux_info(AT_HWCAP, &hwcap, sizeof(hwcap)) == 0) {
+    return (hwcap & COMPAT_HWCAP_ISA_V) != 0;
+  }
+  return false;
+#else
+  // Bare-metal / unknown OS: no safe way to detect V extension at runtime.
+  // Use BLAKE3_USE_RVV=1 to force-enable when the hardware is known to
+  // support it.
+  return false;
+#endif
+}
 #endif
 
 #if !defined(BLAKE3_ATOMICS)
@@ -298,10 +326,12 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
   return;
 #endif
 
-#if BLAKE3_USE_RVV == 1
-  blake3_hash_many_rvv(inputs, num_inputs, blocks, key, counter,
-                       increment_counter, flags, flags_start, flags_end, out);
-  return;
+#if BLAKE3_BUILD_RVV == 1
+  if (blake3_rvv_detected()) {
+    blake3_hash_many_rvv(inputs, num_inputs, blocks, key, counter,
+                         increment_counter, flags, flags_start, flags_end, out);
+    return;
+  }
 #endif
 
   blake3_hash_many_portable(inputs, num_inputs, blocks, key, counter,
@@ -338,9 +368,10 @@ size_t blake3_simd_degree(void) {
 #if BLAKE3_USE_NEON == 1
   return 4;
 #endif
-#if BLAKE3_USE_RVV == 1
-  // RVV vector length is dynamic, query it at runtime.
-  return __riscv_vsetvlmax_e32m1();
+#if BLAKE3_BUILD_RVV == 1
+  if (blake3_rvv_detected()) {
+    return blake3_rvv_simd_degree();
+  }
 #endif
   return 1;
 }

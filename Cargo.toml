@@ -18,9 +18,13 @@ default = ["std"]
 # implementation uses C intrinsics and requires a C compiler.
 neon = []
 
-# The RVV (RISC-V Vector) implementation does not participate in dynamic feature
-# detection. If "rvv" is on, RVV support is assumed. The RVV implementation uses
-# C intrinsics and requires a C compiler with RVV support.
+# The RVV (RISC-V Vector) implementation participates in dynamic feature
+# detection on Linux and FreeBSD (via getauxval/elf_aux_info). On riscv64
+# little-endian targets, RVV code is compiled automatically if the C compiler
+# supports it; runtime detection then determines whether to use it. Enabling
+# "rvv" will aussume that the compiler supports it and the compilation output 
+# will explicitly skip runtime detection and assume RVV is available, which
+# is useful for bare-metal targets.
 rvv = []
 
 # The Wasm SIMD implementation does not participate in dynamic feature detection,
@@ -111,6 +115,7 @@ no_sse41 = []
 no_avx2 = []
 no_avx512 = []
 no_neon = []
+no_rvv = []
 
 [package.metadata.docs.rs]
 # Document the rayon/mmap methods and the Serialize/Deserialize/Zeroize impls on docs.rs.

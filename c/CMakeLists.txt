@@ -88,71 +88,18 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU"
   if (CMAKE_SYSTEM_PROCESSOR IN_LIST BLAKE3_RISCV64_NAMES)
     if(DEFINED BLAKE3_CFLAGS_RVV)
       message(STATUS "Using user-specified RVV flags: ${BLAKE3_CFLAGS_RVV}")
-    elseif(NOT CMAKE_CROSSCOMPILING)
-      message(STATUS "Native RISC-V build: testing RVV runtime support...")
-      
-      file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/test_rvv.c "
-#include <riscv_vector.h>
-#include <stdint.h>
-
-int main() {
-  size_t vl = __riscv_vsetvlmax_e32m1();
-  if (vl == 0) return 1;
-
-  vuint32m1_t v32_a = __riscv_vmv_v_x_u32m1(42, vl);
-  vuint32m1_t v32_b = __riscv_vmv_v_x_u32m1(17, vl);
-  vuint32m1_t v32_sum = __riscv_vadd_vv_u32m1(v32_a, v32_b, vl);
-  vuint32m1_t v32_xor = __riscv_vxor_vv_u32m1(v32_a, v32_b, vl);
-  vuint32m1_t v32_or = __riscv_vor_vv_u32m1(v32_a, v32_b, vl);
-  vuint32m1_t v32_srl = __riscv_vsrl_vx_u32m1(v32_a, 4, vl);
-  vuint32m1_t v32_sll = __riscv_vsll_vx_u32m1(v32_a, 4, vl);
-
-  uint32_t data32[16] = {0};
-  vuint32m1_t v32_loaded = __riscv_vle32_v_u32m1(data32, vl);
-  __riscv_vsse32_v_u32m1(data32, sizeof(uint32_t) * 2, v32_sum, vl);
-
-  uint64_t data64[16] = {0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60};
-  vuint64m2_t v64 = __riscv_vle64_v_u64m2(data64, vl);
-  vuint64m2_t v64_add = __riscv_vadd_vx_u64m2(v64, 100, vl);
-
-  uint32_t src_data[16] = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160};
-  vuint32m1_t v32_indexed = __riscv_vluxei64_v_u32m1((const uint32_t *)src_data, v64, vl);
-
-  uint32_t result_sum[16] = {0};
-  uint32_t result_indexed[16] = {0};
-  __riscv_vse32_v_u32m1(result_sum, v32_sum, vl);
-  __riscv_vse32_v_u32m1(result_indexed, v32_indexed, vl);
-
-  if (result_sum[0] != 59) return 2;
-  if (result_indexed[0] != 10) return 3;
-  if (vl > 1 && result_indexed[1] != 20) return 4;
-
-  return 0;
-}
-")
-      
-      try_run(
-        BLAKE3_RVV_RUN_RESULT
-        BLAKE3_RVV_COMPILE_RESULT
-        ${CMAKE_CURRENT_BINARY_DIR}/try_rvv
-        ${CMAKE_CURRENT_BINARY_DIR}/test_rvv.c
-        COMPILE_DEFINITIONS -march=rv64gcv
-        COMPILE_OUTPUT_VARIABLE BLAKE3_RVV_COMPILE_OUTPUT
-      )
-      
-      if(BLAKE3_RVV_COMPILE_RESULT AND BLAKE3_RVV_RUN_RESULT EQUAL 0)
-        set(BLAKE3_CFLAGS_RVV "-march=rv64gcv" CACHE STRING "the compiler flags to enable RVV")
-        message(STATUS "RVV runtime support verified")
-      elseif(BLAKE3_RVV_COMPILE_RESULT)
-        message(STATUS "RVV compiled but failed to run (CPU doesn't support it)")
-      else()
-        message(STATUS "RVV compilation failed")
-      endif()
     else()
-      message(WARNING 
-        "Cross-compiling for RISC-V: Cannot auto-detect RVV support.\n"
-        "RVV will be DISABLED. To enable, specify:\n"
-        "  cmake -DBLAKE3_CFLAGS_RVV=\"-march=rv64gcv\" ..")
+      message(STATUS "Testing RVV compiler support...")
+
+      include(CheckCCompilerFlag)
+      check_c_compiler_flag("-march=rv64imfdv" BLAKE3_RVV_SUPPORTED)
+
+      if(BLAKE3_RVV_SUPPORTED)
+        set(BLAKE3_CFLAGS_RVV "-march=rv64imfdv" CACHE STRING "the compiler flags to enable RVV")
+        message(STATUS "RVV compiler support verified")
+      else()
+        message(STATUS "RVV not supported (compiler does not accept -march=rv64imfdv)")
+      endif()
     endif()
   endif()
 endif()
@@ -295,19 +242,17 @@ elseif(BLAKE3_SIMD_TYPE STREQUAL "rvv-intrinsics")
     blake3_rvv.c
   )
   target_compile_definitions(blake3 PRIVATE
-    BLAKE3_USE_RVV=1
+    BLAKE3_BUILD_RVV=1
   )
 
   if (DEFINED BLAKE3_CFLAGS_RVV)
     set_source_files_properties(blake3_rvv.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_RVV}")
-    # blake3_dispatch.c also needs RVV flags to call __riscv_vsetvlmax_e32m1()
-    set_source_files_properties(blake3_dispatch.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_RVV}")
   endif()
 
 elseif(BLAKE3_SIMD_TYPE STREQUAL "none")
   target_compile_definitions(blake3 PRIVATE
     BLAKE3_USE_NEON=0
-    BLAKE3_USE_RVV=0
+    BLAKE3_BUILD_RVV=0
     BLAKE3_NO_SSE2
     BLAKE3_NO_SSE41
     BLAKE3_NO_AVX2

@@ -106,11 +106,13 @@ impl Platform {
         {
             return Platform::NEON;
         }
-        // We don't use dynamic feature detection for RVV. If the "rvv"
-        // feature is on, RVV is assumed to be supported.
+        // Runtime detection for RVV. The V extension may or may not be present
+        // on the current hardware, even though the binary includes RVV code.
         #[cfg(blake3_rvv)]
         {
-            return Platform::RVV;
+            if rvv_detected() {
+                return Platform::RVV;
+            }
         }
         #[cfg(blake3_wasm32_simd)]
         {
@@ -438,6 +440,15 @@ impl Platform {
         Some(Self::NEON)
     }
 
+    #[cfg(blake3_rvv)]
+    pub fn rvv() -> Option<Self> {
+        if rvv_detected() {
+            Some(Self::RVV)
+        } else {
+            None
+        }
+    }
+
     #[cfg(blake3_wasm32_simd)]
     pub fn wasm32_simd() -> Option<Self> {
         // Assumed to be safe if the "wasm32_simd" feature is on.
@@ -510,6 +521,76 @@ pub fn sse2_detected() -> bool {
 
     cpufeatures::new!(has_sse2, "sse2");
     has_sse2::get()
+}
+
+// Detect RVV support at runtime. The detection method depends on the target OS:
+// - Linux: getauxval(AT_HWCAP) checks the 'V' bit
+// - FreeBSD: elf_aux_info(AT_HWCAP) checks the 'V' bit
+// - Other (bare-metal, unknown OS): returns false; use --features=rvv to override
+#[cfg(blake3_rvv)]
+#[inline(always)]
+pub fn rvv_detected() -> bool {
+    if cfg!(miri) {
+        return false;
+    }
+
+    // A testing-only short-circuit.
+    if cfg!(feature = "no_rvv") {
+        return false;
+    }
+
+    // The "rvv" Cargo feature means "assume RVV is available, skip detection".
+    // This is useful when the user knows their hardware supports V.
+    if cfg!(feature = "rvv") {
+        return true;
+    }
+
+    rvv_detected_impl()
+}
+
+#[cfg(blake3_rvv)]
+#[cfg(target_os = "linux")]
+fn rvv_detected_impl() -> bool {
+    // RISC-V HWCAP bit for V extension (bit 21, corresponding to letter 'V')
+    const COMPAT_HWCAP_ISA_V: u64 = 1 << (b'V' - b'A');
+    const AT_HWCAP: u64 = 16;
+
+    unsafe extern "C" {
+        fn getauxval(type_: u64) -> u64;
+    }
+
+    let hwcap = unsafe { getauxval(AT_HWCAP) };
+    (hwcap & COMPAT_HWCAP_ISA_V) != 0
+}
+
+#[cfg(blake3_rvv)]
+#[cfg(target_os = "freebsd")]
+fn rvv_detected_impl() -> bool {
+    const COMPAT_HWCAP_ISA_V: u64 = 1 << (b'V' - b'A');
+    const AT_HWCAP: i32 = 16;
+
+    unsafe extern "C" {
+        fn elf_aux_info(aux: i32, buf: *mut core::ffi::c_void, buf_len: i32) -> i32;
+    }
+
+    let mut hwcap: u64 = 0;
+    let ret = unsafe {
+        elf_aux_info(
+            AT_HWCAP,
+            &mut hwcap as *mut _ as *mut core::ffi::c_void,
+            core::mem::size_of::<u64>() as i32,
+        )
+    };
+    ret == 0 && (hwcap & COMPAT_HWCAP_ISA_V) != 0
+}
+
+// For bare-metal or unknown OS: no safe way to detect V extension at runtime.
+// Reading misa requires M-mode; doing so from S/U-mode is an illegal instruction.
+// Use --features=rvv to force-enable when you know the hardware supports it.
+#[cfg(blake3_rvv)]
+#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+fn rvv_detected_impl() -> bool {
+    false
 }
 
 #[inline(always)]
