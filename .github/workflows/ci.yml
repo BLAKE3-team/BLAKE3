@@ -20,10 +20,11 @@ jobs:
       fail-fast: false
       matrix:
         target: [
-          { "os": "ubuntu-latest",  "toolchain": "x86_64-unknown-linux-gnu", "name": "Linux GNU" },
-          { "os": "macOS-latest",   "toolchain": "aarch64-apple-darwin",     "name": "macOS" },
-          { "os": "windows-latest", "toolchain": "x86_64-pc-windows-msvc",   "name": "Windows MSVC" },
-          { "os": "windows-latest", "toolchain": "x86_64-pc-windows-gnu",    "name": "Windows GNU" }
+          { "os": "ubuntu-latest",    "toolchain": "x86_64-unknown-linux-gnu",  "name": "Linux GNU" },
+          { "os": "ubuntu-24.04-arm", "toolchain": "aarch64-unknown-linux-gnu", "name": "Linux GNU (arm64)" },
+          { "os": "macOS-latest",     "toolchain": "aarch64-apple-darwin",      "name": "macOS" },
+          { "os": "windows-latest",   "toolchain": "x86_64-pc-windows-msvc",    "name": "Windows MSVC" },
+          { "os": "windows-latest",   "toolchain": "x86_64-pc-windows-gnu",     "name": "Windows GNU" }
         ]
         channel: ["stable", "beta", "nightly"]
 
@@ -53,6 +54,11 @@ jobs:
     - run: cargo test --features=mmap,rayon,traits-preview,serde,zeroize
     # no_std tests.
     - run: cargo test --no-default-features
+    - name: Make sure enabling LTO via CFLAGS doesn't break the build.
+      run: cargo build --tests --features prefer_intrinsics
+      if: matrix.target.toolchain != 'x86_64-pc-windows-msvc'
+      env:
+        CFLAGS: -flto
 
     # A matrix of different test settings:
     # - debug vs release
@@ -165,10 +171,11 @@ jobs:
       fail-fast: false
       matrix:
         target: [
-          { "os": "ubuntu-latest",  "toolchain": "x86_64-unknown-linux-gnu", "name": "Linux GNU" },
-          { "os": "macOS-latest",   "toolchain": "aarch64-apple-darwin",      "name": "macOS" },
-          { "os": "windows-latest", "toolchain": "x86_64-pc-windows-msvc",   "name": "Windows MSVC" },
-          { "os": "windows-latest", "toolchain": "x86_64-pc-windows-gnu",    "name": "Windows GNU" }
+          { "os": "ubuntu-latest",    "toolchain": "x86_64-unknown-linux-gnu",  "name": "Linux GNU" },
+          { "os": "ubuntu-24.04-arm", "toolchain": "aarch64-unknown-linux-gnu", "name": "Linux GNU (arm64)" },
+          { "os": "macOS-latest",     "toolchain": "aarch64-apple-darwin",      "name": "macOS" },
+          { "os": "windows-latest",   "toolchain": "x86_64-pc-windows-msvc",    "name": "Windows MSVC" },
+          { "os": "windows-latest",   "toolchain": "x86_64-pc-windows-gnu",     "name": "Windows GNU" }
         ]
         channel: ["stable", "beta", "nightly"]
 
@@ -183,6 +190,12 @@ jobs:
       working-directory: ./b3sum
     - name: test b3sum --no-default-features
       run: cargo test --no-default-features
+      working-directory: ./b3sum
+    - name: Make sure enabling LTO via CFLAGS doesn't break the build.
+      run: cargo build --features prefer_intrinsics
+      if: matrix.target.toolchain != 'x86_64-pc-windows-msvc'
+      env:
+        CFLAGS: -flto
       working-directory: ./b3sum
 
   cross_tests:
