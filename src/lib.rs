@@ -255,6 +255,12 @@ impl Hash {
         Self(bytes)
     }
 
+    /// Create a references to a `Hash` from a reference to its raw bytes representation.
+    #[cfg(feature = "bytemuck")]
+    pub const fn from_bytes_ref(bytes: &[u8; OUT_LEN]) -> &Self {
+        bytemuck::must_cast_ref(bytes)
+    }
+
     /// The raw bytes of the `Hash`, as a slice. Useful for serialization. Note that byte arrays
     /// don't provide constant-time equality checking, so if you need to compare hashes, prefer
     /// the `Hash` type.
