@@ -303,7 +303,7 @@ fn build_wasm32_simd() {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // If CFLAGS is set, make sure LTO is disabled by appending -fno-lto. (We can't do this with
     // .flag() later on, because CFLAGS takes precedence.) Any mismatch between the C compiler and
-    // the Rust linker can cause linker errors in our C intrinsice implementations if LTO is
+    // the Rust linker can cause linker errors in our C intrinsics implementations if LTO is
     // enabled. See https://github.com/BLAKE3-team/BLAKE3/issues/550.
     if !is_windows_msvc() {
         if let Some(mut flags) = env::var_os("CFLAGS") {

@@ -170,7 +170,7 @@ const MAX_DEPTH: usize = 54; // 2^54 * CHUNK_LEN = 2^64
 // While iterating the compression function within a chunk, the CV is
 // represented as words, to avoid doing two extra endianness conversions for
 // each compression in the portable implementation. But the hash_many interface
-// needs to hash both input bytes and parent nodes, so its better for its
+// needs to hash both input bytes and parent nodes, so it's better for its
 // output CVs to be represented as bytes.
 type CVWords = [u32; 8];
 type CVBytes = [u8; 32]; // little-endian
@@ -241,7 +241,7 @@ pub struct Hash([u8; OUT_LEN]);
 
 impl Hash {
     /// The raw bytes of the `Hash`. Note that byte arrays don't provide
-    /// constant-time equality checking, so if  you need to compare hashes,
+    /// constant-time equality checking, so if you need to compare hashes,
     /// prefer the `Hash` type.
     #[inline]
     pub const fn as_bytes(&self) -> &[u8; OUT_LEN] {

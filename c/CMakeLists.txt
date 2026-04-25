@@ -31,7 +31,7 @@ add_subdirectory(dependencies)
 set(BLAKE3_AMD64_NAMES amd64 AMD64 x86_64)
 set(BLAKE3_X86_NAMES i686 x86 X86)
 set(BLAKE3_ARMv8_NAMES aarch64 AArch64 arm64 ARM64 armv8 armv8a)
-# default SIMD compiler flag configuration (can be overriden by toolchains or CLI)
+# default SIMD compiler flag configuration (can be overridden by toolchains or CLI)
 if(MSVC)
   if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
     set(BLAKE3_CFLAGS_SSE2 "-msse2" CACHE STRING "the compiler flags to enable SSE2")
@@ -340,7 +340,7 @@ function(join_paths joined_path first_path_segment)
     set(${joined_path} "${temp_path}" PARENT_SCOPE)
 endfunction()
 
-# In-place rewrite a string and and join by `sep`.
+# In-place rewrite a string and join by `sep`.
 #
 # TODO: Replace function with list(JOIN) when updating to CMake 3.12
 function(join_pkg_config_field sep requires)
