@@ -110,6 +110,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if cfg!(feature = "tbb") {
         base_build.define("BLAKE3_USE_TBB", "1");
     }
+    if cfg!(feature = "rvv") {
+        base_build.define("BLAKE3_USE_RVV", "1");
+    }
     base_build.compile("blake3_base");
 
     if cfg!(feature = "tbb") {
@@ -221,6 +224,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             neon_build.flag("-mfloat-abi=hard");
         }
         neon_build.compile("blake3_neon");
+    }
+
+    if defined("CARGO_FEATURE_RVV") {
+        let mut rvv_build = new_build();
+        rvv_build.file(c_dir_path("blake3_rvv.c"));
+        rvv_build.flag("-march=rv64imfdv");
+        rvv_build.compile("blake3_rvv");
     }
 
     // The `cc` crate does not automatically emit rerun-if directives for the

@@ -99,6 +99,35 @@ fn is_wasm32() -> bool {
     target_components()[0] == "wasm32"
 }
 
+fn is_riscv64() -> bool {
+    target_components()[0].starts_with("riscv64")
+}
+
+// Test whether the C compiler supports -march=rv64imfdv (i.e. has RVV support).
+fn test_rvv_compile_support() -> bool {
+    let build = new_build();
+    build.is_flag_supported("-march=rv64imfdv").unwrap_or(false)
+}
+
+fn is_rvv() -> bool {
+    if defined("CARGO_FEATURE_RVV") {
+        return true;
+    }
+
+    if is_pure() {
+        return false;
+    }
+
+    // Auto-enable on riscv64 little-endian if the compiler supports RVV,
+    // similar to how NEON is auto-enabled on aarch64. Runtime detection
+    // in platform.rs handles the case where the hardware lacks V extension.
+    if is_riscv64() && is_little_endian() {
+        return test_rvv_compile_support();
+    }
+
+    false
+}
+
 fn endianness() -> String {
     let endianness = env::var("CARGO_CFG_TARGET_ENDIAN").unwrap();
     assert!(endianness == "little" || endianness == "big");
@@ -300,6 +329,26 @@ fn build_wasm32_simd() {
     println!("cargo:rustc-cfg=blake3_wasm32_simd");
 }
 
+fn build_rvv_c_intrinsics() {
+    let mut build = new_build();
+    // Note that blake3_rvv.c depends on blake3_portable.c for the single-instance
+    // compression function. On the Rust side, we expose portable.rs over FFI
+    // instead. See ffi_rvv.rs.
+    build.file("c/blake3_rvv.c");
+    // blake3_rvv.c requires: I (base) + M (VLA stack mul) + V (vector).
+    // F+D are not used by our code but required by the lp64d ABI of all
+    // riscv64gc Rust targets. We spell out each extension explicitly
+    // rather than using 'g' (= imafd_zicsr_zifencei) to document the
+    // minimal set: A, C, Zicsr, Zifencei are not needed.
+    build.flag("-march=rv64imfdv");
+    // Workaround: cc crate infers -mabi=lp64 (soft-float) for bare-metal
+    // riscv64gc targets, but Rust uses lp64d. Override to avoid ABI mismatch.
+    if env::var("CARGO_CFG_TARGET_OS").unwrap_or_default() == "none" {
+        build.flag("-mabi=lp64d");
+    }
+    build.compile("blake3_rvv");
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // If CFLAGS is set, make sure LTO is disabled by appending -fno-lto. (We can't do this with
     // .flag() later on, because CFLAGS takes precedence.) Any mismatch between the C compiler and
@@ -326,6 +375,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "blake3_avx512_ffi",
         "blake3_neon",
         "blake3_wasm32_simd",
+        "blake3_rvv",
     ];
     for cfg_name in all_cfgs {
         // TODO: Switch this whole file to the new :: syntax when our MSRV reaches 1.77.
@@ -339,6 +389,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if is_no_neon() && is_neon() {
         panic!("It doesn't make sense to enable both \"no_neon\" and \"neon\".");
+    }
+
+    if is_pure() && is_rvv() {
+        panic!("It doesn't make sense to enable both \"pure\" and \"rvv\".");
     }
 
     if is_x86_64() || is_x86_32() {
@@ -373,6 +427,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if is_wasm32() && is_wasm32_simd() {
         build_wasm32_simd();
+    }
+
+    if is_rvv() && is_big_endian() {
+        panic!("The RVV implementation doesn't support big-endian RISC-V.")
+    }
+
+    // Auto-enable RVV on riscv64 when the compiler supports it (similar to
+    // NEON on aarch64). Runtime detection in platform.rs will check for actual
+    // V extension support before using the RVV code path.
+    if is_riscv64() && is_rvv() {
+        println!("cargo:rustc-cfg=blake3_rvv");
+        build_rvv_c_intrinsics();
     }
 
     // The `cc` crate doesn't automatically emit rerun-if directives for the

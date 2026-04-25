@@ -26,6 +26,7 @@ cat > Cross.toml << EOF
 [build.env]
 passthrough = [
     "BLAKE3_C_DIR_OVERRIDE",
+    "QEMU_CPU",
 ]
 EOF
 cross test "$@"

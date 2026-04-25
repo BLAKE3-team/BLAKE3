@@ -212,11 +212,17 @@ jobs:
           # Big-endian targets. See https://twitter.com/burntsushi5/status/1695483429997945092.
           - powerpc64-unknown-linux-gnu
           - s390x-unknown-linux-gnu
+          # RISC-V target. The musl image has GCC 14 with RVV intrinsics support.
+          - riscv64gc-unknown-linux-musl
 
     steps:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
     - run: cargo install cross
+      if: "!startsWith(matrix.arch, 'riscv64')"
+    # RISC-V musl target requires the latest cross from git.
+    - run: cargo install cross --git https://github.com/cross-rs/cross
+      if: startsWith(matrix.arch, 'riscv64')
     # Test the portable implementation on everything.
     - run: cross test --target ${{ matrix.arch }}
     # Test building for ancient i386 processors without guaranteed SSE2 support.
@@ -228,12 +234,17 @@ jobs:
     # NEON is enabled by default on aarch64, disabling it through the no_neon feature.
     - run: cross test --target ${{ matrix.arch }} --features=no_neon
       if: startsWith(matrix.arch, 'aarch64-')
+    # Test the RVV implementation on RISC-V targets (force-enable, skip runtime detection).
+    - run: cross test --target ${{ matrix.arch }} --features=rvv
+      if: startsWith(matrix.arch, 'riscv64')
     # Test vectors. Note that this uses a hacky script due to path dependency limitations.
     - run: ./test_vectors/cross_test.sh --target ${{ matrix.arch }}
     # C code. Same issue with the hacky script.
     - run: ./c/blake3_c_rust_bindings/cross_test.sh --target ${{ matrix.arch }}
     - run: ./c/blake3_c_rust_bindings/cross_test.sh --target ${{ matrix.arch }} --features=neon
       if: startsWith(matrix.arch, 'armv7-') || startsWith(matrix.arch, 'aarch64-')
+    - run: ./c/blake3_c_rust_bindings/cross_test.sh --target ${{ matrix.arch }} --features=rvv
+      if: startsWith(matrix.arch, 'riscv64')
 
   wasm_tests:
     name: WASM tests
