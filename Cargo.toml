@@ -50,6 +50,9 @@ mmap = ["std", "dep:memmap2"]
 # Implement the zeroize::Zeroize trait for types in this crate.
 zeroize = ["dep:zeroize", "arrayvec/zeroize"]
 
+# Implement the `bytemuck::Pod` trait for the `blake3::Hash` type.
+bytemuck = ["dep:bytemuck"]
+
 # This crate implements traits from the RustCrypto project, exposed here as the
 # "traits-preview" feature. However, these traits aren't stable, and they're
 # expected to change in incompatible ways before they reach 1.0. For that
@@ -121,6 +124,7 @@ memmap2 = { version = "0.9", optional = true }
 rayon-core = { version = "1.12.1", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
 zeroize = { version = "1", default-features = false, optional = true }
+bytemuck = { version = "1.25.0", features = ["derive"], optional = true }
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
 cpufeatures = "0.3.0"
