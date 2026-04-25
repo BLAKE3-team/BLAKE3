@@ -5,6 +5,7 @@
 - Bump the version in b3sum/Cargo.toml.
     - Bump the dependency on the root crate too, if new features are used.
 - Delete b3sum/Cargo.lock and recreate it with `cargo build` or similar.
+    - Make sure to do this *after* the previous step.
 - Update the `-h` output in b3sum/README.md if it's changed.
 - Bump `BLAKE3_VERSION_STRING` in c/blake3.h.
 - Bump `VERSION` in c/CMakeLists.txt.
