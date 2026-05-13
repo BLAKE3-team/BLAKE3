@@ -236,7 +236,9 @@ fn counter_high(counter: u64) -> u32 {
 /// [`Display`]: https://doc.rust-lang.org/std/fmt/trait.Display.html
 /// [`FromStr`]: https://doc.rust-lang.org/std/str/trait.FromStr.html
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "bytemuck", derive(bytemuck::Pod, bytemuck::Zeroable))]
 #[derive(Clone, Copy, Hash, Eq)]
+#[repr(transparent)]
 pub struct Hash([u8; OUT_LEN]);
 
 impl Hash {
@@ -251,6 +253,12 @@ impl Hash {
     /// Create a `Hash` from its raw bytes representation.
     pub const fn from_bytes(bytes: [u8; OUT_LEN]) -> Self {
         Self(bytes)
+    }
+
+    /// Create a references to a `Hash` from a reference to its raw bytes representation.
+    #[cfg(feature = "bytemuck")]
+    pub const fn from_bytes_ref(bytes: &[u8; OUT_LEN]) -> &Self {
+        bytemuck::must_cast_ref(bytes)
     }
 
     /// The raw bytes of the `Hash`, as a slice. Useful for serialization. Note that byte arrays
