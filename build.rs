@@ -1,7 +1,7 @@
 use std::env;
 
 fn defined(var: &str) -> bool {
-    println!("cargo:rerun-if-env-changed={}", var);
+    println!("cargo::rerun-if-env-changed={}", var);
     env::var_os(var).is_some()
 }
 
@@ -31,9 +31,9 @@ fn is_ci() -> bool {
 
 fn warn(warning: &str) {
     assert!(!warning.contains("\n"));
-    println!("cargo:warning={}", warning);
+    println!("cargo::warning={}", warning);
     if is_ci() {
-        println!("cargo:warning=Warnings in CI are treated as errors. Build failed.");
+        println!("cargo::warning=Warnings in CI are treated as errors. Build failed.");
         std::process::exit(1);
     }
 }
@@ -198,18 +198,18 @@ fn build_sse2_sse41_avx2_rust_intrinsics() {
     // No C code to compile here. Set the cfg flags that enable the Rust SSE2,
     // SSE4.1, and AVX2 intrinsics modules. The regular Cargo build will compile
     // them.
-    println!("cargo:rustc-cfg=blake3_sse2_rust");
-    println!("cargo:rustc-cfg=blake3_sse41_rust");
-    println!("cargo:rustc-cfg=blake3_avx2_rust");
+    println!("cargo::rustc-cfg=blake3_sse2_rust");
+    println!("cargo::rustc-cfg=blake3_sse41_rust");
+    println!("cargo::rustc-cfg=blake3_avx2_rust");
 }
 
 fn build_sse2_sse41_avx2_assembly() {
     // Build the assembly implementations for SSE4.1 and AVX2. This is
     // preferred, but it only supports x86_64.
     assert!(is_x86_64());
-    println!("cargo:rustc-cfg=blake3_sse2_ffi");
-    println!("cargo:rustc-cfg=blake3_sse41_ffi");
-    println!("cargo:rustc-cfg=blake3_avx2_ffi");
+    println!("cargo::rustc-cfg=blake3_sse2_ffi");
+    println!("cargo::rustc-cfg=blake3_sse41_ffi");
+    println!("cargo::rustc-cfg=blake3_avx2_ffi");
     let mut build = new_build();
     if is_windows_target() {
         if use_msvc_asm() {
@@ -235,7 +235,7 @@ fn build_sse2_sse41_avx2_assembly() {
 fn build_avx512_c_intrinsics() {
     // This is required on 32-bit x86 targets, since the assembly
     // implementation doesn't support those.
-    println!("cargo:rustc-cfg=blake3_avx512_ffi");
+    println!("cargo::rustc-cfg=blake3_avx512_ffi");
     let mut build = new_build();
     build.file("c/blake3_avx512.c");
     if is_windows_msvc() {
@@ -255,7 +255,7 @@ fn build_avx512_assembly() {
     // Build the assembly implementation for AVX-512. This is preferred, but it
     // only supports x86_64.
     assert!(is_x86_64());
-    println!("cargo:rustc-cfg=blake3_avx512_ffi");
+    println!("cargo::rustc-cfg=blake3_avx512_ffi");
     let mut build = new_build();
     let mut is_msvc = false;
     if is_windows_target() {
@@ -297,7 +297,7 @@ fn build_wasm32_simd() {
     assert!(is_wasm32());
     // No C code to compile here. Set the cfg flags that enable the Wasm SIMD.
     // The regular Cargo build will compile it.
-    println!("cargo:rustc-cfg=blake3_wasm32_simd");
+    println!("cargo::rustc-cfg=blake3_wasm32_simd");
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -328,9 +328,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "blake3_wasm32_simd",
     ];
     for cfg_name in all_cfgs {
-        // TODO: Switch this whole file to the new :: syntax when our MSRV reaches 1.77.
         // https://doc.rust-lang.org/cargo/reference/build-scripts.html#outputs-of-the-build-script
-        println!("cargo:rustc-check-cfg=cfg({cfg_name}, values(none()))");
+        println!("cargo::rustc-check-cfg=cfg({cfg_name}, values(none()))");
     }
 
     if is_pure() && is_neon() {
@@ -367,7 +366,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if (is_arm() && is_neon())
         || (!is_no_neon() && !is_pure() && is_aarch64() && is_little_endian())
     {
-        println!("cargo:rustc-cfg=blake3_neon");
+        println!("cargo::rustc-cfg=blake3_neon");
         build_neon_c_intrinsics();
     }
 
@@ -379,13 +378,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // environment variables it supports, in particular for $CC. We expect to
     // do a lot of benchmarking across different compilers, so we explicitly
     // add the variables that we're likely to need.
-    println!("cargo:rerun-if-env-changed=CC");
-    println!("cargo:rerun-if-env-changed=CFLAGS");
+    println!("cargo::rerun-if-env-changed=CC");
+    println!("cargo::rerun-if-env-changed=CFLAGS");
 
     // Ditto for source files, though these shouldn't change as often.
     for file in std::fs::read_dir("c")? {
         println!(
-            "cargo:rerun-if-changed={}",
+            "cargo::rerun-if-changed={}",
             file?.path().to_str().expect("utf-8")
         );
     }
