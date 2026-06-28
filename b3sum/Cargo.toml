@@ -9,13 +9,15 @@ readme = "README.md"
 edition = "2024"
 
 [features]
-neon = ["blake3/neon"]
-prefer_intrinsics = ["blake3/prefer_intrinsics"]
+system = ["dep:blake3_c_rust_bindings", "blake3_c_rust_bindings/system"]
+neon = ["blake3/neon", "blake3_c_rust_bindings?/neon"]
+prefer_intrinsics = ["blake3/prefer_intrinsics", "blake3_c_rust_bindings?/prefer_intrinsics"]
 pure = ["blake3/pure"]
 
 [dependencies]
 anyhow = "1.0.25"
 blake3 = { version = "1.8", path = "..", features = ["mmap", "rayon"] }
+blake3_c_rust_bindings = { path = "../c/blake3_c_rust_bindings", default-features = false, optional = true }
 clap = { version = "4.0.8", features = ["derive", "wrap_help"] }
 hex = "0.4.0"
 rayon-core = "1.12.1"

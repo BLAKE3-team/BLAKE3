@@ -19,6 +19,39 @@ const RAW_ARG: &str = "raw";
 const TAG_ARG: &str = "tag";
 const CHECK_ARG: &str = "check";
 
+#[cfg(feature = "system")]
+use blake3_c_rust_bindings as blake3;
+
+#[cfg(not(feature = "system"))]
+type OutputReader = blake3::OutputReader;
+
+#[cfg(feature = "system")]
+#[derive(Clone)]
+struct OutputReader {
+    hasher: blake3::Hasher,
+    position: u64,
+}
+
+#[cfg(feature = "system")]
+impl OutputReader {
+    fn new(hasher: blake3::Hasher, position: u64) -> Self {
+        Self { hasher, position }
+    }
+
+    fn fill(&mut self, buf: &mut [u8]) {
+        self.hasher.finalize_seek(self.position, buf);
+        self.position = self.position.wrapping_add(buf.len() as u64);
+    }
+}
+
+#[cfg(feature = "system")]
+impl Read for OutputReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.fill(buf);
+        Ok(buf.len())
+    }
+}
+
 #[derive(Parser)]
 #[command(version, max_term_width(100))]
 struct Inner {
@@ -121,7 +154,7 @@ impl Args {
             // `-` arguments. Input::open handles that case below.
             blake3::Hasher::new_keyed(&read_key_from_stdin()?)
         } else if let Some(ref context) = inner.derive_key {
-            blake3::Hasher::new_derive_key(context)
+            new_derive_key(context)
         } else {
             blake3::Hasher::new()
         };
@@ -173,25 +206,72 @@ impl Args {
     }
 }
 
-fn hash_path(args: &Args, path: &Path) -> anyhow::Result<blake3::OutputReader> {
+#[cfg(not(feature = "system"))]
+fn new_derive_key(context: &str) -> blake3::Hasher {
+    blake3::Hasher::new_derive_key(context)
+}
+
+#[cfg(feature = "system")]
+fn new_derive_key(context: &str) -> blake3::Hasher {
+    blake3::Hasher::new_derive_key_raw(context.as_bytes())
+}
+
+#[cfg(not(feature = "system"))]
+fn update_reader(
+    hasher: &mut blake3::Hasher,
+    reader: impl Read,
+) -> io::Result<()> {
+    hasher.update_reader(reader)?;
+    Ok(())
+}
+
+#[cfg(feature = "system")]
+fn update_reader(
+    hasher: &mut blake3::Hasher,
+    mut reader: impl Read,
+) -> io::Result<()> {
+    // Match the buffer size used by the root crate's update_reader helper.
+    let mut buffer = [0; 65536];
+    loop {
+        match reader.read(&mut buffer) {
+            Ok(0) => return Ok(()),
+            Ok(n) => {
+                hasher.update(&buffer[..n]);
+            }
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+fn hash_path(args: &Args, path: &Path) -> anyhow::Result<OutputReader> {
     let mut hasher = args.base_hasher.clone();
     if path == Path::new("-") {
         if args.keyed() {
             bail!("Cannot open `-` in keyed mode");
         }
-        hasher.update_reader(io::stdin().lock())?;
+        update_reader(&mut hasher, io::stdin().lock())?;
     } else if args.no_mmap() {
-        hasher.update_reader(File::open(path)?)?;
+        update_reader(&mut hasher, File::open(path)?)?;
     } else {
-        // The fast path: Try to mmap the file and hash it with multiple threads.
+        #[cfg(not(feature = "system"))]
         hasher.update_mmap_rayon(path)?;
+        #[cfg(feature = "system")]
+        update_reader(&mut hasher, File::open(path)?)?;
     }
-    let mut output_reader = hasher.finalize_xof();
-    output_reader.set_position(args.seek());
-    Ok(output_reader)
+    #[cfg(not(feature = "system"))]
+    {
+        let mut output_reader = hasher.finalize_xof();
+        output_reader.set_position(args.seek());
+        Ok(output_reader)
+    }
+    #[cfg(feature = "system")]
+    {
+        Ok(OutputReader::new(hasher, args.seek()))
+    }
 }
 
-fn write_hex_output(mut output: blake3::OutputReader, args: &Args) -> anyhow::Result<()> {
+fn write_hex_output(mut output: OutputReader, args: &Args) -> anyhow::Result<()> {
     // Encoding multiples of the 64 bytes is most efficient.
     // TODO: This computes each output block twice when the --seek argument isn't a multiple of 64.
     // We'll refactor all of this soon anyway, once SIMD optimizations are available for the XOF.
@@ -207,7 +287,7 @@ fn write_hex_output(mut output: blake3::OutputReader, args: &Args) -> anyhow::Re
     Ok(())
 }
 
-fn write_raw_output(output: blake3::OutputReader, args: &Args) -> anyhow::Result<()> {
+fn write_raw_output(output: OutputReader, args: &Args) -> anyhow::Result<()> {
     let mut output = output.take(args.len());
     let stdout = std::io::stdout();
     let mut handler = stdout.lock();

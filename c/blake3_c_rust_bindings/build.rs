@@ -1,4 +1,5 @@
 use std::env;
+use std::process::Command;
 
 fn defined(var: &str) -> bool {
     env::var_os(var).is_some()
@@ -102,7 +103,33 @@ fn c_dir_path(filename: &str) -> String {
     }
 }
 
+fn pkg_config(args: &[&str]) -> Option<String> {
+    let pkg_config = env::var_os("PKG_CONFIG").unwrap_or_else(|| "pkg-config".into());
+    let output = Command::new(pkg_config).args(args).output().ok()?;
+    if output.status.success() {
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        None
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if defined("CARGO_FEATURE_SYSTEM") {
+        println!("cargo::rerun-if-env-changed=PKG_CONFIG");
+        println!("cargo::rerun-if-env-changed=PKG_CONFIG_PATH");
+        println!("cargo::rerun-if-env-changed=PKG_CONFIG_LIBDIR");
+        println!("cargo::rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR");
+
+        if let Some(libdir) = pkg_config(&["--variable=libdir", "libblake3"]) {
+            if !libdir.is_empty() {
+                println!("cargo::rustc-link-search=native={libdir}");
+                println!("cargo::rustc-link-lib=blake3");
+                return Ok(());
+            }
+        }
+        return Err("pkg-config libblake3 lookup failed".into());
+    }
+
     let mut base_build = new_build();
     base_build.file(c_dir_path("blake3.c"));
     base_build.file(c_dir_path("blake3_dispatch.c"));

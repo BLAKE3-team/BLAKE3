@@ -11,7 +11,10 @@ mod test;
 
 pub const BLOCK_LEN: usize = 64;
 pub const CHUNK_LEN: usize = 1024;
+// The C header exposes the keyed API as a 32-byte key, but not a named constant.
+pub const KEY_LEN: usize = 32;
 pub const OUT_LEN: usize = 32;
+pub type Hash = [u8; OUT_LEN];
 
 // Feature detection functions for tests and benchmarks. Note that the C code
 // does its own feature detection in blake3_dispatch.c.
