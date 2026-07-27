@@ -29,6 +29,14 @@ fn is_ci() -> bool {
     defined("BLAKE3_CI")
 }
 
+// AVX-512 intrinsics (e.g. `_mm512_ror_epi32`) were stabilized in Rust 1.89.0. Below
+// that version, `src/rust_avx512.rs` fails to compile, so we can only select it on
+// newer compilers.
+fn rustc_version_supports_avx512_intrinsics() -> bool {
+    let version = rustc_version::version().expect("failed to determine the rustc version");
+    version >= rustc_version::Version::new(1, 89, 0)
+}
+
 fn warn(warning: &str) {
     assert!(!warning.contains("\n"));
     println!("cargo::warning={}", warning);
@@ -232,9 +240,13 @@ fn build_sse2_sse41_avx2_assembly() {
     build.compile("blake3_sse2_sse41_avx2_assembly");
 }
 
+fn build_avx512_rust_intrinsics() {
+    // No C code to compile here. Set the cfg flag that enables the Rust AVX-512
+    // intrinsics module. The regular Cargo build will compile it.
+    println!("cargo::rustc-cfg=blake3_avx512_rust");
+}
+
 fn build_avx512_c_intrinsics() {
-    // This is required on 32-bit x86 targets, since the assembly
-    // implementation doesn't support those.
     println!("cargo::rustc-cfg=blake3_avx512_ffi");
     let mut build = new_build();
     build.file("c/blake3_avx512.c");
@@ -324,6 +336,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "blake3_avx2_ffi",
         "blake3_avx2_rust",
         "blake3_avx512_ffi",
+        "blake3_avx512_rust",
         "blake3_neon",
         "blake3_wasm32_simd",
     ];
@@ -350,12 +363,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             build_sse2_sse41_avx2_assembly();
         }
 
-        if is_pure() || support == NoCompiler || support == NoAVX512 {
-            // The binary will not include any AVX-512 code.
-        } else if is_x86_32() || should_prefer_intrinsics() {
-            build_avx512_c_intrinsics();
-        } else {
-            build_avx512_assembly();
+        // AVX-512 is x86-64-only. There's no real-world 32-bit x86 CPU that supports
+        // it, and our assembly implementation doesn't support 32-bit x86 either way.
+        if is_x86_64() {
+            if (is_pure() || should_prefer_intrinsics())
+                && rustc_version_supports_avx512_intrinsics()
+            {
+                // The Rust intrinsics implementation doesn't need a C compiler, so this
+                // branch is checked first and doesn't need to consider `support` at all.
+                build_avx512_rust_intrinsics();
+            } else if is_pure() {
+                // "pure" doesn't allow falling back to the C intrinsics below, and the
+                // installed rustc is too old to compile the Rust ones. The binary will
+                // not include any AVX-512 code.
+            } else if support == NoCompiler || support == NoAVX512 {
+                // The binary will not include any AVX-512 code.
+            } else if should_prefer_intrinsics() {
+                build_avx512_c_intrinsics();
+            } else {
+                build_avx512_assembly();
+            }
         }
     }
 
