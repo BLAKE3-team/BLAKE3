@@ -135,6 +135,7 @@ mod wasm32_simd;
 #[cfg(feature = "traits-preview")]
 pub mod traits;
 
+#[cfg(feature = "std")]
 mod io;
 mod join;
 

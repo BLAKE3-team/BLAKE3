@@ -1,10 +1,13 @@
 //! Helper functions for efficient IO.
 
-#[cfg(feature = "std")]
-pub(crate) fn copy_wide(
-    mut reader: impl std::io::Read,
-    hasher: &mut crate::Hasher,
-) -> std::io::Result<u64> {
+#[cfg(feature = "mmap")]
+use std::fs::File;
+use std::io;
+
+#[cfg(feature = "mmap")]
+const MINIMUM_MMAP_SIZE: u64 = 16 * 1024; // 16 KiB
+
+pub(crate) fn copy_wide(mut reader: impl io::Read, hasher: &mut crate::Hasher) -> io::Result<u64> {
     let mut buffer = [0; 65536];
     let mut total = 0;
     loop {
@@ -15,15 +18,14 @@ pub(crate) fn copy_wide(
                 total += n as u64;
             }
             // see test_update_reader_interrupted
-            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
             Err(e) => return Err(e),
         }
     }
 }
 
-// Mmap a file, if it looks like a good idea. Return None in cases where we know mmap will fail, or
-// if the file is short enough that mmapping isn't worth it. However, if we do try to mmap and it
-// fails, return the error.
+// Try to mmap a file, if it looks like a good idea. Return None if mmap fails, or if the file is
+// short enough that it's not worth it.
 //
 // SAFETY: Mmaps are fundamentally unsafe, because you can call invariant-checking functions like
 // str::from_utf8 on them and then have them change out from under you. Letting a safe caller get
@@ -47,18 +49,71 @@ pub(crate) fn copy_wide(
 // But if you "know what you're doing," I don't think *const i32 and &i32 are fundamentally
 // different here. Feedback needed.
 #[cfg(feature = "mmap")]
-pub(crate) fn maybe_mmap_file(file: &std::fs::File) -> std::io::Result<Option<memmap2::Mmap>> {
+pub(crate) fn maybe_mmap_file(file: &File) -> io::Result<Option<memmap2::Mmap>> {
     let metadata = file.metadata()?;
     let file_size = metadata.len();
     if !metadata.is_file() {
         // Not a real file.
         Ok(None)
-    } else if file_size < 16 * 1024 {
+    } else if file_size < MINIMUM_MMAP_SIZE {
         // Mapping small files is not worth it, and some special files that can't be mapped report
         // a size of zero.
         Ok(None)
     } else {
-        let map = unsafe { memmap2::Mmap::map(file)? };
-        Ok(Some(map))
+        // If the mmap itself fails (as opposed to opening the File previously, or reading its
+        // metadata above), swallow the error and return Ok(None).
+        Ok(unsafe { memmap2::Mmap::map(file) }.ok())
+    }
+}
+
+#[cfg(all(test, feature = "mmap"))]
+mod test {
+    use super::*;
+    use std::io;
+    use std::io::prelude::*;
+
+    #[test]
+    fn test_maybe_mmap_current_exe() -> io::Result<()> {
+        // The current executable should always be a regular file larger than 16 KiB, so mmap
+        // should ~always succeed. (A filesystem might not support mmap at all, but we don't test
+        // any of those in CI.)
+        let exe_file = File::open(std::env::current_exe()?)?;
+        assert!(exe_file.metadata()?.len() > MINIMUM_MMAP_SIZE);
+        let mmap = maybe_mmap_file(&exe_file)?.expect("maybe_mmap_file should return Some");
+        // Mainly we're testing that we got `Some` above, but go ahead and read the mmap just to
+        // make sure it doesn't bus fault or anything like that.
+        assert_eq!(
+            crate::hash(&mmap),
+            crate::Hasher::new().update_reader(&exe_file)?.finalize(),
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_maybe_mmap_small_file() -> io::Result<()> {
+        // Create a file smaller than 16 KiB. `maybe_mmap_file` returns `None` because of its size.
+        let mut f = tempfile::NamedTempFile::new()?;
+        f.write_all(b"hello world")?;
+        f.flush()?;
+        assert!(maybe_mmap_file(&File::open(f.path())?)?.is_none());
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_unmappable_linux() -> io::Result<()> {
+        // I'm not aware of any similarly unmappable paths on macOS or Windows, so this test is
+        // Linux-only for now.
+        let unmappable_path = "/sys/kernel/btf/vmlinux";
+        let mut unmappable_file = File::open(unmappable_path)?;
+        // The file is large enough to attempt mmapping.
+        assert!(unmappable_file.metadata()?.len() > MINIMUM_MMAP_SIZE);
+        // We're allowed to read the file.
+        assert_eq!(unmappable_file.read(&mut [0])?, 1);
+        // But mmapping the file fails.
+        unsafe { memmap2::Mmap::map(&unmappable_file) }.unwrap_err();
+        // `maybe_mmap_file` swallows that error and returns `None`.
+        assert!(maybe_mmap_file(&unmappable_file)?.is_none());
+        Ok(())
     }
 }
