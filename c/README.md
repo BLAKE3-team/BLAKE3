@@ -353,6 +353,34 @@ gcc -shared -O3 -o libblake3.so -DBLAKE3_USE_NEON=1 blake3.c blake3_dispatch.c \
     blake3_portable.c blake3_neon.c
 ```
 
+On AArch64 CPUs that implement SVE2 (Neoverse V2/V3 and Cortex-X2 and later,
+which covers AWS Graviton4/5, Google Axion, Microsoft Cobalt and NVIDIA Grace),
+an additional backend is available that uses the SVE2 `XAR` instruction to fuse
+each of BLAKE3's xor-then-rotate steps into a single instruction. It is
+opt-in, because it needs a compiler that supports SVE2 intrinsics:
+
+```bash
+gcc -shared -O3 -o libblake3.so -DBLAKE3_USE_NEON=1 -DBLAKE3_USE_SVE2=1 \
+    blake3.c blake3_dispatch.c blake3_portable.c blake3_neon.c \
+    $(: blake3_sve2.c needs its own flags, so compile it separately) &&
+gcc -O3 -DBLAKE3_USE_SVE2=1 -march=armv8-a+sve2 -msve-vector-bits=128 \
+    -c blake3_sve2.c
+```
+
+A binary built this way still runs on AArch64 CPUs without SVE2: the backend is
+selected at runtime and falls back to NEON otherwise. Runtime detection currently
+only works on Linux and Android; on other platforms the SVE2 backend is compiled
+out.
+
+Note that `blake3_sve2.c` is compiled with `-msve-vector-bits=128` so that its
+vectors can be used as array elements, which means it is only valid when the
+hardware vector length is exactly 128 bits. Every SVE2 implementation shipping
+today is 128 bits wide, but the architecture allows up to 2048, so the runtime
+check requires both `HWCAP2_SVE2` and a 128-bit vector length; on a wider machine
+it falls back to NEON rather than misbehaving. A vector-length-agnostic
+implementation that could use wider vectors would need to avoid arrays of
+vectors, and is not attempted here.
+
 To explicitiy disable using NEON instructions on AArch64, set
 `BLAKE3_USE_NEON=0`.
 

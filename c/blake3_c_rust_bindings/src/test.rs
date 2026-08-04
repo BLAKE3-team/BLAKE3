@@ -359,6 +359,15 @@ fn test_hash_many_neon() {
     test_hash_many_fn(crate::ffi::neon::blake3_hash_many_neon);
 }
 
+#[test]
+#[cfg(all(feature = "sve2", target_arch = "aarch64"))]
+fn test_hash_many_sve2() {
+    if !crate::sve2_detected() {
+        return;
+    }
+    test_hash_many_fn(crate::ffi::sve2::blake3_hash_many_sve2);
+}
+
 #[allow(unused)]
 type XofManyFunction = unsafe extern "C" fn(
     cv: *const u32,

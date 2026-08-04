@@ -122,6 +122,22 @@ jobs:
     - name: cargo test C bindings intrinsics
       run: cargo test --features=prefer_intrinsics
       working-directory: ./c/blake3_c_rust_bindings
+    # SVE2 is AArch64-only and needs its own -march flags, so this is restricted to
+    # the arm64 runner. GitHub's Arm-hosted runners are Neoverse N2 with a 128-bit
+    # vector length, so the backend is reached rather than falling back to NEON.
+    - name: cargo test C bindings SVE2
+      if: matrix.target.os == 'ubuntu-24.04-arm'
+      run: cargo test --features=sve2
+      working-directory: ./c/blake3_c_rust_bindings
+    # BLAKE3_USE_SVE2 has to reach blake3_dispatch.c as well as blake3_sve2.c. If it
+    # only reaches the latter, everything above still passes while the backend is
+    # never called, so check the objects rather than trusting a green run.
+    - name: check that the SVE2 backend is reachable
+      if: matrix.target.os == 'ubuntu-24.04-arm'
+      working-directory: ./c/blake3_c_rust_bindings
+      run: |
+        objdump -d $(find target -name '*blake3_sve2.o') | grep -q '\bxar\b'
+        objdump -d $(find target -name '*blake3_dispatch.o') | grep -q 'bl.*<getauxval'
     - name: cargo test C bindings no AVX-512
       run: cargo test
       working-directory: ./c/blake3_c_rust_bindings
@@ -271,6 +287,7 @@ jobs:
     - run: docker run -v $(pwd):/io -w /io messense/cargo-xwin cargo xwin test --target x86_64-pc-windows-msvc --features=mmap,rayon,traits-preview,serde,zeroize
 
   # Currently only on x86.
+
   cmake_c_tests:
     name: CMake C tests SIMD=${{ matrix.simd }} TBB=${{ matrix.use_tbb }}
     runs-on: ubuntu-latest

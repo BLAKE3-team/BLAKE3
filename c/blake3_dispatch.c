@@ -18,6 +18,27 @@
 #endif
 #endif
 
+#if BLAKE3_USE_SVE2 == 1
+#if defined(__linux__) || defined(__ANDROID__)
+#include <sys/auxv.h>
+#include <sys/prctl.h>
+#include <asm/hwcap.h>
+#ifndef HWCAP2_SVE2
+#define HWCAP2_SVE2 (1 << 1)
+#endif
+#ifndef PR_SVE_GET_VL
+#define PR_SVE_GET_VL 51
+#endif
+#ifndef PR_SVE_VL_LEN_MASK
+#define PR_SVE_VL_LEN_MASK 0xffff
+#endif
+#else
+/* No way to detect SVE2 at runtime on this platform, so don't use it. */
+#undef BLAKE3_USE_SVE2
+#define BLAKE3_USE_SVE2 0
+#endif
+#endif
+
 #if !defined(BLAKE3_ATOMICS)
 #if defined(__has_include)
 #if __has_include(<stdatomic.h>) && !defined(_MSC_VER)
@@ -247,6 +268,31 @@ void blake3_xof_many(const uint32_t cv[8],
   }
 }
 
+#if BLAKE3_USE_SVE2 == 1
+/* blake3_sve2.c is built with -msve-vector-bits=128, so it needs both SVE2 and a
+   128-bit vector length; the architecture allows up to 2048, and running the
+   fixed-length code on a wider vector would be undefined behavior.
+
+   The length must be read here and not from blake3_sve2.c, because under
+   -msve-vector-bits=128 the compiler folds svcntb() to the constant 16, so a check
+   in that file would always succeed. This file is built without SVE flags. */
+INLINE bool sve2_usable(void) {
+  static ATOMIC_INT g_sve2_usable = -1;
+  int cached = ATOMIC_LOAD(g_sve2_usable);
+  if (cached < 0) {
+    cached = 0;
+    if ((getauxval(AT_HWCAP2) & HWCAP2_SVE2) != 0) {
+      int vl = prctl(PR_SVE_GET_VL, 0, 0, 0, 0);
+      if (vl >= 0 && (vl & PR_SVE_VL_LEN_MASK) == 16) {
+        cached = 1;
+      }
+    }
+    ATOMIC_STORE(g_sve2_usable, cached);
+  }
+  return cached != 0;
+}
+#endif
+
 void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
                       size_t blocks, const uint32_t key[8], uint64_t counter,
                       bool increment_counter, uint8_t flags,
@@ -286,6 +332,15 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
     return;
   }
 #endif
+#endif
+
+#if BLAKE3_USE_SVE2 == 1
+  if (sve2_usable()) {
+    blake3_hash_many_sve2(inputs, num_inputs, blocks, key, counter,
+                          increment_counter, flags, flags_start, flags_end,
+                          out);
+    return;
+  }
 #endif
 
 #if BLAKE3_USE_NEON == 1
