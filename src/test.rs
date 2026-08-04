@@ -888,6 +888,72 @@ fn test_update_reader_interrupted() -> std::io::Result<()> {
 }
 
 #[test]
+#[cfg(feature = "std")]
+fn test_update_reader_empty() -> std::io::Result<()> {
+    let mut hasher = crate::Hasher::new();
+    hasher.update_reader(&[][..])?;
+    assert_eq!(hasher.finalize(), crate::hash(b""));
+    Ok(())
+}
+
+#[test]
+#[cfg(feature = "std")]
+fn test_update_reader_partial() -> std::io::Result<()> {
+    // Use an input larger than the internal 64 KiB buffer to exercise partial
+    // reads across buffer boundaries and BLAKE3 chunk boundaries.
+    let mut input = vec![0; 70_000];
+    paint_test_input(&mut input);
+
+    struct PartialReader<'a>(&'a [u8]);
+    impl<'a> std::io::Read for PartialReader<'a> {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.0.is_empty() {
+                return Ok(0);
+            }
+            let take = std::cmp::min(31, std::cmp::min(self.0.len(), buf.len()));
+            buf[..take].copy_from_slice(&self.0[..take]);
+            self.0 = &self.0[take..];
+            Ok(take)
+        }
+    }
+
+    let mut hasher = crate::Hasher::new();
+    hasher.update_reader(PartialReader(&input))?;
+    assert_eq!(hasher.finalize(), crate::hash(&input));
+    Ok(())
+}
+
+#[test]
+#[cfg(feature = "std")]
+fn test_update_reader_multiple_interrupted() -> std::io::Result<()> {
+    struct MultiInterruptedReader<'a> {
+        slice: &'a [u8],
+        interruptions_remaining: usize,
+    }
+    impl<'a> std::io::Read for MultiInterruptedReader<'a> {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.interruptions_remaining > 0 {
+                self.interruptions_remaining -= 1;
+                return Err(std::io::Error::from(std::io::ErrorKind::Interrupted));
+            }
+            let take = std::cmp::min(self.slice.len(), buf.len());
+            buf[..take].copy_from_slice(&self.slice[..take]);
+            self.slice = &self.slice[take..];
+            Ok(take)
+        }
+    }
+
+    let input = b"hello world";
+    let mut hasher = crate::Hasher::new();
+    hasher.update_reader(MultiInterruptedReader {
+        slice: input,
+        interruptions_remaining: 5,
+    })?;
+    assert_eq!(hasher.finalize(), crate::hash(input));
+    Ok(())
+}
+
+#[test]
 #[cfg(feature = "mmap")]
 // NamedTempFile isn't Miri-compatible
 #[cfg(not(miri))]
