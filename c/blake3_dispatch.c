@@ -191,6 +191,12 @@ void blake3_compress_in_place(uint32_t cv[8],
   }
 #endif
 #endif
+
+#if defined(__wasm_simd128__)
+  blake3_compress_in_place_wasm32_simd(cv, block, block_len, counter, flags);
+  return;
+#endif
+
   blake3_compress_in_place_portable(cv, block, block_len, counter, flags);
 }
 
@@ -220,6 +226,12 @@ void blake3_compress_xof(const uint32_t cv[8],
   }
 #endif
 #endif
+
+#if defined(__wasm_simd128__)
+  blake3_compress_xof_wasm32_simd(cv, block, block_len, counter, flags, out);
+  return;
+#endif
+
   blake3_compress_xof_portable(cv, block, block_len, counter, flags, out);
 }
 
@@ -291,6 +303,13 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
 #if BLAKE3_USE_NEON == 1
   blake3_hash_many_neon(inputs, num_inputs, blocks, key, counter,
                         increment_counter, flags, flags_start, flags_end, out);
+  return;
+#endif
+
+#if defined(__wasm_simd128__)
+  blake3_hash_many_wasm32_simd(inputs, num_inputs, blocks, key, counter,
+                               increment_counter, flags, flags_start, flags_end,
+                               out);
   return;
 #endif
 
