@@ -1,2 +1,5 @@
 Cargo.lock
 target
+
+# TIS-CI
+__vfs-tis*.[c|h]
