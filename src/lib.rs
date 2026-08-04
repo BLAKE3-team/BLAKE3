@@ -1008,6 +1008,16 @@ pub fn derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
         .0
 }
 
+#[cfg(i_know_what_im_doing)]
+pub fn derive_key_u8ref(context: &[u8], key_material: &[u8]) -> [u8; OUT_LEN] {
+    let context_key =
+        hash_all_at_once::<join::SerialJoin>(context, IV, DERIVE_KEY_CONTEXT).root_hash();
+    let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
+    hash_all_at_once::<join::SerialJoin>(key_material, &context_key_words, DERIVE_KEY_MATERIAL)
+        .root_hash()
+        .0
+}
+
 fn parent_node_output(
     left_child: &CVBytes,
     right_child: &CVBytes,
