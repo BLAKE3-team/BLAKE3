@@ -915,9 +915,6 @@ fn test_mmap() -> Result<(), std::io::Error> {
 fn test_mmap_virtual_file() -> Result<(), std::io::Error> {
     // Virtual files like /proc/version can't be mmapped, because their contents don't actually
     // exist anywhere in memory. Make sure we fall back to regular file IO in these cases.
-    // Currently this is handled with a length check, where the assumption is that virtual files
-    // will always report length 0. If that assumption ever breaks, hopefully this test will catch
-    // it.
     let virtual_filepath = "/proc/version";
     let mut mmap_hasher = crate::Hasher::new();
     // We'll fail right here if the fallback doesn't work.
