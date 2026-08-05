@@ -476,7 +476,23 @@ jobs:
     # Currently the test search "miri" only matches "test_miri_smoketest", but
     # we might add more. If this accidentally picks up anything incompatible or
     # slow, we can narrow it.
-    - run: cargo miri test miri
+
+    # build.rs selects Rust intrinsics under Miri and skips C/assembly backends.
+    # Wasm SIMD remains unselected because Miri does not support its intrinsics.
+    - name: x86-64 portable
+      run: cargo miri test miri --target x86_64-unknown-linux-gnu --features no_sse2
+    - name: x86-64 SSE2
+      run: cargo miri test miri --target x86_64-unknown-linux-gnu
+    - name: x86-64 SSE4.1
+      env:
+        RUSTFLAGS: -C target-feature=+sse4.1
+      run: cargo miri test miri --target x86_64-unknown-linux-gnu
+    - name: x86-64 AVX2
+      env:
+        RUSTFLAGS: -C target-feature=+avx2
+      run: cargo miri test miri --target x86_64-unknown-linux-gnu
+    - name: aarch64 portable
+      run: cargo miri test miri --target aarch64-unknown-linux-gnu
 
   tbb_rust_bindings_tests:
     name: TBB test bindings ${{ matrix.os }}
