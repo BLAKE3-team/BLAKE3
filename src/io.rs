@@ -124,7 +124,8 @@ mod test {
             // We have a debug assert that the initial file offset is 0.
             f.rewind()?;
             assert!(maybe_mmap_file(f.as_file_mut())?.is_none());
-            // Check that the file cursor got rewound to start-of-file.
+            // Check that the file cursor remains at start-of-file.
+            assert_eq!(f.stream_position()?, 0);
             assert_eq!(
                 crate::hash(&input),
                 crate::Hasher::new()
