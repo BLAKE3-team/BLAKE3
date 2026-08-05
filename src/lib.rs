@@ -144,6 +144,8 @@ use arrayvec::{ArrayString, ArrayVec};
 use core::cmp;
 use core::fmt;
 use platform::{MAX_SIMD_DEGREE, MAX_SIMD_DEGREE_OR_2, Platform};
+#[cfg(feature = "rand")]
+use std::convert::Infallible;
 #[cfg(feature = "zeroize")]
 use zeroize::Zeroize;
 
@@ -1838,5 +1840,51 @@ impl Zeroize for OutputReader {
 
         inner.zeroize();
         position_within_block.zeroize();
+    }
+}
+
+#[cfg(feature = "rand")]
+impl rand::TryRng for OutputReader {
+    type Error = Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        let mut buf = [0u8; 4];
+        self.fill(&mut buf);
+        Ok(u32::from_le_bytes(buf))
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        let mut buf = [0u8; 8];
+        self.fill(&mut buf);
+        Ok(u64::from_le_bytes(buf))
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
+        self.fill(dest);
+        Ok(())
+    }
+}
+
+#[cfg(feature = "rand")]
+impl rand::TryCryptoRng for OutputReader {}
+
+#[cfg(feature = "rand")]
+impl rand::rand_core::block::Generator for OutputReader {
+    type Output = [u32; BLOCK_LEN / 4];
+
+    fn generate(&mut self, output: &mut Self::Output) {
+        let mut buf = [0u8; BLOCK_LEN];
+        self.fill(&mut buf);
+
+        const _: () = assert!(BLOCK_LEN.is_multiple_of(4));
+        let (chunks, _) = buf.as_chunks::<4>();
+        for (out, chunk) in output.iter_mut().zip(chunks) {
+            *out = u32::from_le_bytes(*chunk);
+        }
+    }
+
+    #[cfg(feature = "zeroize")]
+    fn drop(&mut self, output: &mut Self::Output) {
+        output.zeroize();
     }
 }
