@@ -999,16 +999,28 @@ fn test_serde() {
 // they don't use incompatible features like Rayon or mmap. This test should get reasonable
 // coverage of our public API without using any large inputs, so we can run it in CI and catch
 // obvious breaks. (For example, constant_time_eq is not compatible with Miri.)
+// CI runs this test explicitly with the portable, SSE2, SSE4.1, AVX2, and
+// AArch64-portable target/target-feature combinations. Backends implemented
+// only through C/assembly or unsupported Miri intrinsics remain short-circuited.
 #[test]
 fn test_miri_smoketest() {
+    // Process both small and big chunks so the Miri smoketest exercises all
+    // single-chunk and multi-chunk/backend paths.
     let mut hasher = crate::Hasher::new_derive_key("Miri smoketest");
     hasher.update(b"foo");
     #[cfg(feature = "std")]
     hasher.update_reader(&b"bar"[..]).unwrap();
     assert_eq!(hasher.finalize(), hasher.finalize());
+
+    let input = [42; 4096];
+    hasher.update(&input);
+    #[cfg(feature = "std")]
+    hasher.update_reader(&input[..]).unwrap();
+    assert_eq!(hasher.finalize(), hasher.finalize());
     let mut reader = hasher.finalize_xof();
     reader.set_position(999999);
     reader.fill(&mut [0]);
+    reader.fill(&mut [0; 4096]);
 }
 
 // I had to move these tests out of the deprecated guts module, because leaving them there causes
