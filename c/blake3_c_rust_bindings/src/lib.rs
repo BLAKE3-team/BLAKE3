@@ -15,6 +15,27 @@ pub const OUT_LEN: usize = 32;
 
 // Feature detection functions for tests and benchmarks. Note that the C code
 // does its own feature detection in blake3_dispatch.c.
+// The backend needs SVE2 and a 128-bit vector length; see blake3_dispatch.c. std
+// has no is_aarch64_feature_detected! for SVE2 on stable, so read the kernel's view
+// directly rather than calling svcntb(), which the compiler would fold to a
+// constant under -msve-vector-bits=128.
+#[cfg(all(feature = "sve2", target_arch = "aarch64", target_os = "linux"))]
+pub fn sve2_detected() -> bool {
+    let vl = std::fs::read_to_string("/proc/sys/abi/sve_default_vector_length")
+        .ok()
+        .and_then(|s| s.trim().parse::<usize>().ok());
+    vl == Some(16) && std::fs::read_to_string("/proc/cpuinfo").is_ok_and(|s| {
+        s.lines()
+            .find(|l| l.starts_with("Features"))
+            .is_some_and(|l| l.split_whitespace().any(|f| f == "sve2"))
+    })
+}
+
+#[cfg(all(feature = "sve2", target_arch = "aarch64", not(target_os = "linux")))]
+pub fn sve2_detected() -> bool {
+    false
+}
+
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub fn sse2_detected() -> bool {
     is_x86_feature_detected!("sse2")
@@ -308,6 +329,25 @@ pub mod ffi {
                 flags: u8,
                 out: *mut u8,
                 outblocks: usize,
+            );
+        }
+    }
+
+    #[cfg(all(feature = "sve2", target_arch = "aarch64"))]
+    pub mod sve2 {
+        unsafe extern "C" {
+            // SVE2 low level functions
+            pub fn blake3_hash_many_sve2(
+                inputs: *const *const u8,
+                num_inputs: usize,
+                blocks: usize,
+                key: *const u32,
+                counter: u64,
+                increment_counter: bool,
+                flags: u8,
+                flags_start: u8,
+                flags_end: u8,
+                out: *mut u8,
             );
         }
     }

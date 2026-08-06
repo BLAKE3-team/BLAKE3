@@ -53,6 +53,10 @@ fn is_armv7() -> bool {
     target_components()[0] == "armv7"
 }
 
+fn is_little_endian() -> bool {
+    env::var("CARGO_CFG_TARGET_ENDIAN").unwrap() == "little"
+}
+
 fn is_aarch64() -> bool {
     target_components()[0] == "aarch64"
 }
@@ -107,6 +111,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     base_build.file(c_dir_path("blake3.c"));
     base_build.file(c_dir_path("blake3_dispatch.c"));
     base_build.file(c_dir_path("blake3_portable.c"));
+    if defined("CARGO_FEATURE_SVE2") && is_aarch64() && is_little_endian() {
+        base_build.define("BLAKE3_USE_SVE2", "1");
+    }
     if cfg!(feature = "tbb") {
         base_build.define("BLAKE3_USE_TBB", "1");
     }
@@ -221,6 +228,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             neon_build.flag("-mfloat-abi=hard");
         }
         neon_build.compile("blake3_neon");
+    }
+
+    // Opt-in even on aarch64, because SVE2 isn't universal there and this needs a
+    // compiler with SVE2 intrinsics. Gated on the target too, unlike "neon", which
+    // is also valid on 32-bit ARM.
+    //
+    // Note that BLAKE3_USE_SVE2 is defined for base_build above as well. If it only
+    // reached this build, blake3_dispatch.c would preprocess away the call and the
+    // backend would be compiled but never used.
+    if defined("CARGO_FEATURE_SVE2") && is_aarch64() && is_little_endian() {
+        let mut sve2_build = new_build();
+        sve2_build.file(c_dir_path("blake3_sve2.c"));
+        sve2_build.define("BLAKE3_USE_SVE2", "1");
+        // blake3_sve2.c requires exactly 128-bit vectors; see the comment at the
+        // top of that file.
+        sve2_build.flag("-march=armv8-a+sve2");
+        sve2_build.flag("-msve-vector-bits=128");
+        sve2_build.compile("blake3_sve2");
     }
 
     // The `cc` crate does not automatically emit rerun-if directives for the

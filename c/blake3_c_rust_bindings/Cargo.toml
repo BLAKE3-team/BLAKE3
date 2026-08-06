@@ -16,6 +16,10 @@ prefer_intrinsics = []
 # Activate NEON bindings. We don't currently do any CPU feature detection for
 # this. If this Cargo feature is on, the NEON gets used.
 neon = []
+# Activate SVE2 bindings, for benchmarking the SVE2 backend against NEON. Unlike
+# "neon" this does do feature detection, because SVE2 is not universal on
+# AArch64 and the backend additionally requires a 128-bit vector length.
+sve2 = []
 # Enable TBB-based multithreading.
 tbb = []
 

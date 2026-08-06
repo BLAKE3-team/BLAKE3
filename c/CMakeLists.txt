@@ -85,7 +85,14 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU"
   endif()
 endif()
 
-mark_as_advanced(BLAKE3_CFLAGS_SSE2 BLAKE3_CFLAGS_SSE4.1 BLAKE3_CFLAGS_AVX2 BLAKE3_CFLAGS_AVX512 BLAKE3_CFLAGS_NEON)
+# SVE2 is an opt-in extra on top of the NEON backend: it needs a compiler that
+# understands SVE2 intrinsics, and it is only dispatched to at runtime when the
+# CPU reports HWCAP2_SVE2 with a 128-bit vector length. Off by default so that
+# builds keep working with older toolchains.
+option(BLAKE3_USE_SVE2 "use the SVE2 backend on AArch64 when the CPU supports it" OFF)
+set(BLAKE3_CFLAGS_SVE2 "-march=armv8-a+sve2 -msve-vector-bits=128" CACHE STRING "the compiler flags to enable SVE2")
+
+mark_as_advanced(BLAKE3_CFLAGS_SSE2 BLAKE3_CFLAGS_SSE4.1 BLAKE3_CFLAGS_AVX2 BLAKE3_CFLAGS_AVX512 BLAKE3_CFLAGS_NEON BLAKE3_CFLAGS_SVE2)
 mark_as_advanced(BLAKE3_AMD64_ASM_SOURCES)
 
 message(STATUS "BLAKE3 SIMD configuration: ${CMAKE_C_COMPILER_ARCHITECTURE_ID}")
@@ -210,6 +217,16 @@ elseif(BLAKE3_SIMD_TYPE STREQUAL "neon-intrinsics")
 
   if (DEFINED BLAKE3_CFLAGS_NEON)
     set_source_files_properties(blake3_neon.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_NEON}")
+  endif()
+
+  if (BLAKE3_USE_SVE2)
+    target_sources(blake3 PRIVATE
+      blake3_sve2.c
+    )
+    target_compile_definitions(blake3 PRIVATE
+      BLAKE3_USE_SVE2=1
+    )
+    set_source_files_properties(blake3_sve2.c PROPERTIES COMPILE_FLAGS "${BLAKE3_CFLAGS_SVE2}")
   endif()
 
 elseif(BLAKE3_SIMD_TYPE STREQUAL "none")
