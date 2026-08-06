@@ -73,21 +73,27 @@ traits-preview = ["dep:digest"]
 digest = ["dep:digest"]
 
 # By default on x86_64, this crate uses Samuel Neves' hand-written assembly
-# implementations for SSE4.1, AVX2, and AVX512. (These provide both the best
+# implementations for SSE4.1, AVX2, and AVX-512. (These provide both the best
 # runtime performance, and the fastest build times.) And by default on 32-bit
-# x86, this crate uses Rust intrinsics implementations for SSE4.1 and AVX2, and
-# a C intrinsics implementation for AVX-512. In both cases, if a C compiler is
-# not detected, or if AVX-512 support is missing from the detected compiler,
-# build.rs automatically falls back to a pure Rust build. This feature forces
-# that fallback, for testing purposes. (Note that in CI testing, we set the
-# BLAKE3_CI environment variable, which instructs build.rs to error out rather
-# than doing an automatic fallback.)
+# x86, this crate uses Rust intrinsics implementations for SSE4.1 and AVX2.
+# AVX-512 is x86_64-only (there's no real-world 32-bit x86 CPU that supports
+# it), so 32-bit x86 builds never include any AVX-512 code at all. If a C
+# compiler is not detected, or if AVX-512 support is missing from the detected
+# compiler, build.rs automatically falls back to a pure Rust build; on x86_64
+# that includes AVX-512, as long as the installed rustc is new enough (AVX-512
+# intrinsics were stabilized in Rust 1.89) -- otherwise AVX-512 is left out
+# entirely, the same as it already is on 32-bit x86. This feature forces the
+# pure-Rust fallback, for testing purposes. (Note that in CI testing, we set
+# the BLAKE3_CI environment variable, which instructs build.rs to error out
+# rather than doing an automatic fallback.)
 pure = []
 
 # As described above, on x86_64 this crate use assembly implementations by
 # default. Enabling the "prefer_intrinsics" feature makes this crate use
 # intrinsics implementations on both 32-bit and 64-bit x86, again for testing
-# purposes.
+# purposes. On x86_64, AVX-512 prefers the Rust intrinsics when the installed
+# rustc supports them (see "pure" above), and falls back to the C intrinsics
+# otherwise.
 prefer_intrinsics = []
 
 # Disable individual instruction sets. CI testing uses these flags to simulate
@@ -138,3 +144,4 @@ ciborium = "0.2.2"
 
 [build-dependencies]
 cc = "1.1.12"
+rustc_version = "0.4.1"

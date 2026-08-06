@@ -1,15 +1,13 @@
 use crate::{BLOCK_LEN, CVWords, IncrementCounter, portable};
 use arrayref::{array_mut_ref, array_ref};
 
+// AVX-512 is x86-64-only, so this needs its own cfg ahead of the general
+// x86/x86_64 branch below.
 cfg_if::cfg_if! {
-    if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
-        cfg_if::cfg_if! {
-            if #[cfg(blake3_avx512_ffi)] {
-                pub const MAX_SIMD_DEGREE: usize = 16;
-            } else {
-                pub const MAX_SIMD_DEGREE: usize = 8;
-            }
-        }
+    if #[cfg(all(target_arch = "x86_64", any(blake3_avx512_ffi, blake3_avx512_rust)))] {
+        pub const MAX_SIMD_DEGREE: usize = 16;
+    } else if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
+        pub const MAX_SIMD_DEGREE: usize = 8;
     } else if #[cfg(blake3_neon)] {
         pub const MAX_SIMD_DEGREE: usize = 4;
     } else if #[cfg(blake3_wasm32_simd)] {
@@ -24,14 +22,10 @@ cfg_if::cfg_if! {
 // allowed to use cmp::max, so we have to hardcode this additional constant
 // value. Get rid of this once cmp::max is a const fn.
 cfg_if::cfg_if! {
-    if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
-        cfg_if::cfg_if! {
-            if #[cfg(blake3_avx512_ffi)] {
-                pub const MAX_SIMD_DEGREE_OR_2: usize = 16;
-            } else {
-                pub const MAX_SIMD_DEGREE_OR_2: usize = 8;
-            }
-        }
+    if #[cfg(all(target_arch = "x86_64", any(blake3_avx512_ffi, blake3_avx512_rust)))] {
+        pub const MAX_SIMD_DEGREE_OR_2: usize = 16;
+    } else if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
+        pub const MAX_SIMD_DEGREE_OR_2: usize = 8;
     } else if #[cfg(blake3_neon)] {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 4;
     } else if #[cfg(blake3_wasm32_simd)] {
@@ -50,8 +44,8 @@ pub enum Platform {
     SSE41,
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     AVX2,
-    #[cfg(blake3_avx512_ffi)]
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[cfg(any(blake3_avx512_ffi, blake3_avx512_rust))]
+    #[cfg(target_arch = "x86_64")]
     AVX512,
     #[cfg(blake3_neon)]
     NEON,
@@ -70,7 +64,7 @@ impl Platform {
 
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            #[cfg(blake3_avx512_ffi)]
+            #[cfg(all(target_arch = "x86_64", any(blake3_avx512_ffi, blake3_avx512_rust)))]
             {
                 if avx512_detected() {
                     return Platform::AVX512;
@@ -108,8 +102,8 @@ impl Platform {
             Platform::SSE41 => 4,
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX2 => 8,
-            #[cfg(blake3_avx512_ffi)]
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            #[cfg(any(blake3_avx512_ffi, blake3_avx512_rust))]
+            #[cfg(target_arch = "x86_64")]
             Platform::AVX512 => 16,
             #[cfg(blake3_neon)]
             Platform::NEON => 4,
@@ -141,8 +135,8 @@ impl Platform {
                 crate::sse41::compress_in_place(cv, block, block_len, counter, flags)
             },
             // Safe because detect() checked for platform support.
-            #[cfg(blake3_avx512_ffi)]
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            #[cfg(any(blake3_avx512_ffi, blake3_avx512_rust))]
+            #[cfg(target_arch = "x86_64")]
             Platform::AVX512 => unsafe {
                 crate::avx512::compress_in_place(cv, block, block_len, counter, flags)
             },
@@ -177,8 +171,8 @@ impl Platform {
                 crate::sse41::compress_xof(cv, block, block_len, counter, flags)
             },
             // Safe because detect() checked for platform support.
-            #[cfg(blake3_avx512_ffi)]
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            #[cfg(any(blake3_avx512_ffi, blake3_avx512_rust))]
+            #[cfg(target_arch = "x86_64")]
             Platform::AVX512 => unsafe {
                 crate::avx512::compress_xof(cv, block, block_len, counter, flags)
             },
@@ -267,8 +261,8 @@ impl Platform {
                 )
             },
             // Safe because detect() checked for platform support.
-            #[cfg(blake3_avx512_ffi)]
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            #[cfg(any(blake3_avx512_ffi, blake3_avx512_rust))]
+            #[cfg(target_arch = "x86_64")]
             Platform::AVX512 => unsafe {
                 crate::avx512::hash_many(
                     inputs,
@@ -327,10 +321,18 @@ impl Platform {
             return;
         }
         match self {
-            // Safe because detect() checked for platform support.
+            // Safe because detect() checked for platform support. The assembly and C
+            // intrinsics implementations of xof_many are currently only built on Unix.
             #[cfg(blake3_avx512_ffi)]
             #[cfg(unix)]
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            #[cfg(target_arch = "x86_64")]
+            Platform::AVX512 => unsafe {
+                crate::avx512::xof_many(cv, block, block_len, counter, flags, out)
+            },
+            // Safe because detect() checked for platform support. The Rust intrinsics
+            // implementation of xof_many is portable and isn't limited to Unix.
+            #[cfg(blake3_avx512_rust)]
+            #[cfg(target_arch = "x86_64")]
             Platform::AVX512 => unsafe {
                 crate::avx512::xof_many(cv, block, block_len, counter, flags, out)
             },
@@ -380,8 +382,8 @@ impl Platform {
         }
     }
 
-    #[cfg(blake3_avx512_ffi)]
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[cfg(any(blake3_avx512_ffi, blake3_avx512_rust))]
+    #[cfg(target_arch = "x86_64")]
     pub fn avx512() -> Option<Self> {
         if avx512_detected() {
             Some(Self::AVX512)
@@ -405,8 +407,8 @@ impl Platform {
 
 // Note that AVX-512 is divided into multiple featuresets, and we use two of
 // them, F and VL.
-#[cfg(blake3_avx512_ffi)]
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(any(blake3_avx512_ffi, blake3_avx512_rust))]
+#[cfg(target_arch = "x86_64")]
 #[inline(always)]
 pub fn avx512_detected() -> bool {
     if cfg!(miri) {

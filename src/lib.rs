@@ -108,6 +108,9 @@ mod avx2;
 #[cfg(blake3_avx2_ffi)]
 #[path = "ffi_avx2.rs"]
 mod avx2;
+#[cfg(blake3_avx512_rust)]
+#[path = "rust_avx512.rs"]
+mod avx512;
 #[cfg(blake3_avx512_ffi)]
 #[path = "ffi_avx512.rs"]
 mod avx512;

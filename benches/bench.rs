@@ -78,7 +78,7 @@ fn bench_single_compression_sse41(b: &mut Bencher) {
 }
 
 #[bench]
-#[cfg(blake3_avx512_ffi)]
+#[cfg(any(blake3_avx512_ffi, blake3_avx512_rust))]
 fn bench_single_compression_avx512(b: &mut Bencher) {
     if let Some(platform) = Platform::avx512() {
         bench_single_compression_fn(b, platform);
@@ -136,7 +136,7 @@ fn bench_many_chunks_avx2(b: &mut Bencher) {
 }
 
 #[bench]
-#[cfg(blake3_avx512_ffi)]
+#[cfg(any(blake3_avx512_ffi, blake3_avx512_rust))]
 fn bench_many_chunks_avx512(b: &mut Bencher) {
     if let Some(platform) = Platform::avx512() {
         bench_many_chunks_fn(b, platform);
@@ -207,7 +207,7 @@ fn bench_many_parents_avx2(b: &mut Bencher) {
 }
 
 #[bench]
-#[cfg(blake3_avx512_ffi)]
+#[cfg(any(blake3_avx512_ffi, blake3_avx512_rust))]
 fn bench_many_parents_avx512(b: &mut Bencher) {
     if let Some(platform) = Platform::avx512() {
         bench_many_parents_fn(b, platform);
