@@ -544,7 +544,7 @@ unsafe fn transpose_msg_vecs(inputs: &[*const u8; DEGREE], block_offset: usize) 
         ];
         for i in 0..DEGREE {
             _mm_prefetch(
-                inputs[i].wrapping_add(block_offset + 256) as *const i8,
+                inputs[i].wrapping_add(block_offset + 128) as *const i8,
                 _MM_HINT_T0,
             );
         }

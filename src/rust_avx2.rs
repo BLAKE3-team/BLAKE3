@@ -6,15 +6,9 @@ use core::arch::x86_64::*;
 use crate::{
     BLOCK_LEN, CVWords, IV, IncrementCounter, MSG_SCHEDULE, OUT_LEN, counter_high, counter_low,
 };
-use arrayref::{array_mut_ref, mut_array_refs};
+use arrayref::array_mut_ref;
 
 pub const DEGREE: usize = 8;
-
-#[inline(always)]
-unsafe fn loadu(src: *const u8) -> __m256i {
-    // This is an unaligned load, so the pointer cast is allowed.
-    unsafe { _mm256_loadu_si256(src as *const __m256i) }
-}
 
 #[inline(always)]
 unsafe fn storeu(src: __m256i, dest: *mut u8) {
@@ -249,36 +243,59 @@ unsafe fn transpose_vecs(vecs: &mut [__m256i; DEGREE]) {
     }
 }
 
+macro_rules! shuffle2_256 {
+    ($a:expr, $b:expr, $imm:expr) => {
+        _mm256_castps_si256(_mm256_shuffle_ps(
+            _mm256_castsi256_ps($a),
+            _mm256_castsi256_ps($b),
+            $imm,
+        ))
+    };
+}
+
+// Transpose 8 message blocks of 16 words into 16 vectors of 8 lanes.
+//
+// Rather than loading each 64-byte block whole and then running three butterfly
+// stages over the result, load each 16-byte group as two 128-bit halves and
+// pair input i with input i+4 in one register. That performs the 128-bit lane
+// stage of the transpose as part of the load, leaving two stages instead of
+// three, and the second stage lands the message vectors directly. The
+// instruction count is about the same, but 16 shuffles per block become loads,
+// which matters because the shuffle port is the scarce resource here. This is
+// the same shape as blake3_avx2_x86-64_unix.S and the C implementation.
 #[inline(always)]
 unsafe fn transpose_msg_vecs(inputs: &[*const u8; DEGREE], block_offset: usize) -> [__m256i; 16] {
     unsafe {
-        let mut vecs = [
-            loadu(inputs[0].add(block_offset + 0 * 4 * DEGREE)),
-            loadu(inputs[1].add(block_offset + 0 * 4 * DEGREE)),
-            loadu(inputs[2].add(block_offset + 0 * 4 * DEGREE)),
-            loadu(inputs[3].add(block_offset + 0 * 4 * DEGREE)),
-            loadu(inputs[4].add(block_offset + 0 * 4 * DEGREE)),
-            loadu(inputs[5].add(block_offset + 0 * 4 * DEGREE)),
-            loadu(inputs[6].add(block_offset + 0 * 4 * DEGREE)),
-            loadu(inputs[7].add(block_offset + 0 * 4 * DEGREE)),
-            loadu(inputs[0].add(block_offset + 1 * 4 * DEGREE)),
-            loadu(inputs[1].add(block_offset + 1 * 4 * DEGREE)),
-            loadu(inputs[2].add(block_offset + 1 * 4 * DEGREE)),
-            loadu(inputs[3].add(block_offset + 1 * 4 * DEGREE)),
-            loadu(inputs[4].add(block_offset + 1 * 4 * DEGREE)),
-            loadu(inputs[5].add(block_offset + 1 * 4 * DEGREE)),
-            loadu(inputs[6].add(block_offset + 1 * 4 * DEGREE)),
-            loadu(inputs[7].add(block_offset + 1 * 4 * DEGREE)),
-        ];
+        let mut vecs = [_mm256_setzero_si256(); 16];
+        for group in 0..4 {
+            let off = block_offset + group * 4 * 4;
+
+            // Low 128 bits from input i, high 128 bits from input i+4.
+            let mut t = [_mm256_setzero_si256(); 4];
+            for i in 0..4 {
+                let lo = _mm_loadu_si128(inputs[i].add(off) as *const __m128i);
+                let hi = _mm_loadu_si128(inputs[i + 4].add(off) as *const __m128i);
+                t[i] = _mm256_inserti128_si256(_mm256_castsi128_si256(lo), hi, 1);
+            }
+
+            // Interleave qwords within each 128-bit lane, then pick one word per
+            // input out of each lane.
+            let u0 = _mm256_unpacklo_epi64(t[0], t[1]);
+            let u1 = _mm256_unpackhi_epi64(t[0], t[1]);
+            let u2 = _mm256_unpacklo_epi64(t[2], t[3]);
+            let u3 = _mm256_unpackhi_epi64(t[2], t[3]);
+
+            vecs[group * 4] = shuffle2_256!(u0, u2, 0x88);
+            vecs[group * 4 + 1] = shuffle2_256!(u0, u2, 0xdd);
+            vecs[group * 4 + 2] = shuffle2_256!(u1, u3, 0x88);
+            vecs[group * 4 + 3] = shuffle2_256!(u1, u3, 0xdd);
+        }
         for i in 0..DEGREE {
             _mm_prefetch(
-                inputs[i].wrapping_add(block_offset + 256) as *const i8,
+                inputs[i].wrapping_add(block_offset + 128) as *const i8,
                 _MM_HINT_T0,
             );
         }
-        let squares = mut_array_refs!(&mut vecs, DEGREE, DEGREE);
-        transpose_vecs(squares.0);
-        transpose_vecs(squares.1);
         vecs
     }
 }

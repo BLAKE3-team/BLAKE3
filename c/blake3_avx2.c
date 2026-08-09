@@ -4,9 +4,15 @@
 
 #define DEGREE 8
 
-INLINE __m256i loadu(const uint8_t src[32]) {
-  return _mm256_loadu_si256((const __m256i *)src);
-}
+#define _mm256_shuffle_ps2(a, b, c)                                            \
+  (_mm256_castps_si256(                                                        \
+      _mm256_shuffle_ps(_mm256_castsi256_ps(a), _mm256_castsi256_ps(b), (c))))
+
+// 0b10001000, or lanes a0/a2/b0/b2 in little-endian order
+#define LO_IMM8 0x88
+
+// 0b11011101, or lanes a1/a3/b1/b3 in little-endian order
+#define HI_IMM8 0xdd
 
 INLINE void storeu(__m256i src, uint8_t dest[16]) {
   _mm256_storeu_si256((__m256i *)dest, src);
@@ -189,29 +195,45 @@ INLINE void transpose_vecs(__m256i vecs[DEGREE]) {
   vecs[7] = _mm256_permute2x128_si256(abcd_37, efgh_37, 0x31);
 }
 
+// Transpose 8 message blocks of 16 words into 16 vectors of 8 lanes.
+//
+// Rather than loading each 64-byte block whole and then running three butterfly
+// stages over the result, load each 16-byte group as two 128-bit halves and
+// pair input i with input i+4 in one register. That performs the 128-bit lane
+// stage of the transpose as part of the load, leaving two stages instead of
+// three, and the second stage lands the message vectors directly. The
+// instruction count is about the same, but 16 shuffles per block become loads,
+// and the shuffle port is the bottleneck here. This is the same shape as
+// blake3_avx2_x86-64_unix.S.
 INLINE void transpose_msg_vecs(const uint8_t *const *inputs,
                                size_t block_offset, __m256i out[16]) {
-  out[0] = loadu(&inputs[0][block_offset + 0 * sizeof(__m256i)]);
-  out[1] = loadu(&inputs[1][block_offset + 0 * sizeof(__m256i)]);
-  out[2] = loadu(&inputs[2][block_offset + 0 * sizeof(__m256i)]);
-  out[3] = loadu(&inputs[3][block_offset + 0 * sizeof(__m256i)]);
-  out[4] = loadu(&inputs[4][block_offset + 0 * sizeof(__m256i)]);
-  out[5] = loadu(&inputs[5][block_offset + 0 * sizeof(__m256i)]);
-  out[6] = loadu(&inputs[6][block_offset + 0 * sizeof(__m256i)]);
-  out[7] = loadu(&inputs[7][block_offset + 0 * sizeof(__m256i)]);
-  out[8] = loadu(&inputs[0][block_offset + 1 * sizeof(__m256i)]);
-  out[9] = loadu(&inputs[1][block_offset + 1 * sizeof(__m256i)]);
-  out[10] = loadu(&inputs[2][block_offset + 1 * sizeof(__m256i)]);
-  out[11] = loadu(&inputs[3][block_offset + 1 * sizeof(__m256i)]);
-  out[12] = loadu(&inputs[4][block_offset + 1 * sizeof(__m256i)]);
-  out[13] = loadu(&inputs[5][block_offset + 1 * sizeof(__m256i)]);
-  out[14] = loadu(&inputs[6][block_offset + 1 * sizeof(__m256i)]);
-  out[15] = loadu(&inputs[7][block_offset + 1 * sizeof(__m256i)]);
-  for (size_t i = 0; i < 8; ++i) {
-    _mm_prefetch((const void *)&inputs[i][block_offset + 256], _MM_HINT_T0);
+  for (size_t group = 0; group < 4; group++) {
+    size_t off = block_offset + group * 4 * sizeof(uint32_t);
+
+    // Low 128 bits from input i, high 128 bits from input i+4.
+    __m256i t[4];
+    for (size_t i = 0; i < 4; i++) {
+      __m128i lo = _mm_loadu_si128((const __m128i *)&inputs[i][off]);
+      __m128i hi = _mm_loadu_si128((const __m128i *)&inputs[i + 4][off]);
+      t[i] = _mm256_inserti128_si256(_mm256_castsi128_si256(lo), hi, 1);
+    }
+
+    // Interleave qwords within each 128-bit lane, then pick one word per input
+    // out of each lane.
+    __m256i u0 = _mm256_unpacklo_epi64(t[0], t[1]);
+    __m256i u1 = _mm256_unpackhi_epi64(t[0], t[1]);
+    __m256i u2 = _mm256_unpacklo_epi64(t[2], t[3]);
+    __m256i u3 = _mm256_unpackhi_epi64(t[2], t[3]);
+
+    out[group * 4 + 0] = _mm256_shuffle_ps2(u0, u2, LO_IMM8);
+    out[group * 4 + 1] = _mm256_shuffle_ps2(u0, u2, HI_IMM8);
+    out[group * 4 + 2] = _mm256_shuffle_ps2(u1, u3, LO_IMM8);
+    out[group * 4 + 3] = _mm256_shuffle_ps2(u1, u3, HI_IMM8);
   }
-  transpose_vecs(&out[0]);
-  transpose_vecs(&out[8]);
+
+  for (size_t i = 0; i < 8; ++i) {
+    _mm_prefetch((const void *)&inputs[i][block_offset + 128], _MM_HINT_T0);
+  }
 }
 
 INLINE void load_counters(uint64_t counter, bool increment_counter,
@@ -220,7 +242,7 @@ INLINE void load_counters(uint64_t counter, bool increment_counter,
   const __m256i add0 = _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0);
   const __m256i add1 = _mm256_and_si256(mask, add0);
   __m256i l = _mm256_add_epi32(_mm256_set1_epi32((int32_t)counter), add1);
-  __m256i carry = _mm256_cmpgt_epi32(_mm256_xor_si256(add1, _mm256_set1_epi32(0x80000000)), 
+  __m256i carry = _mm256_cmpgt_epi32(_mm256_xor_si256(add1, _mm256_set1_epi32(0x80000000)),
                                      _mm256_xor_si256(   l, _mm256_set1_epi32(0x80000000)));
   __m256i h = _mm256_sub_epi32(_mm256_set1_epi32((int32_t)(counter >> 32)), carry);
   *out_lo = l;

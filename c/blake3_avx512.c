@@ -6,16 +6,22 @@
   (_mm_castps_si128(                                                           \
       _mm_shuffle_ps(_mm_castsi128_ps(a), _mm_castsi128_ps(b), (c))))
 
+#define _mm256_shuffle_ps2(a, b, c)                                            \
+  (_mm256_castps_si256(                                                        \
+      _mm256_shuffle_ps(_mm256_castsi256_ps(a), _mm256_castsi256_ps(b), (c))))
+
+#define _mm512_shuffle_ps2(a, b, c)                                            \
+  (_mm512_castps_si512(                                                        \
+      _mm512_shuffle_ps(_mm512_castsi512_ps(a), _mm512_castsi512_ps(b), (c))))
+
+// 0b10001000, or lanes a0/a2/b0/b2 in little-endian order
+#define LO_IMM8 0x88
+
+// 0b11011101, or lanes a1/a3/b1/b3 in little-endian order
+#define HI_IMM8 0xdd
+
 INLINE __m128i loadu_128(const uint8_t src[16]) {
   return _mm_loadu_si128((void*)src);
-}
-
-INLINE __m256i loadu_256(const uint8_t src[32]) {
-  return _mm256_loadu_si256((void*)src);
-}
-
-INLINE __m512i loadu_512(const uint8_t src[64]) {
-  return _mm512_loadu_si512((void*)src);
 }
 
 INLINE void storeu_128(__m128i src, uint8_t dest[16]) {
@@ -472,7 +478,7 @@ INLINE void transpose_msg_vecs4(const uint8_t *const *inputs,
   out[14] = loadu_128(&inputs[2][block_offset + 3 * sizeof(__m128i)]);
   out[15] = loadu_128(&inputs[3][block_offset + 3 * sizeof(__m128i)]);
   for (size_t i = 0; i < 4; ++i) {
-    _mm_prefetch((const void *)&inputs[i][block_offset + 256], _MM_HINT_T0);
+    _mm_prefetch((const void *)&inputs[i][block_offset + 128], _MM_HINT_T0);
   }
   transpose_vecs_128(&out[0]);
   transpose_vecs_128(&out[4]);
@@ -758,29 +764,37 @@ INLINE void transpose_vecs_256(__m256i vecs[8]) {
   vecs[7] = _mm256_permute2x128_si256(abcd_37, efgh_37, 0x31);
 }
 
+// Transpose 8 message blocks of 16 words into 16 vectors of 8 lanes. Same
+// load-fused shape as transpose_msg_vecs16() one width down: pair input i with
+// input i+4 in the two 128-bit lanes of a 256-bit register so the lane stage of
+// the transpose happens during the load, leaving two stages instead of three.
+// Matches the 8-lane path of blake3_avx512_x86-64_unix.S.
 INLINE void transpose_msg_vecs8(const uint8_t *const *inputs,
                                 size_t block_offset, __m256i out[16]) {
-  out[0] = loadu_256(&inputs[0][block_offset + 0 * sizeof(__m256i)]);
-  out[1] = loadu_256(&inputs[1][block_offset + 0 * sizeof(__m256i)]);
-  out[2] = loadu_256(&inputs[2][block_offset + 0 * sizeof(__m256i)]);
-  out[3] = loadu_256(&inputs[3][block_offset + 0 * sizeof(__m256i)]);
-  out[4] = loadu_256(&inputs[4][block_offset + 0 * sizeof(__m256i)]);
-  out[5] = loadu_256(&inputs[5][block_offset + 0 * sizeof(__m256i)]);
-  out[6] = loadu_256(&inputs[6][block_offset + 0 * sizeof(__m256i)]);
-  out[7] = loadu_256(&inputs[7][block_offset + 0 * sizeof(__m256i)]);
-  out[8] = loadu_256(&inputs[0][block_offset + 1 * sizeof(__m256i)]);
-  out[9] = loadu_256(&inputs[1][block_offset + 1 * sizeof(__m256i)]);
-  out[10] = loadu_256(&inputs[2][block_offset + 1 * sizeof(__m256i)]);
-  out[11] = loadu_256(&inputs[3][block_offset + 1 * sizeof(__m256i)]);
-  out[12] = loadu_256(&inputs[4][block_offset + 1 * sizeof(__m256i)]);
-  out[13] = loadu_256(&inputs[5][block_offset + 1 * sizeof(__m256i)]);
-  out[14] = loadu_256(&inputs[6][block_offset + 1 * sizeof(__m256i)]);
-  out[15] = loadu_256(&inputs[7][block_offset + 1 * sizeof(__m256i)]);
-  for (size_t i = 0; i < 8; ++i) {
-    _mm_prefetch((const void *)&inputs[i][block_offset + 256], _MM_HINT_T0);
+  for (size_t group = 0; group < 4; group++) {
+    size_t off = block_offset + group * 4 * sizeof(uint32_t);
+
+    __m256i t[4];
+    for (size_t i = 0; i < 4; i++) {
+      __m128i lo = _mm_loadu_si128((const __m128i *)&inputs[i][off]);
+      __m128i hi = _mm_loadu_si128((const __m128i *)&inputs[i + 4][off]);
+      t[i] = _mm256_inserti128_si256(_mm256_castsi128_si256(lo), hi, 1);
+    }
+
+    __m256i u0 = _mm256_unpacklo_epi64(t[0], t[1]);
+    __m256i u1 = _mm256_unpackhi_epi64(t[0], t[1]);
+    __m256i u2 = _mm256_unpacklo_epi64(t[2], t[3]);
+    __m256i u3 = _mm256_unpackhi_epi64(t[2], t[3]);
+
+    out[group * 4 + 0] = _mm256_shuffle_ps2(u0, u2, LO_IMM8);
+    out[group * 4 + 1] = _mm256_shuffle_ps2(u0, u2, HI_IMM8);
+    out[group * 4 + 2] = _mm256_shuffle_ps2(u1, u3, LO_IMM8);
+    out[group * 4 + 3] = _mm256_shuffle_ps2(u1, u3, HI_IMM8);
   }
-  transpose_vecs_256(&out[0]);
-  transpose_vecs_256(&out[8]);
+
+  for (size_t i = 0; i < 8; ++i) {
+    _mm_prefetch((const void *)&inputs[i][block_offset + 128], _MM_HINT_T0);
+  }
 }
 
 INLINE void load_counters8(uint64_t counter, bool increment_counter,
@@ -1020,15 +1034,9 @@ INLINE void round_fn16(__m512i v[16], __m512i m[16], size_t r) {
   v[4] = rot7_512(v[4]);
 }
 
-// 0b10001000, or lanes a0/a2/b0/b2 in little-endian order
-#define LO_IMM8 0x88
-
 INLINE __m512i unpack_lo_128(__m512i a, __m512i b) {
   return _mm512_shuffle_i32x4(a, b, LO_IMM8);
 }
-
-// 0b11011101, or lanes a1/a3/b1/b3 in little-endian order
-#define HI_IMM8 0xdd
 
 INLINE __m512i unpack_hi_128(__m512i a, __m512i b) {
   return _mm512_shuffle_i32x4(a, b, HI_IMM8);
@@ -1116,28 +1124,77 @@ INLINE void transpose_vecs_512(__m512i vecs[16]) {
   vecs[15] = unpack_hi_128(abcdefgh_7, ijklmnop_7);
 }
 
+// Gather one 128-bit lane from each half of the two 512-bit inputs.
+//
+// vecs_a and vecs_b each hold, per 128-bit lane, one message word for four
+// consecutive inputs -- lanes 0/1 for inputs 0-7 and lanes 2/3 for inputs
+// 8-15, because of how transpose_msg_vecs16() loads them. One vpermt2d per
+// output collects the four lanes that belong together.
+// Transpose 16 message blocks of 16 words into 16 vectors of 16 lanes.
+//
+// Rather than loading each 64-byte block whole and then running four butterfly
+// stages over the result, load each block as two 256-bit halves and pair input
+// i with input i+8 in one register. That performs the 256-bit stage of the
+// transpose as part of the load, leaving three stages instead of four, and the
+// final lane gather collapses into a single vpermt2d per output. The total
+// instruction count is about the same as the straightforward version, but 16
+// operations per block move off the shuffle port onto the load ports, which is
+// where the win comes from -- the shuffle port is the bottleneck here. This is
+// the same shape as blake3_avx512_x86-64_unix.S.
 INLINE void transpose_msg_vecs16(const uint8_t *const *inputs,
                                  size_t block_offset, __m512i out[16]) {
-  out[0] = loadu_512(&inputs[0][block_offset]);
-  out[1] = loadu_512(&inputs[1][block_offset]);
-  out[2] = loadu_512(&inputs[2][block_offset]);
-  out[3] = loadu_512(&inputs[3][block_offset]);
-  out[4] = loadu_512(&inputs[4][block_offset]);
-  out[5] = loadu_512(&inputs[5][block_offset]);
-  out[6] = loadu_512(&inputs[6][block_offset]);
-  out[7] = loadu_512(&inputs[7][block_offset]);
-  out[8] = loadu_512(&inputs[8][block_offset]);
-  out[9] = loadu_512(&inputs[9][block_offset]);
-  out[10] = loadu_512(&inputs[10][block_offset]);
-  out[11] = loadu_512(&inputs[11][block_offset]);
-  out[12] = loadu_512(&inputs[12][block_offset]);
-  out[13] = loadu_512(&inputs[13][block_offset]);
-  out[14] = loadu_512(&inputs[14][block_offset]);
-  out[15] = loadu_512(&inputs[15][block_offset]);
-  for (size_t i = 0; i < 16; ++i) {
-    _mm_prefetch((const void *)&inputs[i][block_offset + 256], _MM_HINT_T0);
+  const __m512i gather0 = _mm512_setr_epi32(0, 1, 2, 3, 16, 17, 18, 19,
+                                            8, 9, 10, 11, 24, 25, 26, 27);
+  const __m512i gather1 = _mm512_setr_epi32(4, 5, 6, 7, 20, 21, 22, 23,
+                                            12, 13, 14, 15, 28, 29, 30, 31);
+
+  for (size_t half = 0; half < 2; half++) {
+    size_t off = block_offset + half * 32;
+
+    // Low 256 bits from input i, high 256 bits from input i+8.
+    __m512i t[8];
+    for (size_t i = 0; i < 8; i++) {
+      __m256i lo = _mm256_loadu_si256((const __m256i *)&inputs[i][off]);
+      __m256i hi = _mm256_loadu_si256((const __m256i *)&inputs[i + 8][off]);
+      t[i] = _mm512_inserti64x4(_mm512_castsi256_si512(lo), hi, 1);
+    }
+
+    // Interleave qwords within each 128-bit lane.
+    __m512i u[8];
+    for (size_t i = 0; i < 4; i++) {
+      u[2 * i + 0] = _mm512_unpacklo_epi64(t[2 * i], t[2 * i + 1]);
+      u[2 * i + 1] = _mm512_unpackhi_epi64(t[2 * i], t[2 * i + 1]);
+    }
+
+    // Pick one word per input out of each lane, then gather the four 128-bit
+    // lanes of the two halves into one vector with a single permute each. u[0]
+    // and u[1] hold the even and odd halves of the qword interleave, and
+    // u[i]/u[i+2] cover inputs 0-3 and 8-11 while u[i+4]/u[i+6] cover 4-7 and
+    // 12-15.
+    __m512i lo_a = _mm512_shuffle_ps2(u[0], u[2], LO_IMM8);
+    __m512i lo_b = _mm512_shuffle_ps2(u[4], u[6], LO_IMM8);
+    out[half * 8 + 0] = _mm512_permutex2var_epi32(lo_a, gather0, lo_b);
+    out[half * 8 + 4] = _mm512_permutex2var_epi32(lo_a, gather1, lo_b);
+
+    __m512i hi_a = _mm512_shuffle_ps2(u[0], u[2], HI_IMM8);
+    __m512i hi_b = _mm512_shuffle_ps2(u[4], u[6], HI_IMM8);
+    out[half * 8 + 1] = _mm512_permutex2var_epi32(hi_a, gather0, hi_b);
+    out[half * 8 + 5] = _mm512_permutex2var_epi32(hi_a, gather1, hi_b);
+
+    __m512i lo_c = _mm512_shuffle_ps2(u[1], u[3], LO_IMM8);
+    __m512i lo_d = _mm512_shuffle_ps2(u[5], u[7], LO_IMM8);
+    out[half * 8 + 2] = _mm512_permutex2var_epi32(lo_c, gather0, lo_d);
+    out[half * 8 + 6] = _mm512_permutex2var_epi32(lo_c, gather1, lo_d);
+
+    __m512i hi_c = _mm512_shuffle_ps2(u[1], u[3], HI_IMM8);
+    __m512i hi_d = _mm512_shuffle_ps2(u[5], u[7], HI_IMM8);
+    out[half * 8 + 3] = _mm512_permutex2var_epi32(hi_c, gather0, hi_d);
+    out[half * 8 + 7] = _mm512_permutex2var_epi32(hi_c, gather1, hi_d);
   }
-  transpose_vecs_512(out);
+
+  for (size_t i = 0; i < 16; ++i) {
+    _mm_prefetch((const void *)&inputs[i][block_offset + 128], _MM_HINT_T0);
+  }
 }
 
 INLINE void load_counters16(uint64_t counter, bool increment_counter,
