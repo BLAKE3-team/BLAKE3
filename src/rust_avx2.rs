@@ -3,10 +3,12 @@ use core::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::*;
 
-use crate::{
-    BLOCK_LEN, CVWords, IV, IncrementCounter, MSG_SCHEDULE, OUT_LEN, counter_high, counter_low,
-};
-use arrayref::{array_mut_ref, mut_array_refs};
+use crate::{BLOCK_LEN, CVWords, IV, MSG_SCHEDULE, counter_high, counter_low};
+#[cfg(blake3_avx2_rust)]
+use crate::{IncrementCounter, OUT_LEN};
+#[cfg(blake3_avx2_rust)]
+use arrayref::array_mut_ref;
+use arrayref::mut_array_refs;
 
 pub const DEGREE: usize = 8;
 
@@ -37,6 +39,7 @@ unsafe fn set1(x: u32) -> __m256i {
     unsafe { _mm256_set1_epi32(x as i32) }
 }
 
+#[cfg(blake3_avx2_rust)]
 #[inline(always)]
 unsafe fn set8(a: u32, b: u32, c: u32, d: u32, e: u32, f: u32, g: u32, h: u32) -> __m256i {
     unsafe {
@@ -283,6 +286,7 @@ unsafe fn transpose_msg_vecs(inputs: &[*const u8; DEGREE], block_offset: usize) 
     }
 }
 
+#[cfg(blake3_avx2_rust)]
 #[inline(always)]
 unsafe fn load_counters(counter: u64, increment_counter: IncrementCounter) -> (__m256i, __m256i) {
     let mask = if increment_counter.yes() { !0 } else { 0 };
@@ -312,6 +316,7 @@ unsafe fn load_counters(counter: u64, increment_counter: IncrementCounter) -> (_
     }
 }
 
+#[cfg(blake3_avx2_rust)]
 #[target_feature(enable = "avx2")]
 pub unsafe fn hash8(
     inputs: &[*const u8; DEGREE],
@@ -399,6 +404,7 @@ pub unsafe fn hash8(
     }
 }
 
+#[cfg(blake3_avx2_rust)]
 #[target_feature(enable = "avx2")]
 pub unsafe fn hash_many<const N: usize>(
     mut inputs: &[&[u8; N]],
@@ -450,6 +456,74 @@ pub unsafe fn hash_many<const N: usize>(
     }
 }
 
+/// Compresses one (possibly partial) block for up to [`DEGREE`] (8) independent lanes at once.
+/// `cvs[i]` is lane `i`'s incoming chaining value, overwritten in place with the compression
+/// result, and `blocks[i]` points to at least `BLOCK_LEN` readable bytes for lane `i`. The
+/// `block_len`, `counter`, and `flags` are shared by every lane.
+#[target_feature(enable = "avx2")]
+pub unsafe fn compress8(
+    cvs: &mut [CVWords; DEGREE],
+    blocks: &[[u8; BLOCK_LEN]; DEGREE],
+    block_len: u8,
+    counter: u64,
+    flags: u8,
+) {
+    unsafe {
+        let mut h_vecs: [__m256i; DEGREE] =
+            core::array::from_fn(|lane| loadu(cvs[lane].as_ptr() as *const u8));
+        transpose_vecs(&mut h_vecs);
+
+        let block_ptrs: [*const u8; DEGREE] = core::array::from_fn(|lane| blocks[lane].as_ptr());
+        let msg_vecs = transpose_msg_vecs(&block_ptrs, 0);
+
+        let counter_low_vec = set1(counter_low(counter));
+        let counter_high_vec = set1(counter_high(counter));
+        let block_len_vec = set1(block_len as u32);
+        let block_flags_vec = set1(flags as u32);
+
+        let mut v = [
+            h_vecs[0],
+            h_vecs[1],
+            h_vecs[2],
+            h_vecs[3],
+            h_vecs[4],
+            h_vecs[5],
+            h_vecs[6],
+            h_vecs[7],
+            set1(IV[0]),
+            set1(IV[1]),
+            set1(IV[2]),
+            set1(IV[3]),
+            counter_low_vec,
+            counter_high_vec,
+            block_len_vec,
+            block_flags_vec,
+        ];
+        round(&mut v, &msg_vecs, 0);
+        round(&mut v, &msg_vecs, 1);
+        round(&mut v, &msg_vecs, 2);
+        round(&mut v, &msg_vecs, 3);
+        round(&mut v, &msg_vecs, 4);
+        round(&mut v, &msg_vecs, 5);
+        round(&mut v, &msg_vecs, 6);
+
+        let mut h_vecs_out = [
+            xor(v[0], v[8]),
+            xor(v[1], v[9]),
+            xor(v[2], v[10]),
+            xor(v[3], v[11]),
+            xor(v[4], v[12]),
+            xor(v[5], v[13]),
+            xor(v[6], v[14]),
+            xor(v[7], v[15]),
+        ];
+        transpose_vecs(&mut h_vecs_out);
+        for lane in 0..DEGREE {
+            storeu(h_vecs_out[lane], cvs[lane].as_mut_ptr() as *mut u8);
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -486,11 +560,62 @@ mod test {
         }
     }
 
+    #[cfg(blake3_avx2_rust)]
     #[test]
     fn test_hash_many() {
         if !crate::platform::avx2_detected() {
             return;
         }
         crate::test::test_hash_many_fn(hash_many, hash_many);
+    }
+
+    #[test]
+    fn test_compress8_matches_compress_in_place() {
+        if !crate::platform::avx2_detected() {
+            return;
+        }
+        // Give each lane a different slice of the painted buffer, so a lane mixup fails the test.
+        let mut input_buf = [0u8; DEGREE * BLOCK_LEN];
+        crate::test::paint_test_input(&mut input_buf);
+
+        for block_len in [0u8, 1, 17, 32, 63, 64] {
+            // See test_hash_many_fn in src/test.rs for why these particular counters matter.
+            for counter in [0u64, u32::MAX as u64, i32::MAX as u64] {
+                for flags in [
+                    crate::CHUNK_START | crate::CHUNK_END | crate::ROOT,
+                    crate::KEYED_HASH | crate::CHUNK_START | crate::CHUNK_END,
+                ] {
+                    let mut cvs = [[0u32; 8]; DEGREE];
+                    let mut blocks = [[0u8; BLOCK_LEN]; DEGREE];
+                    for lane in 0..DEGREE {
+                        // A rotation of TEST_KEY_WORDS, distinct for every lane.
+                        for w in 0..8 {
+                            cvs[lane][w] = crate::test::TEST_KEY_WORDS[(w + lane) % 8];
+                        }
+                        blocks[lane].copy_from_slice(&input_buf[lane * BLOCK_LEN..][..BLOCK_LEN]);
+                    }
+
+                    let mut want_cvs = cvs;
+                    for lane in 0..DEGREE {
+                        crate::portable::compress_in_place(
+                            &mut want_cvs[lane],
+                            &blocks[lane],
+                            block_len,
+                            counter,
+                            flags,
+                        );
+                    }
+
+                    unsafe {
+                        compress8(&mut cvs, &blocks, block_len, counter, flags);
+                    }
+
+                    assert_eq!(
+                        cvs, want_cvs,
+                        "block_len {block_len} counter {counter} flags {flags}"
+                    );
+                }
+            }
+        }
     }
 }

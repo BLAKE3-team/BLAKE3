@@ -621,3 +621,94 @@ fn bench_xof_32_blocks(b: &mut Bencher) {
 fn bench_xof_64_blocks(b: &mut Bencher) {
     bench_xof(b, 64 * BLOCK_LEN);
 }
+
+// Benchmarks for the blake3::many API, which hashes a batch of equal-length,
+// independent inputs together. Each size has two benches: the batched one, and a
+// `_loop` baseline that hashes the same values one at a time with blake3::hash().
+// The ratio between the pair is what the batching actually buys, which matters
+// most for values too small to fill a SIMD lane group on their own.
+
+// Large enough to amortize the per-call setup, small enough to stay on the stack
+// and in cache. Real callers (Merkle tree leaves, say) have far more than this,
+// and would just call the API once with all of them.
+const MANY_BATCH: usize = 64;
+
+fn many_inputs(b: &mut Bencher, len: usize) -> Vec<RandomInput> {
+    let mut inputs = Vec::with_capacity(MANY_BATCH);
+    for _ in 0..MANY_BATCH {
+        inputs.push(RandomInput::new(b, len));
+    }
+    inputs
+}
+
+fn bench_many_inputs(b: &mut Bencher, len: usize) {
+    let mut inputs = many_inputs(b, len);
+    let mut out = [blake3::Hash::from_bytes([0; OUT_LEN]); MANY_BATCH];
+    b.iter(|| {
+        let slices: ArrayVec<&[u8], MANY_BATCH> = inputs.iter_mut().map(|i| i.get()).collect();
+        assert!(blake3::many::hash(&slices[..], &mut out));
+    });
+}
+
+fn bench_many_inputs_loop(b: &mut Bencher, len: usize) {
+    let mut inputs = many_inputs(b, len);
+    let mut out = [blake3::Hash::from_bytes([0; OUT_LEN]); MANY_BATCH];
+    b.iter(|| {
+        for (out1, input) in out.iter_mut().zip(inputs.iter_mut()) {
+            *out1 = blake3::hash(input.get());
+        }
+    });
+}
+
+#[bench]
+fn bench_many_inputs_0032_bytes(b: &mut Bencher) {
+    bench_many_inputs(b, 32);
+}
+
+#[bench]
+fn bench_many_inputs_0032_bytes_loop(b: &mut Bencher) {
+    bench_many_inputs_loop(b, 32);
+}
+
+#[bench]
+fn bench_many_inputs_0001_block(b: &mut Bencher) {
+    bench_many_inputs(b, BLOCK_LEN);
+}
+
+#[bench]
+fn bench_many_inputs_0001_block_loop(b: &mut Bencher) {
+    bench_many_inputs_loop(b, BLOCK_LEN);
+}
+
+// Not a multiple of BLOCK_LEN, so every lane ends on a partial block. This is the
+// case that needs Platform::compress_many rather than hash_many.
+#[bench]
+fn bench_many_inputs_0100_bytes(b: &mut Bencher) {
+    bench_many_inputs(b, 100);
+}
+
+#[bench]
+fn bench_many_inputs_0100_bytes_loop(b: &mut Bencher) {
+    bench_many_inputs_loop(b, 100);
+}
+
+#[bench]
+fn bench_many_inputs_0001_kib(b: &mut Bencher) {
+    bench_many_inputs(b, 1 * KIB);
+}
+
+#[bench]
+fn bench_many_inputs_0001_kib_loop(b: &mut Bencher) {
+    bench_many_inputs_loop(b, 1 * KIB);
+}
+
+// Past one chunk, so the batch recurses and builds a tree per input.
+#[bench]
+fn bench_many_inputs_0004_kib(b: &mut Bencher) {
+    bench_many_inputs(b, 4 * KIB);
+}
+
+#[bench]
+fn bench_many_inputs_0004_kib_loop(b: &mut Bencher) {
+    bench_many_inputs_loop(b, 4 * KIB);
+}

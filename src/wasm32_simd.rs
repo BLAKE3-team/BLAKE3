@@ -759,6 +759,93 @@ pub unsafe fn hash_many<const N: usize>(
     }
 }
 
+/// Compresses one (possibly partial) block for up to [`DEGREE`] (4) independent lanes at once.
+/// `cvs[i]` is lane `i`'s incoming chaining value, overwritten in place with the compression
+/// result, and `blocks[i]` points to at least `BLOCK_LEN` readable bytes for lane `i`. The
+/// `block_len`, `counter`, and `flags` are shared by every lane.
+#[target_feature(enable = "simd128")]
+pub unsafe fn compress4(
+    cvs: &mut [CVWords; DEGREE],
+    blocks: &[[u8; BLOCK_LEN]; DEGREE],
+    block_len: u8,
+    counter: u64,
+    flags: u8,
+) {
+    // A CV is 8 words, but a DEGREE=4 vector only holds 4 words, so the transpose happens in
+    // two independent halves: the low 4 words of each lane's CV, and the high 4 words.
+    let mut low_vecs: [v128; DEGREE] =
+        core::array::from_fn(|lane| unsafe { loadu(cvs[lane].as_ptr() as *const u8) });
+    let mut high_vecs: [v128; DEGREE] =
+        core::array::from_fn(|lane| unsafe { loadu(cvs[lane].as_ptr().add(4) as *const u8) });
+    transpose_vecs(&mut low_vecs);
+    transpose_vecs(&mut high_vecs);
+    let h_vecs = [
+        low_vecs[0],
+        low_vecs[1],
+        low_vecs[2],
+        low_vecs[3],
+        high_vecs[0],
+        high_vecs[1],
+        high_vecs[2],
+        high_vecs[3],
+    ];
+
+    let block_ptrs: [*const u8; DEGREE] = core::array::from_fn(|lane| blocks[lane].as_ptr());
+    let msg_vecs = unsafe { transpose_msg_vecs(&block_ptrs, 0) };
+
+    let counter_low_vec = set1(counter_low(counter));
+    let counter_high_vec = set1(counter_high(counter));
+    let block_len_vec = set1(block_len as u32);
+    let block_flags_vec = set1(flags as u32);
+
+    let mut v = [
+        h_vecs[0],
+        h_vecs[1],
+        h_vecs[2],
+        h_vecs[3],
+        h_vecs[4],
+        h_vecs[5],
+        h_vecs[6],
+        h_vecs[7],
+        set1(IV[0]),
+        set1(IV[1]),
+        set1(IV[2]),
+        set1(IV[3]),
+        counter_low_vec,
+        counter_high_vec,
+        block_len_vec,
+        block_flags_vec,
+    ];
+    round(&mut v, &msg_vecs, 0);
+    round(&mut v, &msg_vecs, 1);
+    round(&mut v, &msg_vecs, 2);
+    round(&mut v, &msg_vecs, 3);
+    round(&mut v, &msg_vecs, 4);
+    round(&mut v, &msg_vecs, 5);
+    round(&mut v, &msg_vecs, 6);
+
+    let mut low_out = [
+        xor(v[0], v[8]),
+        xor(v[1], v[9]),
+        xor(v[2], v[10]),
+        xor(v[3], v[11]),
+    ];
+    let mut high_out = [
+        xor(v[4], v[12]),
+        xor(v[5], v[13]),
+        xor(v[6], v[14]),
+        xor(v[7], v[15]),
+    ];
+    transpose_vecs(&mut low_out);
+    transpose_vecs(&mut high_out);
+    unsafe {
+        for lane in 0..DEGREE {
+            storeu(low_out[lane], cvs[lane].as_mut_ptr() as *mut u8);
+            storeu(high_out[lane], cvs[lane].as_mut_ptr().add(4) as *mut u8);
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -799,5 +886,52 @@ mod test {
     #[test]
     fn test_hash_many() {
         crate::test::test_hash_many_fn(hash_many, hash_many);
+    }
+
+    #[test]
+    fn test_compress4_matches_compress_in_place() {
+        // Give each lane a different slice of the painted buffer, so a lane mixup fails the test.
+        let mut input_buf = [0u8; DEGREE * BLOCK_LEN];
+        crate::test::paint_test_input(&mut input_buf);
+
+        for block_len in [0u8, 1, 17, 32, 63, 64] {
+            // See test_hash_many_fn in src/test.rs for why these particular counters matter.
+            for counter in [0u64, u32::MAX as u64, i32::MAX as u64] {
+                for flags in [
+                    crate::CHUNK_START | crate::CHUNK_END | crate::ROOT,
+                    crate::KEYED_HASH | crate::CHUNK_START | crate::CHUNK_END,
+                ] {
+                    let mut cvs = [[0u32; 8]; DEGREE];
+                    let mut blocks = [[0u8; BLOCK_LEN]; DEGREE];
+                    for lane in 0..DEGREE {
+                        // A rotation of TEST_KEY_WORDS, distinct for every lane.
+                        for w in 0..8 {
+                            cvs[lane][w] = crate::test::TEST_KEY_WORDS[(w + lane) % 8];
+                        }
+                        blocks[lane].copy_from_slice(&input_buf[lane * BLOCK_LEN..][..BLOCK_LEN]);
+                    }
+
+                    let mut want_cvs = cvs;
+                    for lane in 0..DEGREE {
+                        crate::portable::compress_in_place(
+                            &mut want_cvs[lane],
+                            &blocks[lane],
+                            block_len,
+                            counter,
+                            flags,
+                        );
+                    }
+
+                    unsafe {
+                        compress4(&mut cvs, &blocks, block_len, counter, flags);
+                    }
+
+                    assert_eq!(
+                        cvs, want_cvs,
+                        "block_len {block_len} counter {counter} flags {flags}"
+                    );
+                }
+            }
+        }
     }
 }

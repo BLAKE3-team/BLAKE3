@@ -192,6 +192,73 @@ impl Platform {
         }
     }
 
+    /// Compress one block for each of several independent inputs at the same time.
+    ///
+    /// This sits between the two primitives above. [`Self::compress_in_place`] takes a runtime
+    /// `block_len`, but handles only a single message. [`Self::hash_many`] compresses many messages
+    /// at once, but always assumes full blocks - `block_len` isn't part of its interface on any
+    /// backend, including the hand-written assembly. This one does both, which is what lets a batch
+    /// of independent inputs finalize their short final blocks in parallel instead of one at a
+    /// time. See [`crate::many`].
+    ///
+    /// `cvs[i]` is lane `i`'s chaining value, updated in place. `blocks[i]` is lane `i`'s block,
+    /// zero-padded to `BLOCK_LEN` if it's short. `block_len`, `counter`, and `flags` are shared by
+    /// every lane. Lanes past a whole multiple of the platform's SIMD width, and platforms with no
+    /// wide implementation, fall back to `compress_in_place`, so this is always correct - just not
+    /// always parallel.
+    ///
+    /// `cvs` and `blocks` must have the same length. This is debug-asserted rather than checked,
+    /// like the `out` length in [`Self::hash_many`].
+    #[inline]
+    pub fn compress_many(
+        &self,
+        cvs: &mut [CVWords],
+        blocks: &[[u8; BLOCK_LEN]],
+        block_len: u8,
+        counter: u64,
+        flags: u8,
+    ) {
+        debug_assert_eq!(cvs.len(), blocks.len(), "mismatched lanes");
+        // Safe in every arm below because detect() checked for platform support.
+        let processed_lanes = match self {
+            // The portable backend has no wide compression to offer, so every lane
+            // falls through to the compress_in_place() loop below.
+            Platform::Portable => 0,
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Platform::SSE2 => unsafe { sse2_compress_many(cvs, blocks, block_len, counter, flags) },
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Platform::SSE41 => unsafe {
+                sse41_compress_many(cvs, blocks, block_len, counter, flags)
+            },
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Platform::AVX2 => unsafe { avx2_compress_many(cvs, blocks, block_len, counter, flags) },
+            // AVX-512 implies AVX2 on every CPU that has it, so borrowing the 8-lane
+            // AVX2 kernel is correct, just half as wide as it could be.
+            //
+            // TODO: Implement a 16-lane compress_many() once this crate has a Rust
+            //  intrinsics AVX-512 backend to put it in. Today AVX-512 is C and assembly
+            //  only, neither of which can express a runtime block_len for hash_many().
+            //  See https://github.com/BLAKE3-team/BLAKE3/pull/566.
+            #[cfg(blake3_avx512_ffi)]
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Platform::AVX512 => unsafe {
+                avx2_compress_many(cvs, blocks, block_len, counter, flags)
+            },
+            // TODO: Implement compress_many() for NEON. Its only backend is C
+            //  (ffi_neon.rs), so this needs either a Rust intrinsics NEON module or a
+            //  new C entry point. Until then every lane falls through below.
+            #[cfg(blake3_neon)]
+            Platform::NEON => 0,
+            #[cfg(blake3_wasm32_simd)]
+            Platform::WASM32_SIMD => unsafe {
+                wasm32_simd_compress_many(cvs, blocks, block_len, counter, flags)
+            },
+        };
+        for i in processed_lanes..cvs.len() {
+            self.compress_in_place(&mut cvs[i], &blocks[i], block_len, counter, flags);
+        }
+    }
+
     // IMPLEMENTATION NOTE
     // ===================
     // hash_many() applies two optimizations. The critically important
@@ -402,6 +469,47 @@ impl Platform {
         Some(Self::WASM32_SIMD)
     }
 }
+
+// Each of these drives one backend's compress_many kernel over as many whole SIMD-width groups of
+// lanes as it can, and returns how many lanes it consumed. Platform::compress_many() finishes any
+// remainder with compress_in_place.
+#[cfg(any(target_arch = "x86", target_arch = "x86_64", blake3_wasm32_simd))]
+macro_rules! compress_many_impl {
+    ($name:ident, $backend:ident, $kernel:ident) => {
+        unsafe fn $name(
+            cvs: &mut [CVWords],
+            blocks: &[[u8; BLOCK_LEN]],
+            block_len: u8,
+            counter: u64,
+            flags: u8,
+        ) -> usize {
+            const DEGREE: usize = crate::$backend::DEGREE;
+            let mut lane = 0;
+            while lane + DEGREE <= cvs.len() {
+                unsafe {
+                    crate::$backend::$kernel(
+                        array_mut_ref!(cvs, lane, DEGREE),
+                        array_ref!(blocks, lane, DEGREE),
+                        block_len,
+                        counter,
+                        flags,
+                    )
+                };
+                lane += DEGREE;
+            }
+            lane
+        }
+    };
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+compress_many_impl!(sse2_compress_many, rust_sse2, compress4);
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+compress_many_impl!(sse41_compress_many, rust_sse41, compress4);
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+compress_many_impl!(avx2_compress_many, rust_avx2, compress8);
+#[cfg(blake3_wasm32_simd)]
+compress_many_impl!(wasm32_simd_compress_many, wasm32_simd, compress4);
 
 // Note that AVX-512 is divided into multiple featuresets, and we use two of
 // them, F and VL.

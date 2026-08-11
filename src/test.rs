@@ -1,7 +1,6 @@
 use crate::{BLOCK_LEN, CHUNK_LEN, CVBytes, CVWords, IncrementCounter, OUT_LEN};
 use arrayref::array_ref;
 use arrayvec::ArrayVec;
-use core::usize;
 use rand::prelude::*;
 
 // Interesting input lengths to run tests on.

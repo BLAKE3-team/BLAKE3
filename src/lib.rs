@@ -96,15 +96,14 @@ pub mod guts;
 
 pub mod hazmat;
 
+pub mod many;
+
 /// Undocumented and unstable, for benchmarks only.
 #[doc(hidden)]
 pub mod platform;
 
 // Platform-specific implementations of the compression function. These
 // BLAKE3-specific cfg flags are set in build.rs.
-#[cfg(blake3_avx2_rust)]
-#[path = "rust_avx2.rs"]
-mod avx2;
 #[cfg(blake3_avx2_ffi)]
 #[path = "ffi_avx2.rs"]
 mod avx2;
@@ -115,15 +114,21 @@ mod avx512;
 #[path = "ffi_neon.rs"]
 mod neon;
 mod portable;
+#[cfg(any(blake3_avx2_ffi, blake3_avx2_rust))]
+mod rust_avx2;
+#[cfg(blake3_avx2_rust)]
+use rust_avx2 as avx2;
+#[cfg(any(blake3_sse2_ffi, blake3_sse2_rust))]
+mod rust_sse2;
 #[cfg(blake3_sse2_rust)]
-#[path = "rust_sse2.rs"]
-mod sse2;
+use rust_sse2 as sse2;
+#[cfg(any(blake3_sse41_ffi, blake3_sse41_rust))]
+mod rust_sse41;
+#[cfg(blake3_sse41_rust)]
+use rust_sse41 as sse41;
 #[cfg(blake3_sse2_ffi)]
 #[path = "ffi_sse2.rs"]
 mod sse2;
-#[cfg(blake3_sse41_rust)]
-#[path = "rust_sse41.rs"]
-mod sse41;
 #[cfg(blake3_sse41_ffi)]
 #[path = "ffi_sse41.rs"]
 mod sse41;
@@ -1805,7 +1810,7 @@ impl std::io::Read for OutputReader {
 #[cfg(feature = "std")]
 impl std::io::Seek for OutputReader {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
-        let max_position = u64::max_value() as i128;
+        let max_position = u64::MAX as i128;
         let target_position: i128 = match pos {
             std::io::SeekFrom::Start(x) => x as i128,
             std::io::SeekFrom::Current(x) => self.position() as i128 + x as i128,
