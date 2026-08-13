@@ -339,6 +339,89 @@ INLINE void hash_one_neon(const uint8_t *input, size_t blocks,
   memcpy(out, cv, BLAKE3_OUT_LEN);
 }
 
+/*
+ * ----------------------------------------------------------------------------
+ * xof_many_neon
+ * ----------------------------------------------------------------------------
+ *
+ * XOF output generation is counter-mode: every output block is an independent
+ * compression of the same (cv, block) with an incremented counter, so four
+ * output blocks vectorize across NEON lanes exactly like four independent
+ * inputs do in hash4_neon above. The message and chaining value broadcast to
+ * all lanes; only the counter differs per lane.
+ */
+
+INLINE void xof4_neon(const uint32_t cv[8], const uint32_t block_words[16],
+                      uint8_t block_len, uint64_t counter, uint8_t flags,
+                      uint8_t out[4 * BLAKE3_BLOCK_LEN]) {
+  uint32x4_t counter_low_vec, counter_high_vec;
+  load_counters4(counter, true, &counter_low_vec, &counter_high_vec);
+  uint32x4_t v[16] = {
+      set1_128(cv[0]),   set1_128(cv[1]),
+      set1_128(cv[2]),   set1_128(cv[3]),
+      set1_128(cv[4]),   set1_128(cv[5]),
+      set1_128(cv[6]),   set1_128(cv[7]),
+      set1_128(IV[0]),   set1_128(IV[1]),
+      set1_128(IV[2]),   set1_128(IV[3]),
+      counter_low_vec,   counter_high_vec,
+      set1_128((uint32_t)block_len), set1_128((uint32_t)flags),
+  };
+  uint32x4_t m[16];
+  for (size_t i = 0; i < 16; i++) {
+    m[i] = set1_128(block_words[i]);
+  }
+  round_fn4(v, m, 0);
+  round_fn4(v, m, 1);
+  round_fn4(v, m, 2);
+  round_fn4(v, m, 3);
+  round_fn4(v, m, 4);
+  round_fn4(v, m, 5);
+  round_fn4(v, m, 6);
+  // The 64-byte extended output per lane: words 0..8 are v[i] ^ v[i+8],
+  // words 8..16 are v[i+8] ^ cv[i] (see portable compress_xof).
+  for (size_t i = 0; i < 8; i++) {
+    v[i] = xor_128(v[i], v[i + 8]);
+    v[i + 8] = xor_128(v[i + 8], set1_128(cv[i]));
+  }
+  // v is word-major (vector = state word, lane = output block); transpose
+  // each group of four so v[4*g + lane] holds words [4g, 4g+4) of `lane`.
+  transpose_vecs_128(&v[0]);
+  transpose_vecs_128(&v[4]);
+  transpose_vecs_128(&v[8]);
+  transpose_vecs_128(&v[12]);
+  for (size_t lane = 0; lane < 4; lane++) {
+    storeu_128(v[lane], &out[lane * BLAKE3_BLOCK_LEN + 0 * sizeof(uint32x4_t)]);
+    storeu_128(v[4 + lane],
+               &out[lane * BLAKE3_BLOCK_LEN + 1 * sizeof(uint32x4_t)]);
+    storeu_128(v[8 + lane],
+               &out[lane * BLAKE3_BLOCK_LEN + 2 * sizeof(uint32x4_t)]);
+    storeu_128(v[12 + lane],
+               &out[lane * BLAKE3_BLOCK_LEN + 3 * sizeof(uint32x4_t)]);
+  }
+}
+
+void blake3_xof_many_neon(const uint32_t cv[8],
+                          const uint8_t block[BLAKE3_BLOCK_LEN],
+                          uint8_t block_len, uint64_t counter, uint8_t flags,
+                          uint8_t *out, size_t outblocks) {
+  uint32_t block_words[16];
+  for (size_t i = 0; i < 16; i++) {
+    block_words[i] = load32(&block[i * 4]);
+  }
+  while (outblocks >= 4) {
+    xof4_neon(cv, block_words, block_len, counter, flags, out);
+    counter += 4;
+    outblocks -= 4;
+    out = &out[4 * BLAKE3_BLOCK_LEN];
+  }
+  while (outblocks > 0) {
+    blake3_compress_xof_portable(cv, block, block_len, counter, flags, out);
+    counter += 1;
+    outblocks -= 1;
+    out = &out[BLAKE3_BLOCK_LEN];
+  }
+}
+
 void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
                            size_t blocks, const uint32_t key[8],
                            uint64_t counter, bool increment_counter,

@@ -31,6 +31,29 @@ pub unsafe fn hash_many<const N: usize>(
     }
 }
 
+// Unsafe because this may only be called on platforms supporting NEON.
+pub unsafe fn xof_many(
+    cv: &CVWords,
+    block: &[u8; BLOCK_LEN],
+    block_len: u8,
+    counter: u64,
+    flags: u8,
+    out: &mut [u8],
+) {
+    debug_assert_eq!(0, out.len() % BLOCK_LEN, "whole blocks only");
+    unsafe {
+        ffi::blake3_xof_many_neon(
+            cv.as_ptr(),
+            block.as_ptr(),
+            block_len,
+            counter,
+            flags,
+            out.as_mut_ptr(),
+            out.len() / BLOCK_LEN,
+        );
+    }
+}
+
 // blake3_neon.c normally depends on blake3_portable.c, because the NEON
 // implementation only provides 4x compression, and it relies on the portable
 // implementation for 1x compression. However, we expose the portable Rust
@@ -54,6 +77,26 @@ pub extern "C" fn blake3_compress_in_place_portable(
     }
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn blake3_compress_xof_portable(
+    cv: *const u32,
+    block: *const u8,
+    block_len: u8,
+    counter: u64,
+    flags: u8,
+    out: *mut u8,
+) {
+    unsafe {
+        *(out as *mut [u8; 64]) = crate::portable::compress_xof(
+            &*(cv as *const [u32; 8]),
+            &*(block as *const [u8; 64]),
+            block_len,
+            counter,
+            flags,
+        );
+    }
+}
+
 pub mod ffi {
     unsafe extern "C" {
         pub fn blake3_hash_many_neon(
@@ -68,6 +111,15 @@ pub mod ffi {
             flags_end: u8,
             out: *mut u8,
         );
+        pub fn blake3_xof_many_neon(
+            cv: *const u32,
+            block: *const u8,
+            block_len: u8,
+            counter: u64,
+            flags: u8,
+            out: *mut u8,
+            outblocks: usize,
+        );
     }
 }
 
@@ -80,5 +132,10 @@ mod test {
         // This entire file is gated on feature="neon", so NEON support is
         // assumed here.
         crate::test::test_hash_many_fn(hash_many, hash_many);
+    }
+
+    #[test]
+    fn test_xof_many() {
+        crate::test::test_xof_many_fn(xof_many);
     }
 }
