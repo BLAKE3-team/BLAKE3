@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 
 #[cfg(test)]
 mod unit_tests;
@@ -516,14 +517,14 @@ fn check_one_checkfile(path: &Path, args: &Args, files_failed: &mut u64) -> anyh
     }
 }
 
-fn main() -> anyhow::Result<()> {
+fn run() -> anyhow::Result<u64> {
     let args = Args::parse()?;
     let mut thread_pool_builder = rayon_core::ThreadPoolBuilder::new();
     if let Some(num_threads) = args.num_threads() {
         thread_pool_builder = thread_pool_builder.num_threads(num_threads);
     }
     let thread_pool = thread_pool_builder.build()?;
-    thread_pool.install(|| {
+    let files_failed = thread_pool.install(|| {
         let mut files_failed = 0u64;
         // Note that file_args automatically includes `-` if nothing is given.
         for path in &args.file_args {
@@ -549,8 +550,20 @@ fn main() -> anyhow::Result<()> {
                 if files_failed == 1 { "" } else { "s" },
             );
         }
-        std::process::exit(if files_failed > 0 { 1 } else { 0 });
-    })
+        files_failed
+    });
+    Ok(files_failed)
+}
+
+fn main() -> ExitCode {
+    match run() {
+        Ok(files_failed) if files_failed > 0 => ExitCode::from(1),
+        Ok(_) => ExitCode::from(0),
+        Err(err) => {
+            eprintln!("Error: {err:?}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 #[cfg(test)]
