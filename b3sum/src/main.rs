@@ -550,8 +550,8 @@ fn run() -> anyhow::Result<u64> {
                 if files_failed == 1 { "" } else { "s" },
             );
         }
-        files_failed
-    });
+        Ok(files_failed)
+    })?;
     Ok(files_failed)
 }
 
