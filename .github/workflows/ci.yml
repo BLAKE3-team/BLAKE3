@@ -29,7 +29,7 @@ jobs:
         channel: ["stable", "beta", "nightly"]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ format('{0}-{1}', matrix.channel, matrix.target.toolchain) }}
@@ -155,7 +155,7 @@ jobs:
       matrix:
         os: ["ubuntu-latest", "macOS-latest", "windows-latest"]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     # The current MSRV. This crate doesn't have an official MSRV policy,
     # but in practice we'll probably do what libc does:
     # https://github.com/rust-lang/libs-team/issues/72.
@@ -180,7 +180,7 @@ jobs:
         channel: ["stable", "beta", "nightly"]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ format('{0}-{1}', matrix.channel, matrix.target.toolchain) }}
@@ -214,7 +214,7 @@ jobs:
           - s390x-unknown-linux-gnu
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@stable
     - run: cargo install cross
     # Test the portable implementation on everything.
@@ -239,7 +239,7 @@ jobs:
     name: WASM tests
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@stable
       with:
         targets: wasm32-wasip1
@@ -267,7 +267,7 @@ jobs:
     name: cargo xwin test
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - run: docker run -v $(pwd):/io -w /io messense/cargo-xwin cargo xwin test --target x86_64-pc-windows-msvc --features=mmap,rayon,traits-preview,serde,zeroize
 
   # Currently only on x86.
@@ -280,7 +280,7 @@ jobs:
         use_tbb: ["OFF", "ON"]
         simd: ["x86-intrinsics", "amd64-asm"]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - run: |
         sudo apt-get update
         sudo apt-get install ninja-build libtbb-dev libtbb12
@@ -326,7 +326,7 @@ jobs:
         shared_libs: ["OFF", "ON"]
         stdlib: ["libc++", "libstdc++"]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: update packages
       run: |
         sudo apt-get update
@@ -352,7 +352,7 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@stable
       with:
         targets: aarch64-apple-darwin
@@ -366,7 +366,7 @@ jobs:
     name: build with the Tiny C Compiler
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: install TCC
       run: sudo apt-get install -y tcc
     - name: compile
@@ -383,7 +383,7 @@ jobs:
     name: "compile and test with GCC 5.4"
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: addnab/docker-run-action@v3
       with:
         image: gcc:5.4
@@ -427,8 +427,8 @@ jobs:
             toolchain: { cc: gcc, cxx: g++ }
             use_tbb: ON
     steps:
-      - uses: actions/checkout@v4
-      - uses: lukka/get-cmake@5f6e04f5267c8133f1273bf2103583fc72c46b17
+      - uses: actions/checkout@v7
+      - uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
           cmakeVersion: ${{ matrix.cmakeVersion }}
           ninjaVersion: ${{ matrix.ninjaVersion }}
@@ -452,8 +452,8 @@ jobs:
     name: CMake 3.9.6 ubuntu-latest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: lukka/get-cmake@5f6e04f5267c8133f1273bf2103583fc72c46b17
+      - uses: actions/checkout@v7
+      - uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
           cmakeVersion: 3.9.6
       - name: Create build directory
@@ -469,7 +469,7 @@ jobs:
     name: Miri smoketest
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@nightly
       with:
         components: miri
@@ -486,7 +486,7 @@ jobs:
       matrix:
         os: ["ubuntu-latest", "macOS-latest"]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@stable
     - name: install TBB
       if: matrix.os == 'ubuntu-latest'
