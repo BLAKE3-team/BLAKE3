@@ -524,7 +524,7 @@ fn run() -> anyhow::Result<u64> {
         thread_pool_builder = thread_pool_builder.num_threads(num_threads);
     }
     let thread_pool = thread_pool_builder.build()?;
-    let files_failed = thread_pool.install(|| {
+    let files_failed: anyhow::Result<u64> = thread_pool.install(|| {
         let mut files_failed = 0u64;
         // Note that file_args automatically includes `-` if nothing is given.
         for path in &args.file_args {
