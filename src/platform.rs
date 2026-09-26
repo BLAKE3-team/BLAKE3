@@ -212,6 +212,15 @@ impl Platform {
         flags_end: u8,
         out: &mut [u8],
     ) {
+        // Every implementation compresses whole blocks and ignores a partial
+        // last block, so an input length that isn't a positive multiple of
+        // BLOCK_LEN would silently produce wrong outputs (in release builds,
+        // where the implementations' own debug assertions are compiled out).
+        // N is a constant, so this check costs nothing when it passes.
+        assert!(
+            N > 0 && N % BLOCK_LEN == 0,
+            "hash_many inputs must be a positive multiple of BLOCK_LEN bytes"
+        );
         match self {
             Platform::Portable => portable::hash_many(
                 inputs,

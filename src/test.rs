@@ -1094,3 +1094,39 @@ mod guts_tests {
         assert_eq!(hasher.finalize(), root);
     }
 }
+
+// Platform::hash_many hashes whole blocks only. A partial last block used to
+// be dropped silently in release builds, so inputs differing only in their
+// last bytes got the same output. Now it panics, on every platform.
+#[test]
+#[should_panic(expected = "positive multiple of BLOCK_LEN")]
+fn test_hash_many_rejects_partial_blocks() {
+    let input = [0u8; 100];
+    let mut out = [0u8; OUT_LEN];
+    crate::platform::Platform::detect().hash_many::<100>(
+        &[&input],
+        crate::IV,
+        0,
+        IncrementCounter::No,
+        0,
+        0,
+        0,
+        &mut out,
+    );
+}
+
+#[test]
+#[should_panic(expected = "positive multiple of BLOCK_LEN")]
+fn test_hash_many_rejects_empty_inputs() {
+    let mut out = [0u8; OUT_LEN];
+    crate::platform::Platform::detect().hash_many::<0>(
+        &[&[]],
+        crate::IV,
+        0,
+        IncrementCounter::No,
+        0,
+        0,
+        0,
+        &mut out,
+    );
+}
