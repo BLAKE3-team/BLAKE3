@@ -62,11 +62,6 @@ pub enum Platform {
 impl Platform {
     #[allow(unreachable_code)]
     pub fn detect() -> Self {
-        #[cfg(miri)]
-        {
-            return Platform::Portable;
-        }
-
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             #[cfg(blake3_avx512_ffi)]
@@ -409,10 +404,6 @@ impl Platform {
 #[inline(always)]
 #[allow(deprecated)] // TODO: revert this after https://github.com/RustCrypto/utils/pull/1515 is released
 pub fn avx512_detected() -> bool {
-    if cfg!(miri) {
-        return false;
-    }
-
     // A testing-only short-circuit.
     if cfg!(feature = "no_avx512") {
         return false;
@@ -426,13 +417,13 @@ pub fn avx512_detected() -> bool {
 #[inline(always)]
 #[allow(deprecated)] // TODO: revert this after https://github.com/RustCrypto/utils/pull/1515 is released
 pub fn avx2_detected() -> bool {
-    if cfg!(miri) {
-        return false;
-    }
-
     // A testing-only short-circuit.
     if cfg!(feature = "no_avx2") {
         return false;
+    }
+
+    if cfg!(target_feature = "avx2") {
+        return true;
     }
 
     cpufeatures::new!(has_avx2, "avx2");
@@ -443,13 +434,13 @@ pub fn avx2_detected() -> bool {
 #[inline(always)]
 #[allow(deprecated)] // TODO: revert this after https://github.com/RustCrypto/utils/pull/1515 is released
 pub fn sse41_detected() -> bool {
-    if cfg!(miri) {
-        return false;
-    }
-
     // A testing-only short-circuit.
     if cfg!(feature = "no_sse41") {
         return false;
+    }
+
+    if cfg!(target_feature = "sse4.1") {
+        return true;
     }
 
     cpufeatures::new!(has_sse41, "sse4.1");
@@ -460,13 +451,13 @@ pub fn sse41_detected() -> bool {
 #[inline(always)]
 #[allow(deprecated)] // TODO: revert this after https://github.com/RustCrypto/utils/pull/1515 is released
 pub fn sse2_detected() -> bool {
-    if cfg!(miri) {
-        return false;
-    }
-
     // A testing-only short-circuit.
     if cfg!(feature = "no_sse2") {
         return false;
+    }
+
+    if cfg!(target_feature = "sse2") {
+        return true;
     }
 
     cpufeatures::new!(has_sse2, "sse2");
