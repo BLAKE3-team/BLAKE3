@@ -1094,3 +1094,23 @@ mod guts_tests {
         assert_eq!(hasher.finalize(), root);
     }
 }
+
+#[test]
+// There's a debug_assert that we fail for non-multiple-of-64 lengths.
+#[cfg_attr(debug_assertions, should_panic)]
+fn test_xof_many_rounds_down() {
+    let platform = crate::platform::Platform::detect();
+    for i in 0..=128 {
+        let mut out = [0; 128];
+        platform.xof_many(&[42; 8], &[99; 64], 64, 0, 0, &mut out[..i]);
+        if i < 64 {
+            assert_eq!(out, [0; 128]);
+        } else if i < 128 {
+            assert_ne!(out[..64], [0; 64]);
+            assert_eq!(out[64..], [0; 64]);
+        } else {
+            assert_ne!(out[..64], [0; 64]);
+            assert_ne!(out[64..], [0; 64]);
+        }
+    }
+}
