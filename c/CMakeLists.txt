@@ -154,7 +154,7 @@ set_target_properties(blake3 PROPERTIES
   C_EXTENSIONS OFF
 )
 target_compile_features(blake3 PUBLIC c_std_99)
-if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.12)
+if(BLAKE3_USE_TBB AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.12)
   target_compile_features(blake3 PUBLIC cxx_std_20)
   # else: add it further below through `BLAKE3_CMAKE_CXXFLAGS_*`
 endif()
