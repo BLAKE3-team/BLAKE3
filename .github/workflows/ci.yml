@@ -447,6 +447,9 @@ jobs:
           ${{ matrix.os != 'windows-latest' || '$vs_install_path = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath; & "$vs_install_path/Common7/Tools/Launch-VsDevShell.ps1" -Arch amd64 -SkipAutomaticLocation' }}
           cmake -S c -B c/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/target -DCMAKE_C_COMPILER=${{ matrix.toolchain.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.toolchain.cxx }} -DBLAKE3_USE_TBB=${{ matrix.use_tbb }} -DBLAKE3_FETCH_TBB=${{ matrix.os == 'windows-latest' && 'YES' || 'NO' }} -DBLAKE3_EXAMPLES=ON
           cmake --build c/build --target install
+      - name: Test CMake installation as a subproject
+        if: matrix.os == 'ubuntu-latest' && matrix.toolchain.cc == 'gcc' && matrix.use_tbb == 'OFF'
+        run: python3 c/test_install.py
 
   cmake_3-9_build:
     name: CMake 3.9.6 ubuntu-latest
