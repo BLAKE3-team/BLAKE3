@@ -339,6 +339,33 @@ INLINE void hash_one_neon(const uint8_t *input, size_t blocks,
   memcpy(out, cv, BLAKE3_OUT_LEN);
 }
 
+void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
+                           size_t blocks, const uint32_t key[8],
+                           uint64_t counter, bool increment_counter,
+                           uint8_t flags, uint8_t flags_start,
+                           uint8_t flags_end, uint8_t *out) {
+  while (num_inputs >= 4) {
+    blake3_hash4_neon(inputs, blocks, key, counter, increment_counter, flags,
+                      flags_start, flags_end, out);
+    if (increment_counter) {
+      counter += 4;
+    }
+    inputs += 4;
+    num_inputs -= 4;
+    out = &out[4 * BLAKE3_OUT_LEN];
+  }
+  while (num_inputs > 0) {
+    hash_one_neon(inputs[0], blocks, key, counter, flags, flags_start,
+                  flags_end, out);
+    if (increment_counter) {
+      counter += 1;
+    }
+    inputs += 1;
+    num_inputs -= 1;
+    out = &out[BLAKE3_OUT_LEN];
+  }
+}
+
 /*
  * ----------------------------------------------------------------------------
  * xof_many_neon
@@ -351,20 +378,17 @@ INLINE void hash_one_neon(const uint8_t *input, size_t blocks,
  * all lanes; only the counter differs per lane.
  */
 
-INLINE void xof4_neon(const uint32_t cv[8], const uint32_t block_words[16],
-                      uint8_t block_len, uint64_t counter, uint8_t flags,
-                      uint8_t out[4 * BLAKE3_BLOCK_LEN]) {
+INLINE void blake3_xof4_neon(const uint32_t cv[8],
+                             const uint32_t block_words[16],
+                             uint8_t block_len, uint64_t counter, uint8_t flags,
+                             uint8_t out[4 * BLAKE3_BLOCK_LEN]) {
   uint32x4_t counter_low_vec, counter_high_vec;
   load_counters4(counter, true, &counter_low_vec, &counter_high_vec);
   uint32x4_t v[16] = {
-      set1_128(cv[0]),   set1_128(cv[1]),
-      set1_128(cv[2]),   set1_128(cv[3]),
-      set1_128(cv[4]),   set1_128(cv[5]),
-      set1_128(cv[6]),   set1_128(cv[7]),
-      set1_128(IV[0]),   set1_128(IV[1]),
-      set1_128(IV[2]),   set1_128(IV[3]),
-      counter_low_vec,   counter_high_vec,
-      set1_128((uint32_t)block_len), set1_128((uint32_t)flags),
+      set1_128(cv[0]), set1_128(cv[1]),  set1_128(cv[2]),     set1_128(cv[3]),
+      set1_128(cv[4]), set1_128(cv[5]),  set1_128(cv[6]),     set1_128(cv[7]),
+      set1_128(IV[0]), set1_128(IV[1]),  set1_128(IV[2]),     set1_128(IV[3]),
+      counter_low_vec, counter_high_vec, set1_128(block_len), set1_128(flags),
   };
   uint32x4_t m[16];
   for (size_t i = 0; i < 16; i++) {
@@ -409,7 +433,7 @@ void blake3_xof_many_neon(const uint32_t cv[8],
     block_words[i] = load32(&block[i * 4]);
   }
   while (outblocks >= 4) {
-    xof4_neon(cv, block_words, block_len, counter, flags, out);
+    blake3_xof4_neon(cv, block_words, block_len, counter, flags, out);
     counter += 4;
     outblocks -= 4;
     out = &out[4 * BLAKE3_BLOCK_LEN];
@@ -419,32 +443,5 @@ void blake3_xof_many_neon(const uint32_t cv[8],
     counter += 1;
     outblocks -= 1;
     out = &out[BLAKE3_BLOCK_LEN];
-  }
-}
-
-void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
-                           size_t blocks, const uint32_t key[8],
-                           uint64_t counter, bool increment_counter,
-                           uint8_t flags, uint8_t flags_start,
-                           uint8_t flags_end, uint8_t *out) {
-  while (num_inputs >= 4) {
-    blake3_hash4_neon(inputs, blocks, key, counter, increment_counter, flags,
-                      flags_start, flags_end, out);
-    if (increment_counter) {
-      counter += 4;
-    }
-    inputs += 4;
-    num_inputs -= 4;
-    out = &out[4 * BLAKE3_OUT_LEN];
-  }
-  while (num_inputs > 0) {
-    hash_one_neon(inputs[0], blocks, key, counter, flags, flags_start,
-                  flags_end, out);
-    if (increment_counter) {
-      counter += 1;
-    }
-    inputs += 1;
-    num_inputs -= 1;
-    out = &out[BLAKE3_OUT_LEN];
   }
 }

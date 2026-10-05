@@ -281,7 +281,7 @@ fn build_avx512_assembly() {
 fn build_neon_c_intrinsics() {
     let mut build = new_build();
     // Note that blake3_neon.c normally depends on the blake3_portable.c
-    // for the single-instance compression function, but we expose
+    // for the single-instance compression functions, but we expose
     // portable.rs over FFI instead. See ffi_neon.rs.
     build.file("c/blake3_neon.c");
     // ARMv7 platforms that support NEON generally need the following
