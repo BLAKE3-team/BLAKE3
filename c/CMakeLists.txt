@@ -364,7 +364,7 @@ join_pkg_config_field(" " PKG_CONFIG_CFLAGS)
 join_paths(PKG_CONFIG_INSTALL_LIBDIR "\${prefix}" "${CMAKE_INSTALL_LIBDIR}")
 join_paths(PKG_CONFIG_INSTALL_INCLUDEDIR "\${prefix}" "${CMAKE_INSTALL_INCLUDEDIR}")
 configure_file(libblake3.pc.in libblake3.pc @ONLY)
-install(FILES "${CMAKE_BINARY_DIR}/libblake3.pc"
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libblake3.pc"
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
 
 # print feature summary
