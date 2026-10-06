@@ -472,7 +472,9 @@ INLINE void transpose_msg_vecs4(const uint8_t *const *inputs,
   out[14] = loadu_128(&inputs[2][block_offset + 3 * sizeof(__m128i)]);
   out[15] = loadu_128(&inputs[3][block_offset + 3 * sizeof(__m128i)]);
   for (size_t i = 0; i < 4; ++i) {
-    _mm_prefetch((const void *)&inputs[i][block_offset + 256], _MM_HINT_T0);
+    /* Integer wrap: &inputs[i][block_offset+256] is UB past the allocation. */
+    _mm_prefetch((const void *)((uintptr_t)inputs[i] + block_offset + 256),
+                 _MM_HINT_T0);
   }
   transpose_vecs_128(&out[0]);
   transpose_vecs_128(&out[4]);
@@ -777,7 +779,9 @@ INLINE void transpose_msg_vecs8(const uint8_t *const *inputs,
   out[14] = loadu_256(&inputs[6][block_offset + 1 * sizeof(__m256i)]);
   out[15] = loadu_256(&inputs[7][block_offset + 1 * sizeof(__m256i)]);
   for (size_t i = 0; i < 8; ++i) {
-    _mm_prefetch((const void *)&inputs[i][block_offset + 256], _MM_HINT_T0);
+    /* Integer wrap: &inputs[i][block_offset+256] is UB past the allocation. */
+    _mm_prefetch((const void *)((uintptr_t)inputs[i] + block_offset + 256),
+                 _MM_HINT_T0);
   }
   transpose_vecs_256(&out[0]);
   transpose_vecs_256(&out[8]);
@@ -1135,7 +1139,9 @@ INLINE void transpose_msg_vecs16(const uint8_t *const *inputs,
   out[14] = loadu_512(&inputs[14][block_offset]);
   out[15] = loadu_512(&inputs[15][block_offset]);
   for (size_t i = 0; i < 16; ++i) {
-    _mm_prefetch((const void *)&inputs[i][block_offset + 256], _MM_HINT_T0);
+    /* Integer wrap: &inputs[i][block_offset+256] is UB past the allocation. */
+    _mm_prefetch((const void *)((uintptr_t)inputs[i] + block_offset + 256),
+                 _MM_HINT_T0);
   }
   transpose_vecs_512(out);
 }
