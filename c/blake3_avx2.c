@@ -208,7 +208,9 @@ INLINE void transpose_msg_vecs(const uint8_t *const *inputs,
   out[14] = loadu(&inputs[6][block_offset + 1 * sizeof(__m256i)]);
   out[15] = loadu(&inputs[7][block_offset + 1 * sizeof(__m256i)]);
   for (size_t i = 0; i < 8; ++i) {
-    _mm_prefetch((const void *)&inputs[i][block_offset + 256], _MM_HINT_T0);
+    /* Integer wrap: &inputs[i][block_offset+256] is UB past the allocation. */
+    _mm_prefetch((const void *)((uintptr_t)inputs[i] + block_offset + 256),
+                 _MM_HINT_T0);
   }
   transpose_vecs(&out[0]);
   transpose_vecs(&out[8]);
