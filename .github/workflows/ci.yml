@@ -163,6 +163,12 @@ jobs:
     # the MSRV, but it's not a promise that we won't bump it.
     - uses: dtolnay/rust-toolchain@1.85.1
     - run: cargo build --features=mmap,rayon,traits-preview,serde,zeroize
+    # AVX-512 intrinsics were stabilized in Rust 1.89, after this MSRV. Build with
+    # "prefer_intrinsics" and "pure" to make sure build.rs correctly detects that and
+    # falls back (to the C intrinsics, and to no AVX-512 code at all, respectively)
+    # instead of trying to build src/rust_avx512.rs.
+    - run: cargo build --features=prefer_intrinsics
+    - run: cargo build --features=pure
 
   b3sum_tests:
     name: b3sum ${{ matrix.target.name }} ${{ matrix.channel }}
@@ -379,6 +385,14 @@ jobs:
   # See https://github.com/BLAKE3-team/BLAKE3/issues/271 for why we test this.
   # Note that this isn't guaranteed to execute on an AVX-512-supporting server,
   # but hopefully at least some of the time it will.
+  #
+  # This needs a pre-1.89 rustc: 1.89 is when the Rust AVX-512 intrinsics were
+  # stabilized, and "prefer_intrinsics" prefers those over the C intrinsics
+  # whenever they're available, which would mean this job stops exercising GCC
+  # 5.4's AVX-512 bug entirely. Pinning an old rustc keeps "prefer_intrinsics"
+  # routing through the C intrinsics here, and doubles as a test that build.rs's
+  # rustc-version fallback (see build.rs's rustc_version_supports_avx512_intrinsics)
+  # still picks the C intrinsics correctly on an old compiler.
   gcc54:
     name: "compile and test with GCC 5.4"
     runs-on: ubuntu-latest
@@ -390,7 +404,7 @@ jobs:
         options: -v ${{ github.workspace }}:/work
         run: |
           cat /proc/cpuinfo
-          curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain 1.85.1
           cd /work
           ~/.cargo/bin/cargo test --features prefer_intrinsics
 
