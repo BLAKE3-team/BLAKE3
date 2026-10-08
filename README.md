@@ -212,6 +212,7 @@ Alternatively, it is licensed under any of the following:
 * [Nix](https://github.com/NixOS/nix/pull/12379)
 * [Nym](https://github.com/nymtech/nym/blob/59056a22c5e6b01a38da2124662bd1fa3c8abef2/common/nymsphinx/params/src/lib.rs#L5)
 * [OpenZFS](https://github.com/openzfs/zfs/)
+* [Query.Farm Crypto for DuckDB](https://query.farm/products/extensions/crypto/)
 * [Redox](https://www.redox-os.org/news/pkgar-introduction/)
 * [Solana](https://docs.rs/solana-program/1.9.5/solana_program/blake3/index.html)
 * [Tekken 8](https://x.com/rodarmor/status/1751567502050771189)
