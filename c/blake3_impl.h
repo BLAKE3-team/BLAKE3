@@ -324,6 +324,10 @@ void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
                            uint64_t counter, bool increment_counter,
                            uint8_t flags, uint8_t flags_start,
                            uint8_t flags_end, uint8_t *out);
+void blake3_hash4_neon(const uint8_t *const *inputs, size_t blocks,
+                       const uint32_t key[8], uint64_t counter,
+                       bool increment_counter, uint8_t flags,
+                       uint8_t flags_start, uint8_t flags_end, uint8_t *out);
 #endif
 
 #ifdef __cplusplus
