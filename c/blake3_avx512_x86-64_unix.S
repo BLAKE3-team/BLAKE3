@@ -89,6 +89,7 @@ blake3_hash_many_avx512:
         cmp     rdx, qword ptr [rsp+0x80]
         cmove   eax, ebx
         mov     dword ptr [rsp+0x88], eax
+#ifndef __ILP32__
         mov     r8, qword ptr [rdi]
         mov     r9, qword ptr [rdi+0x8]
         mov     r10, qword ptr [rdi+0x10]
@@ -97,6 +98,16 @@ blake3_hash_many_avx512:
         mov     r13, qword ptr [rdi+0x48]
         mov     r14, qword ptr [rdi+0x50]
         mov     r15, qword ptr [rdi+0x58]
+#else
+        mov     r8d, dword ptr [rdi]
+        mov     r9d, dword ptr [rdi+0x4]
+        mov     r10d, dword ptr [rdi+0x8]
+        mov     r11d, dword ptr [rdi+0xc]
+        mov     r12d, dword ptr [rdi+0x20]
+        mov     r13d, dword ptr [rdi+0x24]
+        mov     r14d, dword ptr [rdi+0x28]
+        mov     r15d, dword ptr [rdi+0x2c]
+#endif
         vmovdqu32 ymm16, ymmword ptr [rdx+r8-0x2*0x20]
         vinserti64x4 zmm16, zmm16, ymmword ptr [rdx+r12-0x2*0x20], 0x01
         vmovdqu32 ymm17, ymmword ptr [rdx+r9-0x2*0x20]
@@ -109,6 +120,7 @@ blake3_hash_many_avx512:
         vinserti64x4 zmm19, zmm19, ymmword ptr [rdx+r15-0x2*0x20], 0x01
         vpunpcklqdq zmm10, zmm18, zmm19
         vpunpckhqdq zmm11, zmm18, zmm19
+#ifndef __ILP32__
         mov     r8, qword ptr [rdi+0x20]
         mov     r9, qword ptr [rdi+0x28]
         mov     r10, qword ptr [rdi+0x30]
@@ -117,6 +129,16 @@ blake3_hash_many_avx512:
         mov     r13, qword ptr [rdi+0x68]
         mov     r14, qword ptr [rdi+0x70]
         mov     r15, qword ptr [rdi+0x78]
+#else
+        mov     r8d, dword ptr [rdi+0x10]
+        mov     r9d, dword ptr [rdi+0x14]
+        mov     r10d, dword ptr [rdi+0x18]
+        mov     r11d, dword ptr [rdi+0x1c]
+        mov     r12d, dword ptr [rdi+0x30]
+        mov     r13d, dword ptr [rdi+0x34]
+        mov     r14d, dword ptr [rdi+0x38]
+        mov     r15d, dword ptr [rdi+0x3c]
+#endif
         vmovdqu32 ymm16, ymmword ptr [rdx+r8-0x2*0x20]
         vinserti64x4 zmm16, zmm16, ymmword ptr [rdx+r12-0x2*0x20], 0x01
         vmovdqu32 ymm17, ymmword ptr [rdx+r9-0x2*0x20]
@@ -151,6 +173,7 @@ blake3_hash_many_avx512:
         vmovdqa32 zmm23, zmm19
         vpermt2d zmm19, zmm27, zmm8
         vpermt2d zmm23, zmm31, zmm8
+#ifndef __ILP32__
         mov     r8, qword ptr [rdi]
         mov     r9, qword ptr [rdi+0x8]
         mov     r10, qword ptr [rdi+0x10]
@@ -159,6 +182,16 @@ blake3_hash_many_avx512:
         mov     r13, qword ptr [rdi+0x48]
         mov     r14, qword ptr [rdi+0x50]
         mov     r15, qword ptr [rdi+0x58]
+#else
+        mov     r8d, dword ptr [rdi]
+        mov     r9d, dword ptr [rdi+0x4]
+        mov     r10d, dword ptr [rdi+0x8]
+        mov     r11d, dword ptr [rdi+0xc]
+        mov     r12d, dword ptr [rdi+0x20]
+        mov     r13d, dword ptr [rdi+0x24]
+        mov     r14d, dword ptr [rdi+0x28]
+        mov     r15d, dword ptr [rdi+0x2c]
+#endif
         vmovdqu32 ymm24, ymmword ptr [r8+rdx-0x1*0x20]
         vinserti64x4 zmm24, zmm24, ymmword ptr [r12+rdx-0x1*0x20], 0x01
         vmovdqu32 ymm25, ymmword ptr [r9+rdx-0x1*0x20]
@@ -179,6 +212,7 @@ blake3_hash_many_avx512:
         prefetcht0 [r14+rdx+0x80]
         prefetcht0 [r11+rdx+0x80]
         prefetcht0 [r15+rdx+0x80]
+#ifndef __ILP32__
         mov     r8, qword ptr [rdi+0x20]
         mov     r9, qword ptr [rdi+0x28]
         mov     r10, qword ptr [rdi+0x30]
@@ -187,6 +221,16 @@ blake3_hash_many_avx512:
         mov     r13, qword ptr [rdi+0x68]
         mov     r14, qword ptr [rdi+0x70]
         mov     r15, qword ptr [rdi+0x78]
+#else
+        mov     r8d, dword ptr [rdi+0x10]
+        mov     r9d, dword ptr [rdi+0x14]
+        mov     r10d, dword ptr [rdi+0x18]
+        mov     r11d, dword ptr [rdi+0x1c]
+        mov     r12d, dword ptr [rdi+0x30]
+        mov     r13d, dword ptr [rdi+0x34]
+        mov     r14d, dword ptr [rdi+0x38]
+        mov     r15d, dword ptr [rdi+0x3c]
+#endif
         vmovdqu32 ymm24, ymmword ptr [r8+rdx-0x1*0x20]
         vinserti64x4 zmm24, zmm24, ymmword ptr [r12+rdx-0x1*0x20], 0x01
         vmovdqu32 ymm25, ymmword ptr [r9+rdx-0x1*0x20]
@@ -1077,7 +1121,11 @@ blake3_hash_many_avx512:
         vpaddd  zmm1 {k2}, zmm1, dword ptr [ADD1+rip] {1to16}
         vmovdqa32 zmmword ptr [rsp], zmm2
         vmovdqa32 zmmword ptr [rsp+0x1*0x40], zmm1
+#ifndef __ILP32__
         add     rdi, 128
+#else
+        add     rdi, 64
+#endif
         add     rbx, 512
         mov     qword ptr [rbp+0x50], rbx
         sub     rsi, 16
@@ -1107,6 +1155,7 @@ blake3_hash_many_avx512:
         vpbroadcastd ymm5, dword ptr [rcx+0x14]
         vpbroadcastd ymm6, dword ptr [rcx+0x18]
         vpbroadcastd ymm7, dword ptr [rcx+0x1C]
+#ifndef __ILP32__
         mov     r8, qword ptr [rdi]
         mov     r9, qword ptr [rdi+0x8]
         mov     r10, qword ptr [rdi+0x10]
@@ -1115,6 +1164,16 @@ blake3_hash_many_avx512:
         mov     r13, qword ptr [rdi+0x28]
         mov     r14, qword ptr [rdi+0x30]
         mov     r15, qword ptr [rdi+0x38]
+#else
+        mov     r8d, dword ptr [rdi]
+        mov     r9d, dword ptr [rdi+0x4]
+        mov     r10d, dword ptr [rdi+0x8]
+        mov     r11d, dword ptr [rdi+0xc]
+        mov     r12d, dword ptr [rdi+0x10]
+        mov     r13d, dword ptr [rdi+0x14]
+        mov     r14d, dword ptr [rdi+0x18]
+        mov     r15d, dword ptr [rdi+0x1c]
+#endif
         movzx   eax, byte ptr [rbp+0x38]
         movzx   ebx, byte ptr [rbp+0x40]
         or      eax, ebx
@@ -2037,7 +2096,11 @@ blake3_hash_many_avx512:
         vmovdqa ymmword ptr [rsp+0x2*0x20], ymm2
         add     rbx, 256
         mov     qword ptr [rbp+0x50], rbx
+#ifndef __ILP32__
         add     rdi, 64
+#else
+        add     rdi, 32
+#endif
         sub     rsi, 8
 3:
         mov     rbx, qword ptr [rbp+0x50]
@@ -2060,10 +2123,17 @@ blake3_hash_many_avx512:
         kmovw   k2, eax
         vpblendmd zmm13 {k2}, zmm13, zmm12
         vbroadcasti32x4 zmm15, xmmword ptr [BLAKE3_IV+rip]
+#ifndef __ILP32__
         mov     r8, qword ptr [rdi]
         mov     r9, qword ptr [rdi+0x8]
         mov     r10, qword ptr [rdi+0x10]
         mov     r11, qword ptr [rdi+0x18]
+#else
+        mov     r8d, dword ptr [rdi]
+        mov     r9d, dword ptr [rdi+0x4]
+        mov     r10d, dword ptr [rdi+0x8]
+        mov     r11d, dword ptr [rdi+0xc]
+#endif
         mov     eax, 43690
         kmovw   k3, eax
         mov     eax, 34952
@@ -2177,7 +2247,11 @@ blake3_hash_many_avx512:
         vmovdqa xmmword ptr [rsp], xmm0
         vmovdqa xmmword ptr [rsp+0x40], xmm2
         add     rbx, 128
+#ifndef __ILP32__
         add     rdi, 32
+#else
+        add     rdi, 16
+#endif
         sub     rsi, 4
 3:
         test    esi, 0x2
@@ -2191,8 +2265,13 @@ blake3_hash_many_avx512:
         vpinsrd xmm14, xmm14, dword ptr [rsp+0x44], 1
         vpinsrd xmm14, xmm14, dword ptr [BLAKE3_BLOCK_LEN+rip], 2
         vinserti128 ymm13, ymm13, xmm14, 0x01
+#ifndef __ILP32__
         mov     r8, qword ptr [rdi]
         mov     r9, qword ptr [rdi+0x8]
+#else
+        mov     r8d, dword ptr [rdi]
+        mov     r9d, dword ptr [rdi+0x4]
+#endif
         movzx   eax, byte ptr [rbp+0x40]
         or      eax, r13d
         xor     edx, edx
@@ -2290,7 +2369,11 @@ blake3_hash_many_avx512:
         vmovdqa xmmword ptr [rsp], xmm0
         vmovdqa xmmword ptr [rsp+0x4*0x10], xmm2
         add     rbx, 64
+#ifndef __ILP32__
         add     rdi, 16
+#else
+        add     rdi, 8
+#endif
         sub     rsi, 2
 3:
         test    esi, 0x1
@@ -2301,7 +2384,11 @@ blake3_hash_many_avx512:
         vpinsrd xmm14, xmm14, dword ptr [rsp+0x40], 1
         vpinsrd xmm14, xmm14, dword ptr [BLAKE3_BLOCK_LEN+rip], 2
         vmovdqa xmm15, xmmword ptr [BLAKE3_IV+rip]
+#ifndef __ILP32__
         mov     r8, qword ptr [rdi]
+#else
+        mov     r8d, dword ptr [rdi]
+#endif
         movzx   eax, byte ptr [rbp+0x40]
         or      eax, r13d
         xor     edx, edx
