@@ -16,6 +16,12 @@
 #else
 #undef IS_X86 /* Unimplemented! */
 #endif
+#else
+#if defined(_MSC_VER)
+//
+#elif defined(__linux__)
+#include <sys/auxv.h>
+#endif
 #endif
 
 #if !defined(BLAKE3_ATOMICS)
@@ -90,7 +96,17 @@ static void cpuidex(uint32_t out[4], uint32_t id, uint32_t sid) {
 }
 
 
+#if defined(IS_AARCH64)
+static int has_neon(void) {
+#if defined(__linux__)
+  return getauxval(AT_HWCAP) & (1 << 1);
+#endif
+  return 1;
+}
+#endif
+
 enum cpu_feature {
+#if defined(IS_X86)
   SSE2 = 1 << 0,
   SSSE3 = 1 << 1,
   SSE41 = 1 << 2,
@@ -98,6 +114,9 @@ enum cpu_feature {
   AVX2 = 1 << 4,
   AVX512F = 1 << 5,
   AVX512VL = 1 << 6,
+#else
+  NEON = 1 << 0,
+#endif
   /* ... */
   UNDEFINED = 1 << 30
 };
@@ -158,8 +177,10 @@ static
     ATOMIC_STORE(g_cpu_features, features);
     return features;
 #else
-    /* How to detect NEON? */
-    return 0;
+    enum cpu_feature features = 0;
+    if (has_neon())
+      features |= NEON;
+    return features;
 #endif
   }
 }
@@ -289,9 +310,12 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
 #endif
 
 #if BLAKE3_USE_NEON == 1
-  blake3_hash_many_neon(inputs, num_inputs, blocks, key, counter,
+  const enum cpu_feature features = get_cpu_features();
+  if (features & NEON) {
+    blake3_hash_many_neon(inputs, num_inputs, blocks, key, counter,
                         increment_counter, flags, flags_start, flags_end, out);
-  return;
+    return;
+  }
 #endif
 
   blake3_hash_many_portable(inputs, num_inputs, blocks, key, counter,
