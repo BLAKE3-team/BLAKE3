@@ -223,18 +223,28 @@ size_t blake3_simd_degree(void);
 BLAKE3_PRIVATE size_t blake3_compress_subtree_wide(const uint8_t *input, size_t input_len,
                                                    const uint32_t key[8],
                                                    uint64_t chunk_counter, uint8_t flags,
-                                                   uint8_t *out, bool use_tbb);
+                                                   uint8_t *out, bool use_threads);
 
 #if defined(BLAKE3_USE_TBB)
 BLAKE3_PRIVATE void blake3_compress_subtree_wide_join_tbb(
     // shared params
-    const uint32_t key[8], uint8_t flags, bool use_tbb,
+    const uint32_t key[8], uint8_t flags, bool use_threads,
     // left-hand side params
     const uint8_t *l_input, size_t l_input_len, uint64_t l_chunk_counter,
     uint8_t *l_cvs, size_t *l_n,
     // right-hand side params
     const uint8_t *r_input, size_t r_input_len, uint64_t r_chunk_counter,
     uint8_t *r_cvs, size_t *r_n) NOEXCEPT;
+#elif defined(BLAKE3_USE_PTHREAD)
+BLAKE3_PRIVATE void blake3_compress_subtree_wide_join_pthread(
+    // shared params
+    const uint32_t key[8], uint8_t flags, bool use_threads,
+    // left-hand side params
+    const uint8_t *l_input, size_t l_input_len, uint64_t l_chunk_counter,
+    uint8_t *l_cvs, size_t *l_n,
+    // right-hand side params
+    const uint8_t *r_input, size_t r_input_len, uint64_t r_chunk_counter,
+    uint8_t *r_cvs, size_t *r_n);
 #endif
 
 // Declarations for implementation-specific functions.
