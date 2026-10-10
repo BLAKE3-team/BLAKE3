@@ -341,6 +341,24 @@ gcc -shared -O3 -o libblake3.so -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_A
     -DBLAKE3_NO_AVX512 blake3.c blake3_dispatch.c blake3_portable.c
 ```
 
+## Installing BLAKE3 using dependency management tools
+
+If you are using a dependency management tool, you can also install BLAKE3 using the respective package manager,
+instead of compiling it from source code.
+
+### Conan
+
+You can download and install BLAKE3 using the [Conan](https://conan.io/) dependency manager:
+
+```
+conan install -r conancenter --requires="blake3/[*]" --build=missing
+```
+
+The BLAKE3 package in Conan Center is maintained by
+[ConanCenterIndex](https://github.com/conan-io/conan-center-index) community.
+If the version is out of date or the package does not work,
+please create an issue or pull request on the [Conan Center Index repository](https://github.com/conan-io/conan-center-index).
+
 ### ARM NEON
 
 The NEON implementation is enabled by default on AArch64, but not on
@@ -358,7 +376,7 @@ To explicitiy disable using NEON instructions on AArch64, set
 
 ```bash
 gcc -shared -O3 -o libblake3.so -DBLAKE3_USE_NEON=0 blake3.c blake3_dispatch.c \
-    blake3_portable.c 
+    blake3_portable.c
 ```
 
 Note that on some targets (ARMv7 in particular), extra flags may be
