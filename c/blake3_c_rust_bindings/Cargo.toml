@@ -18,6 +18,8 @@ prefer_intrinsics = []
 neon = []
 # Enable TBB-based multithreading.
 tbb = []
+# Enable OpenMP-based multithreading.
+openmp = ["dep:openmp-sys"]
 
 [dev-dependencies]
 arrayvec = { version = "0.7.0", default-features = false }
@@ -29,3 +31,6 @@ reference_impl = { path = "../../reference_impl" }
 [build-dependencies]
 cc = "1.0.48"
 ignore = "0.4.23"
+
+[dependencies]
+openmp-sys = { version = "1.2.3", optional = true }
