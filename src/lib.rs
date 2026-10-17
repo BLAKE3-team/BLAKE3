@@ -1008,6 +1008,25 @@ pub fn derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
         .0
 }
 
+/// Derive a 32-byte key using a context encoded as arbitrary bytes.
+///
+/// This is equivalent to [`derive_key`] for UTF-8 contexts, but also supports
+/// interoperability with protocols that specify a binary context. New protocols
+/// should prefer a globally unique, application-specific context string as
+/// described in [`derive_key`]. The same key-material requirements apply, and
+/// this function must not be used as a password hash.
+///
+/// No encoding or normalization is applied to `context`.
+pub fn derive_key_bytes(context: &[u8], key_material: &[u8]) -> [u8; OUT_LEN] {
+    let context_key = hash_all_at_once::<join::SerialJoin>(context, IV, DERIVE_KEY_CONTEXT)
+        .root_hash()
+        .0;
+    let words = platform::words_from_le_bytes_32(&context_key);
+    hash_all_at_once::<join::SerialJoin>(key_material, &words, DERIVE_KEY_MATERIAL)
+        .root_hash()
+        .0
+}
+
 fn parent_node_output(
     left_child: &CVBytes,
     right_child: &CVBytes,
