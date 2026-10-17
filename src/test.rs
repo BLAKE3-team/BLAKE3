@@ -2,6 +2,58 @@ use crate::{BLOCK_LEN, CHUNK_LEN, CVBytes, CVWords, IncrementCounter, OUT_LEN};
 use arrayvec::ArrayVec;
 use rand::prelude::*;
 
+#[test]
+fn test_derive_key_bytes() {
+    let material: Vec<u8> = (0..96).collect();
+    for context in ["", "VLESS", "application context", "\u{1f30d}"] {
+        assert_eq!(
+            crate::derive_key(context, &material),
+            crate::derive_key_bytes(context.as_bytes(), &material),
+        );
+    }
+
+    // Generated with lukechampine.com/blake3 v1.4.1 DeriveKey, using
+    // context[i] = byte(i * 137), material[i] = byte(i), and a 32-byte output.
+    for (length, expected) in [
+        (
+            0,
+            "5a57b0e5c15726d18f697e8d6738d7a216de67109f18663de7b1d10d1f39d0b3",
+        ),
+        (
+            16,
+            "947f265e049f3d8d5dec23995d425ce4734ccdc7e94b90c9c63fce288231d9c2",
+        ),
+        (
+            32,
+            "123a96d2697fdfa75ccb44a2ebdfd10414583ebff276e0ec717fa2b02473cd9a",
+        ),
+        (
+            96,
+            "78f3bfd7aa6a717ac4aaa8b28c2d0658ec18620f7c60540a0b2424078afbf0e3",
+        ),
+        (
+            1024,
+            "f066cb9d96302bd319b9655940e0cf9688235b4e078c379889bd05f209f3319b",
+        ),
+        (
+            1216,
+            "e6d45994c3c953b436240bee129ecc2a0e126b87468c7bdd311b2b382363ef62",
+        ),
+        (
+            4096,
+            "01498b828deaa79c72fc10ab73ef846646ba4c9002fa0550a8eb1343f1ec8506",
+        ),
+    ] {
+        let context: Vec<u8> = (0..length).map(|i| (i * 137) as u8).collect();
+        assert_eq!(
+            crate::Hash::from(crate::derive_key_bytes(&context, &material))
+                .to_hex()
+                .as_str(),
+            expected,
+        );
+    }
+}
+
 // Interesting input lengths to run tests on.
 pub const TEST_CASES: &[usize] = &[
     0,
