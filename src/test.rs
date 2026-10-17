@@ -1096,6 +1096,24 @@ mod guts_tests {
 }
 
 #[test]
+fn test_xof_many_platform() {
+    fn xof_many(
+        cv: &CVWords,
+        block: &[u8; BLOCK_LEN],
+        block_len: u8,
+        counter: u64,
+        flags: u8,
+        out: &mut [u8],
+    ) {
+        crate::platform::Platform::detect().xof_many(cv, block, block_len, counter, flags, out);
+    }
+
+    // Also exercise the dispatch fallback on targets like Windows and Cygwin,
+    // where the AVX-512 assembly doesn't implement xof_many.
+    test_xof_many_fn(xof_many);
+}
+
+#[test]
 // There's a debug_assert that we fail for non-multiple-of-64 lengths.
 #[cfg_attr(debug_assertions, should_panic)]
 fn test_xof_many_rounds_down() {

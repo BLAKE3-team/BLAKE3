@@ -48,7 +48,11 @@ fn is_x86_64() -> bool {
 }
 
 fn is_windows_target() -> bool {
-    env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows"
+    // Cygwin uses the Windows x86-64 ABI, despite its Unix target family.
+    matches!(
+        env::var("CARGO_CFG_TARGET_OS").unwrap().as_str(),
+        "windows" | "cygwin"
+    )
 }
 
 fn use_msvc_asm() -> bool {
