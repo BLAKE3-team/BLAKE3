@@ -335,6 +335,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // https://doc.rust-lang.org/cargo/reference/build-scripts.html#outputs-of-the-build-script
         println!("cargo::rustc-check-cfg=cfg({cfg_name}, values(none()))");
     }
+    println!("cargo::rustc-check-cfg=cfg(target_os, values(\"cygwin\"))");
 
     if is_pure() && is_neon() {
         panic!("It doesn't make sense to enable both \"pure\" and \"neon\".");
