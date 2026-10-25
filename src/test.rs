@@ -842,6 +842,8 @@ fn test_zeroize() {
         initial_chunk_counter: 42,
         key: [42; 8],
         cv_stack: [[42; 32]; { crate::MAX_DEPTH + 1 }].into(),
+        #[cfg(feature = "mmap")]
+        mmap_threshold: 42,
     };
     hasher.zeroize();
     assert_eq!(hasher.chunk_state.cv, [0; 8]);
@@ -857,6 +859,8 @@ fn test_zeroize() {
     assert_eq!(hasher.initial_chunk_counter, 0);
     assert_eq!(hasher.key, [0; 8]);
     assert_eq!(&*hasher.cv_stack, &[[0u8; 32]; 0]);
+    #[cfg(feature = "mmap")]
+    assert_eq!(hasher.mmap_threshold, 0);
 
     let mut output_reader = crate::OutputReader {
         inner: crate::Output {
