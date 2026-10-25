@@ -1120,6 +1120,10 @@ pub struct Hasher {
     // we don't know whether more input is coming. This is different from how
     // the reference implementation does things.
     cv_stack: ArrayVec<CVBytes, { MAX_DEPTH + 1 }>,
+    // The minimum file size, in bytes, for which `update_mmap` and `update_mmap_rayon` use memory
+    // mapping. Configurable via `set_mmap_threshold`; defaults to `io::DEFAULT_MMAP_THRESHOLD`.
+    #[cfg(feature = "mmap")]
+    mmap_threshold: u64,
 }
 
 impl Hasher {
@@ -1129,6 +1133,8 @@ impl Hasher {
             chunk_state: ChunkState::new(key, 0, flags, Platform::detect()),
             initial_chunk_counter: 0,
             cv_stack: ArrayVec::new(),
+            #[cfg(feature = "mmap")]
+            mmap_threshold: io::DEFAULT_MMAP_THRESHOLD,
         }
     }
 
@@ -1589,7 +1595,7 @@ impl Hasher {
     #[cfg(feature = "mmap")]
     pub fn update_mmap(&mut self, path: impl AsRef<std::path::Path>) -> std::io::Result<&mut Self> {
         let mut file = std::fs::File::open(path.as_ref())?;
-        if let Some(mmap) = io::maybe_mmap_file(&mut file)? {
+        if let Some(mmap) = io::maybe_mmap_file(&mut file, self.mmap_threshold)? {
             self.update(&mmap);
         } else {
             io::copy_wide(&file, self)?;
@@ -1644,12 +1650,44 @@ impl Hasher {
         path: impl AsRef<std::path::Path>,
     ) -> std::io::Result<&mut Self> {
         let mut file = std::fs::File::open(path.as_ref())?;
-        if let Some(mmap) = io::maybe_mmap_file(&mut file)? {
+        if let Some(mmap) = io::maybe_mmap_file(&mut file, self.mmap_threshold)? {
             self.update_rayon(&mmap);
         } else {
             io::copy_wide(&file, self)?;
         }
         Ok(self)
+    }
+
+    /// Set the minimum file size, in bytes, for which [`update_mmap`](Hasher::update_mmap) and
+    /// [`update_mmap_rayon`](Hasher::update_mmap_rayon) use memory mapping. Files smaller than this
+    /// are read with ordinary IO instead, which is usually faster for small inputs.
+    ///
+    /// The default is 16 KiB. Memory mapping has a fixed setup cost, so a larger threshold can be
+    /// worthwhile for callers that mostly hash small files, while a smaller threshold maps more
+    /// aggressively. A threshold of 0 maps every non-empty file.
+    ///
+    /// This setting only affects the `update_mmap*` methods and is ignored by the streaming
+    /// [`update`](Hasher::update) method. It requires the `mmap` Cargo feature, which is disabled
+    /// by default but enabled on [docs.rs](https://docs.rs).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use std::io;
+    /// # use std::path::Path;
+    /// # fn main() -> io::Result<()> {
+    /// let path = Path::new("file.dat");
+    /// let mut hasher = blake3::Hasher::new();
+    /// hasher.set_mmap_threshold(1 << 20); // only mmap files of at least 1 MiB
+    /// hasher.update_mmap(path)?;
+    /// println!("{}", hasher.finalize());
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "mmap")]
+    pub fn set_mmap_threshold(&mut self, threshold: u64) -> &mut Self {
+        self.mmap_threshold = threshold;
+        self
     }
 }
 
@@ -1694,12 +1732,16 @@ impl Zeroize for Hasher {
             chunk_state,
             initial_chunk_counter,
             cv_stack,
+            #[cfg(feature = "mmap")]
+            mmap_threshold,
         } = self;
 
         key.zeroize();
         chunk_state.zeroize();
         initial_chunk_counter.zeroize();
         cv_stack.zeroize();
+        #[cfg(feature = "mmap")]
+        mmap_threshold.zeroize();
     }
 }
 
