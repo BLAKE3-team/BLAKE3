@@ -58,8 +58,6 @@ struct Inner {
     num_threads: Option<usize>,
 
     /// Disable memory mapping
-    ///
-    /// Currently this also disables multithreading.
     #[arg(long)]
     no_mmap: bool,
 
@@ -179,11 +177,11 @@ fn hash_path(args: &Args, path: &Path) -> anyhow::Result<blake3::OutputReader> {
         if args.keyed() {
             bail!("Cannot open `-` in keyed mode");
         }
-        hasher.update_reader(io::stdin().lock())?;
+        hasher.update_reader_rayon(io::stdin().lock())?;
     } else if args.no_mmap() {
-        hasher.update_reader(File::open(path)?)?;
+        hasher.update_reader_rayon(File::open(path)?)?;
     } else {
-        // The fast path: Try to mmap the file and hash it with multiple threads.
+        // The memory-mapped fast path: Try to mmap the file and hash it with multiple threads.
         hasher.update_mmap_rayon(path)?;
     }
     let mut output_reader = hasher.finalize_xof();

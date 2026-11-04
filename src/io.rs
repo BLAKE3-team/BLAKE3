@@ -24,6 +24,83 @@ pub(crate) fn copy_wide(mut reader: impl io::Read, hasher: &mut crate::Hasher) -
     }
 }
 
+#[cfg(feature = "rayon")]
+const STACK_BUF_LEN: usize = 65536; // 64 KiB
+
+#[cfg(feature = "rayon")]
+const RAYON_BUF_LEN: usize = 4 * 1024 * 1024; // 4 MiB
+
+#[cfg(feature = "rayon")]
+fn read_full(reader: &mut impl io::Read, mut buf: &mut [u8]) -> io::Result<usize> {
+    let mut total = 0;
+    while !buf.is_empty() {
+        match reader.read(buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                total += n;
+                buf = &mut buf[n..];
+            }
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(total)
+}
+
+#[cfg(feature = "rayon")]
+pub(crate) fn copy_wide_rayon(
+    mut reader: impl io::Read,
+    hasher: &mut crate::Hasher,
+) -> io::Result<u64> {
+    let mut stack_buf = [0; STACK_BUF_LEN];
+    let n = read_full(&mut reader, &mut stack_buf)?;
+    if n < stack_buf.len() {
+        // The entire input fit within the stack buffer. Avoid allocating a heap buffer
+        // or invoking Rayon.
+        hasher.update(&stack_buf[..n]);
+        return Ok(n as u64);
+    }
+
+    // Probe one more chunk on the stack before allocating a multi-megabyte heap buffer,
+    // so inputs of exactly 64 KiB don't allocate 4 MiB just to observe EOF.
+    let mut probe_buf = [0; crate::CHUNK_LEN];
+    let probe_n = read_full(&mut reader, &mut probe_buf)?;
+    if probe_n < probe_buf.len() {
+        hasher.update(&stack_buf);
+        hasher.update(&probe_buf[..probe_n]);
+        return Ok((n + probe_n) as u64);
+    }
+
+    // Copy the initial bytes into the heap buffer rather than hashing them upfront.
+    // Hashing upfront would leave the Hasher at an unaligned byte offset, permanently
+    // misaligning every subsequent 4 MiB buffer in the BLAKE3 Merkle tree and forcing
+    // `update_rayon` to split each 4 MiB slice into multiple smaller subtrees.
+    let mut heap_buf = vec![0; RAYON_BUF_LEN];
+    let prefix_len = stack_buf.len() + probe_buf.len();
+    heap_buf[..stack_buf.len()].copy_from_slice(&stack_buf);
+    heap_buf[stack_buf.len()..prefix_len].copy_from_slice(&probe_buf);
+
+    let mut filled = prefix_len;
+    let mut total = 0;
+    loop {
+        let n = filled + read_full(&mut reader, &mut heap_buf[filled..])?;
+        filled = 0;
+        if n == 0 {
+            return Ok(total);
+        }
+        // Multithreading has overhead on small inputs; only use Rayon for > 64 KiB.
+        if n <= STACK_BUF_LEN {
+            hasher.update(&heap_buf[..n]);
+        } else {
+            hasher.update_rayon(&heap_buf[..n]);
+        }
+        total += n as u64;
+        if n < RAYON_BUF_LEN {
+            return Ok(total);
+        }
+    }
+}
+
 // Try to `mmap` a file, unless it's short enough that ordinary reads are faster, currently 16 KiB.
 // Return `Ok(None)` if mapping fails or if we don't attempt it. Only return `Err` for unexpected
 // failures that could leave the `File` in a bad state.
