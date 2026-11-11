@@ -326,7 +326,7 @@ size_t blake3_simd_degree(void) {
 #endif
 #endif
 #if BLAKE3_USE_NEON == 1
-  return 4;
+  return MAX_SIMD_DEGREE;
 #endif
   return 1;
 }

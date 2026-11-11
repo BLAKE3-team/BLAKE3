@@ -32,9 +32,10 @@ pub unsafe fn hash_many<const N: usize>(
 }
 
 // blake3_neon.c normally depends on blake3_portable.c, because the NEON
-// implementation only provides 4x compression, and it relies on the portable
-// implementation for 1x compression. However, we expose the portable Rust
-// implementation here instead, to avoid linking in unnecessary code.
+// implementation only provides 4x compression (and 8x on AArch64), and it
+// relies on the portable implementation for 1x compression. However, we
+// expose the portable Rust implementation here instead, to avoid linking in
+// unnecessary code.
 #[unsafe(no_mangle)]
 pub extern "C" fn blake3_compress_in_place_portable(
     cv: *mut u32,
