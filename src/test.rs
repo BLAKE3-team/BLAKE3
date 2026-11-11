@@ -118,7 +118,9 @@ pub fn test_hash_many_fn(
     // - u32::MAX: The low word of the counter overflows for all inputs except the first.
     // - i32::MAX: *No* overflow. But carry bugs in tricky SIMD code can screw this up, if you XOR
     //   when you're supposed to ANDNOT...
-    let initial_counters = [0, u32::MAX as u64, i32::MAX as u64];
+    // - u32::MAX - 3: The low word of the counter overflows starting with the fifth input, which
+    //   is the first input of the second half in 8x implementations made of two 4x halves.
+    let initial_counters = [0, u32::MAX as u64, i32::MAX as u64, u32::MAX as u64 - 3];
     for counter in initial_counters {
         #[cfg(feature = "std")]
         dbg!(counter);

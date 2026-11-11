@@ -243,6 +243,21 @@ INLINE void load_counters4(uint64_t counter, bool increment_counter,
       counter_high(counter + (mask & 2)), counter_high(counter + (mask & 3)));
 }
 
+INLINE void store_cvs4(uint32x4_t h_vecs[8], uint8_t *out) {
+  transpose_vecs_128(&h_vecs[0]);
+  transpose_vecs_128(&h_vecs[4]);
+  // The first four vecs now contain the first half of each output, and the
+  // second four vecs contain the second half of each output.
+  storeu_128(h_vecs[0], &out[0 * sizeof(uint32x4_t)]);
+  storeu_128(h_vecs[4], &out[1 * sizeof(uint32x4_t)]);
+  storeu_128(h_vecs[1], &out[2 * sizeof(uint32x4_t)]);
+  storeu_128(h_vecs[5], &out[3 * sizeof(uint32x4_t)]);
+  storeu_128(h_vecs[2], &out[4 * sizeof(uint32x4_t)]);
+  storeu_128(h_vecs[6], &out[5 * sizeof(uint32x4_t)]);
+  storeu_128(h_vecs[3], &out[6 * sizeof(uint32x4_t)]);
+  storeu_128(h_vecs[7], &out[7 * sizeof(uint32x4_t)]);
+}
+
 static void blake3_hash4_neon(const uint8_t *const *inputs, size_t blocks,
                               const uint32_t key[8], uint64_t counter,
                               bool increment_counter, uint8_t flags,
@@ -291,19 +306,249 @@ static void blake3_hash4_neon(const uint8_t *const *inputs, size_t blocks,
     block_flags = flags;
   }
 
-  transpose_vecs_128(&h_vecs[0]);
-  transpose_vecs_128(&h_vecs[4]);
-  // The first four vecs now contain the first half of each output, and the
-  // second four vecs contain the second half of each output.
-  storeu_128(h_vecs[0], &out[0 * sizeof(uint32x4_t)]);
-  storeu_128(h_vecs[4], &out[1 * sizeof(uint32x4_t)]);
-  storeu_128(h_vecs[1], &out[2 * sizeof(uint32x4_t)]);
-  storeu_128(h_vecs[5], &out[3 * sizeof(uint32x4_t)]);
-  storeu_128(h_vecs[2], &out[4 * sizeof(uint32x4_t)]);
-  storeu_128(h_vecs[6], &out[5 * sizeof(uint32x4_t)]);
-  storeu_128(h_vecs[3], &out[6 * sizeof(uint32x4_t)]);
-  storeu_128(h_vecs[7], &out[7 * sizeof(uint32x4_t)]);
+  store_cvs4(h_vecs, out);
 }
+
+/*
+ * ----------------------------------------------------------------------------
+ * hash8_neon
+ * ----------------------------------------------------------------------------
+ */
+
+// hash8 hashes two groups of four inputs at once, interleaving their
+// instructions. This keeps more NEON pipelines busy than hash4 does, but needs
+// more than 16 vector registers. See MAX_SIMD_DEGREE.
+#if MAX_SIMD_DEGREE >= 8
+
+INLINE uint32x4x2_t add_128x2(uint32x4x2_t a, uint32x4x2_t b) {
+  uint32x4x2_t r = {{add_128(a.val[0], b.val[0]), add_128(a.val[1], b.val[1])}};
+  return r;
+}
+
+INLINE uint32x4x2_t xor_128x2(uint32x4x2_t a, uint32x4x2_t b) {
+  uint32x4x2_t r = {{xor_128(a.val[0], b.val[0]), xor_128(a.val[1], b.val[1])}};
+  return r;
+}
+
+INLINE uint32x4x2_t set1_128x2(uint32_t x) {
+  uint32x4x2_t r = {{set1_128(x), set1_128(x)}};
+  return r;
+}
+
+INLINE uint32x4x2_t rot16_128x2(uint32x4x2_t x) {
+  uint32x4x2_t r = {{rot16_128(x.val[0]), rot16_128(x.val[1])}};
+  return r;
+}
+
+INLINE uint32x4x2_t rot12_128x2(uint32x4x2_t x) {
+  uint32x4x2_t r = {{rot12_128(x.val[0]), rot12_128(x.val[1])}};
+  return r;
+}
+
+INLINE uint32x4x2_t rot8_128x2(uint32x4x2_t x) {
+  uint32x4x2_t r = {{rot8_128(x.val[0]), rot8_128(x.val[1])}};
+  return r;
+}
+
+INLINE uint32x4x2_t rot7_128x2(uint32x4x2_t x) {
+  uint32x4x2_t r = {{rot7_128(x.val[0]), rot7_128(x.val[1])}};
+  return r;
+}
+
+INLINE void round_fn8(uint32x4x2_t v[16], uint32x4x2_t m[16], size_t r) {
+  v[0] = add_128x2(v[0], m[(size_t)MSG_SCHEDULE[r][0]]);
+  v[1] = add_128x2(v[1], m[(size_t)MSG_SCHEDULE[r][2]]);
+  v[2] = add_128x2(v[2], m[(size_t)MSG_SCHEDULE[r][4]]);
+  v[3] = add_128x2(v[3], m[(size_t)MSG_SCHEDULE[r][6]]);
+  v[0] = add_128x2(v[0], v[4]);
+  v[1] = add_128x2(v[1], v[5]);
+  v[2] = add_128x2(v[2], v[6]);
+  v[3] = add_128x2(v[3], v[7]);
+  v[12] = xor_128x2(v[12], v[0]);
+  v[13] = xor_128x2(v[13], v[1]);
+  v[14] = xor_128x2(v[14], v[2]);
+  v[15] = xor_128x2(v[15], v[3]);
+  v[12] = rot16_128x2(v[12]);
+  v[13] = rot16_128x2(v[13]);
+  v[14] = rot16_128x2(v[14]);
+  v[15] = rot16_128x2(v[15]);
+  v[8] = add_128x2(v[8], v[12]);
+  v[9] = add_128x2(v[9], v[13]);
+  v[10] = add_128x2(v[10], v[14]);
+  v[11] = add_128x2(v[11], v[15]);
+  v[4] = xor_128x2(v[4], v[8]);
+  v[5] = xor_128x2(v[5], v[9]);
+  v[6] = xor_128x2(v[6], v[10]);
+  v[7] = xor_128x2(v[7], v[11]);
+  v[4] = rot12_128x2(v[4]);
+  v[5] = rot12_128x2(v[5]);
+  v[6] = rot12_128x2(v[6]);
+  v[7] = rot12_128x2(v[7]);
+  v[0] = add_128x2(v[0], m[(size_t)MSG_SCHEDULE[r][1]]);
+  v[1] = add_128x2(v[1], m[(size_t)MSG_SCHEDULE[r][3]]);
+  v[2] = add_128x2(v[2], m[(size_t)MSG_SCHEDULE[r][5]]);
+  v[3] = add_128x2(v[3], m[(size_t)MSG_SCHEDULE[r][7]]);
+  v[0] = add_128x2(v[0], v[4]);
+  v[1] = add_128x2(v[1], v[5]);
+  v[2] = add_128x2(v[2], v[6]);
+  v[3] = add_128x2(v[3], v[7]);
+  v[12] = xor_128x2(v[12], v[0]);
+  v[13] = xor_128x2(v[13], v[1]);
+  v[14] = xor_128x2(v[14], v[2]);
+  v[15] = xor_128x2(v[15], v[3]);
+  v[12] = rot8_128x2(v[12]);
+  v[13] = rot8_128x2(v[13]);
+  v[14] = rot8_128x2(v[14]);
+  v[15] = rot8_128x2(v[15]);
+  v[8] = add_128x2(v[8], v[12]);
+  v[9] = add_128x2(v[9], v[13]);
+  v[10] = add_128x2(v[10], v[14]);
+  v[11] = add_128x2(v[11], v[15]);
+  v[4] = xor_128x2(v[4], v[8]);
+  v[5] = xor_128x2(v[5], v[9]);
+  v[6] = xor_128x2(v[6], v[10]);
+  v[7] = xor_128x2(v[7], v[11]);
+  v[4] = rot7_128x2(v[4]);
+  v[5] = rot7_128x2(v[5]);
+  v[6] = rot7_128x2(v[6]);
+  v[7] = rot7_128x2(v[7]);
+
+  v[0] = add_128x2(v[0], m[(size_t)MSG_SCHEDULE[r][8]]);
+  v[1] = add_128x2(v[1], m[(size_t)MSG_SCHEDULE[r][10]]);
+  v[2] = add_128x2(v[2], m[(size_t)MSG_SCHEDULE[r][12]]);
+  v[3] = add_128x2(v[3], m[(size_t)MSG_SCHEDULE[r][14]]);
+  v[0] = add_128x2(v[0], v[5]);
+  v[1] = add_128x2(v[1], v[6]);
+  v[2] = add_128x2(v[2], v[7]);
+  v[3] = add_128x2(v[3], v[4]);
+  v[15] = xor_128x2(v[15], v[0]);
+  v[12] = xor_128x2(v[12], v[1]);
+  v[13] = xor_128x2(v[13], v[2]);
+  v[14] = xor_128x2(v[14], v[3]);
+  v[15] = rot16_128x2(v[15]);
+  v[12] = rot16_128x2(v[12]);
+  v[13] = rot16_128x2(v[13]);
+  v[14] = rot16_128x2(v[14]);
+  v[10] = add_128x2(v[10], v[15]);
+  v[11] = add_128x2(v[11], v[12]);
+  v[8] = add_128x2(v[8], v[13]);
+  v[9] = add_128x2(v[9], v[14]);
+  v[5] = xor_128x2(v[5], v[10]);
+  v[6] = xor_128x2(v[6], v[11]);
+  v[7] = xor_128x2(v[7], v[8]);
+  v[4] = xor_128x2(v[4], v[9]);
+  v[5] = rot12_128x2(v[5]);
+  v[6] = rot12_128x2(v[6]);
+  v[7] = rot12_128x2(v[7]);
+  v[4] = rot12_128x2(v[4]);
+  v[0] = add_128x2(v[0], m[(size_t)MSG_SCHEDULE[r][9]]);
+  v[1] = add_128x2(v[1], m[(size_t)MSG_SCHEDULE[r][11]]);
+  v[2] = add_128x2(v[2], m[(size_t)MSG_SCHEDULE[r][13]]);
+  v[3] = add_128x2(v[3], m[(size_t)MSG_SCHEDULE[r][15]]);
+  v[0] = add_128x2(v[0], v[5]);
+  v[1] = add_128x2(v[1], v[6]);
+  v[2] = add_128x2(v[2], v[7]);
+  v[3] = add_128x2(v[3], v[4]);
+  v[15] = xor_128x2(v[15], v[0]);
+  v[12] = xor_128x2(v[12], v[1]);
+  v[13] = xor_128x2(v[13], v[2]);
+  v[14] = xor_128x2(v[14], v[3]);
+  v[15] = rot8_128x2(v[15]);
+  v[12] = rot8_128x2(v[12]);
+  v[13] = rot8_128x2(v[13]);
+  v[14] = rot8_128x2(v[14]);
+  v[10] = add_128x2(v[10], v[15]);
+  v[11] = add_128x2(v[11], v[12]);
+  v[8] = add_128x2(v[8], v[13]);
+  v[9] = add_128x2(v[9], v[14]);
+  v[5] = xor_128x2(v[5], v[10]);
+  v[6] = xor_128x2(v[6], v[11]);
+  v[7] = xor_128x2(v[7], v[8]);
+  v[4] = xor_128x2(v[4], v[9]);
+  v[5] = rot7_128x2(v[5]);
+  v[6] = rot7_128x2(v[6]);
+  v[7] = rot7_128x2(v[7]);
+  v[4] = rot7_128x2(v[4]);
+}
+
+INLINE void transpose_msg_vecs8(const uint8_t *const *inputs,
+                                size_t block_offset, uint32x4x2_t out[16]) {
+  uint32x4_t lo[16];
+  uint32x4_t hi[16];
+  transpose_msg_vecs4(&inputs[0], block_offset, lo);
+  transpose_msg_vecs4(&inputs[4], block_offset, hi);
+  for (size_t i = 0; i < 16; i++) {
+    out[i].val[0] = lo[i];
+    out[i].val[1] = hi[i];
+  }
+}
+
+static void blake3_hash8_neon(const uint8_t *const *inputs, size_t blocks,
+                              const uint32_t key[8], uint64_t counter,
+                              bool increment_counter, uint8_t flags,
+                              uint8_t flags_start, uint8_t flags_end,
+                              uint8_t *out) {
+  uint32x4x2_t h_vecs[8] = {
+      set1_128x2(key[0]), set1_128x2(key[1]), set1_128x2(key[2]),
+      set1_128x2(key[3]), set1_128x2(key[4]), set1_128x2(key[5]),
+      set1_128x2(key[6]), set1_128x2(key[7]),
+  };
+  uint32x4x2_t counter_low_vec, counter_high_vec;
+  load_counters4(counter, increment_counter, &counter_low_vec.val[0],
+                 &counter_high_vec.val[0]);
+  load_counters4(counter + (increment_counter ? 4 : 0), increment_counter,
+                 &counter_low_vec.val[1], &counter_high_vec.val[1]);
+  uint8_t block_flags = flags | flags_start;
+
+  for (size_t block = 0; block < blocks; block++) {
+    if (block + 1 == blocks) {
+      block_flags |= flags_end;
+    }
+    uint32x4x2_t block_len_vec = set1_128x2(BLAKE3_BLOCK_LEN);
+    uint32x4x2_t block_flags_vec = set1_128x2(block_flags);
+    uint32x4x2_t msg_vecs[16];
+    transpose_msg_vecs8(inputs, block * BLAKE3_BLOCK_LEN, msg_vecs);
+
+    uint32x4x2_t v[16] = {
+        h_vecs[0],         h_vecs[1],         h_vecs[2],
+        h_vecs[3],         h_vecs[4],         h_vecs[5],
+        h_vecs[6],         h_vecs[7],         set1_128x2(IV[0]),
+        set1_128x2(IV[1]), set1_128x2(IV[2]), set1_128x2(IV[3]),
+        counter_low_vec,   counter_high_vec,  block_len_vec,
+        block_flags_vec,
+    };
+    round_fn8(v, msg_vecs, 0);
+    round_fn8(v, msg_vecs, 1);
+    round_fn8(v, msg_vecs, 2);
+    round_fn8(v, msg_vecs, 3);
+    round_fn8(v, msg_vecs, 4);
+    round_fn8(v, msg_vecs, 5);
+    round_fn8(v, msg_vecs, 6);
+    h_vecs[0] = xor_128x2(v[0], v[8]);
+    h_vecs[1] = xor_128x2(v[1], v[9]);
+    h_vecs[2] = xor_128x2(v[2], v[10]);
+    h_vecs[3] = xor_128x2(v[3], v[11]);
+    h_vecs[4] = xor_128x2(v[4], v[12]);
+    h_vecs[5] = xor_128x2(v[5], v[13]);
+    h_vecs[6] = xor_128x2(v[6], v[14]);
+    h_vecs[7] = xor_128x2(v[7], v[15]);
+
+    block_flags = flags;
+  }
+
+  uint32x4_t lo[8] = {
+      h_vecs[0].val[0], h_vecs[1].val[0], h_vecs[2].val[0], h_vecs[3].val[0],
+      h_vecs[4].val[0], h_vecs[5].val[0], h_vecs[6].val[0], h_vecs[7].val[0],
+  };
+  uint32x4_t hi[8] = {
+      h_vecs[0].val[1], h_vecs[1].val[1], h_vecs[2].val[1], h_vecs[3].val[1],
+      h_vecs[4].val[1], h_vecs[5].val[1], h_vecs[6].val[1], h_vecs[7].val[1],
+  };
+  store_cvs4(lo, &out[0 * BLAKE3_OUT_LEN]);
+  store_cvs4(hi, &out[4 * BLAKE3_OUT_LEN]);
+}
+
+#endif // MAX_SIMD_DEGREE >= 8
 
 /*
  * ----------------------------------------------------------------------------
@@ -344,6 +589,18 @@ void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
                            uint64_t counter, bool increment_counter,
                            uint8_t flags, uint8_t flags_start,
                            uint8_t flags_end, uint8_t *out) {
+#if MAX_SIMD_DEGREE >= 8
+  while (num_inputs >= 8) {
+    blake3_hash8_neon(inputs, blocks, key, counter, increment_counter, flags,
+                      flags_start, flags_end, out);
+    if (increment_counter) {
+      counter += 8;
+    }
+    inputs += 8;
+    num_inputs -= 8;
+    out = &out[8 * BLAKE3_OUT_LEN];
+  }
+#endif
   while (num_inputs >= 4) {
     blake3_hash4_neon(inputs, blocks, key, counter, increment_counter, flags,
                       flags_start, flags_end, out);
