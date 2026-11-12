@@ -9,6 +9,10 @@ fn is_pure() -> bool {
     defined("CARGO_FEATURE_PURE")
 }
 
+fn is_miri() -> bool {
+    env::var_os("CARGO_CFG_MIRI").is_some()
+}
+
 fn should_prefer_intrinsics() -> bool {
     defined("CARGO_FEATURE_PREFER_INTRINSICS")
 }
@@ -159,6 +163,11 @@ enum CCompilerSupport {
 use CCompilerSupport::*;
 
 fn c_compiler_support() -> CCompilerSupport {
+    // Miri cannot execute this crate's C/assembly backends.
+    if is_miri() {
+        return NoCompiler;
+    }
+
     let build = new_build();
     let flags_checked;
     let support_result: Result<bool, _> = if is_windows_msvc() {
@@ -363,14 +372,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("The NEON implementation doesn't support big-endian ARM.")
     }
 
-    if (is_arm() && is_neon())
-        || (!is_no_neon() && !is_pure() && is_aarch64() && is_little_endian())
+    // Miri cannot execute this crate's C NEON backend.
+    if !is_miri()
+        && ((is_arm() && is_neon())
+            || (!is_no_neon() && !is_pure() && is_aarch64() && is_little_endian()))
     {
         println!("cargo::rustc-cfg=blake3_neon");
         build_neon_c_intrinsics();
     }
 
-    if is_wasm32() && is_wasm32_simd() {
+    // Miri does not support the Wasm SIMD intrinsic calls used by this crate.
+    if !is_miri() && is_wasm32() && is_wasm32_simd() {
         build_wasm32_simd();
     }
 
