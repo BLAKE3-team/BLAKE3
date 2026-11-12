@@ -278,11 +278,21 @@ impl Hash {
     ///
     /// [`ArrayString`]: https://docs.rs/arrayvec/0.5.1/arrayvec/struct.ArrayString.html
     pub fn to_hex(&self) -> ArrayString<{ 2 * OUT_LEN }> {
+        // Do this conversion in constant-ish time instead of indexing into a string. This is
+        // *very* unlikely to matter to anyone in practice, but we might as well do it right-ish.
+        // The usual caveat applies: the compiler can insert branches wherever it wants.
+        fn hex_nibble(nibble: u8) -> u8 {
+            debug_assert!(nibble < 16);
+            const LETTER_OFFSET: u8 = b'a' - b'0' - 10;
+            let is_letter = nibble >= 10;
+            let is_letter_mask = (is_letter as u8).wrapping_neg(); // if is_letter { 0xff } else { 0 }
+            b'0' + nibble + (LETTER_OFFSET & is_letter_mask)
+        }
+
         let mut s = ArrayString::new();
-        let table = b"0123456789abcdef";
         for &b in self.0.iter() {
-            s.push(table[(b >> 4) as usize] as char);
-            s.push(table[(b & 0xf) as usize] as char);
+            s.push(hex_nibble(b >> 4) as char);
+            s.push(hex_nibble(b & 0xf) as char);
         }
         s
     }
