@@ -328,6 +328,15 @@ pub mod ffi {
                 flags_end: u8,
                 out: *mut u8,
             );
+            pub fn blake3_xof_many_neon(
+                cv: *const u32,
+                block: *const u8,
+                block_len: u8,
+                counter: u64,
+                flags: u8,
+                out: *mut u8,
+                outblocks: usize,
+            );
         }
     }
 }

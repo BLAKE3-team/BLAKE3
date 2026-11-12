@@ -333,6 +333,11 @@ impl Platform {
             Platform::AVX512 => unsafe {
                 crate::avx512::xof_many(cv, block, block_len, counter, flags, out)
             },
+            // Safe because detect() checked for platform support.
+            #[cfg(blake3_neon)]
+            Platform::NEON => unsafe {
+                crate::neon::xof_many(cv, block, block_len, counter, flags, out)
+            },
             _ => {
                 // For platforms without an optimized xof_many, fall back to a loop over
                 // compress_xof. This is still faster than portable code.

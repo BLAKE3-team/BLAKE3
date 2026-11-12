@@ -465,6 +465,12 @@ fn test_xof_many_avx512() {
 }
 
 #[test]
+#[cfg(feature = "neon")]
+fn test_xof_many_neon() {
+    test_xof_many_fn(crate::ffi::neon::blake3_xof_many_neon);
+}
+
+#[test]
 fn test_compare_reference_impl() {
     const OUT: usize = 303; // more than 64, not a multiple of 4
     let mut input_buf = [0; TEST_CASES_MAX];
