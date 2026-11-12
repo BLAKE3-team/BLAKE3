@@ -373,6 +373,21 @@ in call to always_inline ‘vaddq_u32’: target specific option mismatch
 ...then you may need to add something like `-mfpu=neon-vfpv4
 -mfloat-abi=hard`.
 
+### ARM SVE2
+
+The SVE2 implementation is off by default, since it needs a compiler with SVE2
+intrinsics. To enable it, set `BLAKE3_USE_SVE2=1`; it is then used at runtime
+when the CPU has SVE2 with a 128-bit vector length, and NEON otherwise. Here's
+an example of building a shared library on AArch64 Linux with SVE2 support,
+where `blake3_sve2.c` needs its own flags:
+
+```bash
+gcc -O3 -DBLAKE3_USE_SVE2=1 -march=armv8-a+sve2 -msve-vector-bits=128 \
+    -c blake3_sve2.c
+gcc -shared -O3 -o libblake3.so -DBLAKE3_USE_NEON=1 -DBLAKE3_USE_SVE2=1 \
+    blake3.c blake3_dispatch.c blake3_portable.c blake3_neon.c blake3_sve2.o
+```
+
 ### Other Platforms
 
 The portable implementation should work on most other architectures. For
