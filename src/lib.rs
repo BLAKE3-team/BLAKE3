@@ -38,8 +38,10 @@
 //! for [`OutputReader`].
 //!
 //! The `rayon` feature (disabled by default, but enabled for [docs.rs]) adds
-//! the [`update_rayon`](Hasher::update_rayon) and (in combination with `mmap`
-//! below) [`update_mmap_rayon`](Hasher::update_mmap_rayon) methods for
+//! the [`update_rayon`](Hasher::update_rayon), (in combination with `std`
+//! above) [`update_reader_rayon`](Hasher::update_reader_rayon), and (in
+//! combination with `mmap` below)
+//! [`update_mmap_rayon`](Hasher::update_mmap_rayon) methods for
 //! multithreaded hashing. However, even if this feature is enabled, all other
 //! APIs remain single-threaded.
 //!
@@ -1507,7 +1509,9 @@ impl Hasher {
     /// [`std::fs::File`](https://doc.rust-lang.org/std/fs/struct.File.html), but note that memory
     /// mapping can be faster than this method for hashing large files. See
     /// [`update_mmap`](Hasher::update_mmap) and [`update_mmap_rayon`](Hasher::update_mmap_rayon),
-    /// which require the `mmap` and (for the latter) `rayon` Cargo features.
+    /// which require the `mmap` and (for the latter) `rayon` Cargo features. For multithreaded
+    /// streaming reads without memory mapping, see
+    /// [`update_reader_rayon`](Hasher::update_reader_rayon).
     ///
     /// This method requires the `std` Cargo feature, which is enabled by default.
     ///
@@ -1527,6 +1531,42 @@ impl Hasher {
     #[cfg(feature = "std")]
     pub fn update_reader(&mut self, reader: impl std::io::Read) -> std::io::Result<&mut Self> {
         io::copy_wide(reader, self)?;
+        Ok(self)
+    }
+
+    /// As [`update_reader`](Hasher::update_reader), but using Rayon-based multithreading
+    /// internally.
+    ///
+    /// This method is gated by both the `std` and `rayon` Cargo features (`std` is enabled by
+    /// default, while `rayon` is disabled by default but enabled on [docs.rs](https://docs.rs)).
+    ///
+    /// To avoid allocation and multithreading overhead on small inputs, this method hashes small
+    /// inputs on the stack without Rayon, and reads larger inputs into a reusable heap buffer
+    /// before calling [`update_rayon`](Hasher::update_rayon). The internal buffer sizes and
+    /// multithreading thresholds may change at any time.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use std::io;
+    /// # fn main() -> io::Result<()> {
+    /// # #[cfg(feature = "rayon")]
+    /// # {
+    /// // Hash standard input using multiple threads.
+    /// let mut hasher = blake3::Hasher::new();
+    /// hasher.update_reader_rayon(std::io::stdin().lock())?;
+    /// println!("{}", hasher.finalize());
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "std")]
+    #[cfg(feature = "rayon")]
+    pub fn update_reader_rayon(
+        &mut self,
+        reader: impl std::io::Read,
+    ) -> std::io::Result<&mut Self> {
+        io::copy_wide_rayon(reader, self)?;
         Ok(self)
     }
 
@@ -1626,7 +1666,7 @@ impl Hasher {
     ///
     /// The memory mapping behavior of this function is the same as
     /// [`update_mmap`](Hasher::update_mmap), and the heuristic for when to fall back to standard
-    /// file IO might change at any time.
+    /// file IO (via [`update_reader_rayon`](Hasher::update_reader_rayon)) might change at any time.
     ///
     /// This method requires both the `mmap` and `rayon` Cargo features, which are disabled by
     /// default but enabled on [docs.rs](https://docs.rs).
@@ -1657,7 +1697,7 @@ impl Hasher {
         if let Some(mmap) = io::maybe_mmap_file(&mut file)? {
             self.update_rayon(&mmap);
         } else {
-            io::copy_wide(&file, self)?;
+            io::copy_wide_rayon(&file, self)?;
         }
         Ok(self)
     }

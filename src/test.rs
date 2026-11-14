@@ -935,6 +935,109 @@ fn test_update_reader_interrupted() -> std::io::Result<()> {
 }
 
 #[test]
+#[cfg(feature = "std")]
+#[cfg(feature = "rayon")]
+fn test_update_reader_rayon() -> Result<(), std::io::Error> {
+    let test_lengths = [
+        0,
+        1,
+        100,
+        1024,
+        65535,
+        65536,
+        65537,
+        65536 + 1024 - 1,
+        65536 + 1024,
+        65536 + 1024 + 1,
+        128 * 1024,
+        4 * 1024 * 1024 - 1,
+        4 * 1024 * 1024,
+        4 * 1024 * 1024 + 1,
+        5 * 1024 * 1024,
+    ];
+    let mut input = vec![0; *test_lengths.last().unwrap()];
+    paint_test_input(&mut input);
+    for &len in &test_lengths {
+        let input = &input[..len];
+        let expected = crate::hash(input);
+
+        // 1. Fresh hasher
+        assert_eq!(
+            crate::Hasher::new().update_reader_rayon(input)?.finalize(),
+            expected,
+            "mismatch at length {}",
+            len,
+        );
+
+        // 2. Hasher with existing unaligned prefix
+        if len >= 13 {
+            let mut hasher = crate::Hasher::new();
+            hasher.update(&input[..13]);
+            hasher.update_reader_rayon(&input[13..])?;
+            assert_eq!(
+                hasher.finalize(),
+                expected,
+                "prefix mismatch at length {}",
+                len,
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+#[cfg(feature = "std")]
+#[cfg(feature = "rayon")]
+fn test_update_reader_rayon_interrupted() -> std::io::Result<()> {
+    use std::io;
+
+    struct ChunkedInterruptingReader<'a> {
+        slice: &'a [u8],
+        chunk_size: usize,
+        interrupt_every: usize,
+        call_count: usize,
+    }
+
+    impl<'a> io::Read for ChunkedInterruptingReader<'a> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            self.call_count += 1;
+            if self.interrupt_every > 0 && self.call_count % self.interrupt_every == 0 {
+                return Err(io::Error::from(io::ErrorKind::Interrupted));
+            }
+            if self.slice.is_empty() {
+                return Ok(0);
+            }
+            let take = std::cmp::min(std::cmp::min(self.slice.len(), buf.len()), self.chunk_size);
+            buf[..take].copy_from_slice(&self.slice[..take]);
+            self.slice = &self.slice[take..];
+            Ok(take)
+        }
+    }
+
+    let test_lengths = [0, 500, 65535, 65536, 65536 + 1024, 200_000];
+    let mut input = vec![0; *test_lengths.last().unwrap()];
+    paint_test_input(&mut input);
+    for &len in &test_lengths {
+        let input = &input[..len];
+        let mut reader = ChunkedInterruptingReader {
+            slice: input,
+            chunk_size: 512,
+            interrupt_every: 7,
+            call_count: 0,
+        };
+        let mut hasher = crate::Hasher::new();
+        hasher.update_reader_rayon(&mut reader)?;
+        assert_eq!(
+            hasher.finalize(),
+            crate::hash(input),
+            "mismatch for chunked reader at length {}",
+            len,
+        );
+    }
+    Ok(())
+}
+
+#[test]
 #[cfg(feature = "mmap")]
 // NamedTempFile isn't Miri-compatible
 #[cfg(not(miri))]
