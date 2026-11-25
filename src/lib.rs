@@ -135,6 +135,7 @@ mod wasm32_simd;
 #[cfg(feature = "traits-preview")]
 pub mod traits;
 
+mod hex;
 #[cfg(feature = "std")]
 mod io;
 mod join;
@@ -278,21 +279,10 @@ impl Hash {
     ///
     /// [`ArrayString`]: https://docs.rs/arrayvec/0.5.1/arrayvec/struct.ArrayString.html
     pub fn to_hex(&self) -> ArrayString<{ 2 * OUT_LEN }> {
-        // Do this conversion in constant-ish time instead of indexing into a string. This is
-        // *very* unlikely to matter to anyone in practice, but we might as well do it right-ish.
-        // The usual caveat applies: the compiler can insert branches wherever it wants.
-        fn hex_nibble(nibble: u8) -> u8 {
-            debug_assert!(nibble < 16);
-            const LETTER_OFFSET: u8 = b'a' - b'0' - 10;
-            let is_letter = nibble >= 10;
-            let is_letter_mask = (is_letter as u8).wrapping_neg(); // if is_letter { 0xff } else { 0 }
-            b'0' + nibble + (LETTER_OFFSET & is_letter_mask)
-        }
-
         let mut s = ArrayString::new();
         for &b in self.0.iter() {
-            s.push(hex_nibble(b >> 4) as char);
-            s.push(hex_nibble(b & 0xf) as char);
+            s.push(hex::nibble_to_hex_constant_time_ish(b >> 4) as char);
+            s.push(hex::nibble_to_hex_constant_time_ish(b & 0xf) as char);
         }
         s
     }
@@ -307,23 +297,26 @@ impl Hash {
     /// Note that `Hash` also implements `FromStr`, so `Hash::from_hex("...")`
     /// is equivalent to `"...".parse()`.
     pub fn from_hex(hex: impl AsRef<[u8]>) -> Result<Self, HexError> {
-        fn hex_val(byte: u8) -> Result<u8, HexError> {
-            match byte {
-                b'A'..=b'F' => Ok(byte - b'A' + 10),
-                b'a'..=b'f' => Ok(byte - b'a' + 10),
-                b'0'..=b'9' => Ok(byte - b'0'),
-                _ => Err(HexError(HexErrorInner::InvalidByte(byte))),
-            }
-        }
         let hex_bytes: &[u8] = hex.as_ref();
         if hex_bytes.len() != OUT_LEN * 2 {
             return Err(HexError(HexErrorInner::InvalidLen(hex_bytes.len())));
         }
         let mut hash_bytes: [u8; OUT_LEN] = [0; OUT_LEN];
+        let mut accumulator = 0;
         for i in 0..OUT_LEN {
-            hash_bytes[i] = 16 * hex_val(hex_bytes[2 * i])? + hex_val(hex_bytes[2 * i + 1])?;
+            // Invalid hex characters return -1.
+            let high_nibble: i32 = hex::hex_to_nibble_constant_time_ish(hex_bytes[2 * i]);
+            accumulator |= high_nibble;
+            let low_nibble: i32 = hex::hex_to_nibble_constant_time_ish(hex_bytes[2 * i + 1]);
+            accumulator |= low_nibble;
+            hash_bytes[i] = ((high_nibble as u8) << 4).wrapping_add(low_nibble as u8);
         }
-        Ok(Hash::from(hash_bytes))
+        // If we saw any -1's above, fail.
+        if accumulator < 0 {
+            Err(HexError(HexErrorInner::InvalidByte))
+        } else {
+            Ok(Hash::from(hash_bytes))
+        }
     }
 }
 
@@ -416,19 +409,15 @@ pub struct HexError(HexErrorInner);
 
 #[derive(Clone, Debug)]
 enum HexErrorInner {
-    InvalidByte(u8),
+    InvalidByte,
     InvalidLen(usize),
 }
 
 impl fmt::Display for HexError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
-            HexErrorInner::InvalidByte(byte) => {
-                if byte < 128 {
-                    write!(f, "invalid hex character: {:?}", byte as char)
-                } else {
-                    write!(f, "invalid hex character: 0x{:x}", byte)
-                }
+            HexErrorInner::InvalidByte => {
+                write!(f, "invalid hex character")
             }
             HexErrorInner::InvalidLen(len) => {
                 write!(f, "expected 64 hex bytes, received {}", len)
