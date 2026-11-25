@@ -268,7 +268,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
-    - run: docker run -v $(pwd):/io -w /io messense/cargo-xwin cargo xwin test --target x86_64-pc-windows-msvc --features=mmap,rayon,traits-preview,serde,zeroize
+    - uses: docker/setup-docker-action@v5
+    - run: docker version
+    - run: docker run --rm -v "$PWD:/io" -w /io messense/cargo-xwin cargo xwin test --target x86_64-pc-windows-msvc --features=mmap,rayon,traits-preview,serde,zeroize
 
   # Currently only on x86.
   cmake_c_tests:
@@ -384,15 +386,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
-    - uses: addnab/docker-run-action@v3
-      with:
-        image: gcc:5.4
-        options: -v ${{ github.workspace }}:/work
-        run: |
+    - uses: docker/setup-docker-action@v5
+    - run: docker version
+    - run: |
+        docker run --rm -v "$PWD:/work" -w /work gcc:5.4 sh -ec '
           cat /proc/cpuinfo
           curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
-          cd /work
           ~/.cargo/bin/cargo test --features prefer_intrinsics
+        '
 
   # CMake build test (Library only).
   cmake_current_build:
