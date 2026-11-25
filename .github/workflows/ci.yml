@@ -443,6 +443,21 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install libtbb-dev libtbb12
+      # The clang-cl + TBB build can fail with an old Clang version. Use Visual
+      # Studio's bundled Clang to match its MSVC standard library.
+      - if: runner.os == 'Windows' && matrix.toolchain.cc == 'clang-cl'
+        name: prepend Visual Studio Clang to PATH
+        run: |
+          $vsInstallPath = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vsInstallPath) {
+            throw "Visual Studio with C++ tools was not found."
+          }
+          $clangBin = Join-Path $vsInstallPath 'VC\Tools\Llvm\x64\bin'
+          if (-not (Test-Path (Join-Path $clangBin 'clang-cl.exe'))) {
+            throw "Visual Studio's bundled Clang was not found at $clangBin."
+          }
+          $clangBin >> $env:GITHUB_PATH
+          & (Join-Path $clangBin 'clang-cl.exe') --version
       - name: CMake generation, build, install
         run: |
           ${{ matrix.os != 'windows-latest' || '$vs_install_path = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath; & "$vs_install_path/Common7/Tools/Launch-VsDevShell.ps1" -Arch amd64 -SkipAutomaticLocation' }}
