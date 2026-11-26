@@ -309,6 +309,7 @@ impl Hash {
             accumulator |= high_nibble;
             let low_nibble: i32 = hex::hex_to_nibble_constant_time_ish(hex_bytes[2 * i + 1]);
             accumulator |= low_nibble;
+            // `wrapping_add` is unnecessary for valid hex, but in the invalid case we add 0xff.
             hash_bytes[i] = ((high_nibble as u8) << 4).wrapping_add(low_nibble as u8);
         }
         // If we saw any -1's above, fail.
