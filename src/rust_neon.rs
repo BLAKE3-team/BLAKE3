@@ -11,22 +11,31 @@ pub const DEGREE: usize = 4;
 // `vqtbl1q_u8` compiles to a single NEON `tbl` instruction.
 const ROT8_INDEX: [u8; 16] = [1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 12];
 
+// NEON intrinsics are unsafe before Rust 1.86 and safe inside a matching
+// target-feature function after it. Keep the blocks for the MSRV build.
+#[allow(unused_unsafe)]
 #[inline]
 #[target_feature(enable = "neon")]
 unsafe fn add(a: uint32x4_t, b: uint32x4_t) -> uint32x4_t {
-    vaddq_u32(a, b)
+    unsafe { vaddq_u32(a, b) }
 }
 
+// NEON intrinsics are unsafe before Rust 1.86 and safe inside a matching
+// target-feature function after it. Keep the blocks for the MSRV build.
+#[allow(unused_unsafe)]
 #[inline]
 #[target_feature(enable = "neon")]
 unsafe fn xor(a: uint32x4_t, b: uint32x4_t) -> uint32x4_t {
-    veorq_u32(a, b)
+    unsafe { veorq_u32(a, b) }
 }
 
+// NEON intrinsics are unsafe before Rust 1.86 and safe inside a matching
+// target-feature function after it. Keep the blocks for the MSRV build.
+#[allow(unused_unsafe)]
 #[inline]
 #[target_feature(enable = "neon")]
 unsafe fn set1(x: u32) -> uint32x4_t {
-    vdupq_n_u32(x)
+    unsafe { vdupq_n_u32(x) }
 }
 
 #[inline]
@@ -56,16 +65,22 @@ unsafe fn storeu(src: uint32x4_t, dest: *mut u8, offset: usize) {
     unsafe { vst1q_u8(ptr, vreinterpretq_u8_u32(src)) }
 }
 
+// NEON intrinsics are unsafe before Rust 1.86 and safe inside a matching
+// target-feature function after it. Keep the blocks for the MSRV build.
+#[allow(unused_unsafe)]
 #[inline]
 #[target_feature(enable = "neon")]
 unsafe fn rot16(x: uint32x4_t) -> uint32x4_t {
-    vreinterpretq_u32_u16(vrev32q_u16(vreinterpretq_u16_u32(x)))
+    unsafe { vreinterpretq_u32_u16(vrev32q_u16(vreinterpretq_u16_u32(x))) }
 }
 
+// NEON intrinsics are unsafe before Rust 1.86 and safe inside a matching
+// target-feature function after it. Keep the blocks for the MSRV build.
+#[allow(unused_unsafe)]
 #[inline]
 #[target_feature(enable = "neon")]
 unsafe fn rot12(x: uint32x4_t) -> uint32x4_t {
-    vsriq_n_u32(vshlq_n_u32(x, 32 - 12), x, 12)
+    unsafe { vsriq_n_u32(vshlq_n_u32(x, 32 - 12), x, 12) }
 }
 
 #[inline]
@@ -79,10 +94,13 @@ unsafe fn rot8(x: uint32x4_t) -> uint32x4_t {
     }
 }
 
+// NEON intrinsics are unsafe before Rust 1.86 and safe inside a matching
+// target-feature function after it. Keep the blocks for the MSRV build.
+#[allow(unused_unsafe)]
 #[inline]
 #[target_feature(enable = "neon")]
 unsafe fn rot7(x: uint32x4_t) -> uint32x4_t {
-    vsriq_n_u32(vshlq_n_u32(x, 32 - 7), x, 7)
+    unsafe { vsriq_n_u32(vshlq_n_u32(x, 32 - 7), x, 7) }
 }
 
 #[inline]
@@ -126,17 +144,22 @@ unsafe fn round(v: &mut [uint32x4_t; 16], m: &[uint32x4_t; 16], round_index: usi
     }
 }
 
+// NEON intrinsics are unsafe before Rust 1.86 and safe inside a matching
+// target-feature function after it. Keep the blocks for the MSRV build.
+#[allow(unused_unsafe)]
 #[inline]
 #[target_feature(enable = "neon")]
 unsafe fn transpose_vecs(vecs: &mut [uint32x4_t; DEGREE]) {
-    // Interleave 32-bit lanes. `vtrnq_u32` lowers to the `trn1`/`trn2` pair.
-    let rows01 = vtrnq_u32(vecs[0], vecs[1]);
-    let rows23 = vtrnq_u32(vecs[2], vecs[3]);
+    unsafe {
+        // Interleave 32-bit lanes. `vtrnq_u32` lowers to the `trn1`/`trn2` pair.
+        let rows01 = vtrnq_u32(vecs[0], vecs[1]);
+        let rows23 = vtrnq_u32(vecs[2], vecs[3]);
 
-    vecs[0] = vcombine_u32(vget_low_u32(rows01.0), vget_low_u32(rows23.0));
-    vecs[1] = vcombine_u32(vget_low_u32(rows01.1), vget_low_u32(rows23.1));
-    vecs[2] = vcombine_u32(vget_high_u32(rows01.0), vget_high_u32(rows23.0));
-    vecs[3] = vcombine_u32(vget_high_u32(rows01.1), vget_high_u32(rows23.1));
+        vecs[0] = vcombine_u32(vget_low_u32(rows01.0), vget_low_u32(rows23.0));
+        vecs[1] = vcombine_u32(vget_low_u32(rows01.1), vget_low_u32(rows23.1));
+        vecs[2] = vcombine_u32(vget_high_u32(rows01.0), vget_high_u32(rows23.0));
+        vecs[3] = vcombine_u32(vget_high_u32(rows01.1), vget_high_u32(rows23.1));
+    }
 }
 
 #[inline]
