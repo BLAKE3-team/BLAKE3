@@ -73,6 +73,10 @@ BLAKE3_API void blake3_hasher_update(blake3_hasher *self, const void *input,
 BLAKE3_API void blake3_hasher_update_tbb(blake3_hasher *self, const void *input,
                                          size_t input_len);
 #endif // BLAKE3_USE_TBB
+#if defined(BLAKE3_USE_OPENMP)
+BLAKE3_API void blake3_hasher_update_openmp(blake3_hasher *self, const void *input,
+                                           size_t input_len);
+#endif // BLAKE3_USE_OPENMP
 BLAKE3_API void blake3_hasher_finalize(const blake3_hasher *self, uint8_t *out,
                                        size_t out_len);
 BLAKE3_API void blake3_hasher_finalize_seek(const blake3_hasher *self, uint64_t seek,
