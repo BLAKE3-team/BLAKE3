@@ -216,6 +216,7 @@ Alternatively, it is licensed under any of the following:
 * [Solana](https://docs.rs/solana-program/1.9.5/solana_program/blake3/index.html)
 * [Tekken 8](https://x.com/rodarmor/status/1751567502050771189)
 * [Wasmer](https://github.com/wasmerio/wasmer/blob/4f935a8c162bf604df223003e434e4f7ca253688/lib/cache/src/hash.rs#L21)
+* [Xet](https://huggingface.co/docs/xet/hashing)
 
 
 ## Miscellany
