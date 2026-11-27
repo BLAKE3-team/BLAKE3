@@ -13,19 +13,19 @@ const ROT8_INDEX: [u8; 16] = [1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 
 
 #[inline]
 #[target_feature(enable = "neon")]
-fn add(a: uint32x4_t, b: uint32x4_t) -> uint32x4_t {
+unsafe fn add(a: uint32x4_t, b: uint32x4_t) -> uint32x4_t {
     vaddq_u32(a, b)
 }
 
 #[inline]
 #[target_feature(enable = "neon")]
-fn xor(a: uint32x4_t, b: uint32x4_t) -> uint32x4_t {
+unsafe fn xor(a: uint32x4_t, b: uint32x4_t) -> uint32x4_t {
     veorq_u32(a, b)
 }
 
 #[inline]
 #[target_feature(enable = "neon")]
-fn set1(x: u32) -> uint32x4_t {
+unsafe fn set1(x: u32) -> uint32x4_t {
     vdupq_n_u32(x)
 }
 
@@ -58,34 +58,36 @@ unsafe fn storeu(src: uint32x4_t, dest: *mut u8, offset: usize) {
 
 #[inline]
 #[target_feature(enable = "neon")]
-fn rot16(x: uint32x4_t) -> uint32x4_t {
+unsafe fn rot16(x: uint32x4_t) -> uint32x4_t {
     vreinterpretq_u32_u16(vrev32q_u16(vreinterpretq_u16_u32(x)))
 }
 
 #[inline]
 #[target_feature(enable = "neon")]
-fn rot12(x: uint32x4_t) -> uint32x4_t {
+unsafe fn rot12(x: uint32x4_t) -> uint32x4_t {
     vsriq_n_u32(vshlq_n_u32(x, 32 - 12), x, 12)
 }
 
 #[inline]
 #[target_feature(enable = "neon")]
-fn rot8(x: uint32x4_t) -> uint32x4_t {
+unsafe fn rot8(x: uint32x4_t) -> uint32x4_t {
     // SAFETY: The table is a static byte array, so its pointer is valid for
     // the 16-byte NEON load.
-    let index = unsafe { vld1q_u8(ROT8_INDEX.as_ptr()) };
-    vreinterpretq_u32_u8(vqtbl1q_u8(vreinterpretq_u8_u32(x), index))
+    unsafe {
+        let index = vld1q_u8(ROT8_INDEX.as_ptr());
+        vreinterpretq_u32_u8(vqtbl1q_u8(vreinterpretq_u8_u32(x), index))
+    }
 }
 
 #[inline]
 #[target_feature(enable = "neon")]
-fn rot7(x: uint32x4_t) -> uint32x4_t {
+unsafe fn rot7(x: uint32x4_t) -> uint32x4_t {
     vsriq_n_u32(vshlq_n_u32(x, 32 - 7), x, 7)
 }
 
 #[inline]
 #[target_feature(enable = "neon")]
-fn g(
+unsafe fn g(
     v: &mut [uint32x4_t; 16],
     a: usize,
     b: usize,
@@ -94,35 +96,39 @@ fn g(
     mx: uint32x4_t,
     my: uint32x4_t,
 ) {
-    v[a] = add(add(v[a], v[b]), mx);
-    v[d] = rot16(xor(v[d], v[a]));
-    v[c] = add(v[c], v[d]);
-    v[b] = rot12(xor(v[b], v[c]));
-    v[a] = add(add(v[a], v[b]), my);
-    v[d] = rot8(xor(v[d], v[a]));
-    v[c] = add(v[c], v[d]);
-    v[b] = rot7(xor(v[b], v[c]));
+    unsafe {
+        v[a] = add(add(v[a], v[b]), mx);
+        v[d] = rot16(xor(v[d], v[a]));
+        v[c] = add(v[c], v[d]);
+        v[b] = rot12(xor(v[b], v[c]));
+        v[a] = add(add(v[a], v[b]), my);
+        v[d] = rot8(xor(v[d], v[a]));
+        v[c] = add(v[c], v[d]);
+        v[b] = rot7(xor(v[b], v[c]));
+    }
 }
 
 #[inline]
 #[target_feature(enable = "neon")]
-fn round(v: &mut [uint32x4_t; 16], m: &[uint32x4_t; 16], round_index: usize) {
+unsafe fn round(v: &mut [uint32x4_t; 16], m: &[uint32x4_t; 16], round_index: usize) {
     let s = MSG_SCHEDULE[round_index];
-    // Mix the columns.
-    g(v, 0, 4, 8, 12, m[s[0]], m[s[1]]);
-    g(v, 1, 5, 9, 13, m[s[2]], m[s[3]]);
-    g(v, 2, 6, 10, 14, m[s[4]], m[s[5]]);
-    g(v, 3, 7, 11, 15, m[s[6]], m[s[7]]);
-    // Mix the diagonals.
-    g(v, 0, 5, 10, 15, m[s[8]], m[s[9]]);
-    g(v, 1, 6, 11, 12, m[s[10]], m[s[11]]);
-    g(v, 2, 7, 8, 13, m[s[12]], m[s[13]]);
-    g(v, 3, 4, 9, 14, m[s[14]], m[s[15]]);
+    unsafe {
+        // Mix the columns.
+        g(v, 0, 4, 8, 12, m[s[0]], m[s[1]]);
+        g(v, 1, 5, 9, 13, m[s[2]], m[s[3]]);
+        g(v, 2, 6, 10, 14, m[s[4]], m[s[5]]);
+        g(v, 3, 7, 11, 15, m[s[6]], m[s[7]]);
+        // Mix the diagonals.
+        g(v, 0, 5, 10, 15, m[s[8]], m[s[9]]);
+        g(v, 1, 6, 11, 12, m[s[10]], m[s[11]]);
+        g(v, 2, 7, 8, 13, m[s[12]], m[s[13]]);
+        g(v, 3, 4, 9, 14, m[s[14]], m[s[15]]);
+    }
 }
 
 #[inline]
 #[target_feature(enable = "neon")]
-fn transpose_vecs(vecs: &mut [uint32x4_t; DEGREE]) {
+unsafe fn transpose_vecs(vecs: &mut [uint32x4_t; DEGREE]) {
     // Interleave 32-bit lanes. `vtrnq_u32` lowers to the `trn1`/`trn2` pair.
     let rows01 = vtrnq_u32(vecs[0], vecs[1]);
     let rows23 = vtrnq_u32(vecs[2], vecs[3]);
@@ -169,31 +175,38 @@ unsafe fn transpose_msg_vecs(
     let (square0, rest) = vecs.split_at_mut(DEGREE);
     let (square1, rest) = rest.split_at_mut(DEGREE);
     let (square2, square3) = rest.split_at_mut(DEGREE);
-    transpose_vecs(square0.try_into().unwrap());
-    transpose_vecs(square1.try_into().unwrap());
-    transpose_vecs(square2.try_into().unwrap());
-    transpose_vecs(square3.try_into().unwrap());
+    unsafe {
+        transpose_vecs(square0.try_into().unwrap());
+        transpose_vecs(square1.try_into().unwrap());
+        transpose_vecs(square2.try_into().unwrap());
+        transpose_vecs(square3.try_into().unwrap());
+    }
     vecs
 }
 
 #[inline]
 #[target_feature(enable = "neon")]
-fn load_counters(counter: u64, increment_counter: IncrementCounter) -> (uint32x4_t, uint32x4_t) {
+unsafe fn load_counters(
+    counter: u64,
+    increment_counter: IncrementCounter,
+) -> (uint32x4_t, uint32x4_t) {
     let increment = u64::from(increment_counter.yes());
-    (
-        set4(
-            counter_low(counter),
-            counter_low(counter + increment),
-            counter_low(counter + 2 * increment),
-            counter_low(counter + 3 * increment),
-        ),
-        set4(
-            counter_high(counter),
-            counter_high(counter + increment),
-            counter_high(counter + 2 * increment),
-            counter_high(counter + 3 * increment),
-        ),
-    )
+    unsafe {
+        (
+            set4(
+                counter_low(counter),
+                counter_low(counter + increment),
+                counter_low(counter + 2 * increment),
+                counter_low(counter + 3 * increment),
+            ),
+            set4(
+                counter_high(counter),
+                counter_high(counter + increment),
+                counter_high(counter + 2 * increment),
+                counter_high(counter + 3 * increment),
+            ),
+        )
+    }
 }
 
 /// # Safety
@@ -213,70 +226,78 @@ unsafe fn hash4(
     flags_end: u8,
     out: &mut [u8; DEGREE * OUT_LEN],
 ) {
-    let mut h_vecs = [
-        set1(key[0]),
-        set1(key[1]),
-        set1(key[2]),
-        set1(key[3]),
-        set1(key[4]),
-        set1(key[5]),
-        set1(key[6]),
-        set1(key[7]),
-    ];
-    let (counter_low_vec, counter_high_vec) = load_counters(counter, increment_counter);
+    let mut h_vecs = unsafe {
+        [
+            set1(key[0]),
+            set1(key[1]),
+            set1(key[2]),
+            set1(key[3]),
+            set1(key[4]),
+            set1(key[5]),
+            set1(key[6]),
+            set1(key[7]),
+        ]
+    };
+    let (counter_low_vec, counter_high_vec) = unsafe { load_counters(counter, increment_counter) };
     let mut block_flags = flags | flags_start;
 
     for block in 0..blocks {
         if block + 1 == blocks {
             block_flags |= flags_end;
         }
-        let block_len_vec = set1(BLOCK_LEN as u32); // full blocks only
-        let block_flags_vec = set1(block_flags as u32);
+        let block_len_vec = unsafe { set1(BLOCK_LEN as u32) }; // full blocks only
+        let block_flags_vec = unsafe { set1(block_flags as u32) };
         // SAFETY: The caller guarantees that each input is valid for
         // `blocks * BLOCK_LEN` bytes. The `blocks` count passed by `hash_many`
         // is derived from the fixed input array length.
         let msg_vecs = unsafe { transpose_msg_vecs(inputs, block * BLOCK_LEN) };
 
-        let mut v = [
-            h_vecs[0],
-            h_vecs[1],
-            h_vecs[2],
-            h_vecs[3],
-            h_vecs[4],
-            h_vecs[5],
-            h_vecs[6],
-            h_vecs[7],
-            set1(IV[0]),
-            set1(IV[1]),
-            set1(IV[2]),
-            set1(IV[3]),
-            counter_low_vec,
-            counter_high_vec,
-            block_len_vec,
-            block_flags_vec,
-        ];
-        round(&mut v, &msg_vecs, 0);
-        round(&mut v, &msg_vecs, 1);
-        round(&mut v, &msg_vecs, 2);
-        round(&mut v, &msg_vecs, 3);
-        round(&mut v, &msg_vecs, 4);
-        round(&mut v, &msg_vecs, 5);
-        round(&mut v, &msg_vecs, 6);
-        h_vecs[0] = xor(v[0], v[8]);
-        h_vecs[1] = xor(v[1], v[9]);
-        h_vecs[2] = xor(v[2], v[10]);
-        h_vecs[3] = xor(v[3], v[11]);
-        h_vecs[4] = xor(v[4], v[12]);
-        h_vecs[5] = xor(v[5], v[13]);
-        h_vecs[6] = xor(v[6], v[14]);
-        h_vecs[7] = xor(v[7], v[15]);
+        let mut v = unsafe {
+            [
+                h_vecs[0],
+                h_vecs[1],
+                h_vecs[2],
+                h_vecs[3],
+                h_vecs[4],
+                h_vecs[5],
+                h_vecs[6],
+                h_vecs[7],
+                set1(IV[0]),
+                set1(IV[1]),
+                set1(IV[2]),
+                set1(IV[3]),
+                counter_low_vec,
+                counter_high_vec,
+                block_len_vec,
+                block_flags_vec,
+            ]
+        };
+        unsafe {
+            round(&mut v, &msg_vecs, 0);
+            round(&mut v, &msg_vecs, 1);
+            round(&mut v, &msg_vecs, 2);
+            round(&mut v, &msg_vecs, 3);
+            round(&mut v, &msg_vecs, 4);
+            round(&mut v, &msg_vecs, 5);
+            round(&mut v, &msg_vecs, 6);
+            h_vecs[0] = xor(v[0], v[8]);
+            h_vecs[1] = xor(v[1], v[9]);
+            h_vecs[2] = xor(v[2], v[10]);
+            h_vecs[3] = xor(v[3], v[11]);
+            h_vecs[4] = xor(v[4], v[12]);
+            h_vecs[5] = xor(v[5], v[13]);
+            h_vecs[6] = xor(v[6], v[14]);
+            h_vecs[7] = xor(v[7], v[15]);
+        }
 
         block_flags = flags;
     }
 
     let (square0, square1) = h_vecs.split_at_mut(DEGREE);
-    transpose_vecs(square0.try_into().unwrap());
-    transpose_vecs(square1.try_into().unwrap());
+    unsafe {
+        transpose_vecs(square0.try_into().unwrap());
+        transpose_vecs(square1.try_into().unwrap());
+    }
     // The first four vecs now contain the first half of each output, and the
     // second four vecs contain the second half of each output.
     // SAFETY: `out` is exactly `DEGREE * OUT_LEN` bytes, and each store
@@ -390,7 +411,7 @@ pub unsafe fn hash_many<const N: usize>(
 
 #[inline]
 #[target_feature(enable = "neon")]
-fn set4(a: u32, b: u32, c: u32, d: u32) -> uint32x4_t {
+unsafe fn set4(a: u32, b: u32, c: u32, d: u32) -> uint32x4_t {
     let array = [a, b, c, d];
     // SAFETY: The local array is valid for the full 16-byte vector load.
     unsafe { vld1q_u32(array.as_ptr()) }
