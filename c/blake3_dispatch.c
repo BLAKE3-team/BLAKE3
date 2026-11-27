@@ -18,6 +18,21 @@
 #endif
 #endif
 
+#if BLAKE3_USE_SVE2 == 1
+#if defined(IS_AARCH64) && defined(__linux__)
+#include <sys/auxv.h>
+#include <sys/prctl.h>
+#include <asm/hwcap.h>
+#ifndef HWCAP2_SVE2
+#define HWCAP2_SVE2 (1 << 1)
+#endif
+#else
+/* No runtime detection on this platform. */
+#undef BLAKE3_USE_SVE2
+#define BLAKE3_USE_SVE2 0
+#endif
+#endif
+
 #if !defined(BLAKE3_ATOMICS)
 #if defined(__has_include)
 #if __has_include(<stdatomic.h>) && !defined(_MSC_VER)
@@ -165,6 +180,33 @@ static
 }
 #endif
 
+#if BLAKE3_USE_SVE2 == 1
+enum cpu_feature_aarch64 {
+  SVE2 = 1 << 0,
+  /* ... */
+  UNDEFINED_AARCH64 = 1 << 30
+};
+
+static ATOMIC_INT g_cpu_features_aarch64 = UNDEFINED_AARCH64;
+
+static enum cpu_feature_aarch64 get_cpu_features_aarch64(void) {
+  enum cpu_feature_aarch64 features = ATOMIC_LOAD(g_cpu_features_aarch64);
+  if (features != UNDEFINED_AARCH64) {
+    return features;
+  }
+  /* blake3_sve2.c is built with -msve-vector-bits=128, so it needs SVE2 and a
+     128-bit vector length. Checked here because under that flag the compiler
+     folds svcntb() to 16, so a check in that file would always pass. */
+  features = 0;
+  if ((getauxval(AT_HWCAP2) & HWCAP2_SVE2) != 0 &&
+      (prctl(PR_SVE_GET_VL, 0, 0, 0, 0) & PR_SVE_VL_LEN_MASK) == 16) {
+    features |= SVE2;
+  }
+  ATOMIC_STORE(g_cpu_features_aarch64, features);
+  return features;
+}
+#endif
+
 void blake3_compress_in_place(uint32_t cv[8],
                               const uint8_t block[BLAKE3_BLOCK_LEN],
                               uint8_t block_len, uint64_t counter,
@@ -286,6 +328,15 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
     return;
   }
 #endif
+#endif
+
+#if BLAKE3_USE_SVE2 == 1
+  if (get_cpu_features_aarch64() & SVE2) {
+    blake3_hash_many_sve2(inputs, num_inputs, blocks, key, counter,
+                          increment_counter, flags, flags_start, flags_end,
+                          out);
+    return;
+  }
 #endif
 
 #if BLAKE3_USE_NEON == 1
