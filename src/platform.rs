@@ -9,6 +9,8 @@ cfg_if::cfg_if! {
                 pub const MAX_SIMD_DEGREE: usize = 8;
             }
         }
+    } else if #[cfg(all(blake3_neon, target_arch = "aarch64"))] {
+        pub const MAX_SIMD_DEGREE: usize = 8;
     } else if #[cfg(blake3_neon)] {
         pub const MAX_SIMD_DEGREE: usize = 4;
     } else if #[cfg(blake3_wasm32_simd)] {
@@ -31,6 +33,8 @@ cfg_if::cfg_if! {
                 pub const MAX_SIMD_DEGREE_OR_2: usize = 8;
             }
         }
+    } else if #[cfg(all(blake3_neon, target_arch = "aarch64"))] {
+        pub const MAX_SIMD_DEGREE_OR_2: usize = 8;
     } else if #[cfg(blake3_neon)] {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 4;
     } else if #[cfg(blake3_wasm32_simd)] {
@@ -110,7 +114,9 @@ impl Platform {
             #[cfg(blake3_avx512_ffi)]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => 16,
-            #[cfg(blake3_neon)]
+            #[cfg(all(blake3_neon, target_arch = "aarch64"))]
+            Platform::NEON => 8,
+            #[cfg(all(blake3_neon, not(target_arch = "aarch64")))]
             Platform::NEON => 4,
             #[cfg(blake3_wasm32_simd)]
             Platform::WASM32_SIMD => 4,

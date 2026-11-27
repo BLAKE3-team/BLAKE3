@@ -203,7 +203,7 @@ fn bench_many_chunks_neon(b: &mut Bencher) {
     bench_many_chunks_fn(
         b,
         blake3_c_rust_bindings::ffi::neon::blake3_hash_many_neon,
-        4,
+        if cfg!(target_arch = "aarch64") { 8 } else { 4 },
     );
 }
 
@@ -295,7 +295,7 @@ fn bench_many_parents_neon(b: &mut Bencher) {
     bench_many_parents_fn(
         b,
         blake3_c_rust_bindings::ffi::neon::blake3_hash_many_neon,
-        4,
+        if cfg!(target_arch = "aarch64") { 8 } else { 4 },
     );
 }
 

@@ -73,6 +73,10 @@ enum blake3_flags {
 
 #if defined(IS_X86)
 #define MAX_SIMD_DEGREE 16
+#elif BLAKE3_USE_NEON == 1 && defined(IS_AARCH64) && !defined(_M_ARM64EC)
+// hash8_neon needs the 32 vector registers of AArch64. ARM64EC code may only
+// use 16 of them, just like 32-bit ARM.
+#define MAX_SIMD_DEGREE 8
 #elif BLAKE3_USE_NEON == 1
 #define MAX_SIMD_DEGREE 4
 #else
