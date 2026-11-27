@@ -328,7 +328,7 @@ impl Platform {
         match self {
             // Safe because detect() checked for platform support.
             #[cfg(blake3_avx512_ffi)]
-            #[cfg(unix)]
+            #[cfg(all(unix, not(target_os = "cygwin")))]
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::AVX512 => unsafe {
                 crate::avx512::xof_many(cv, block, block_len, counter, flags, out)
