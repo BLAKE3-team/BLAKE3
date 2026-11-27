@@ -52,6 +52,10 @@ enum blake3_flags {
 #define IS_AARCH64
 #endif
 
+#ifdef __loongarch__
+#define IS_LOONGARCH
+#endif
+
 #if defined(IS_X86)
 #if defined(_MSC_VER)
 #include <intrin.h>
@@ -75,6 +79,8 @@ enum blake3_flags {
 #define MAX_SIMD_DEGREE 16
 #elif BLAKE3_USE_NEON == 1
 #define MAX_SIMD_DEGREE 4
+#elif defined(IS_LOONGARCH)
+#define MAX_SIMD_DEGREE 8
 #else
 #define MAX_SIMD_DEGREE 1
 #endif
@@ -325,6 +331,23 @@ void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
                            uint8_t flags, uint8_t flags_start,
                            uint8_t flags_end, uint8_t *out);
 #endif
+
+#if defined(IS_LOONGARCH)
+#if !defined(BLAKE3_NO_LSX)
+void blake3_hash_many_lasx(const uint8_t *const *inputs, size_t num_inputs,
+                           size_t blocks, const uint32_t key[8],
+                           uint64_t counter, bool increment_counter,
+                           uint8_t flags, uint8_t flags_start,
+                           uint8_t flags_end, uint8_t *out);
+#endif
+#if !defined(BLAKE3_NO_LSX)
+void blake3_hash_many_lsx(const uint8_t *const *inputs, size_t num_inputs,
+                          size_t blocks, const uint32_t key[8],
+                          uint64_t counter, bool increment_counter,
+                          uint8_t flags, uint8_t flags_start,
+                          uint8_t flags_end, uint8_t *out);
+#endif
+#endif /* IS_LOONGARCH */
 
 #ifdef __cplusplus
 }
