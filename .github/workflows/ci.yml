@@ -3,9 +3,10 @@ name: tests
 on:
   push:
     branches:
-      - "*"
+      - master
     # not on tags
   pull_request:
+  workflow_dispatch:
 
 env:
   BLAKE3_CI: "1"
