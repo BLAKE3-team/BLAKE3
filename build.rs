@@ -363,11 +363,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("The NEON implementation doesn't support big-endian ARM.")
     }
 
-    if (is_arm() && is_neon())
-        || (!is_no_neon() && !is_pure() && is_aarch64() && is_little_endian())
-    {
+    let aarch64_neon = !is_no_neon() && !is_pure() && is_aarch64() && is_little_endian();
+    let arm_neon = is_arm() && !is_aarch64() && is_neon();
+    if aarch64_neon || arm_neon {
         println!("cargo::rustc-cfg=blake3_neon");
-        build_neon_c_intrinsics();
+        if arm_neon {
+            build_neon_c_intrinsics();
+        }
     }
 
     if is_wasm32() && is_wasm32_simd() {
