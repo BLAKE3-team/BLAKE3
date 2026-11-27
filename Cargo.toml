@@ -34,9 +34,10 @@ wasm32_simd = []
 std = ["constant_time_eq/std"]
 
 # The `rayon` feature (disabled by default, but enabled for docs.rs) adds the
-# `update_rayon` and (in combination with `mmap` below) `update_mmap_rayon`
-# methods, for multithreaded hashing. However, even if this feature is enabled,
-# all other APIs remain single-threaded.
+# `update_rayon`, (in combination with `std` above) `update_reader_rayon`, and
+# (in combination with `mmap` below) `update_mmap_rayon` methods, for
+# multithreaded hashing. However, even if this feature is enabled, all other
+# APIs remain single-threaded.
 #
 # Implementation detail: We take a dependency on rayon-core instead of rayon,
 # because it builds faster and still includes all the APIs we need.

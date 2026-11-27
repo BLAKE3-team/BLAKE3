@@ -216,6 +216,40 @@ fn test_no_mmap() {
 }
 
 #[test]
+fn test_no_mmap_large_file() {
+    // 5 MiB input crosses both 64 KiB stack buffer and 4 MiB heap buffer boundaries.
+    let mut data = vec![0u8; 5 * 1024 * 1024];
+    for (i, b) in data.iter_mut().enumerate() {
+        *b = (i % 251) as u8;
+    }
+    let f = tempfile::NamedTempFile::new().unwrap();
+    f.as_file().write_all(&data).unwrap();
+    f.as_file().flush().unwrap();
+
+    let expected = blake3::hash(&data).to_hex();
+    let default_output = cmd!(b3sum_exe(), "--no-names", f.path()).read().unwrap();
+    let no_mmap_output = cmd!(b3sum_exe(), "--no-mmap", "--no-names", f.path())
+        .read()
+        .unwrap();
+    assert_eq!(&*expected, &*default_output);
+    assert_eq!(&*expected, &*no_mmap_output);
+}
+
+#[test]
+fn test_stdin_large_input() {
+    let mut data = vec![0u8; 5 * 1024 * 1024];
+    for (i, b) in data.iter_mut().enumerate() {
+        *b = (i % 251) as u8;
+    }
+    let expected = blake3::hash(&data).to_hex();
+    let output = cmd!(b3sum_exe(), "--no-names")
+        .stdin_bytes(data)
+        .read()
+        .unwrap();
+    assert_eq!(&*expected, &*output);
+}
+
+#[test]
 #[cfg(windows)]
 fn test_null_device_on_windows() {
     let expected = blake3::hash(b"").to_hex();
