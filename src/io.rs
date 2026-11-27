@@ -4,8 +4,11 @@
 use std::fs::File;
 use std::io;
 
+// The default minimum file size, in bytes, for which `maybe_mmap_file` attempts memory mapping.
+// Files smaller than this use ordinary reads, which are faster for small inputs. Callers can
+// override this per-`Hasher` with `Hasher::set_mmap_threshold`.
 #[cfg(feature = "mmap")]
-const MINIMUM_MMAP_SIZE: u64 = 16 * 1024; // 16 KiB
+pub(crate) const DEFAULT_MMAP_THRESHOLD: u64 = 16 * 1024; // 16 KiB
 
 pub(crate) fn copy_wide(mut reader: impl io::Read, hasher: &mut crate::Hasher) -> io::Result<u64> {
     let mut buffer = [0; 65536];
@@ -24,7 +27,8 @@ pub(crate) fn copy_wide(mut reader: impl io::Read, hasher: &mut crate::Hasher) -
     }
 }
 
-// Try to `mmap` a file, unless it's short enough that ordinary reads are faster, currently 16 KiB.
+// Try to `mmap` a file, unless it's shorter than `mmap_threshold` bytes, in which case ordinary
+// reads are faster. (The default threshold is `DEFAULT_MMAP_THRESHOLD`, i.e. 16 KiB.)
 // Return `Ok(None)` if mapping fails or if we don't attempt it. Only return `Err` for unexpected
 // failures that could leave the `File` in a bad state.
 //
@@ -58,7 +62,10 @@ pub(crate) fn copy_wide(mut reader: impl io::Read, hasher: &mut crate::Hasher) -
 // But if you "know what you're doing," I don't think *const i32 and &i32 are fundamentally
 // different here. Feedback needed.
 #[cfg(feature = "mmap")]
-pub(crate) fn maybe_mmap_file(file: &mut File) -> io::Result<Option<memmap2::Mmap>> {
+pub(crate) fn maybe_mmap_file(
+    file: &mut File,
+    mmap_threshold: u64,
+) -> io::Result<Option<memmap2::Mmap>> {
     // Seeking is more reliable than `.metadata()` for getting the length. Either is valid for
     // regular files, but block devices sometimes report zero length despite being mappable. See
     // https://github.com/BLAKE3-team/BLAKE3/pull/487.
@@ -71,13 +78,13 @@ pub(crate) fn maybe_mmap_file(file: &mut File) -> io::Result<Option<memmap2::Mma
             assert_eq!(position, 0, "initial file offset isn't at the beginning");
         }
     }
-    // Seek to "16 KiB less 1 byte" from end-of-file. For short files, this will generally fail
-    // with an invalid argument error and leave the cursor at the beginning. For a regular file of
-    // exactly 16383 bytes, it will succeed and return 0, again leaving the cursor at the
-    // beginning. For some special/device files like /dev/random, it will also return 0. In all
-    // those cases, we can return without doing any extra syscalls to reset the cursor, and let the
-    // caller fall back to ordinary reads.
-    let seek_offset = MINIMUM_MMAP_SIZE - 1;
+    // Seek to "`mmap_threshold` less 1 byte" from end-of-file. For short files, this will generally
+    // fail with an invalid argument error and leave the cursor at the beginning. For a regular file
+    // of exactly `mmap_threshold - 1` bytes, it will succeed and return 0, again leaving the cursor
+    // at the beginning. For some special/device files like /dev/random, it will also return 0. In
+    // all those cases, we can return without doing any extra syscalls to reset the cursor, and let
+    // the caller fall back to ordinary reads. `saturating_sub` guards against a threshold of 0.
+    let seek_offset = mmap_threshold.saturating_sub(1);
     let seek_target = io::SeekFrom::End(-(seek_offset as i64));
     let Ok(offset_len) = file.seek(seek_target) else {
         return Ok(None); // short or unseekable files
@@ -112,7 +119,7 @@ mod test {
 
     #[test]
     fn test_maybe_mmap_small_files() -> io::Result<()> {
-        let test_cases = [0, 1, MINIMUM_MMAP_SIZE - 2, MINIMUM_MMAP_SIZE - 1];
+        let test_cases = [0, 1, DEFAULT_MMAP_THRESHOLD - 2, DEFAULT_MMAP_THRESHOLD - 1];
         for len in test_cases {
             dbg!(len);
             // Create a file smaller than 16 KiB. `maybe_mmap_file` should return `Ok(None)`.
@@ -123,7 +130,7 @@ mod test {
             f.flush()?;
             // We have a debug assert that the initial file offset is 0.
             f.rewind()?;
-            assert!(maybe_mmap_file(f.as_file_mut())?.is_none());
+            assert!(maybe_mmap_file(f.as_file_mut(), DEFAULT_MMAP_THRESHOLD)?.is_none());
             // Check that the file cursor remains at start-of-file.
             assert_eq!(f.stream_position()?, 0);
             assert_eq!(
@@ -138,7 +145,7 @@ mod test {
 
     #[test]
     fn test_maybe_mmap_mappable_files() -> io::Result<()> {
-        let test_cases = [MINIMUM_MMAP_SIZE, MINIMUM_MMAP_SIZE + 1];
+        let test_cases = [DEFAULT_MMAP_THRESHOLD, DEFAULT_MMAP_THRESHOLD + 1];
         for len in test_cases {
             dbg!(len);
             // Create a file that's 16 KiB or larger. `maybe_mmap_file` should return `Ok(Some(_))`.
@@ -149,7 +156,7 @@ mod test {
             f.flush()?;
             // We have a debug assert that the initial file offset is 0.
             f.rewind()?;
-            let Ok(Some(mmap)) = maybe_mmap_file(f.as_file_mut()) else {
+            let Ok(Some(mmap)) = maybe_mmap_file(f.as_file_mut(), DEFAULT_MMAP_THRESHOLD) else {
                 panic!("mmap failed");
             };
             // `maybe_mmap_file` doesn't `rewind` the file in this case, so we need to do that
@@ -169,13 +176,41 @@ mod test {
     }
 
     #[test]
+    fn test_custom_mmap_threshold() -> io::Result<()> {
+        // A file of this size is below the default threshold, so it is normally read rather than
+        // mapped. With a lower custom threshold it should be mapped, and with a higher one it
+        // should still fall back to ordinary reads.
+        let len = 4 * 1024;
+        assert!(len < DEFAULT_MMAP_THRESHOLD);
+        let mut input = vec![0; len as usize];
+        crate::test::paint_test_input(&mut input);
+        let mut f = tempfile::NamedTempFile::new()?;
+        f.write_all(&input)?;
+        f.flush()?;
+
+        // Threshold below the file size: mmap should succeed and map the whole file.
+        f.rewind()?;
+        let Ok(Some(mmap)) = maybe_mmap_file(f.as_file_mut(), len / 2) else {
+            panic!("expected mmap to succeed with a low threshold");
+        };
+        assert_eq!(mmap[..], input[..]);
+
+        // Threshold above the file size: mmap should be skipped, leaving the cursor at the start.
+        f.rewind()?;
+        assert!(maybe_mmap_file(f.as_file_mut(), len + 1)?.is_none());
+        assert_eq!(f.stream_position()?, 0);
+        Ok(())
+    }
+
+    #[test]
     fn test_maybe_mmap_current_exe() -> io::Result<()> {
         // The current executable should always be a regular file larger than 16 KiB, so mmap
         // should ~always succeed. (A filesystem might not support mmap at all, but we don't test
         // any of those in CI.)
         let mut exe_file = File::open(std::env::current_exe()?)?;
-        assert!(exe_file.metadata()?.len() > MINIMUM_MMAP_SIZE);
-        let mmap = maybe_mmap_file(&mut exe_file)?.expect("maybe_mmap_file should return Some");
+        assert!(exe_file.metadata()?.len() > DEFAULT_MMAP_THRESHOLD);
+        let mmap = maybe_mmap_file(&mut exe_file, DEFAULT_MMAP_THRESHOLD)?
+            .expect("maybe_mmap_file should return Some");
         // Mainly we're testing that we got `Some` above, but go ahead and read the mmap just to
         // make sure it doesn't bus fault or anything like that. `maybe_mmap_file` doesn't `rewind`
         // the file in this case, so we need to do that ourselves.
@@ -195,14 +230,14 @@ mod test {
         let unmappable_path = "/sys/kernel/btf/vmlinux";
         let mut unmappable_file = File::open(unmappable_path)?;
         // The file is large enough to attempt mmapping.
-        assert!(unmappable_file.metadata()?.len() > MINIMUM_MMAP_SIZE);
+        assert!(unmappable_file.metadata()?.len() > DEFAULT_MMAP_THRESHOLD);
         // We're allowed to read the file.
         assert_eq!(unmappable_file.read(&mut [0])?, 1);
         // But mmapping the file fails. (We have a debug assert that requires `rewind` here.)
         unmappable_file.rewind()?;
         unsafe { memmap2::Mmap::map(&unmappable_file) }.unwrap_err();
         // `maybe_mmap_file` swallows that error and returns `None`.
-        assert!(maybe_mmap_file(&mut unmappable_file)?.is_none());
+        assert!(maybe_mmap_file(&mut unmappable_file, DEFAULT_MMAP_THRESHOLD)?.is_none());
         Ok(())
     }
 }
