@@ -30,6 +30,9 @@ fn set1(x: u32) -> uint32x4_t {
 }
 
 #[inline]
+/// # Safety
+///
+/// `src` must be valid for reads of at least `offset + 16` bytes.
 unsafe fn loadu(src: *const u8, offset: usize) -> uint32x4_t {
     // SAFETY: The caller guarantees that `src` is valid for reads of at least
     // `offset + 16` bytes.
@@ -40,6 +43,9 @@ unsafe fn loadu(src: *const u8, offset: usize) -> uint32x4_t {
 }
 
 #[inline]
+/// # Safety
+///
+/// `dest` must be valid for writes of at least `offset + 16` bytes.
 unsafe fn storeu(src: uint32x4_t, dest: *mut u8, offset: usize) {
     // SAFETY: The caller guarantees that `dest` is valid for writes of at
     // least `offset + 16` bytes.
@@ -128,6 +134,10 @@ fn transpose_vecs(vecs: &mut [uint32x4_t; DEGREE]) {
 }
 
 #[inline]
+/// # Safety
+///
+/// Every input pointer must be valid for reads of the full fixed-size input.
+/// NEON must be supported by the CPU.
 #[target_feature(enable = "neon")]
 unsafe fn transpose_msg_vecs(
     inputs: &[*const u8; DEGREE],
@@ -186,6 +196,11 @@ fn load_counters(counter: u64, increment_counter: IncrementCounter) -> (uint32x4
     )
 }
 
+/// # Safety
+///
+/// Every input pointer must be valid for reads of `blocks * BLOCK_LEN` bytes,
+/// and `out` must be exactly `DEGREE * OUT_LEN` bytes. NEON must be supported
+/// by the CPU.
 #[target_feature(enable = "neon")]
 unsafe fn hash4(
     inputs: &[*const u8; DEGREE],
